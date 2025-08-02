@@ -2,11 +2,11 @@ spring:
   application:
     name: restaurant-erp-api
 
-  # Configuración de base de datos
+  # Configuraciï¿½n de base de datos
   datasource:
-    url: jdbc:postgresql://localhost:5432/restaurant_erp
+    url: jdbc:postgresql://${DB_URL:localhost}:5432/${DB_NAME:restaurant_erp_dev}
     username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -15,7 +15,7 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-  # Configuración JPA
+  # Configuraciï¿½n JPA
   jpa:
     hibernate:
       ddl-auto: validate
@@ -29,29 +29,29 @@ spring:
         format_sql: true
     show-sql: false
 
-  # Configuración Flyway
+  # Configuraciï¿½n Flyway
   flyway:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
     schemas: public
 
-  # Configuración de seguridad
+  # Configuraciï¿½n de seguridad
   security:
     jwt:
       secret: ${JWT_SECRET:mySecretKeyForDevelopmentOnly2024RestaurantERP}
       expiration: 86400000 # 24 horas
-      refresh-expiration: 604800000 # 7 días
+      refresh-expiration: 604800000 # 7 dï¿½as
 
-  # Configuración de cache
+  # Configuraciï¿½n de cache
   cache:
-    type: simple # cambiar a redis en producción
+    type: simple # cambiar a redis en producciï¿½n
     cache-names:
       - productos
       - categorias
       - usuarios
 
-  # Jackson configuración
+  # Jackson configuraciï¿½n
   jackson:
     time-zone: America/Costa_Rica
     serialization:
@@ -59,7 +59,7 @@ spring:
     deserialization:
       fail-on-unknown-properties: false
 
-# Configuración del servidor
+# Configuraciï¿½n del servidor
 server:
   port: ${SERVER_PORT:8080}
   servlet:
@@ -93,7 +93,7 @@ logging:
   file:
     name: logs/restaurant-erp.log
 
-# OpenAPI/Swagger configuración
+# OpenAPI/Swagger configuraciï¿½n
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -103,7 +103,7 @@ springdoc:
     operations-sorter: method
     tags-sorter: alpha
 
-# Configuración específica para Hacienda Costa Rica
+# Configuraciï¿½n especï¿½fica para Hacienda Costa Rica
 hacienda:
   api:
     url: ${HACIENDA_API_URL:https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1/}
@@ -112,13 +112,13 @@ hacienda:
       path: ${HACIENDA_CERT_PATH:}
       password: ${HACIENDA_CERT_PASSWORD:}
 
-# Configuración Multi-tenant
+# Configuraciï¿½n Multi-tenant
 tenant:
   datasource:
     master-schema: public
     tenant-schema-prefix: tenant_
 
-# Configuración de aplicación
+# Configuraciï¿½n de aplicaciï¿½n
 app:
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:4200}

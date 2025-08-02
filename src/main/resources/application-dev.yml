@@ -1,0 +1,52 @@
+# Configuración para ambiente de desarrollo
+spring:
+  profiles:
+    active: dev
+
+  # Base de datos desarrollo
+  datasource:
+    url: jdbc:postgresql://localhost:5432/restaurant_erp_dev
+    username: postgres
+    password: postgres
+
+  # JPA para desarrollo
+  jpa:
+    hibernate:
+      ddl-auto: update # En desarrollo permitimos actualizar esquema
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # DevTools
+  devtools:
+    restart:
+      enabled: true
+      additional-paths: src/main/java
+    livereload:
+      enabled: true
+
+# Logging más detallado en desarrollo
+logging:
+  level:
+    com.snnsoluciones: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type: TRACE
+
+# Swagger habilitado
+springdoc:
+  swagger-ui:
+    enabled: true
+    try-it-out-enabled: true
+
+# CORS más permisivo en desarrollo
+app:
+  cors:
+    allowed-origins: "*"
+
+# JWT con tiempo más corto para pruebas
+spring.security.jwt:
+  expiration: 3600000 # 1 hora
+  refresh-expiration: 7200000 # 2 horas

@@ -1,0 +1,121 @@
+plugins {
+    id 'java'
+    id 'war'
+    id 'org.springframework.boot' version '3.5.4'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.asciidoctor.jvm.convert' version '3.3.2'
+}
+
+group = 'com.snnsoluciones'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('snippetsDir', file("build/generated-snippets"))
+    // Versiones de las dependencias adicionales
+    set('jwtVersion', '0.11.5')
+    set('mapstructVersion', '1.5.5.Final')
+    set('springdocVersion', '2.3.0')
+}
+
+dependencies {
+    // Spring Boot Starters (ya existentes)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Base de datos
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // JWT para autenticación
+    implementation "io.jsonwebtoken:jjwt-api:${jwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-impl:${jwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jwtVersion}"
+
+    // MapStruct para mapeo de DTOs
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+
+    // OpenAPI/Swagger para documentación
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    // Importante: Lombok debe ir antes que MapStruct en annotationProcessor
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+
+    // Jackson adicionales para manejo de fechas
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // Apache Commons (útil para utilidades)
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
+
+    // Para auditoría avanzada (opcional)
+    implementation 'org.springframework.data:spring-data-envers'
+    implementation 'org.hibernate.orm:hibernate-envers'
+
+    // DevTools para desarrollo
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+    // Tomcat para WAR deployment
+    providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
+
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+}
+
+// Configuración para MapStruct con Lombok
+compileJava {
+    options.annotationProcessorPath = configurations.annotationProcessor
+    options.compilerArgs = [
+            '-Amapstruct.defaultComponentModel=spring',
+            '-Amapstruct.unmappedTargetPolicy=WARN'
+    ]
+}
+
+tasks.named('test') {
+    outputs.dir snippetsDir
+    useJUnitPlatform()
+}
+
+tasks.named('asciidoctor') {
+    inputs.dir snippetsDir
+    dependsOn test
+}
+
+// Configuración adicional para el WAR
+war {
+    enabled = true
+    archiveBaseName = 'restaurant-erp'
+    archiveVersion = '0.0.1'
+}
+
+// Configuración para ejecutar como JAR también
+jar {
+    enabled = true
+}

@@ -1,65 +1,106 @@
 spring:
   application:
-    name: restaurant-erp-api
+    name: backnathbitpos
 
-  # Configuraci�n de base de datos
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   datasource:
-    url: jdbc:postgresql://${DB_URL:localhost}:5432/${DB_NAME:restaurant_erp_dev}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:restaurante_erp_dev}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+
+    # Pool de conexiones
     hikari:
-      maximum-pool-size: 10
+      maximum-pool-size: 20
       minimum-idle: 5
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
+      pool-name: HikariPool-MultiTenant
 
-  # Configuraci�n JPA
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none # Usamos Flyway para las migraciones
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        default_schema: public
-        jdbc:
-          lob:
-            non_contextual_creation: true
-        format_sql: true
-    show-sql: false
+        # Multi-tenant configuration
+        multiTenancy: SCHEMA
+        tenant_identifier_resolver: com.snnsoluciones.backnathbitpos.config.tenant.TenantIdentifierResolver
+        multi_tenant_connection_provider: com.snnsoluciones.backnathbitpos.config.tenant.SchemaBasedMultiTenantConnectionProvider
 
-  # Configuraci�n Flyway
+        # Performance
+        jdbc:
+          batch_size: 25
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+
+        # Cache de segundo nivel (opcional)
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+
+    show-sql: false
+    open-in-view: false
+
+  # Flyway configuration
   flyway:
     enabled: true
     baseline-on-migrate: true
+    baseline-version: 0
     locations: classpath:db/migration
-    schemas: public
+    schemas: public # Schema base para Flyway
+    create-schemas: true
+    validate-on-migrate: true
 
-  # Configuraci�n de seguridad
-  security:
-    jwt:
-      secret: ${JWT_SECRET:mySecretKeyForDevelopmentOnly2024RestaurantERP}
-      expiration: 86400000 # 24 horas
-      refresh-expiration: 604800000 # 7 d�as
+    # Placeholders para usar en scripts
+    placeholders:
+      default_schema: public
+      demo_schema: demo
 
-  # Configuraci�n de cache
-  cache:
-    type: simple # cambiar a redis en producci�n
-    cache-names:
-      - productos
-      - categorias
-      - usuarios
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-token-generation-change-this-in-production}
+  expiration: ${JWT_EXPIRATION:86400000} # 24 horas en milisegundos
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 días en milisegundos
 
-  # Jackson configuraci�n
-  jackson:
-    time-zone: America/Costa_Rica
-    serialization:
-      write-dates-as-timestamps: false
-    deserialization:
-      fail-on-unknown-properties: false
+# Security
+security:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
 
-# Configuraci�n del servidor
+# Logging
+logging:
+  level:
+    root: INFO
+    com.snnsoluciones.backnathbitpos: DEBUG
+    org.hibernate.SQL: DEBUG # Para ver las queries SQL en desarrollo
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE # Para ver los parámetros de las queries
+    org.springframework.security: DEBUG # Para debugging de seguridad
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/backnathbitpos.log
+
+# Actuator (monitoreo)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /api/actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Server configuration
 server:
   port: ${SERVER_PORT:8080}
   servlet:
@@ -68,63 +109,29 @@ server:
     include-message: always
     include-binding-errors: always
 
-# Actuator
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: when-authorized
-
-# Logging
-logging:
-  level:
-    root: INFO
-    com.snnsoluciones: DEBUG
-    org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: logs/restaurant-erp.log
-
-# OpenAPI/Swagger configuraci�n
+# Swagger/OpenAPI
 springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
-    enabled: true
     operations-sorter: method
     tags-sorter: alpha
 
-# Configuraci�n espec�fica para Hacienda Costa Rica
-hacienda:
-  api:
-    url: ${HACIENDA_API_URL:https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1/}
-    timeout: 30000
-    certificado:
-      path: ${HACIENDA_CERT_PATH:}
-      password: ${HACIENDA_CERT_PASSWORD:}
-
-# Configuraci�n Multi-tenant
-tenant:
-  datasource:
-    master-schema: public
-    tenant-schema-prefix: tenant_
-
-# Configuraci�n de aplicaci�n
+# Application specific
 app:
-  cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:4200}
-    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
-    allowed-headers: "*"
-    allow-credentials: true
-  file-upload:
-    max-size: 10MB
-    allowed-extensions: jpg,jpeg,png,pdf
+  name: NathBit POS
+  version: '@project.version@'
+  description: Sistema POS Multi-tenant para Restaurantes
+
+  # Tenants disponibles (para validación)
+  available-tenants:
+    - demo
+    - tenant1
+    - tenant2
+
+  # Configuración de facturación electrónica
+  facturacion:
+    api-fe-url: ${API_FE_URL:https://api-fe.hacienda.cr}
+    timeout: 30000
+    retry-attempts: 3

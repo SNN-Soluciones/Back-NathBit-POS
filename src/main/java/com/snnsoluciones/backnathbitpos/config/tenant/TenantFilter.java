@@ -22,11 +22,13 @@ public class TenantFilter extends OncePerRequestFilter {
 
   private static final String TENANT_HEADER = "X-Tenant-ID";
   private static final String[] EXCLUDED_PATHS = {
-      "/api/auth/register-tenant",
-      "/api/public",
-      "/swagger-ui",
-      "/v3/api-docs",
-      "/actuator"
+      "/api/auth/login",           // Login no requiere tenant
+      "/api/auth/refresh",         // Refresh token no requiere tenant
+      "/api/auth/register-tenant", // Registro de nuevo tenant
+      "/api/public",              // Endpoints públicos
+      "/swagger-ui",              // Documentación Swagger
+      "/v3/api-docs",             // OpenAPI docs
+      "/actuator"                 // Actuator endpoints
   };
 
   @Override
@@ -38,6 +40,7 @@ public class TenantFilter extends OncePerRequestFilter {
 
     // Verificar si la ruta está excluida
     if (isExcludedPath(requestURI)) {
+      log.debug("Ruta excluida del tenant filter: {}", requestURI);
       filterChain.doFilter(request, response);
       return;
     }
@@ -48,7 +51,8 @@ public class TenantFilter extends OncePerRequestFilter {
       if (tenantId == null || tenantId.trim().isEmpty()) {
         log.warn("No se encontró el header {} en la petición a: {}", TENANT_HEADER, requestURI);
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        response.getWriter().write("{\"error\": \"Tenant ID es requerido\"}");
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\": \"Tenant ID es requerido\", \"message\": \"Debe incluir el header X-Tenant-ID\"}");
         return;
       }
 

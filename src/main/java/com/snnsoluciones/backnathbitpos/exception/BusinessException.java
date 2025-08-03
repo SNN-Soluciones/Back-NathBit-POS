@@ -1,5 +1,5 @@
 package com.snnsoluciones.backnathbitpos.exception;
 
-public class BusinessException {
+public class BusinessException extends RuntimeException{
 
 }

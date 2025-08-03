@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity.security;
 
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
+import com.snnsoluciones.backnathbitpos.entity.tenant.Sucursal;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
@@ -99,5 +100,30 @@ public class Usuario extends BaseEntity implements UserDetails {
   public void removerRol(Rol rol) {
     roles.remove(rol);
     rol.getUsuarios().remove(this);
+  }
+
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "usuarios_sucursales",
+      joinColumns = @JoinColumn(name = "usuario_id"),
+      inverseJoinColumns = @JoinColumn(name = "sucursal_id")
+  )
+  @Builder.Default
+  private Set<Sucursal> sucursales = new HashSet<>();
+
+  // Agregar estos métodos helper
+  public void agregarSucursal(Sucursal sucursal) {
+    sucursales.add(sucursal);
+    sucursal.getUsuarios().add(this);
+  }
+
+  public void removerSucursal(Sucursal sucursal) {
+    sucursales.remove(sucursal);
+    sucursal.getUsuarios().remove(this);
+  }
+
+  public boolean tieneSucursal(String codigoSucursal) {
+    return sucursales.stream()
+        .anyMatch(s -> s.getCodigo().equals(codigoSucursal));
   }
 }

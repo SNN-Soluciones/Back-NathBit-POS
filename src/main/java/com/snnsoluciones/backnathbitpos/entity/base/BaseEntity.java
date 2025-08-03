@@ -42,7 +42,7 @@ public abstract class BaseEntity implements Serializable {
   private Long version;
 
   @PrePersist
-  public void prePersist() {
+  protected void prePersist() {
     if (this.tenantId == null) {
       this.tenantId = TenantContext.getCurrentTenant();
     }
@@ -52,8 +52,7 @@ public abstract class BaseEntity implements Serializable {
   }
 
   @PreUpdate
-  public void preUpdate() {
-    // Asegurar que el tenant no cambie
+  protected void preUpdate() {
     this.tenantId = TenantContext.getCurrentTenant();
   }
 }

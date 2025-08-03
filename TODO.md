@@ -1,108 +1,123 @@
-# ✅ TODO.md — Plan de Implementación para `backnathbitpos` (Actualizado)
+# ✅ TODO.md — Back-NathBit-POS (Actualizado al 2025-08-02)
 
-Este documento organiza el trabajo pendiente para el backend multi-tenant POS de restaurantes. Incluye lo que ya está hecho y lo que sigue, en orden estratégico por fase.
-
----
-
-## 🟢 Estado Actual
-
-- Ya están implementadas las principales entidades: `Tenant`, `Sucursal`, `Caja`, `Usuario`, `Cliente`, `Producto`, `Orden`, `Mesa`, `Zona`.
-- Ya existe estructura de repositorios y servicios para varias entidades.
-- Seguridad con JWT está configurada (login/logout básico funcionando).
-- Se han creado enums de estado (`EstadoOrden`, `EstadoCaja`, etc.).
-- Falta completar lógica multi-tenant a nivel de conexión y separación por esquema.
-- Se estaba empezando la parte de orden (te preguntaron por los DTOs y el `OrdenMapper`).
-- Ya existe estructura `TenantContext` y `TenantFilter`.
+Sistema backend multi-tenant para punto de venta en restaurantes. Construido con Java 17 y Spring Boot 3. Utiliza PostgreSQL, separación por schema, JWT, MapStruct, Flyway y arquitectura modular.
 
 ---
 
-## 🔴 Fase 1 - Multi-Tenant (pendiente completar)
+## ✅ FASE 1 – MULTI-TENANT ✅ (COMPLETADA)
 
-- [x] Entidad `Tenant` creada
-- [x] `TenantContext` con ThreadLocal
-- [x] Filtro `TenantFilter` implementado para leer `X-Tenant-ID`
-- [ ] Implementar `TenantIdentifierResolver`
-- [ ] Implementar `MultiTenantConnectionProvider`
-- [ ] Configurar Hibernate multi-tenancy (`SCHEMA` mode)
-- [ ] Ajustar `application.yml` con ejemplo de schema `demo`
-- [ ] Crear migraciones Flyway multi-schema
-- [ ] Crear un seed inicial con tenant `DEMO`, usuario admin y estructura básica
-
----
-
-## 🟠 Fase 2 - Seguridad y Control de Acceso
-
-- [x] Usuario, Rol y Permiso ya creados
-- [x] `JwtTokenProvider`, `JwtAuthenticationFilter`, `SecurityConfig` listos
-- [x] `AuthService` y `AuthController` funcionando
-- [ ] Relación de Usuario ↔ Sucursal ↔ Caja
-- [ ] Endpoint `/api/me` con info del usuario logueado, roles, sucursales y cajas
-- [ ] Validación por sucursal/caja al consumir endpoints
+- [x] `TenantContext` (ThreadLocal)
+- [x] `TenantFilter` (extrae `X-Tenant-ID`)
+- [x] `TenantIdentifierResolver`
+- [x] `SchemaBasedMultiTenantConnectionProvider`
+- [x] `HibernateConfig` (con corrección: `MULTI_TENANT_MODE`)
+- [x] `FlywayConfig` + `TenantSchemaInitializer`
+- [x] `application.yml` multitenant
+- [x] Migraciones SQL:
+    - `V1__create_tenant_table.sql`
+    - `V2__insert_demo_tenant.sql`
+    - `V1__create_base_tables.sql` (tenant)
+    - `V2__create_order_tables.sql`
+    - `V3__insert_seed_data.sql`
 
 ---
 
-## 🟡 Fase 3 - CRUDs Base
+## 🟡 FASE 2 – SEGURIDAD Y CONTROL DE ACCESO (EN PROGRESO)
 
-- [x] Entidades: `Cliente`, `Producto`, `Categoría`, `Proveedor` creadas
-- [ ] Repositorios funcionando
-- [ ] Servicios + Controladores para cada uno
-- [ ] Validaciones + Paginación
-- [ ] DTOs y Mappers (`ClienteDTO`, `ProductoDTO`, etc.)
+### ✅ Completado
+- [x] Entidades: `Usuario`, `Rol`, `Permiso`
+- [x] JWT: `JwtTokenProvider`, `JwtAuthenticationFilter`
+- [x] Servicios y repositorios: `UsuarioRepository`, `UsuarioService`, `UsuarioServiceImpl`
+- [x] DTOs: `UsuarioCreateRequest`, `UsuarioUpdateRequest`, `UsuarioResponse`, `CambioPasswordRequest`
+- [x] `UsuarioMapper` con MapStruct
+- [x] Excepciones y `GlobalExceptionHandler` (sin builder)
+
+### 🔴 Pendientes
+- [ ] `UsuarioController` con endpoints REST:
+    - POST `/api/usuarios`
+    - PUT `/api/usuarios/{id}`
+    - GET `/api/usuarios/{id}`
+    - GET `/api/usuarios`
+    - DELETE `/api/usuarios/{id}`
+    - PUT `/api/usuarios/{id}/password`
+    - PUT `/api/usuarios/{id}/bloquear`
+    - PUT `/api/usuarios/{id}/desbloquear`
+- [ ] Endpoint `GET /api/me`
+- [ ] Asociar `Usuario ↔ Sucursal ↔ Caja` correctamente
+- [ ] Validar permisos por sucursal y caja
 
 ---
 
-## 🟣 Fase 4 - Restaurante (Mesas y Zonas)
+## 🟠 FASE 3 – CRUDS BASE (A INICIAR)
 
-- [x] Entidades `Mesa`, `Zona` implementadas
-- [ ] Servicios para apertura/cierre de mesas
-- [ ] Relación con órdenes y sucursales
+- [ ] Controladores + servicios: Clientes, Proveedores, Categorías, Productos
+- [ ] Validación, paginación, DTOs, mappers
+
+---
+
+## 🟣 FASE 4 – FUNCIONALIDAD RESTAURANTE
+
+- [x] Entidades: `Mesa`, `Zona`
 - [ ] Estados de mesa: Libre, Ocupada, Cerrada
+- [ ] Apertura y cierre de mesa
+- [ ] Asignación de meseros
+- [ ] Relación con `Sucursal`
 
 ---
 
-## 🔵 Fase 5 - Pedidos para Llevar
+## 🔵 FASE 5 – PEDIDOS PARA LLEVAR
 
-- [ ] CRUD de pedidos tipo Uber
-- [ ] Estados de pedido: Pendiente → Cocina → Listo → Entregado
-- [ ] Integración con caja/sucursal y usuario
+- [ ] CRUD pedidos externos
+- [ ] Estados: Pendiente, En cocina, Listo, Entregado
 - [ ] Asociación opcional con cliente
+- [ ] Relación con caja/sucursal
 
 ---
 
-## 🧾 Fase 6 - Facturación Electrónica (via API_FE)
+## 🧾 FASE 6 – FACTURACIÓN ELECTRÓNICA (INTEGRACIÓN API_FE)
 
 - [ ] Endpoint `POST /factura/rapida`
-- [ ] Procesamiento de orden y factura
-- [ ] Envío del JSON a `API_FE` (asíncrono, sin esperar respuesta)
-- [ ] Guardado del estado local ("ENVIADO")
-- [ ] Endpoint de auditoría o reintento manual (opcional)
+- [ ] Construcción de datos y lógica de negocio
+- [ ] Envío asíncrono a `API_FE` (no esperar respuesta)
+- [ ] Registro local del envío
+- [ ] Reintentos manuales o seguimiento (opcional)
 
 ---
 
-## 📊 Fase 7 - Reportes
+## 📊 FASE 7 – REPORTES
 
-- [ ] Ventas por día, semana, mes
+- [ ] Reporte ventas por rango de fechas
 - [ ] Productos más vendidos
+- [ ] Auditoría de acciones por usuario
 - [ ] Cierre de caja
-- [ ] Historial por usuario (auditoría)
 
 ---
 
-## 🎁 Extras
+## 🧪 TESTING
 
-- [ ] Importar catálogo CABYS de Hacienda (CSV/XML)
-- [ ] Generar PDF de facturas o tiquetes (Jasper u otro)
-- [ ] Exportación de reportes (Excel, CSV)
-
----
-
-## 🧪 Testing
-
-- [ ] Pruebas unitarias (JUnit 5 + Mockito)
-- [ ] Pruebas de integración
-- [ ] Tests para seguridad y control de acceso
+- [ ] Tests unitarios (servicios)
+- [ ] Tests de integración (controladores)
+- [ ] Seguridad y multitenancy en pruebas
 
 ---
+
+## 🔧 NOTAS DE CONFIGURACIÓN
+
+```properties
+# Base de datos
+DB_NAME=nathbitpos
+DB_USER=postgres
+DB_PASSWORD=tu_password
+JWT_SECRET=clave-segura-de-256-bits
+
+# Header obligatorio en peticiones autenticadas
+X-Tenant-ID: demo 
+```
+---
+
+## ⚙️ COMPONENTES A REVISAR
+	•	OrdenServiceImpl (incompleto)
+	•	UsuarioServiceImpl (requiere ajustar lógica con sucursal y caja)
 
 > Última actualización: `2025-08-02`  
 > Autor: Jorge Andrés Mayorga  

@@ -171,7 +171,7 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        usuario.setBloqueado(true);
+        usuario.setCuentaBloqueada(true);
         usuarioRepository.save(usuario);
 
         log.info("Usuario bloqueado exitosamente");
@@ -184,7 +184,7 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        usuario.setBloqueado(false);
+        usuario.setCuentaBloqueada(false);
         usuario.setIntentosFallidos(0);
         usuarioRepository.save(usuario);
 
@@ -218,7 +218,7 @@ public class UsuarioServiceImpl implements UsuarioService {
             usuario.setIntentosFallidos(intentosFallidos);
 
             if (intentosFallidos >= maxIntentosLogin) {
-                usuario.setBloqueado(true);
+                usuario.setCuentaBloqueada(true);
                 log.warn("Usuario {} bloqueado por exceder máximo de intentos", email);
             }
 

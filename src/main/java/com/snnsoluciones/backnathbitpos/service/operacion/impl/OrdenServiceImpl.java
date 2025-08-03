@@ -71,7 +71,7 @@ public class OrdenServiceImpl implements OrdenService {
             }
 
             orden.setMesa(mesa);
-            mesa.ocupar(null, request.getCantidadPersonas(), request.getNombreCliente());
+            mesa.ocupar(usuarioRepository.findById(request.getMeseroId()).orElse(null), request.getCantidadPersonas(), request.getNombreCliente());
             mesaRepository.save(mesa);
         }
 

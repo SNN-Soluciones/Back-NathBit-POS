@@ -133,4 +133,8 @@ public class Sucursal extends BaseEntity {
   public synchronized Long siguienteConsecutivoMensaje() {
     return ++consecutivoMensaje;
   }
+
+  public String getDireccion(){
+    return String.format("%s, %s, %s, %s", provincia, canton, distrito, otrasSenas);
+  }
 }

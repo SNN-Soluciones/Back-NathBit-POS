@@ -31,6 +31,8 @@ public interface UsuarioMapper {
   @Mapping(target = "sucursalPredeterminadaNombre", source = "sucursalPredeterminada.nombre")
   @Mapping(target = "sucursalesIds", source = "sucursales", qualifiedByName = "sucursalesToIds")
   @Mapping(target = "cajasIds", source = "cajas", qualifiedByName = "cajasToIds")
+  @Mapping(target = "rolId", source = "rol.id")
+  @Mapping(target = "rolNombre", source = "rol.nombre")
   UsuarioResponse toResponse(Usuario usuario);
 
   /**

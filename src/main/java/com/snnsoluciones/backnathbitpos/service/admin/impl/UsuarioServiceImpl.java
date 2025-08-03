@@ -110,10 +110,13 @@ public class UsuarioServiceImpl implements UsuarioService {
         usuarioMapper.updateEntity(usuario, request);
 
         // Actualizar rol si cambió
-        if (request.getRolId() != null && !request.getRolId().equals(usuario.getRol().getId())) {
-            Rol rol = rolRepository.findById(request.getRolId())
-                .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
-            usuario.setRol(rol);
+        if (request.getRolId() != null) {
+            // Verificar si el rol cambió
+            if (usuario.getRol() == null || !request.getRolId().equals(usuario.getRol().getId())) {
+                Rol rol = rolRepository.findById(request.getRolId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
+                usuario.setRol(rol);
+            }
         }
 
         // Actualizar sucursal predeterminada si cambió
@@ -171,7 +174,7 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        usuario.setCuentaBloqueada(true);
+        usuario.setBloqueado(true);
         usuarioRepository.save(usuario);
 
         log.info("Usuario bloqueado exitosamente");
@@ -184,7 +187,7 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        usuario.setCuentaBloqueada(false);
+        usuario.setBloqueado(false);
         usuario.setIntentosFallidos(0);
         usuarioRepository.save(usuario);
 
@@ -193,6 +196,8 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public void resetearIntentosFallidos(String email) {
+        log.debug("Reseteando intentos fallidos para: {}", email);
+
         String tenantId = TenantContext.getCurrentTenant();
         usuarioRepository.findByEmailAndTenantId(email, tenantId).ifPresent(usuario -> {
             usuario.setIntentosFallidos(0);
@@ -202,6 +207,8 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public void manejarLoginExitoso(String email) {
+        log.debug("Manejando login exitoso para: {}", email);
+
         String tenantId = TenantContext.getCurrentTenant();
         usuarioRepository.findByEmailAndTenantId(email, tenantId).ifPresent(usuario -> {
             usuario.setIntentosFallidos(0);
@@ -212,14 +219,16 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public void manejarLoginFallido(String email) {
+        log.debug("Manejando login fallido para: {}", email);
+
         String tenantId = TenantContext.getCurrentTenant();
         usuarioRepository.findByEmailAndTenantId(email, tenantId).ifPresent(usuario -> {
-            int intentosFallidos = usuario.getIntentosFallidos() + 1;
-            usuario.setIntentosFallidos(intentosFallidos);
+            int intentos = usuario.getIntentosFallidos() + 1;
+            usuario.setIntentosFallidos(intentos);
 
-            if (intentosFallidos >= maxIntentosLogin) {
-                usuario.setCuentaBloqueada(true);
-                log.warn("Usuario {} bloqueado por exceder máximo de intentos", email);
+            if (intentos >= maxIntentosLogin) {
+                usuario.setBloqueado(true);
+                log.warn("Usuario {} bloqueado por exceder intentos de login", email);
             }
 
             usuarioRepository.save(usuario);
@@ -288,17 +297,30 @@ public class UsuarioServiceImpl implements UsuarioService {
      */
     private void asignarSucursalesYCajas(Usuario usuario, Set<UUID> sucursalesIds, Set<UUID> cajasIds) {
         // Limpiar y asignar sucursales
-        if (sucursalesIds != null) {
+        if (sucursalesIds != null && !sucursalesIds.isEmpty()) {
             usuario.getSucursales().clear();
             Set<Sucursal> sucursales = new HashSet<>(sucursalRepository.findAllById(sucursalesIds));
+
+            if (sucursales.size() != sucursalesIds.size()) {
+                throw new BusinessException("Una o más sucursales no fueron encontradas");
+            }
+
             usuario.setSucursales(sucursales);
         }
 
         // Limpiar y asignar cajas
-        if (cajasIds != null) {
+        if (cajasIds != null && !cajasIds.isEmpty()) {
             usuario.getCajas().clear();
             Set<Caja> cajas = new HashSet<>(cajaRepository.findAllById(cajasIds));
+
+            if (cajas.size() != cajasIds.size()) {
+                throw new BusinessException("Una o más cajas no fueron encontradas");
+            }
+
             usuario.setCajas(cajas);
         }
+
+        // Guardar cambios
+        usuarioRepository.save(usuario);
     }
 }

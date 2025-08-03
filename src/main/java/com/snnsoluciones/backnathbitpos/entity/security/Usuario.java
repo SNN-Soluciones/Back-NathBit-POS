@@ -1,8 +1,10 @@
 package com.snnsoluciones.backnathbitpos.entity.security;
 
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
+import com.snnsoluciones.backnathbitpos.entity.operacion.Caja;
 import com.snnsoluciones.backnathbitpos.entity.tenant.Sucursal;
 import jakarta.persistence.*;
+import java.util.UUID;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -23,20 +25,26 @@ import java.util.stream.Collectors;
 @Builder
 public class Usuario extends BaseEntity implements UserDetails {
 
-  @Column(nullable = false, unique = true, length = 100)
+  @Column(nullable = false, length = 255)
   private String email;
 
   @Column(nullable = false)
   private String password;
 
-  @Column(nullable = false, length = 50)
+  @Column(nullable = false, length = 100)
   private String nombre;
 
-  @Column(nullable = false, length = 50)
+  @Column(length = 100)
   private String apellidos;
 
-  @Column(length = 20)
+  @Column(length = 50)
   private String telefono;
+
+  @Column(length = 50)
+  private String identificacion;
+
+  @Column(name = "tipo_identificacion", length = 20)
+  private String tipoIdentificacion;
 
   @Column(name = "ultimo_acceso")
   private LocalDateTime ultimoAcceso;
@@ -45,25 +53,58 @@ public class Usuario extends BaseEntity implements UserDetails {
   @Builder.Default
   private Integer intentosFallidos = 0;
 
-  @Column(name = "cuenta_bloqueada")
+  @Column(name = "bloqueado")
   @Builder.Default
-  private Boolean cuentaBloqueada = false;
+  private Boolean bloqueado = false;
 
-  @ManyToMany(fetch = FetchType.EAGER)
+  // Relación con Rol (uno a muchos según la BD)
+  @ManyToOne(fetch = FetchType.EAGER)
+  @JoinColumn(name = "rol_id")
+  private Rol rol;
+
+  // Relación con Sucursal predeterminada
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "sucursal_predeterminada_id")
+  private Sucursal sucursalPredeterminada;
+
+  // Relación muchos a muchos con Sucursales
+  @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
-      name = "usuarios_roles",
+      name = "usuario_sucursales",
       joinColumns = @JoinColumn(name = "usuario_id"),
-      inverseJoinColumns = @JoinColumn(name = "rol_id")
+      inverseJoinColumns = @JoinColumn(name = "sucursal_id")
   )
   @Builder.Default
-  private Set<Rol> roles = new HashSet<>();
+  private Set<Sucursal> sucursales = new HashSet<>();
+
+  // Relación muchos a muchos con Cajas
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "usuario_cajas",
+      joinColumns = @JoinColumn(name = "usuario_id"),
+      inverseJoinColumns = @JoinColumn(name = "caja_id")
+  )
+  @Builder.Default
+  private Set<Caja> cajas = new HashSet<>();
 
   // Métodos de UserDetails
   @Override
   public Collection<? extends GrantedAuthority> getAuthorities() {
-    return roles.stream()
-        .map(rol -> new SimpleGrantedAuthority("ROLE_" + rol.getNombre().name()))
-        .collect(Collectors.toList());
+    Set<SimpleGrantedAuthority> authorities = new HashSet<>();
+
+    if (rol != null) {
+      // Agregar rol
+      authorities.add(new SimpleGrantedAuthority("ROLE_" + rol.getNombre().name()));
+
+      // Agregar permisos del rol
+      if (rol.getPermisos() != null) {
+        rol.getPermisos().forEach(permiso ->
+            authorities.add(new SimpleGrantedAuthority(permiso.getNombre()))
+        );
+      }
+    }
+
+    return authorities;
   }
 
   @Override
@@ -78,7 +119,7 @@ public class Usuario extends BaseEntity implements UserDetails {
 
   @Override
   public boolean isAccountNonLocked() {
-    return !cuentaBloqueada;
+    return !bloqueado;
   }
 
   @Override
@@ -91,39 +132,31 @@ public class Usuario extends BaseEntity implements UserDetails {
     return getActivo() != null && getActivo();
   }
 
-  // Métodos helper
-  public void agregarRol(Rol rol) {
-    roles.add(rol);
-    rol.getUsuarios().add(this);
-  }
-
-  public void removerRol(Rol rol) {
-    roles.remove(rol);
-    rol.getUsuarios().remove(this);
-  }
-
-  @ManyToMany(fetch = FetchType.LAZY)
-  @JoinTable(
-      name = "usuarios_sucursales",
-      joinColumns = @JoinColumn(name = "usuario_id"),
-      inverseJoinColumns = @JoinColumn(name = "sucursal_id")
-  )
-  @Builder.Default
-  private Set<Sucursal> sucursales = new HashSet<>();
-
-  // Agregar estos métodos helper
+  // Métodos helper para sucursales
   public void agregarSucursal(Sucursal sucursal) {
     sucursales.add(sucursal);
-    sucursal.getUsuarios().add(this);
   }
 
   public void removerSucursal(Sucursal sucursal) {
     sucursales.remove(sucursal);
-    sucursal.getUsuarios().remove(this);
   }
 
-  public boolean tieneSucursal(String codigoSucursal) {
+  public boolean tieneSucursal(UUID sucursalId) {
     return sucursales.stream()
-        .anyMatch(s -> s.getCodigo().equals(codigoSucursal));
+        .anyMatch(s -> s.getId().equals(sucursalId));
+  }
+
+  // Métodos helper para cajas
+  public void agregarCaja(Caja caja) {
+    cajas.add(caja);
+  }
+
+  public void removerCaja(Caja caja) {
+    cajas.remove(caja);
+  }
+
+  public boolean tieneCaja(UUID cajaId) {
+    return cajas.stream()
+        .anyMatch(c -> c.getId().equals(cajaId));
   }
 }

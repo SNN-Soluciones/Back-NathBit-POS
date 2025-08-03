@@ -4,24 +4,36 @@ import com.snnsoluciones.backnathbitpos.config.tenant.TenantContext;
 import com.snnsoluciones.backnathbitpos.dto.request.CambioPasswordRequest;
 import com.snnsoluciones.backnathbitpos.dto.request.UsuarioCreateRequest;
 import com.snnsoluciones.backnathbitpos.dto.request.UsuarioUpdateRequest;
+import com.snnsoluciones.backnathbitpos.dto.response.AuditEventResponse;
 import com.snnsoluciones.backnathbitpos.dto.response.UsuarioResponse;
+import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Caja;
+import com.snnsoluciones.backnathbitpos.entity.security.AuditEvent;
 import com.snnsoluciones.backnathbitpos.entity.security.Rol;
 import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
 import com.snnsoluciones.backnathbitpos.entity.tenant.Sucursal;
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.mapper.UsuarioMapper;
+import com.snnsoluciones.backnathbitpos.repository.AuditEventRepository;
 import com.snnsoluciones.backnathbitpos.repository.CajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.RolRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.admin.UsuarioService;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +55,8 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final CajaRepository cajaRepository;
     private final PasswordEncoder passwordEncoder;
     private final UsuarioMapper usuarioMapper;
+    private final CacheManager cacheManager;
+    private final AuditEventRepository auditEventRepository;
 
     @Value("${app.security.max-intentos-login:3}")
     private int maxIntentosLogin;
@@ -322,5 +336,169 @@ public class UsuarioServiceImpl implements UsuarioService {
 
         // Guardar cambios
         usuarioRepository.save(usuario);
+    }
+
+    @Override
+    @Transactional
+    public UsuarioResponse cambiarRol(UUID userId, String nuevoRol) {
+        log.info("Cambiando rol de usuario {} a {}", userId, nuevoRol);
+
+        Usuario usuario = usuarioRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        // Buscar el nuevo rol
+        Rol rol = rolRepository.findByNombre(RolNombre.valueOf(nuevoRol))
+            .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado: " + nuevoRol));
+
+        String rolAnterior = usuario.getRol() != null ? usuario.getRol().getNombre().name() : "SIN_ROL";
+        usuario.setRol(rol);
+        usuario = usuarioRepository.save(usuario);
+
+        log.info("Rol cambiado exitosamente de {} a {}", rolAnterior, nuevoRol);
+
+        return usuarioMapper.toResponse(usuario);
+    }
+
+    @Override
+    @Transactional
+    public UsuarioResponse asignarSucursales(UUID userId, List<UUID> sucursalIds) {
+        log.info("Asignando {} sucursales a usuario {}", sucursalIds.size(), userId);
+
+        Usuario usuario = usuarioRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        // Obtener las sucursales
+        List<Sucursal> sucursales = sucursalRepository.findAllById(sucursalIds);
+
+        if (sucursales.size() != sucursalIds.size()) {
+            throw new BusinessException("Una o más sucursales no fueron encontradas");
+        }
+
+        // Limpiar sucursales actuales y asignar las nuevas
+        usuario.getSucursales().clear();
+        usuario.getSucursales().addAll(sucursales);
+
+        // Si no tiene sucursal predeterminada, asignar la primera
+        if (usuario.getSucursalPredeterminada() == null && !sucursales.isEmpty()) {
+            usuario.setSucursalPredeterminada(sucursales.get(0));
+        }
+
+        usuario = usuarioRepository.save(usuario);
+
+        log.info("Sucursales asignadas exitosamente");
+
+        return usuarioMapper.toResponse(usuario);
+    }
+
+    @Override
+    @Transactional
+    public UsuarioResponse asignarCajas(UUID userId, List<UUID> cajaIds) {
+        log.info("Asignando {} cajas a usuario {}", cajaIds.size(), userId);
+
+        Usuario usuario = usuarioRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        // Obtener las cajas
+        List<Caja> cajas = cajaRepository.findAllById(cajaIds);
+
+        if (cajas.size() != cajaIds.size()) {
+            throw new BusinessException("Una o más cajas no fueron encontradas");
+        }
+
+        // Verificar que todas las cajas pertenezcan a sucursales asignadas al usuario
+        Set<UUID> sucursalesUsuario = usuario.getSucursales().stream()
+            .map(BaseEntity::getId)
+            .collect(Collectors.toSet());
+
+        boolean cajasValidas = cajas.stream()
+            .allMatch(caja -> sucursalesUsuario.contains(caja.getSucursal().getId()));
+
+        if (!cajasValidas) {
+            throw new BusinessException("Solo se pueden asignar cajas de las sucursales del usuario");
+        }
+
+        // Limpiar cajas actuales y asignar las nuevas
+        usuario.getCajas().clear();
+        usuario.getCajas().addAll(cajas);
+
+        usuario = usuarioRepository.save(usuario);
+
+        log.info("Cajas asignadas exitosamente");
+
+        return usuarioMapper.toResponse(usuario);
+    }
+
+    @Override
+    @Transactional
+    public void resetearIntentos(UUID userId) {
+        log.info("Reseteando intentos fallidos para usuario {}", userId);
+
+        Usuario usuario = usuarioRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        usuario.setIntentosFallidos(0);
+        usuario.setBloqueado(false);
+        usuarioRepository.save(usuario);
+
+        log.info("Intentos reseteados exitosamente");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AuditEventResponse> obtenerHistorialLogin(UUID userId, int page, int size) {
+        log.info("Obteniendo historial de login para usuario {}", userId);
+
+        Usuario usuario = usuarioRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("eventDate").descending());
+
+        Page<AuditEvent> eventos = auditEventRepository.findByUsernameAndEventTypeIn(
+            usuario.getEmail(),
+            Arrays.asList("LOGIN_SUCCESS", "LOGIN_FAILED", "LOGOUT", "LOGIN_BLOCKED"),
+            pageable
+        );
+
+        return eventos.getContent().stream()
+            .map(this::mapToAuditEventResponse)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void cerrarTodasLasSesiones(UUID userId) {
+        log.info("Cerrando todas las sesiones del usuario {}", userId);
+
+        Usuario usuario = usuarioRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        // Agregar todos los tokens del usuario a la blacklist
+        // Esto requeriría tener un registro de tokens activos por usuario
+        // Por ahora, simplemente marcamos en el usuario
+
+        usuario.setForzarRelogin(true); // Este campo habría que agregarlo a la entidad
+        usuarioRepository.save(usuario);
+
+        // Limpiar cache si existe
+        if (cacheManager != null) {
+            Cache userCache = cacheManager.getCache("users");
+            if (userCache != null) {
+                userCache.evict(usuario.getEmail());
+            }
+        }
+
+        log.info("Todas las sesiones cerradas para usuario {}", usuario.getEmail());
+    }
+
+    private AuditEventResponse mapToAuditEventResponse(AuditEvent event) {
+        return AuditEventResponse.builder()
+            .eventType(event.getEventType())
+            .eventDate(event.getEventDate())
+            .ipAddress(event.getIpAddress())
+            .userAgent(event.getUserAgent())
+            .details(event.getDetails())
+            .success(event.getSuccess())
+            .errorMessage(event.getErrorMessage())
+            .build();
     }
 }

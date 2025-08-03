@@ -12,6 +12,9 @@ import org.springframework.stereotype.Component;
 import java.security.Key;
 import java.util.Date;
 
+/**
+ * Componente para manejar la generación, validación y parseo de tokens JWT.
+ */
 @Component
 @Slf4j
 public class JwtTokenProvider {
@@ -26,7 +29,7 @@ public class JwtTokenProvider {
   private Long refreshExpiration;
 
   /**
-   * Genera un token JWT para el usuario autenticado
+   * Genera un token JWT a partir de la autenticación.
    */
   public String generateToken(Authentication authentication) {
     UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
@@ -34,7 +37,7 @@ public class JwtTokenProvider {
   }
 
   /**
-   * Genera un token JWT desde el username
+   * Genera un token JWT a partir del nombre de usuario.
    */
   public String generateTokenFromUsername(String username) {
     Date now = new Date();
@@ -44,12 +47,12 @@ public class JwtTokenProvider {
         .setSubject(username)
         .setIssuedAt(now)
         .setExpiration(expiryDate)
-        .signWith(key(), SignatureAlgorithm.HS256)
+        .signWith(getSignKey(), SignatureAlgorithm.HS512)
         .compact();
   }
 
   /**
-   * Genera un refresh token
+   * Genera un refresh token con mayor duración.
    */
   public String generateRefreshToken(String username) {
     Date now = new Date();
@@ -60,16 +63,16 @@ public class JwtTokenProvider {
         .setIssuedAt(now)
         .setExpiration(expiryDate)
         .claim("type", "refresh")
-        .signWith(key(), SignatureAlgorithm.HS256)
+        .signWith(getSignKey(), SignatureAlgorithm.HS512)
         .compact();
   }
 
   /**
-   * Obtiene el username del token
+   * Obtiene el nombre de usuario del token.
    */
   public String getUsernameFromToken(String token) {
     Claims claims = Jwts.parserBuilder()
-        .setSigningKey(key())
+        .setSigningKey(getSignKey())
         .build()
         .parseClaimsJws(token)
         .getBody();
@@ -78,17 +81,17 @@ public class JwtTokenProvider {
   }
 
   /**
-   * Valida si el token es válido
+   * Valida el token y retorna true si es válido.
    */
-  public boolean validateToken(String authToken) {
+  public boolean validateToken(String token) {
     try {
       Jwts.parserBuilder()
-          .setSigningKey(key())
+          .setSigningKey(getSignKey())
           .build()
-          .parseClaimsJws(authToken);
+          .parseClaimsJws(token);
       return true;
     } catch (SecurityException ex) {
-      log.error("Token JWT inválido - firma incorrecta");
+      log.error("Token JWT inválido - firma no válida");
     } catch (MalformedJwtException ex) {
       log.error("Token JWT inválido - formato incorrecto");
     } catch (ExpiredJwtException ex) {
@@ -96,17 +99,59 @@ public class JwtTokenProvider {
     } catch (UnsupportedJwtException ex) {
       log.error("Token JWT no soportado");
     } catch (IllegalArgumentException ex) {
-      log.error("JWT claims string está vacío");
+      log.error("JWT claims vacío");
     }
     return false;
   }
 
   /**
-   * Obtiene la fecha de expiración del token
+   * Valida el token y retorna los claims si es válido.
+   * Lanza excepción si el token no es válido.
+   */
+  public Claims validateAndGetClaims(String token) {
+    try {
+      return Jwts.parserBuilder()
+          .setSigningKey(getSignKey())
+          .build()
+          .parseClaimsJws(token)
+          .getBody();
+    } catch (ExpiredJwtException e) {
+      // Re-lanzamos para que el servicio pueda manejar tokens expirados especialmente
+      throw e;
+    } catch (SecurityException | MalformedJwtException | UnsupportedJwtException | IllegalArgumentException ex) {
+      log.error("Error validando token: {}", ex.getMessage());
+      throw new JwtException("Token inválido");
+    }
+  }
+
+  /**
+   * Verifica si el token está próximo a expirar (menos de 5 minutos).
+   */
+  public boolean isTokenAboutToExpire(String token) {
+    try {
+      Claims claims = Jwts.parserBuilder()
+          .setSigningKey(getSignKey())
+          .build()
+          .parseClaimsJws(token)
+          .getBody();
+
+      Date expiration = claims.getExpiration();
+      Date now = new Date();
+      long diff = expiration.getTime() - now.getTime();
+
+      // Si quedan menos de 5 minutos
+      return diff < 300000;
+    } catch (Exception e) {
+      return true;
+    }
+  }
+
+  /**
+   * Obtiene la fecha de expiración del token.
    */
   public Date getExpirationDateFromToken(String token) {
     Claims claims = Jwts.parserBuilder()
-        .setSigningKey(key())
+        .setSigningKey(getSignKey())
         .build()
         .parseClaimsJws(token)
         .getBody();
@@ -115,9 +160,28 @@ public class JwtTokenProvider {
   }
 
   /**
-   * Genera la key para firmar los tokens
+   * Verifica si es un refresh token.
    */
-  private Key key() {
-    return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
+  public boolean isRefreshToken(String token) {
+    try {
+      Claims claims = Jwts.parserBuilder()
+          .setSigningKey(getSignKey())
+          .build()
+          .parseClaimsJws(token)
+          .getBody();
+
+      String type = (String) claims.get("type");
+      return "refresh".equals(type);
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene la clave de firma decodificada.
+   */
+  private Key getSignKey() {
+    byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+    return Keys.hmacShaKeyFor(keyBytes);
   }
 }

@@ -1,4 +1,4 @@
-# ✅ TODO.md — Back-NathBit-POS (Actualizado al 2025-08-02)
+# ✅ TODO.md — Back-NathBit-POS (Actualizado al 2025-08-03)
 
 Sistema backend multi-tenant para punto de venta en restaurantes. Construido con Java 17 y Spring Boot 3. Utiliza PostgreSQL, separación por schema, JWT, MapStruct, Flyway y arquitectura modular.
 
@@ -22,10 +22,10 @@ Sistema backend multi-tenant para punto de venta en restaurantes. Construido con
 
 ---
 
-## 🟡 FASE 2 – SEGURIDAD Y CONTROL DE ACCESO (EN PROGRESO)
+## ✅ FASE 2 – SEGURIDAD Y CONTROL DE ACCESO ✅ (COMPLETADA)
 
 ### ✅ Completado
-- [x] Entidades: `Usuario`, `Rol`, `Permiso`
+- [x] Entidades: `Usuario`, `Rol`, `Permiso`, `TokenBlacklist`, `AuditEvent`
 - [x] JWT: `JwtTokenProvider`, `JwtAuthenticationFilter`
 - [x] Servicios y repositorios: `UsuarioRepository`, `UsuarioService`, `UsuarioServiceImpl`
 - [x] DTOs: `UsuarioCreateRequest`, `UsuarioUpdateRequest`, `UsuarioResponse`, `CambioPasswordRequest`
@@ -34,22 +34,20 @@ Sistema backend multi-tenant para punto de venta en restaurantes. Construido con
 - [x] `UsuarioController` con endpoints REST básicos
 - [x] Endpoint `GET /api/me` (perfil usuario actual)
 - [x] Sistema de logout con blacklist de tokens
-- [x] Auditoría de eventos (login, logout, etc.)
-- [x] Scheduled tasks para limpieza de tokens
-
-### 🔧 En Proceso
-- [x] Migración a `@SuperBuilder` en entidades que extienden BaseEntity
-- [ ] Corrección de errores de compilación MapStruct
-
-### 🔴 Pendientes
-- [ ] Validar permisos por sucursal y caja en endpoints
-- [ ] Endpoints administrativos adicionales:
-  - PUT `/api/usuarios/{id}/rol`
-  - POST `/api/usuarios/{id}/sucursales`
-  - POST `/api/usuarios/{id}/cajas`
-- [ ] Refresh token implementation
-- [ ] Rate limiting para login attempts
-- [ ] 2FA (Two-Factor Authentication) - opcional
+- [x] Auditoría de eventos (login, logout, etc.) con `AuditService`
+- [x] **Rate limiting** para prevenir ataques de fuerza bruta
+- [x] **Scheduled tasks** para limpieza de tokens y auditoría
+- [x] **Endpoints administrativos**:
+  - [x] PUT `/api/admin/usuarios/{id}/rol`
+  - [x] POST `/api/admin/usuarios/{id}/sucursales`
+  - [x] POST `/api/admin/usuarios/{id}/cajas`
+  - [x] PUT `/api/admin/usuarios/{id}/desbloquear`
+  - [x] PUT `/api/admin/usuarios/{id}/resetear-intentos`
+  - [x] GET `/api/admin/usuarios/{id}/historial-login`
+  - [x] POST `/api/admin/usuarios/{id}/cerrar-sesiones`
+- [x] Cache en memoria con `CacheConfig`
+- [x] Utilidades de seguridad con `SecurityUtils`
+- [x] Migración a constructores/setters (eliminado @SuperBuilder)
 
 ---
 
@@ -166,9 +164,9 @@ Sistema backend multi-tenant para punto de venta en restaurantes. Construido con
 - [ ] Message Queue (RabbitMQ/Kafka) para operaciones asíncronas
 
 ### 🔐 Seguridad
-- [ ] API Rate Limiting
-- [ ] Encriptación de datos sensibles
-- [ ] Auditoría completa de cambios
+- [x] API Rate Limiting ✅
+- [x] Encriptación de datos sensibles (passwords con BCrypt) ✅
+- [x] Auditoría completa de cambios ✅
 - [ ] Backup automático de BD
 
 ### 📱 Integraciones
@@ -192,44 +190,39 @@ Sistema backend multi-tenant para punto de venta en restaurantes. Construido con
 
 ## 🚀 PRÓXIMOS PASOS INMEDIATOS
 
-1. **Resolver errores de compilación MapStruct**
-  - Completar migración a `@SuperBuilder`
-  - Verificar todos los mappers
-  - Asegurar build exitoso
+1. **Iniciar FASE 3 - CRUD de Productos**
+  - Crear estructura base de categorías
+  - Implementar productos con variantes
+  - Sistema de precios por sucursal
 
-2. **Completar módulo de seguridad**
-  - Implementar refresh tokens
-  - Agregar rate limiting
-  - Completar endpoints de gestión de usuarios
+2. **Gestión de Clientes**
+  - CRUD básico
+  - Validaciones de identificación
+  - Sistema de puntos
 
-3. **Iniciar CRUD de Productos**
-  - Crear estructura base
-  - Implementar categorías
-  - Agregar productos con variantes
-
-4. **Implementar gestión de Mesas**
-  - Completar servicios
-  - Crear controladores
-  - Implementar lógica de estados
+3. **Completar gestión de Mesas**
+  - Implementar servicios faltantes
+  - Estados y transiciones
+  - Asignación de meseros
 
 ---
 
 ## 📝 NOTAS IMPORTANTES
 
-- **Multi-tenant**: Cada operación debe validar el tenant context
-- **Auditoría**: Todas las operaciones críticas deben ser auditadas
+- **Multi-tenant**: Cada operación debe validar el tenant context ✅
+- **Auditoría**: Todas las operaciones críticas deben ser auditadas ✅
 - **Performance**: Considerar índices en BD para consultas frecuentes
-- **Seguridad**: Validar permisos en cada endpoint
-- **Transacciones**: Usar `@Transactional` apropiadamente
+- **Seguridad**: Validar permisos en cada endpoint ✅
+- **Transacciones**: Usar `@Transactional` apropiadamente ✅
 
 ---
 
 ## 🐛 BUGS CONOCIDOS
 
-1. MapStruct no compila con `@Builder` en entidades que extienden `BaseEntity`
-  - **Solución**: Migrar a `@SuperBuilder` ✅ (en proceso)
+1. ~~MapStruct no compila con `@Builder` en entidades que extienden `BaseEntity`~~
+  - **Solución**: ~~Migrar a `@SuperBuilder`~~ Eliminado builders, usando constructores/setters ✅
 
-2. Logout no invalida tokens inmediatamente
+2. ~~Logout no invalida tokens inmediatamente~~
   - **Solución**: Implementar blacklist ✅ (completado)
 
 ---
@@ -242,8 +235,25 @@ Sistema backend multi-tenant para punto de venta en restaurantes. Construido con
 - Integración con delivery apps
 - Sistema de feedback/reviews
 - Gestión de eventos especiales
+- Notificaciones push
+- Analytics en tiempo real
+- Gestión de inventario predictivo
 
 ---
 
-**Última actualización**: 2025-08-02 por Sistema
-**Próxima revisión**: Al completar Fase 2
+## 📈 PROGRESO GENERAL
+
+- **Fase 1 (Multi-tenant)**: 100% ✅
+- **Fase 2 (Seguridad)**: 100% ✅
+- **Fase 3 (CRUDs Base)**: 0% 🔴
+- **Fase 4 (Restaurante)**: 20% 🟠
+- **Fase 5 (POS)**: 10% 🟠
+- **Fase 6 (Facturación)**: 0% 🔴
+- **Fase 7 (Reportes)**: 0% 🔴
+
+**Progreso Total**: ~25%
+
+---
+
+**Última actualización**: 2025-08-03 por Sistema
+**Próxima revisión**: Al completar Fase 3

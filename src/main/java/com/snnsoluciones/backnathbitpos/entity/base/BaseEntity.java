@@ -41,7 +41,7 @@ public abstract class BaseEntity implements Serializable {
   private LocalDateTime updatedAt;
 
   @Column(name = "activo", nullable = false)
-  private Boolean activo = true;
+  private Boolean activo;
 
   @Version
   @Column(name = "version")

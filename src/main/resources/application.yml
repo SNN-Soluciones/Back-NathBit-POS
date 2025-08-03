@@ -74,6 +74,14 @@ security:
     allowed-methods: GET,POST,PUT,DELETE,OPTIONS
     allowed-headers: "*"
     allow-credentials: true
+  rate-limit:
+    max-attempts: 5                    # Máximo de intentos antes de bloquear
+    block-duration-minutes: 15         # Duración del bloqueo en minutos
+  cleanup:
+    audit-retention-days: 90          # Días de retención de eventos de auditoría
+  login:
+    max-failed-attempts: 5            # Intentos fallidos antes de bloquear usuario
+    account-lock-duration: 24         # Horas que permanece bloqueada la cuenta
 
 # Logging
 logging:

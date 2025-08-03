@@ -3,8 +3,10 @@ package com.snnsoluciones.backnathbitpos.service.admin;
 import com.snnsoluciones.backnathbitpos.dto.request.UsuarioCreateRequest;
 import com.snnsoluciones.backnathbitpos.dto.request.UsuarioUpdateRequest;
 import com.snnsoluciones.backnathbitpos.dto.request.CambioPasswordRequest;
+import com.snnsoluciones.backnathbitpos.dto.response.AuditEventResponse;
 import com.snnsoluciones.backnathbitpos.dto.response.UsuarioResponse;
 import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -23,4 +25,33 @@ public interface UsuarioService {
     Page<UsuarioResponse> listar(Pageable pageable);
     boolean existeEmail(String email);
     void eliminar(UUID id);
+    /**
+     * Cambia el rol de un usuario.
+     */
+    UsuarioResponse cambiarRol(UUID userId, String nuevoRol);
+
+    /**
+     * Asigna sucursales a un usuario.
+     */
+    UsuarioResponse asignarSucursales(UUID userId, List<UUID> sucursalIds);
+
+    /**
+     * Asigna cajas a un usuario.
+     */
+    UsuarioResponse asignarCajas(UUID userId, List<UUID> cajaIds);
+
+    /**
+     * Resetea el contador de intentos fallidos.
+     */
+    void resetearIntentos(UUID userId);
+
+    /**
+     * Obtiene el historial de login de un usuario.
+     */
+    List<AuditEventResponse> obtenerHistorialLogin(UUID userId, int page, int size);
+
+    /**
+     * Cierra todas las sesiones activas de un usuario.
+     */
+    void cerrarTodasLasSesiones(UUID userId);
 }

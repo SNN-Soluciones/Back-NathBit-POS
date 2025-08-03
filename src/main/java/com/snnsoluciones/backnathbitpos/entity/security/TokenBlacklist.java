@@ -3,7 +3,6 @@ package com.snnsoluciones.backnathbitpos.entity.security;
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
@@ -18,7 +17,6 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@SuperBuilder
 public class TokenBlacklist extends BaseEntity {
 
     @Column(nullable = false, unique = true, length = 500)

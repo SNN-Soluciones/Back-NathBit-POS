@@ -1,120 +1,109 @@
-# ✅ TODO.md — Plan de Implementación para `backnathbitpos`
+# ✅ TODO.md — Plan de Implementación para `backnathbitpos` (Actualizado)
 
-Este documento organiza el trabajo pendiente para el desarrollo del backend multi-tenant del sistema POS para restaurantes. El objetivo es construir una API REST robusta, modular, escalable y lista para producción.
+Este documento organiza el trabajo pendiente para el backend multi-tenant POS de restaurantes. Incluye lo que ya está hecho y lo que sigue, en orden estratégico por fase.
 
 ---
 
-## 🟠 Fase 1 - Configuración Multi-Tenant (TenantResolver)
+## 🟢 Estado Actual
 
-- [ ] Crear entidad `Tenant` y sus relaciones con sucursales y cajas
+- Ya están implementadas las principales entidades: `Tenant`, `Sucursal`, `Caja`, `Usuario`, `Cliente`, `Producto`, `Orden`, `Mesa`, `Zona`.
+- Ya existe estructura de repositorios y servicios para varias entidades.
+- Seguridad con JWT está configurada (login/logout básico funcionando).
+- Se han creado enums de estado (`EstadoOrden`, `EstadoCaja`, etc.).
+- Falta completar lógica multi-tenant a nivel de conexión y separación por esquema.
+- Se estaba empezando la parte de orden (te preguntaron por los DTOs y el `OrdenMapper`).
+- Ya existe estructura `TenantContext` y `TenantFilter`.
+
+---
+
+## 🔴 Fase 1 - Multi-Tenant (pendiente completar)
+
+- [x] Entidad `Tenant` creada
+- [x] `TenantContext` con ThreadLocal
+- [x] Filtro `TenantFilter` implementado para leer `X-Tenant-ID`
 - [ ] Implementar `TenantIdentifierResolver`
 - [ ] Implementar `MultiTenantConnectionProvider`
-- [ ] Configurar Hibernate y Spring para multi-tenancy
-- [ ] Interceptor para extraer `X-Tenant-ID` desde headers HTTP
-- [ ] Seed de datos iniciales por tenant (Flyway)
-
-> Claude: ayudame a configurar un backend multi-tenant en Spring Boot usando PostgreSQL y separación por schema o base de datos (por definir), usando el header `X-Tenant-ID`.
-
----
-
-## 🔐 Fase 2 - Seguridad y Control de Acceso (JWT)
-
-- [ ] Crear entidad `Usuario`, `Rol`, `Permiso`, `Sucursal`, `Caja`
-- [ ] Relación: usuario puede estar en muchas sucursales, y manejar varias cajas
-- [ ] Autenticación vía `/auth/login` con JWT
-- [ ] Middleware que verifique permisos de usuario según endpoint
-- [ ] Endpoint `/me` para obtener info del usuario logueado y sus roles/permisos
-
-> Claude: ayúdame a implementar autenticación JWT multi-sucursal con control de roles y permisos. El token debe incluir sucursales permitidas y cajas disponibles.
+- [ ] Configurar Hibernate multi-tenancy (`SCHEMA` mode)
+- [ ] Ajustar `application.yml` con ejemplo de schema `demo`
+- [ ] Crear migraciones Flyway multi-schema
+- [ ] Crear un seed inicial con tenant `DEMO`, usuario admin y estructura básica
 
 ---
 
-## 📦 Fase 3 - CRUDs Base de Negocio
+## 🟠 Fase 2 - Seguridad y Control de Acceso
 
-- [ ] Clientes
-- [ ] Proveedores
-- [ ] Categorías
-- [ ] Productos (asociados a CABYS)
-- [ ] Compras
-- [ ] Inventarios (ajustes, ingresos, egresos)
-- [ ] MapStruct + DTOs para cada módulo
-
-> Claude: generá controladores, servicios, DTOs y repositorios para estos CRUDs. Aplicá buenas prácticas de validación y paginación.
+- [x] Usuario, Rol y Permiso ya creados
+- [x] `JwtTokenProvider`, `JwtAuthenticationFilter`, `SecurityConfig` listos
+- [x] `AuthService` y `AuthController` funcionando
+- [ ] Relación de Usuario ↔ Sucursal ↔ Caja
+- [ ] Endpoint `/api/me` con info del usuario logueado, roles, sucursales y cajas
+- [ ] Validación por sucursal/caja al consumir endpoints
 
 ---
 
-## 🍽️ Fase 4 - Estructura de Restaurante
+## 🟡 Fase 3 - CRUDs Base
 
-- [ ] Entidades `Zona`, `Mesa`, `Mesero`
-- [ ] Estado de mesa (libre, ocupada, cerrada)
-- [ ] Abrir/cerrar mesa
-- [ ] Relación con sucursal y caja
-- [ ] Control de pedidos en mesa
-
----
-
-## 🛍️ Fase 5 - Pedidos para Llevar (Takeaway/UberEats-style)
-
-- [ ] CRUD de pedidos externos
-- [ ] Estados: Pendiente → En cocina → Listo → Entregado
-- [ ] Relación opcional con cliente
-- [ ] Asociación con caja/sucursal
+- [x] Entidades: `Cliente`, `Producto`, `Categoría`, `Proveedor` creadas
+- [ ] Repositorios funcionando
+- [ ] Servicios + Controladores para cada uno
+- [ ] Validaciones + Paginación
+- [ ] DTOs y Mappers (`ClienteDTO`, `ProductoDTO`, etc.)
 
 ---
 
-## 🧾 Fase 6 - Facturación Electrónica (Asíncrona vía API_FE)
+## 🟣 Fase 4 - Restaurante (Mesas y Zonas)
 
-- [ ] Endpoint `POST /factura/rapida` para emitir facturas
-- [ ] Procesar internamente la lógica de negocio del POS
-- [ ] Enviar JSON a `API_FE` por `RestTemplate` o `WebClient`
-- [ ] No esperar respuesta (no bloqueante)
-- [ ] Guardar estado local como "ENVIADO"
+- [x] Entidades `Mesa`, `Zona` implementadas
+- [ ] Servicios para apertura/cierre de mesas
+- [ ] Relación con órdenes y sucursales
+- [ ] Estados de mesa: Libre, Ocupada, Cerrada
 
-> Claude: generá un servicio que procese una factura rápida y la envíe a un endpoint externo sin esperar respuesta.
+---
+
+## 🔵 Fase 5 - Pedidos para Llevar
+
+- [ ] CRUD de pedidos tipo Uber
+- [ ] Estados de pedido: Pendiente → Cocina → Listo → Entregado
+- [ ] Integración con caja/sucursal y usuario
+- [ ] Asociación opcional con cliente
+
+---
+
+## 🧾 Fase 6 - Facturación Electrónica (via API_FE)
+
+- [ ] Endpoint `POST /factura/rapida`
+- [ ] Procesamiento de orden y factura
+- [ ] Envío del JSON a `API_FE` (asíncrono, sin esperar respuesta)
+- [ ] Guardado del estado local ("ENVIADO")
+- [ ] Endpoint de auditoría o reintento manual (opcional)
 
 ---
 
 ## 📊 Fase 7 - Reportes
 
-- [ ] Ventas por día, semana, mes, año
-- [ ] Top 5 productos más vendidos
-- [ ] Reporte de cierre de caja
+- [ ] Ventas por día, semana, mes
+- [ ] Productos más vendidos
+- [ ] Cierre de caja
 - [ ] Historial por usuario (auditoría)
 
 ---
 
-## 📚 Fase 8 - Extras
+## 🎁 Extras
 
-- [ ] Importador del catálogo CABYS desde Hacienda
-- [ ] Servicio para generar PDF de factura (opcional con JasperReports)
-- [ ] Exportar reportes a Excel o CSV
-
----
-
-## 🧪 Fase 9 - Testing
-
-- [ ] Pruebas unitarias (Junit 5 + Mockito)
-- [ ] Pruebas de integración de endpoints
-- [ ] Tests de seguridad y autenticación
+- [ ] Importar catálogo CABYS de Hacienda (CSV/XML)
+- [ ] Generar PDF de facturas o tiquetes (Jasper u otro)
+- [ ] Exportación de reportes (Excel, CSV)
 
 ---
 
-## 🚀 Fase 10 - Deploy & Productividad
+## 🧪 Testing
 
-- [ ] Configuración de perfiles: `dev`, `test`, `prod`
-- [ ] Configuración en Spring Boot Admin / Actuator
-- [ ] Soporte para JAR y WAR en Tomcat
-- [ ] Documentación Swagger / OpenAPI
-
----
-
-### ✅ Tips para trabajar con Claude:
-- Compartí clases clave o estructuras para que pueda analizarlas.
-- Pedile ayuda por fase: `"Ayúdame con Fase 3: Productos + Categorías."`
-- Usá prompts como:
-  > "Genera una clase `ProductoController` con endpoints CRUD usando MapStruct, validaciones y paginación."
+- [ ] Pruebas unitarias (JUnit 5 + Mockito)
+- [ ] Pruebas de integración
+- [ ] Tests para seguridad y control de acceso
 
 ---
 
 > Última actualización: `2025-08-02`  
-> Mantené este archivo actualizado conforme completes funcionalidades ✔️
+> Autor: Jorge Andrés Mayorga  
+> Acompañamiento por Claude + ChatGPT

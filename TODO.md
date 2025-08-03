@@ -133,12 +133,15 @@ Sistema backend multi-tenant para punto de venta en restaurantes. Construido con
 
 ## 🧾 FASE 6 – FACTURACIÓN ELECTRÓNICA (HACIENDA CR)
 
-- [ ] Integración con API de Hacienda
-- [ ] Generación de XML según normativa
-- [ ] Firma digital
-- [ ] Envío y recepción de comprobantes
-- [ ] Gestión de consecutivos
-- [ ] Notas de crédito/débito
+> Esta funcionalidad será gestionada por un microservicio externo ya existente.
+> El backend actual se comunicará con este sistema de manera asíncrona.
+
+- [ ] Conexión segura al API externo de facturación
+- [ ] Publicación de comprobantes para facturación vía cola o REST
+- [ ] Consulta periódica del estado de comprobantes
+- [ ] Manejo de respuestas de aceptación/rechazo (asíncronas)
+- [ ] Persistencia de resultados (XML respuesta, PDF, estado)
+- [ ] Gestión de reintentos en caso de errores transitorios
 
 ---
 

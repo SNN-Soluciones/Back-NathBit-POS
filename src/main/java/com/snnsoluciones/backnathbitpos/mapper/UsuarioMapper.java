@@ -31,8 +31,6 @@ public interface UsuarioMapper {
   @Mapping(target = "sucursalPredeterminadaNombre", source = "sucursalPredeterminada.nombre")
   @Mapping(target = "sucursalesIds", source = "sucursales", qualifiedByName = "sucursalesToIds")
   @Mapping(target = "cajasIds", source = "cajas", qualifiedByName = "cajasToIds")
-  @Mapping(target = "rolId", source = "rol.id")
-  @Mapping(target = "rolNombre", source = "rol.nombre")
   UsuarioResponse toResponse(Usuario usuario);
 
   /**
@@ -43,20 +41,16 @@ public interface UsuarioMapper {
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "version", ignore = true)
+  @Mapping(target = "activo", ignore = true)
   @Mapping(target = "rol", ignore = true)
   @Mapping(target = "sucursalPredeterminada", ignore = true)
   @Mapping(target = "sucursales", ignore = true)
   @Mapping(target = "cajas", ignore = true)
   @Mapping(target = "ultimoAcceso", ignore = true)
-  @Mapping(target = "intentosFallidos", constant = "0")
-  @Mapping(target = "bloqueado", constant = "false")
-  @Mapping(target = "activo", constant = "true")
-  @Mapping(target = "authorities", ignore = true)
-  @Mapping(target = "username", ignore = true)
-  @Mapping(target = "accountNonExpired", ignore = true)
-  @Mapping(target = "accountNonLocked", ignore = true)
-  @Mapping(target = "credentialsNonExpired", ignore = true)
-  @Mapping(target = "enabled", ignore = true)
+  @Mapping(target = "intentosFallidos", ignore = true)
+  @Mapping(target = "bloqueado", ignore = true)
+  @Mapping(target = "identificacion", ignore = true)
+  @Mapping(target = "tipoIdentificacion", ignore = true)
   Usuario toEntity(UsuarioCreateRequest request);
 
   /**
@@ -74,12 +68,6 @@ public interface UsuarioMapper {
   @Mapping(target = "cajas", ignore = true)
   @Mapping(target = "ultimoAcceso", ignore = true)
   @Mapping(target = "intentosFallidos", ignore = true)
-  @Mapping(target = "authorities", ignore = true)
-  @Mapping(target = "username", ignore = true)
-  @Mapping(target = "accountNonExpired", ignore = true)
-  @Mapping(target = "accountNonLocked", ignore = true)
-  @Mapping(target = "credentialsNonExpired", ignore = true)
-  @Mapping(target = "enabled", ignore = true)
   void updateEntity(@MappingTarget Usuario usuario, UsuarioUpdateRequest request);
 
   /**

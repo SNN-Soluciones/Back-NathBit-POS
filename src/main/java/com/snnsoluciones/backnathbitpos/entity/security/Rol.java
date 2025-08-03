@@ -25,6 +25,7 @@ public class Rol extends BaseEntity {
   private String descripcion;
 
   @ManyToMany(mappedBy = "roles", fetch = FetchType.LAZY)
+  @Builder.Default
   private Set<Usuario> usuarios = new HashSet<>();
 
   @ManyToMany(fetch = FetchType.EAGER)

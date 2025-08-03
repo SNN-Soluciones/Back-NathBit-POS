@@ -26,5 +26,6 @@ public class Permiso extends BaseEntity {
   private String descripcion;
 
   @ManyToMany(mappedBy = "permisos")
+  @Builder.Default
   private Set<Rol> roles = new HashSet<>();
 }

@@ -81,6 +81,7 @@ public interface OrdenMapper {
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "version", ignore = true)
+  @Mapping(target = "activo", ignore = true)
   void updateEntity(@MappingTarget Orden orden, OrdenRequest request);
 
   /**

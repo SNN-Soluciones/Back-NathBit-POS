@@ -3,9 +3,16 @@ package com.snnsoluciones.backnathbitpos.config.security;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
@@ -18,256 +25,236 @@ import java.util.Date;
 @Component
 @Slf4j
 public class JwtTokenProvider {
-
-  @Value("${jwt.secret}")  // Cambiado de spring.security.jwt.secret
+  @Value("${app.jwt.secret}")
   private String jwtSecret;
 
-  @Value("${jwt.expiration}")  // Cambiado de spring.security.jwt.expiration
-  private Long jwtExpiration;
+  @Value("${app.jwt.expiration:3600}")
+  private Long jwtExpiration; // en segundos
 
-  @Value("${jwt.refresh-expiration}")  // Cambiado de spring.security.jwt.refresh-expiration
-  private Long refreshExpiration;
+  @Value("${app.jwt.refresh-expiration:604800}")
+  private Long refreshExpiration; // 7 días en segundos
 
-  /**
-   * Genera un token JWT a partir de la autenticación.
-   */
-  public String generateToken(Authentication authentication) {
-    UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
-    return generateTokenFromUsername(userPrincipal.getUsername());
+  private SecretKey getSigningKey() {
+    return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
   }
 
   /**
-   * Genera un token JWT a partir del nombre de usuario.
+   * Genera un token temporal para selección de contexto
    */
-  public String generateTokenFromUsername(String username) {
+  public String generateTemporaryToken(String username) {
     Date now = new Date();
-    Date expiryDate = new Date(now.getTime() + jwtExpiration);
+    Date expiryDate = new Date(now.getTime() + (300 * 1000)); // 5 minutos
 
     return Jwts.builder()
         .setSubject(username)
         .setIssuedAt(now)
         .setExpiration(expiryDate)
-        .signWith(getSignKey(), SignatureAlgorithm.HS512)
+        .claim("type", "TEMPORARY")
+        .claim("purpose", "CONTEXT_SELECTION")
+        .signWith(getSigningKey(), SignatureAlgorithm.HS512)
         .compact();
   }
 
   /**
-   * Genera un refresh token con mayor duración.
+   * Genera un token con contexto completo
+   */
+  public String generateTokenWithFullContext(String username,
+      UUID empresaId,
+      UUID sucursalId,
+      String tenantId,
+      String rol) {
+    Date now = new Date();
+    Date expiryDate = new Date(now.getTime() + (jwtExpiration * 1000));
+
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("type", "ACCESS");
+    claims.put("empresa_id", empresaId.toString());
+    claims.put("sucursal_id", sucursalId.toString());
+    claims.put("tenant_id", tenantId);
+    claims.put("rol", rol);
+
+    return Jwts.builder()
+        .setClaims(claims)
+        .setSubject(username)
+        .setIssuedAt(now)
+        .setExpiration(expiryDate)
+        .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+        .compact();
+  }
+
+  /**
+   * Genera un refresh token
    */
   public String generateRefreshToken(String username) {
     Date now = new Date();
-    Date expiryDate = new Date(now.getTime() + refreshExpiration);
+    Date expiryDate = new Date(now.getTime() + (refreshExpiration * 1000));
 
     return Jwts.builder()
         .setSubject(username)
         .setIssuedAt(now)
         .setExpiration(expiryDate)
-        .claim("type", "refresh")
-        .signWith(getSignKey(), SignatureAlgorithm.HS512)
+        .claim("type", "REFRESH")
+        .signWith(getSigningKey(), SignatureAlgorithm.HS512)
         .compact();
   }
 
   /**
-   * Obtiene el nombre de usuario del token.
+   * Obtiene el username del token
    */
   public String getUsernameFromToken(String token) {
-    Claims claims = Jwts.parserBuilder()
-        .setSigningKey(getSignKey())
-        .build()
-        .parseClaimsJws(token)
-        .getBody();
-
+    Claims claims = getClaims(token);
     return claims.getSubject();
   }
 
   /**
-   * Valida el token y retorna true si es válido.
+   * Obtiene el tenant del token
+   */
+  public String getTenantFromToken(String token) {
+    Claims claims = getClaims(token);
+    return claims.get("tenant_id", String.class);
+  }
+
+  /**
+   * Obtiene el ID de empresa del token
+   */
+  public String getEmpresaIdFromToken(String token) {
+    Claims claims = getClaims(token);
+    return claims.get("empresa_id", String.class);
+  }
+
+  /**
+   * Obtiene el ID de sucursal del token
+   */
+  public String getSucursalIdFromToken(String token) {
+    Claims claims = getClaims(token);
+    return claims.get("sucursal_id", String.class);
+  }
+
+  /**
+   * Obtiene el rol del token
+   */
+  public String getRolFromToken(String token) {
+    Claims claims = getClaims(token);
+    return claims.get("rol", String.class);
+  }
+
+  /**
+   * Valida si el token es válido
    */
   public boolean validateToken(String token) {
     try {
       Jwts.parserBuilder()
-          .setSigningKey(getSignKey())
+          .setSigningKey(getSigningKey())
           .build()
           .parseClaimsJws(token);
       return true;
     } catch (SecurityException ex) {
-      log.error("Token JWT inválido - firma no válida");
+      log.error("Token JWT inválido - firma incorrecta", ex);
     } catch (MalformedJwtException ex) {
-      log.error("Token JWT inválido - formato incorrecto");
+      log.error("Token JWT mal formado", ex);
     } catch (ExpiredJwtException ex) {
-      log.error("Token JWT expirado");
+      log.error("Token JWT expirado", ex);
     } catch (UnsupportedJwtException ex) {
-      log.error("Token JWT no soportado");
+      log.error("Token JWT no soportado", ex);
     } catch (IllegalArgumentException ex) {
-      log.error("JWT claims vacío");
+      log.error("JWT claims string está vacío", ex);
     }
     return false;
   }
 
   /**
-   * Valida el token y retorna los claims si es válido.
-   * Lanza excepción si el token no es válido.
+   * Verifica si es un token temporal
    */
-  public Claims validateAndGetClaims(String token) {
-    try {
-      return Jwts.parserBuilder()
-          .setSigningKey(getSignKey())
-          .build()
-          .parseClaimsJws(token)
-          .getBody();
-    } catch (ExpiredJwtException e) {
-      // Re-lanzamos para que el servicio pueda manejar tokens expirados especialmente
-      throw e;
-    } catch (SecurityException | MalformedJwtException | UnsupportedJwtException | IllegalArgumentException ex) {
-      log.error("Error validando token: {}", ex.getMessage());
-      throw new JwtException("Token inválido");
-    }
+  public boolean isTemporaryToken(String token) {
+    Claims claims = getClaims(token);
+    String type = claims.get("type", String.class);
+    return "TEMPORARY".equals(type);
   }
 
   /**
-   * Verifica si el token está próximo a expirar (menos de 5 minutos).
+   * Verifica si es un refresh token
    */
-  public boolean isTokenAboutToExpire(String token) {
-    try {
-      Claims claims = Jwts.parserBuilder()
-          .setSigningKey(getSignKey())
-          .build()
-          .parseClaimsJws(token)
-          .getBody();
-
-      Date expiration = claims.getExpiration();
-      Date now = new Date();
-      long diff = expiration.getTime() - now.getTime();
-
-      // Si quedan menos de 5 minutos
-      return diff < 300000;
-    } catch (Exception e) {
-      return true;
-    }
+  public boolean isRefreshToken(String token) {
+    Claims claims = getClaims(token);
+    String type = claims.get("type", String.class);
+    return "REFRESH".equals(type);
   }
 
   /**
-   * Obtiene la fecha de expiración del token.
+   * Obtiene todos los claims del token
    */
-  public Date getExpirationDateFromToken(String token) {
-    Claims claims = Jwts.parserBuilder()
-        .setSigningKey(getSignKey())
+  private Claims getClaims(String token) {
+    return Jwts.parserBuilder()
+        .setSigningKey(getSigningKey())
         .build()
         .parseClaimsJws(token)
         .getBody();
-
-    return claims.getExpiration();
   }
 
   /**
-   * Verifica si es un refresh token.
+   * Genera un token desde la autenticación de Spring Security
    */
-  public boolean isRefreshToken(String token) {
-    try {
-      Claims claims = Jwts.parserBuilder()
-          .setSigningKey(getSignKey())
-          .build()
-          .parseClaimsJws(token)
-          .getBody();
+  public String generateTokenFromAuthentication(Authentication authentication) {
+    String username = authentication.getName();
 
-      String type = (String) claims.get("type");
-      return "refresh".equals(type);
-    } catch (Exception e) {
-      return false;
+    // Extraer información adicional si está disponible
+    Map<String, Object> details = new HashMap<>();
+    if (authentication.getDetails() instanceof Map) {
+      details = (Map<String, Object>) authentication.getDetails();
     }
-  }
 
-  /**
-   * Genera un token JWT con información del tenant
-   */
-  public String generateTokenWithTenant(String username, String tenantId, String role) {
     Date now = new Date();
-    Date expiryDate = new Date(now.getTime() + jwtExpiration);
+    Date expiryDate = new Date(now.getTime() + (jwtExpiration * 1000));
+
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("type", "ACCESS");
+    claims.put("authorities", authentication.getAuthorities().stream()
+        .map(GrantedAuthority::getAuthority)
+        .collect(Collectors.toList()));
+
+    // Agregar detalles adicionales si existen
+    if (details.containsKey("empresa_id")) {
+      claims.put("empresa_id", details.get("empresa_id"));
+    }
+    if (details.containsKey("sucursal_id")) {
+      claims.put("sucursal_id", details.get("sucursal_id"));
+    }
+    if (details.containsKey("tenant_id")) {
+      claims.put("tenant_id", details.get("tenant_id"));
+    }
 
     return Jwts.builder()
+        .setClaims(claims)
         .setSubject(username)
         .setIssuedAt(now)
         .setExpiration(expiryDate)
-        .claim("tenantId", tenantId)
-        .claim("role", role)
-        .signWith(getSignKey(), SignatureAlgorithm.HS512)
+        .signWith(getSigningKey(), SignatureAlgorithm.HS512)
         .compact();
   }
 
   /**
-   * Invalida un token (se debe usar con un servicio de blacklist)
+   * Invalida un token (para logout)
+   * Nota: En una implementación real, esto debería guardar el token en una blacklist
    */
   public void invalidateToken(String token) {
-    // Este método normalmente se usa con un servicio de blacklist
-    // Por ahora solo logueamos la invalidación
-    log.info("Token invalidado: {}", token.substring(0, 20) + "...");
+    // TODO: Implementar blacklist de tokens
+    log.info("Token invalidado para logout");
   }
 
   /**
-   * Obtiene el username de un refresh token
+   * Obtiene el tiempo de expiración del token
    */
-  public String getUsernameFromRefreshToken(String refreshToken) {
-    return getUsernameFromToken(refreshToken);
+  public Date getExpirationDateFromToken(String token) {
+    Claims claims = getClaims(token);
+    return claims.getExpiration();
   }
 
   /**
-   * Obtiene el tenant ID del token
+   * Verifica si el token está próximo a expirar (menos de 5 minutos)
    */
-  public String getTenantFromToken(String token) {
-    try {
-      Claims claims = Jwts.parserBuilder()
-          .setSigningKey(getSignKey())
-          .build()
-          .parseClaimsJws(token)
-          .getBody();
-      return (String) claims.get("tenantId");
-    } catch (Exception e) {
-      return null;
-    }
-  }
-
-  /**
-   * Obtiene el tenant ID de un refresh token
-   */
-  public String getTenantFromRefreshToken(String refreshToken) {
-    return getTenantFromToken(refreshToken);
-  }
-
-  /**
-   * Obtiene el rol del refresh token
-   */
-  public String getRoleFromRefreshToken(String refreshToken) {
-    try {
-      Claims claims = Jwts.parserBuilder()
-          .setSigningKey(getSignKey())
-          .build()
-          .parseClaimsJws(refreshToken)
-          .getBody();
-      return (String) claims.get("role");
-    } catch (Exception e) {
-      return null;
-    }
-  }
-
-  /**
-   * Genera un token sin información de tenant
-   */
-  public String generateTokenWithoutTenant(String username) {
-    return generateTokenFromUsername(username);
-  }
-
-  /**
-   * Valida un refresh token
-   */
-  public boolean validateRefreshToken(String refreshToken) {
-    return validateToken(refreshToken) && isRefreshToken(refreshToken);
-  }
-
-  /**
-   * Obtiene la clave de firma decodificada.
-   */
-  private Key getSignKey() {
-    byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
-    return Keys.hmacShaKeyFor(keyBytes);
+  public boolean isTokenAboutToExpire(String token) {
+    Date expiration = getExpirationDateFromToken(token);
+    long timeUntilExpiration = expiration.getTime() - System.currentTimeMillis();
+    return timeUntilExpiration < (5 * 60 * 1000); // 5 minutos
   }
 }

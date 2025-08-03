@@ -1,145 +1,111 @@
+# Configuración actualizada para el sistema multi-empresa
 spring:
   application:
-    name: backnathbitpos
-
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    name: nathbit-pos-backend
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:restaurante_erp_dev}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nathbitpos}?currentSchema=public
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
-
-    # Pool de conexiones
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
-      pool-name: HikariPool-MultiTenant
 
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: none # Usamos Flyway para las migraciones
+      ddl-auto: validate # Usamos Flyway para las migraciones
     properties:
       hibernate:
-        # Multi-tenant configuration
-        multiTenancy: SCHEMA
-        tenant_identifier_resolver: com.snnsoluciones.backnathbitpos.config.tenant.TenantIdentifierResolver
-        multi_tenant_connection_provider: com.snnsoluciones.backnathbitpos.config.tenant.SchemaBasedMultiTenantConnectionProvider
-
-        # Performance
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public
         jdbc:
-          batch_size: 25
-          batch_versioned_data: true
-        order_inserts: true
-        order_updates: true
-
-        # Cache de segundo nivel (opcional)
-        cache:
-          use_second_level_cache: false
-          use_query_cache: false
-
+          lob:
+            non_contextual_creation: true
+        format_sql: true
     show-sql: false
     open-in-view: false
 
-  # Flyway configuration
   flyway:
     enabled: true
     baseline-on-migrate: true
-    baseline-version: 0
-    locations: classpath:db/migration
-    schemas: public # Schema base para Flyway
-    create-schemas: true
-    validate-on-migrate: true
+    locations:
+      - classpath:db/migration/public
+      - classpath:db/migration/tenant
+    schemas:
+      - public
+    default-schema: public
 
-    # Placeholders para usar en scripts
-    placeholders:
-      default_schema: public
-      demo_schema: demo
+# Configuración JWT
+app:
+  jwt:
+    secret: ${JWT_SECRET:TuClaveSecretaSeguraDeAlMenos256BitsParaProduccion2024!}
+    expiration: 3600 # 1 hora en segundos
+    refresh-expiration: 604800 # 7 días en segundos
 
-# JWT Configuration
-jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-token-generation-change-this-in-production}
-  expiration: ${JWT_EXPIRATION:86400000} # 24 horas en milisegundos
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 días en milisegundos
+  security:
+    max-intentos-login: 3
+    bloqueo-duracion-minutos: 30
 
-# Security
-security:
-  cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
-    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
-    allowed-headers: "*"
-    allow-credentials: true
-  rate-limit:
-    max-attempts: 5                    # Máximo de intentos antes de bloquear
-    block-duration-minutes: 15         # Duración del bloqueo en minutos
-  cleanup:
-    audit-retention-days: 90          # Días de retención de eventos de auditoría
-  login:
-    max-failed-attempts: 5            # Intentos fallidos antes de bloquear usuario
-    account-lock-duration: 24         # Horas que permanece bloqueada la cuenta
+# Configuración de tenants iniciales
+tenants:
+  initial-tenants:
+    - id: tenant_sj_centro
+      nombre: "Sabores San José Centro"
+      tipo: SUCURSAL
+    - id: tenant_escazu
+      nombre: "Sabores Escazú"
+      tipo: SUCURSAL
+    - id: tenant_heredia
+      nombre: "Sabores Heredia"
+      tipo: SUCURSAL
+    - id: tenant_cafe_mp
+      nombre: "Café del Valle - Multiplaza"
+      tipo: SUCURSAL
+    - id: tenant_cafe_lincoln
+      nombre: "Café del Valle - Lincoln"
+      tipo: SUCURSAL
 
-# Logging
+# Configuración de logs
 logging:
   level:
     root: INFO
     com.snnsoluciones.backnathbitpos: DEBUG
-    org.hibernate.SQL: DEBUG # Para ver las queries SQL en desarrollo
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE # Para ver los parámetros de las queries
-    org.springframework.security: DEBUG # Para debugging de seguridad
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.flywaydb: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: logs/backnathbitpos.log
 
-# Actuator (monitoreo)
+# Configuración del servidor
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# Actuator para monitoreo
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
-      base-path: /api/actuator
+      base-path: /actuator
   endpoint:
     health:
       show-details: when-authorized
 
-# Server configuration
-server:
-  port: ${SERVER_PORT:8080}
-  servlet:
-    context-path: /api
-  error:
-    include-message: always
-    include-binding-errors: always
-
-# Swagger/OpenAPI
-springdoc:
-  api-docs:
-    path: /v3/api-docs
-  swagger-ui:
-    path: /swagger-ui.html
-    operations-sorter: method
-    tags-sorter: alpha
-
-# Application specific
-app:
-  name: NathBit POS
-  version: '@project.version@'
-  description: Sistema POS Multi-tenant para Restaurantes
-
-  # Tenants disponibles (para validación)
-  available-tenants:
-    - demo
-    - tenant1
-    - tenant2
-
-  # Configuración de facturación electrónica
-  facturacion:
-    api-fe-url: ${API_FE_URL:https://api-fe.hacienda.cr}
-    timeout: 30000
-    retry-attempts: 3
+# Configuración de cache
+spring.cache:
+  type: simple
+  cache-names:
+    - usuarios
+    - sucursal-por-ip
+    - sucursal-por-terminal
+    - permisos-usuario

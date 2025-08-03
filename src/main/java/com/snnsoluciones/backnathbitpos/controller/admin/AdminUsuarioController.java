@@ -3,7 +3,7 @@ package com.snnsoluciones.backnathbitpos.controller.admin;
 import com.snnsoluciones.backnathbitpos.dto.request.AsignarCajasRequest;
 import com.snnsoluciones.backnathbitpos.dto.request.AsignarSucursalesRequest;
 import com.snnsoluciones.backnathbitpos.dto.request.CambiarRolRequest;
-import com.snnsoluciones.backnathbitpos.dto.response.ApiResponse;
+import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.response.AuditEventResponse;
 import com.snnsoluciones.backnathbitpos.dto.response.UsuarioResponse;
 import com.snnsoluciones.backnathbitpos.service.admin.UsuarioService;

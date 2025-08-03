@@ -10,5 +10,5 @@ public enum RolNombre {
     CAJERO,         // Puede cobrar y manejar caja
     MESERO,         // Puede tomar órdenes
     COCINA,         // Ve órdenes para preparar
-    CLIENTE         // Para futuros pedidos online
+    CONTADOR         // Para futuros pedidos online
 }

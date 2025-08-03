@@ -1,42 +1,44 @@
 package com.snnsoluciones.backnathbitpos.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.snnsoluciones.backnathbitpos.dto.auth.ContextoAcceso;
+import com.snnsoluciones.backnathbitpos.dto.auth.SucursalDirecta;
+import com.snnsoluciones.backnathbitpos.dto.auth.UsuarioInfo;
+import com.snnsoluciones.backnathbitpos.enums.TipoFlujo;
+import lombok.*;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.util.UUID;
 
+/**
+ * DTO para la respuesta del login en el nuevo sistema multi-empresa.
+ * Soporta diferentes flujos según el tipo de usuario.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class LoginResponse {
 
-  @JsonProperty("access_token")
+  // Tokens de autenticación
   private String accessToken;
-
-  @JsonProperty("refresh_token")
   private String refreshToken;
-
-  @JsonProperty("token_type")
-  @Builder.Default
-  private String tokenType = "Bearer";
-
-  @JsonProperty("expires_in")
+  private String tokenType;
   private Long expiresIn;
 
-  private String email;
+  // Tipo de flujo que debe seguir el frontend
+  @NonNull
+  private TipoFlujo tipoFlujo;
 
-  private String nombre;
+  // Lista de contextos disponibles (empresas/sucursales)
+  private List<ContextoAcceso> contextosDisponibles;
 
-  private String apellidos;
+  // Para usuarios operativos con acceso directo
+  private SucursalDirecta sucursalDirecta;
 
-  private String roles;
+  // Información del usuario
+  private UsuarioInfo usuario;
 
-  @JsonProperty("tenant_id")
-  private String tenantId;
-
-  private List<TenantInfo> tenants;
-  private boolean requiresTenantSelection;
+  // Mensaje opcional
+  private String mensaje;
 }

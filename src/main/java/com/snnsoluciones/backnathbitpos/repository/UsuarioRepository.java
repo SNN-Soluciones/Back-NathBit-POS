@@ -41,7 +41,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
   void resetearIntentosFallidos(@Param("email") String email);
 
   @Modifying
-  @Query("UPDATE Usuario u SET u.cuentaBloqueada = true WHERE u.email = :email")
+  @Query("UPDATE Usuario u SET u.bloqueado = true WHERE u.email = :email")
   void bloquearCuenta(@Param("email") String email);
 
   List<Usuario> findByTenantId(String tenantId);
@@ -51,7 +51,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
   @Query("SELECT u FROM Usuario u WHERE u.tenantId = :tenantId AND u.activo = true")
   Page<Usuario> findActiveByTenantId(@Param("tenantId") String tenantId, Pageable pageable);
 
-  @Query("SELECT u FROM Usuario u WHERE u.roles = :rolId AND u.tenantId = :tenantId")
+  @Query("SELECT u FROM Usuario u WHERE u.rol.id = :rolId AND u.tenantId = :tenantId")
   List<Usuario> findByRolIdAndTenantId(@Param("rolId") UUID rolId, @Param("tenantId") String tenantId);
 
   @Query("SELECT u FROM Usuario u JOIN u.sucursales s WHERE s.id = :sucursalId")

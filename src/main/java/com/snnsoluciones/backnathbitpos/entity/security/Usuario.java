@@ -57,6 +57,7 @@ public class Usuario extends BaseEntity implements UserDetails {
   @Builder.Default
   private Boolean bloqueado = false;
 
+  @Column(name = "forzar_reloging")
   private Boolean forzarRelogin;
 
   // Relación con Rol (uno a muchos según la BD)

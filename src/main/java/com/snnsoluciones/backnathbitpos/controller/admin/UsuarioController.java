@@ -282,36 +282,29 @@ public class UsuarioController {
     Map<String, Object> perfil = new HashMap<>();
     perfil.put("usuario", usuarioResponse);
 
-    // Agregar roles y permisos
+    // Agregar rol y permisos
     Map<String, Object> seguridad = new HashMap<>();
 
-    // Manejar múltiples roles
-    if (usuario.getRoles() != null && !usuario.getRoles().isEmpty()) {
-      seguridad.put("roles", usuario.getRoles().stream()
-          .map(rol -> Map.of(
-              "id", rol.getId(),
-              "nombre", rol.getNombre().name(),
-              "descripcion", rol.getDescripcion() != null ? rol.getDescripcion() : ""
-          ))
-          .collect(Collectors.toList())
-      );
+    // Manejar el rol único del usuario
+    if (usuario.getRol() != null) {
+      seguridad.put("rol", Map.of(
+          "id", usuario.getRol().getId(),
+          "nombre", usuario.getRol().getNombre().name(),
+          "descripcion", usuario.getRol().getDescripcion() != null ? usuario.getRol().getDescripcion() : ""
+      ));
 
-      // Obtener todos los permisos de todos los roles
-      Set<Permiso> todosLosPermisos = new HashSet<>();
-      usuario.getRoles().forEach(rol -> {
-        if (rol.getPermisos() != null) {
-          todosLosPermisos.addAll(rol.getPermisos());
-        }
-      });
-
-      seguridad.put("permisos", todosLosPermisos.stream()
-          .map(permiso -> Map.of(
-              "id", permiso.getId(),
-              "nombre", permiso.getNombre(),
-              "descripcion", permiso.getDescripcion()
-          ))
-          .collect(Collectors.toList())
-      );
+      // Obtener permisos del rol
+      if (usuario.getRol().getPermisos() != null) {
+        seguridad.put("permisos", usuario.getRol().getPermisos().stream()
+            .map(permiso -> Map.of(
+                "id", permiso.getId(),
+                "codigo", permiso.getCodigo(),
+                "nombre", permiso.getNombre(),
+                "descripcion", permiso.getDescripcion() != null ? permiso.getDescripcion() : ""
+            ))
+            .collect(Collectors.toList())
+        );
+      }
     }
 
     perfil.put("seguridad", seguridad);
@@ -324,7 +317,6 @@ public class UsuarioController {
             sucursalInfo.put("id", sucursal.getId());
             sucursalInfo.put("nombre", sucursal.getNombre());
             sucursalInfo.put("codigo", sucursal.getCodigo());
-            sucursalInfo.put("direccion", sucursal.getDireccion());
             sucursalInfo.put("activa", sucursal.getActivo());
             sucursalInfo.put("esPrincipal", sucursal.getEsPrincipal());
             return sucursalInfo;

@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -14,7 +15,7 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 public class Rol extends BaseEntity {
 
   @Enumerated(EnumType.STRING)
@@ -39,6 +40,7 @@ public class Rol extends BaseEntity {
 
   // Constructor conveniente
   public Rol(RolNombre nombre) {
+    super();
     this.nombre = nombre;
   }
 }

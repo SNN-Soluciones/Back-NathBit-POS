@@ -4,8 +4,8 @@ import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Caja;
 import com.snnsoluciones.backnathbitpos.entity.tenant.Sucursal;
 import jakarta.persistence.*;
-import java.util.UUID;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 public class Usuario extends BaseEntity implements UserDetails {
 
   @Column(nullable = false, length = 255)
@@ -90,16 +90,18 @@ public class Usuario extends BaseEntity implements UserDetails {
   // Métodos de UserDetails
   @Override
   public Collection<? extends GrantedAuthority> getAuthorities() {
-    Set<SimpleGrantedAuthority> authorities = new HashSet<>();
+    Set<GrantedAuthority> authorities = new HashSet<>();
 
     if (rol != null) {
-      // Agregar rol
+      // Agregar el rol como autoridad
       authorities.add(new SimpleGrantedAuthority("ROLE_" + rol.getNombre().name()));
 
       // Agregar permisos del rol
       if (rol.getPermisos() != null) {
-        rol.getPermisos().forEach(permiso ->
-            authorities.add(new SimpleGrantedAuthority(permiso.getNombre()))
+        authorities.addAll(
+            rol.getPermisos().stream()
+                .map(permiso -> new SimpleGrantedAuthority(permiso.getCodigo()))
+                .collect(Collectors.toSet())
         );
       }
     }
@@ -129,34 +131,23 @@ public class Usuario extends BaseEntity implements UserDetails {
 
   @Override
   public boolean isEnabled() {
-    return getActivo() != null && getActivo();
+    return Boolean.TRUE.equals(getActivo());
   }
 
-  // Métodos helper para sucursales
-  public void agregarSucursal(Sucursal sucursal) {
-    sucursales.add(sucursal);
+  // Métodos helper
+  public String getNombreCompleto() {
+    return nombre + " " + (apellidos != null ? apellidos : "");
   }
 
-  public void removerSucursal(Sucursal sucursal) {
-    sucursales.remove(sucursal);
+  public boolean tieneRol(String nombreRol) {
+    return rol != null && rol.getNombre().name().equals(nombreRol);
   }
 
-  public boolean tieneSucursal(UUID sucursalId) {
-    return sucursales.stream()
-        .anyMatch(s -> s.getId().equals(sucursalId));
-  }
-
-  // Métodos helper para cajas
-  public void agregarCaja(Caja caja) {
-    cajas.add(caja);
-  }
-
-  public void removerCaja(Caja caja) {
-    cajas.remove(caja);
-  }
-
-  public boolean tieneCaja(UUID cajaId) {
-    return cajas.stream()
-        .anyMatch(c -> c.getId().equals(cajaId));
+  public boolean tienePermiso(String codigoPermiso) {
+    if (rol == null || rol.getPermisos() == null) {
+      return false;
+    }
+    return rol.getPermisos().stream()
+        .anyMatch(permiso -> permiso.getCodigo().equals(codigoPermiso));
   }
 }

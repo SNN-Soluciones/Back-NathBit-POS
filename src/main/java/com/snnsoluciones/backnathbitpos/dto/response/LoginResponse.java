@@ -6,8 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
 @Builder
 @NoArgsConstructor
@@ -33,7 +31,7 @@ public class LoginResponse {
 
   private String apellidos;
 
-  private List<String> roles;
+  private String roles;
 
   @JsonProperty("tenant_id")
   private String tenantId;

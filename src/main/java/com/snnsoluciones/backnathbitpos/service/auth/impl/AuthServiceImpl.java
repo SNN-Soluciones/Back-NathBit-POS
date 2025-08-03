@@ -51,7 +51,7 @@ public class AuthServiceImpl implements AuthService {
   private final CacheManager cacheManager;
   private final RateLimiterConfig rateLimiter;
 
-  @Value("${spring.security.jwt.expiration}")
+  @Value("${jwt.expiration}")
   private Long jwtExpiration;
 
   @Override

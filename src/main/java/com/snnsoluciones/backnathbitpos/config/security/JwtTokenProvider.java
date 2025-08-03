@@ -19,13 +19,13 @@ import java.util.Date;
 @Slf4j
 public class JwtTokenProvider {
 
-  @Value("${spring.security.jwt.secret}")
+  @Value("${jwt.secret}")  // Cambiado de spring.security.jwt.secret
   private String jwtSecret;
 
-  @Value("${spring.security.jwt.expiration}")
+  @Value("${jwt.expiration}")  // Cambiado de spring.security.jwt.expiration
   private Long jwtExpiration;
 
-  @Value("${spring.security.jwt.refresh-expiration}")
+  @Value("${jwt.refresh-expiration}")  // Cambiado de spring.security.jwt.refresh-expiration
   private Long refreshExpiration;
 
   /**

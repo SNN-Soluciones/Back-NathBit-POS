@@ -25,7 +25,8 @@ public class Rol extends BaseEntity {
   @Column(length = 100)
   private String descripcion;
 
-  @ManyToMany(mappedBy = "roles", fetch = FetchType.LAZY)
+  // Cambiado de @ManyToMany a @OneToMany porque un usuario tiene un solo rol
+  @OneToMany(mappedBy = "rol", fetch = FetchType.LAZY)
   @Builder.Default
   private Set<Usuario> usuarios = new HashSet<>();
 

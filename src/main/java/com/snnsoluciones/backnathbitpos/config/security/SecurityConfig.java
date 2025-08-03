@@ -63,10 +63,10 @@ public class SecurityConfig {
             .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
         )
         .authorizeHttpRequests(auth -> auth
-            // Endpoints públicos
+            // Endpoints públicos - IMPORTANTE: auth/login debe ser público
             .requestMatchers(
-                "/api/auth/**",
-                "/api/public/**",
+                "/auth/**",           // Sin /api porque el context-path ya lo incluye
+                "/public/**",
                 "/actuator/**",
                 "/v3/api-docs/**",
                 "/swagger-ui/**",
@@ -74,14 +74,14 @@ public class SecurityConfig {
             ).permitAll()
 
             // Endpoints de admin
-            .requestMatchers("/api/admin/**").hasRole("ADMIN")
+            .requestMatchers("/admin/**").hasRole("ADMIN")
 
             // Endpoints de caja
-            .requestMatchers("/api/caja/abrir", "/api/caja/cerrar").hasAnyRole("JEFE_CAJAS", "ADMIN")
-            .requestMatchers("/api/caja/**").hasAnyRole("CAJERO", "JEFE_CAJAS", "ADMIN")
+            .requestMatchers("/caja/abrir", "/caja/cerrar").hasAnyRole("CAJERO", "ADMIN")
+            .requestMatchers("/caja/**").hasAnyRole("CAJERO", "ADMIN")
 
             // Endpoints de órdenes
-            .requestMatchers("/api/ordenes/**").hasAnyRole("MESERO", "CAJERO", "JEFE_CAJAS", "ADMIN")
+            .requestMatchers("/ordenes/**").hasAnyRole("MESERO", "CAJERO", "ADMIN")
 
             // Todos los demás endpoints requieren autenticación
             .anyRequest().authenticated()
@@ -95,11 +95,11 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:4200"));
+    configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:4200", "*"));
     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(List.of("*"));
     configuration.setAllowCredentials(true);
-    configuration.setExposedHeaders(Arrays.asList("Authorization"));
+    configuration.setExposedHeaders(Arrays.asList("Authorization", "X-Tenant-ID"));
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);

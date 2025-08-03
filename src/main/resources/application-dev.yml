@@ -1,13 +1,10 @@
 # Configuración para ambiente de desarrollo
 spring:
-  profiles:
-    active: dev
-
   # Base de datos desarrollo
   datasource:
     url: jdbc:postgresql://localhost:5432/restaurant_erp_dev
     username: postgres
-    password: postgres
+    password: ${DB_PASSWORD:}  # Usa la variable de entorno o postgres por defecto
 
   # JPA para desarrollo
   jpa:
@@ -47,6 +44,6 @@ app:
     allowed-origins: "*"
 
 # JWT con tiempo más corto para pruebas
-spring.security.jwt:
+jwt:
   expiration: 3600000 # 1 hora
   refresh-expiration: 7200000 # 2 horas

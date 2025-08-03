@@ -178,6 +178,92 @@ public class JwtTokenProvider {
   }
 
   /**
+   * Genera un token JWT con información del tenant
+   */
+  public String generateTokenWithTenant(String username, String tenantId, String role) {
+    Date now = new Date();
+    Date expiryDate = new Date(now.getTime() + jwtExpiration);
+
+    return Jwts.builder()
+        .setSubject(username)
+        .setIssuedAt(now)
+        .setExpiration(expiryDate)
+        .claim("tenantId", tenantId)
+        .claim("role", role)
+        .signWith(getSignKey(), SignatureAlgorithm.HS512)
+        .compact();
+  }
+
+  /**
+   * Invalida un token (se debe usar con un servicio de blacklist)
+   */
+  public void invalidateToken(String token) {
+    // Este método normalmente se usa con un servicio de blacklist
+    // Por ahora solo logueamos la invalidación
+    log.info("Token invalidado: {}", token.substring(0, 20) + "...");
+  }
+
+  /**
+   * Obtiene el username de un refresh token
+   */
+  public String getUsernameFromRefreshToken(String refreshToken) {
+    return getUsernameFromToken(refreshToken);
+  }
+
+  /**
+   * Obtiene el tenant ID del token
+   */
+  public String getTenantFromToken(String token) {
+    try {
+      Claims claims = Jwts.parserBuilder()
+          .setSigningKey(getSignKey())
+          .build()
+          .parseClaimsJws(token)
+          .getBody();
+      return (String) claims.get("tenantId");
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene el tenant ID de un refresh token
+   */
+  public String getTenantFromRefreshToken(String refreshToken) {
+    return getTenantFromToken(refreshToken);
+  }
+
+  /**
+   * Obtiene el rol del refresh token
+   */
+  public String getRoleFromRefreshToken(String refreshToken) {
+    try {
+      Claims claims = Jwts.parserBuilder()
+          .setSigningKey(getSignKey())
+          .build()
+          .parseClaimsJws(refreshToken)
+          .getBody();
+      return (String) claims.get("role");
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /**
+   * Genera un token sin información de tenant
+   */
+  public String generateTokenWithoutTenant(String username) {
+    return generateTokenFromUsername(username);
+  }
+
+  /**
+   * Valida un refresh token
+   */
+  public boolean validateRefreshToken(String refreshToken) {
+    return validateToken(refreshToken) && isRefreshToken(refreshToken);
+  }
+
+  /**
    * Obtiene la clave de firma decodificada.
    */
   private Key getSignKey() {

@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,4 +36,7 @@ public class LoginResponse {
 
   @JsonProperty("tenant_id")
   private String tenantId;
+
+  private List<TenantInfo> tenants;
+  private boolean requiresTenantSelection;
 }

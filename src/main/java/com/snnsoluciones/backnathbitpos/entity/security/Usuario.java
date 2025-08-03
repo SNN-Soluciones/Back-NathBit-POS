@@ -90,26 +90,50 @@ public class Usuario extends BaseEntity implements UserDetails {
   @Builder.Default
   private Set<Caja> cajas = new HashSet<>();
 
-  // Métodos de UserDetails
+  @Transient
+  private Set<SimpleGrantedAuthority> authorities;
+
+  // Relación con múltiples tenants
+  @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
+  private Set<UsuarioTenant> tenantMemberships = new HashSet<>();
+
+
   @Override
   public Collection<? extends GrantedAuthority> getAuthorities() {
-    Set<GrantedAuthority> authorities = new HashSet<>();
+    // Si hay authorities personalizadas (pre-auth), usarlas
+    if (authorities != null && !authorities.isEmpty()) {
+      return authorities;
+    }
 
+    // Para operaciones normales con tenant
+    Set<GrantedAuthority> allAuthorities = new HashSet<>();
+
+    // Si hay un rol directo (compatibilidad hacia atrás)
     if (rol != null) {
-      // Agregar el rol como autoridad
-      authorities.add(new SimpleGrantedAuthority("ROLE_" + rol.getNombre().name()));
-
-      // Agregar permisos del rol
+      allAuthorities.add(new SimpleGrantedAuthority("ROLE_" + rol.getNombre().name()));
       if (rol.getPermisos() != null) {
-        authorities.addAll(
-            rol.getPermisos().stream()
-                .map(permiso -> new SimpleGrantedAuthority(permiso.getCodigo()))
-                .collect(Collectors.toSet())
+        rol.getPermisos().forEach(p ->
+            allAuthorities.add(new SimpleGrantedAuthority(p.getCodigo()))
         );
       }
     }
 
-    return authorities;
+    // Agregar authority especial si es owner de algún tenant
+    if (tenantMemberships != null) {
+      boolean isOwnerAnywhere = tenantMemberships.stream()
+          .anyMatch(UsuarioTenant::isEsPropietario);
+
+      if (isOwnerAnywhere) {
+        allAuthorities.add(new SimpleGrantedAuthority("MULTI_TENANT_OWNER"));
+      }
+
+      // Si tiene acceso a múltiples tenants
+      if (tenantMemberships.size() > 1) {
+        allAuthorities.add(new SimpleGrantedAuthority("MULTI_TENANT_ACCESS"));
+      }
+    }
+
+    return allAuthorities;
   }
 
   @Override
@@ -152,5 +176,20 @@ public class Usuario extends BaseEntity implements UserDetails {
     }
     return rol.getPermisos().stream()
         .anyMatch(permiso -> permiso.getCodigo().equals(codigoPermiso));
+  }
+
+  // Método helper para obtener rol en tenant específico
+  public Rol getRolEnTenant(String tenantId) {
+    return tenantMemberships.stream()
+        .filter(ut -> ut.getTenantId().equals(tenantId))
+        .map(UsuarioTenant::getRol)
+        .findFirst()
+        .orElse(null);
+  }
+
+  // Verificar si es owner en un tenant específico
+  public boolean isOwnerInTenant(String tenantId) {
+    return tenantMemberships.stream()
+        .anyMatch(ut -> ut.getTenantId().equals(tenantId) && ut.isEsPropietario());
   }
 }

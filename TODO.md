@@ -51,6 +51,36 @@ Sistema backend multi-tenant para punto de venta en restaurantes. Construido con
 
 ---
 
+## 🔄 FASE 2.5 – AUTENTICACIÓN MULTI-TENANT (EN PROGRESO)
+🔐 Sistema de Autenticación Multi-Empresa
+
+Entidad UsuarioTenant para relación usuario-empresa
+Modificación de AuthServiceImpl para login sin tenant
+Nuevo endpoint /api/auth/select-tenant
+CustomUserDetailsService con soporte multi-tenant
+TenantFilter mejorado con extracción de JWT
+DTOs: TenantInfo, TenantSelectionRequest/Response
+RateLimiterService para prevención de ataques
+Métodos JWT para manejo de tenant y roles
+PENDIENTE: Migraciones Flyway:
+
+Crear tabla usuario_tenant en schema compartido
+Migrar datos existentes al nuevo modelo
+Actualizar seeds para multi-tenant
+
+
+PENDIENTE: Testing completo del flujo
+PENDIENTE: Documentación del nuevo flujo
+
+📝 Nuevo Flujo de Autenticación
+
+Usuario hace login → recibe lista de empresas
+Usuario selecciona empresa → obtiene token con tenant
+Todas las operaciones posteriores usan ese tenant
+Usuario puede cambiar de empresa sin cerrar sesión
+
+---
+
 ## 🟠 FASE 3 – CRUDS BASE (A INICIAR)
 
 ### 📦 Catálogo de Productos

@@ -3,7 +3,6 @@ plugins {
     id 'war'
     id 'org.springframework.boot' version '3.5.4'
     id 'io.spring.dependency-management' version '1.1.7'
-    id 'org.asciidoctor.jvm.convert' version '3.3.2'
 }
 
 group = 'com.snnsoluciones'
@@ -26,32 +25,36 @@ repositories {
 }
 
 ext {
-    set('snippetsDir', file("build/generated-snippets"))
-    // Versiones de las dependencias adicionales
+    // Versiones de las dependencias
     set('jwtVersion', '0.11.5')
     set('mapstructVersion', '1.5.5.Final')
     set('springdocVersion', '2.3.0')
+    set('hypersistenceVersion', '3.7.0')
 }
 
 dependencies {
-    // Spring Boot Starters (ya existentes)
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    // ========== Spring Boot Starters ==========
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
-    // Base de datos
+    // ========== Base de Datos ==========
+    runtimeOnly 'org.postgresql:postgresql'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
-    runtimeOnly 'org.postgresql:postgresql'
 
-    // JWT para autenticación
+    // Hypersistence para tipos JSON/JSONB en PostgreSQL
+    implementation "io.hypersistence:hypersistence-utils-hibernate-63:${hypersistenceVersion}"
+
+    // ========== Seguridad - JWT ==========
     implementation "io.jsonwebtoken:jjwt-api:${jwtVersion}"
     runtimeOnly "io.jsonwebtoken:jjwt-impl:${jwtVersion}"
     runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jwtVersion}"
 
+    // ========== Mapeo y Documentación ==========
     // MapStruct para mapeo de DTOs
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
@@ -59,37 +62,28 @@ dependencies {
     // OpenAPI/Swagger para documentación
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
-    // Lombok
+    // ========== Lombok ==========
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-    // Importante: Lombok debe ir antes que MapStruct en annotationProcessor
     annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 
-    // Jackson adicionales para manejo de fechas
+    // ========== Utilidades ==========
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
-    // Apache Commons (útil para utilidades)
-    implementation 'org.apache.commons:commons-lang3:3.14.0'
-
-    // Para auditoría avanzada (opcional)
-    implementation 'org.springframework.data:spring-data-envers'
-    implementation 'org.hibernate.orm:hibernate-envers'
-
-    // DevTools para desarrollo
+    // ========== Desarrollo ==========
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
-    // Tomcat para WAR deployment
+    // ========== WAR Deployment ==========
     providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
 
-    // Testing
+    // ========== Testing ==========
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
 }
 
-// Configuración para MapStruct con Lombok
+// ========== Configuración del Compilador ==========
 compileJava {
     options.annotationProcessorPath = configurations.annotationProcessor
     options.compilerArgs = [
@@ -98,24 +92,27 @@ compileJava {
     ]
 }
 
+// ========== Configuración de Tareas ==========
 tasks.named('test') {
-    outputs.dir snippetsDir
     useJUnitPlatform()
 }
 
-tasks.named('asciidoctor') {
-    inputs.dir snippetsDir
-    dependsOn test
-}
-
-// Configuración adicional para el WAR
+// ========== Configuración de Empaquetado ==========
 war {
     enabled = true
-    archiveBaseName = 'restaurant-erp'
-    archiveVersion = '0.0.1'
+    archiveBaseName = 'nathbit-pos'
+    archiveVersion = version
 }
 
-// Configuración para ejecutar como JAR también
 jar {
     enabled = true
+    archiveBaseName = 'nathbit-pos'
+}
+
+// ========== Configuración de Ejecución ==========
+bootRun {
+    jvmArgs = [
+            '-Dspring.profiles.active=dev',
+            '-Dfile.encoding=UTF-8'
+    ]
 }

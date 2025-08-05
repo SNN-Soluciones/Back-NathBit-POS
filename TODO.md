@@ -1,389 +1,263 @@
-# ✅ TODO.md — NathBit POS (Actualizado al 2025-01-03)
+# ✅ TODO - NathBit POS (Sistema Simplificado)
 
-Sistema backend multi-tenant para punto de venta en restaurantes. Java 17 + Spring Boot 3.
-**IMPORTANTE**: Tenant = Sucursal (no empresa). Usuarios globales en schema público.
-
----
-
-## ✅ FASE 1 – CONFIGURACIÓN BASE MULTI-TENANT ✅ (COMPLETADA)
-
-- [x] `TenantContext` (ThreadLocal)
-- [x] `TenantFilter`
-- [x] `TenantIdentifierResolver`
-- [x] `SchemaBasedMultiTenantConnectionProvider`
-- [x] `HibernateConfig`
-- [x] `FlywayConfig` + `TenantSchemaInitializer`
-- [x] `application.yml` multitenant
-- [x] Migraciones SQL base
+Sistema de punto de venta para restaurantes con arquitectura simplificada (sin multi-tenant).
+**Actualizado**: 2025-01-03
 
 ---
 
-## ✅ FASE 2 – SEGURIDAD BÁSICA ✅ (COMPLETADA)
+## 🎯 FASE 1: SISTEMA BASE DE AUTENTICACIÓN Y PERMISOS (En Progreso)
 
-- [x] Entidades: `Usuario`, `Rol`, `Permiso`
-- [x] JWT: `JwtTokenProvider`, `JwtAuthenticationFilter`
-- [x] `SecurityConfig` con Spring Security
-- [x] Rate limiting básico
-- [x] Auditoría de eventos
-
----
-
-## 🔴 FASE 3 – REDEFINICIÓN ARQUITECTURA (EN PROGRESO - CRÍTICO)
-
-### 📋 Redefinir Modelo de Usuarios y Accesos
-
-#### 1️⃣ **Nuevas Tablas en Schema PUBLIC**
-- [ ] Crear tabla `usuarios_global`
-  ```sql
-  CREATE TABLE public.usuarios_global (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      email VARCHAR(255) UNIQUE NOT NULL,
-      password VARCHAR(255) NOT NULL,
-      nombre VARCHAR(100) NOT NULL,
-      apellidos VARCHAR(100),
-      telefono VARCHAR(20),
-      identificacion VARCHAR(50),
-      tipo_identificacion VARCHAR(20),
-      activo BOOLEAN DEFAULT true,
-      bloqueado BOOLEAN DEFAULT false,
-      intentos_fallidos INTEGER DEFAULT 0,
-      ultimo_acceso TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-
-- [ ] Crear tabla `empresas`
-  ```sql
-  CREATE TABLE public.empresas (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      codigo VARCHAR(50) UNIQUE NOT NULL,
-      nombre VARCHAR(200) NOT NULL,
-      nombre_comercial VARCHAR(200),
-      cedula_juridica VARCHAR(50),
-      telefono VARCHAR(20),
-      email VARCHAR(100),
-      direccion TEXT,
-      tipo VARCHAR(50), -- RESTAURANTE, CAFETERIA, BAR, COMIDA_RAPIDA
-      activa BOOLEAN DEFAULT true,
-      configuracion JSONB,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-
-- [ ] Crear tabla `empresas_sucursales`
-  ```sql
-  CREATE TABLE public.empresas_sucursales (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      empresa_id UUID NOT NULL REFERENCES empresas(id),
-      codigo_sucursal VARCHAR(50) NOT NULL,
-      nombre_sucursal VARCHAR(200) NOT NULL,
-      schema_name VARCHAR(50) UNIQUE NOT NULL, -- nombre del tenant
-      direccion TEXT,
-      telefono VARCHAR(20),
-      activa BOOLEAN DEFAULT true,
-      es_principal BOOLEAN DEFAULT false,
-      configuracion JSONB,
-      UNIQUE(empresa_id, codigo_sucursal)
-  );
-  ```
-
-- [ ] Crear tabla `usuario_empresas`
-  ```sql
-  CREATE TABLE public.usuario_empresas (
-      usuario_id UUID NOT NULL REFERENCES usuarios_global(id),
-      empresa_id UUID NOT NULL REFERENCES empresas(id),
-      rol VARCHAR(50) NOT NULL, -- SUPER_ADMIN, ADMIN, JEFE_CAJAS, CAJERO, MESERO
-      fecha_asignacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      asignado_por UUID,
-      activo BOOLEAN DEFAULT true,
-      PRIMARY KEY (usuario_id, empresa_id)
-  );
-  ```
-
-- [ ] Crear tabla `usuario_sucursales`
-  ```sql
-  CREATE TABLE public.usuario_sucursales (
-      usuario_id UUID NOT NULL,
-      empresa_id UUID NOT NULL,
-      sucursal_id UUID NOT NULL REFERENCES empresas_sucursales(id),
-      puede_leer BOOLEAN DEFAULT true,
-      puede_escribir BOOLEAN DEFAULT true,
-      es_principal BOOLEAN DEFAULT false,
-      activo BOOLEAN DEFAULT true,
-      PRIMARY KEY (usuario_id, sucursal_id),
-      FOREIGN KEY (usuario_id, empresa_id) REFERENCES usuario_empresas(usuario_id, empresa_id)
-  );
-  ```
-
-#### 2️⃣ **Crear Vistas en Cada Tenant**
-- [ ] Vista `usuarios` en cada schema tenant
-  ```sql
-  CREATE OR REPLACE VIEW usuarios AS
-  SELECT 
-      ug.id,
-      ug.email,
-      ug.password,
-      ug.nombre,
-      ug.apellidos,
-      ug.telefono,
-      ug.identificacion,
-      ug.tipo_identificacion,
-      ug.activo,
-      ug.bloqueado,
-      ug.ultimo_acceso,
-      ue.rol,
-      current_schema() as tenant_id,
-      es.empresa_id,
-      e.nombre as empresa_nombre
-  FROM public.usuarios_global ug
-  JOIN public.usuario_empresas ue ON ug.id = ue.usuario_id
-  JOIN public.empresas e ON ue.empresa_id = e.id
-  JOIN public.empresas_sucursales es ON es.empresa_id = e.id
-  JOIN public.usuario_sucursales us ON us.usuario_id = ug.id AND us.sucursal_id = es.id
-  WHERE es.schema_name = current_schema()
-    AND ue.activo = true
-    AND us.activo = true;
-  ```
-
-#### 3️⃣ **Migrar Datos Existentes**
-- [ ] Script para migrar usuarios actuales a `usuarios_global`
-- [ ] Crear empresa y sucursal por defecto para datos existentes
-- [ ] Establecer relaciones en tablas de acceso
-
----
-
-### 🔧 Refactorizar Sistema de Autenticación
-
-#### 1️⃣ **Nuevas Entidades Java**
-- [ ] Crear `UsuarioGlobal.java` (schema public)
-- [ ] Crear `Empresa.java`
-- [ ] Crear `EmpresaSucursal.java`
-- [ ] Crear `UsuarioEmpresa.java`
-- [ ] Crear `UsuarioSucursal.java`
-
-#### 2️⃣ **Nuevos DTOs**
-- [ ] `LoginResponse` con soporte multi-empresa
+### 📋 1.1 Modelo de Base de Datos
+- [ ] Crear entidades JPA
   ```java
-  public class LoginResponse {
-      private String accessToken;
-      private String refreshToken;
-      private String tipoUsuario; // OPERATIVO o ADMINISTRATIVO
-      private List<EmpresaAcceso> empresasDisponibles;
-      private boolean requiereSeleccion;
-      private SucursalInfo sucursalDirecta; // Para cajeros
-  }
+  - [ ] Usuario.java
+  - [ ] Empresa.java  
+  - [ ] Sucursal.java
+  - [ ] UsuarioEmpresaRol.java
   ```
 
-- [ ] `EmpresaAcceso.java`
-- [ ] `SucursalInfo.java`
-- [ ] `SeleccionContextoRequest.java`
-
-#### 3️⃣ **Modificar Servicios**
-- [ ] Refactorizar `AuthServiceImpl` completamente
-  - [ ] Login sin tenant obligatorio
-  - [ ] Detección de tipo de usuario
-  - [ ] Flujo diferenciado operativo/administrativo
-
-- [ ] Crear `UsuarioGlobalService`
-- [ ] Crear `EmpresaService`
-- [ ] Crear `AccesoService` para gestionar permisos
-
-#### 4️⃣ **Actualizar Controladores**
-- [ ] Modificar `AuthController`
-  - [ ] Endpoint `/login` sin tenant
-  - [ ] Nuevo endpoint `/select-context`
-  - [ ] Endpoint `/switch-sucursal` para admins
-
-#### 5️⃣ **Seguridad y Filtros**
-- [ ] Modificar `TenantFilter`
-  - [ ] No requerir tenant para rutas públicas
-  - [ ] Obtener tenant del JWT, no del header
-  - [ ] Validar acceso al tenant
-
-- [ ] Actualizar `JwtTokenProvider`
-  - [ ] Incluir empresa_id y sucursal_id en claims
-  - [ ] Tokens temporales para selección
-
-- [ ] Crear `AccessControlService`
-  - [ ] Validar permisos usuario-empresa-sucursal
-  - [ ] Cache de permisos
-
----
-
-## 🟡 FASE 4 – DETECCIÓN INTELIGENTE DE SUCURSAL
-
-### 1️⃣ **Sistema de Detección por IP**
-- [ ] Tabla `sucursal_redes`
+- [ ] Crear migraciones Flyway
   ```sql
-  CREATE TABLE public.sucursal_redes (
-      id UUID PRIMARY KEY,
-      sucursal_id UUID NOT NULL,
-      ip_inicio INET,
-      ip_fin INET,
-      descripcion VARCHAR(200),
-      activa BOOLEAN DEFAULT true
-  );
+  - [ ] V1__crear_tabla_usuarios.sql
+  - [ ] V2__crear_tabla_empresas.sql
+  - [ ] V3__crear_tabla_sucursales.sql
+  - [ ] V4__crear_tabla_usuarios_empresas_roles.sql
+  - [ ] V5__datos_iniciales.sql (empresa demo, usuarios de prueba)
   ```
 
-- [ ] Servicio `SucursalDetectionService`
-- [ ] Configuración de rangos IP por sucursal
+### 🔐 1.2 Sistema de Autenticación
 
-### 2️⃣ **Configuración por Terminal**
-- [ ] Tabla `terminal_config` para POS fijos
-- [ ] API para registrar terminales
-- [ ] Validación de MAC address (opcional)
+#### DTOs de Autenticación
+- [ ] LoginRequest.java
+  ```java
+  - email: String
+  - password: String
+  ```
 
----
+- [ ] LoginResponse.java
+  ```java
+  - token: String
+  - refreshToken: String
+  - usuario: UsuarioDTO
+  - tipoAcceso: OPERATIVO | ADMINISTRATIVO | MULTIPLE
+  - accesoDirecto: AccesoDTO (para operativos)
+  - accesosDisponibles: List<AccesoDTO> (para admin)
+  - requiereSeleccion: boolean
+  ```
 
-## 🟢 FASE 5 – MÓDULOS DE NEGOCIO
+- [ ] SeleccionContextoRequest.java
+  ```java
+  - empresaId: Long
+  - sucursalId: Long (opcional)
+  ```
 
-### 📦 Gestión de Productos
-- [ ] Migrar `Producto` y `CategoriaProducto` al nuevo modelo
-- [ ] `ProductoController` + `ProductoService`
-- [ ] CRUD completo con paginación
-- [ ] Búsqueda y filtros
-- [ ] Gestión de modificadores
-- [ ] Precios por sucursal (opcional)
+#### Servicios de Autenticación
+- [ ] AuthService.java
+  ```java
+  - login(LoginRequest): LoginResponse
+  - seleccionarContexto(SeleccionContextoRequest): TokenResponse
+  - refresh(String refreshToken): TokenResponse
+  - logout(String token): void
+  ```
 
-### 👥 Gestión de Clientes
-- [ ] `ClienteController` + `ClienteService`
-- [ ] Validación de identificación (cédula CR)
-- [ ] Historial de compras
-- [ ] Programa de puntos (fase 2)
+- [ ] UsuarioService.java
+  ```java
+  - findByEmail(String email): Usuario
+  - obtenerAccesos(Long usuarioId): List<AccesoDTO>
+  - validarAcceso(Long usuarioId, Long empresaId, Long sucursalId): boolean
+  ```
 
-### 🪑 Gestión de Mesas y Zonas
-- [ ] `MesaController` + `MesaService`
-- [ ] `ZonaController` + `ZonaService`
-- [ ] Estados de mesa en tiempo real
-- [ ] Asignación de meseros
-- [ ] Transferencia entre mesas
+#### Controladores
+- [ ] AuthController.java
+  ```java
+  POST /api/auth/login
+  POST /api/auth/seleccionar-contexto
+  POST /api/auth/refresh
+  POST /api/auth/logout
+  ```
 
-### 📋 Sistema de Órdenes
-- [ ] `OrdenController` + `OrdenService`
-- [ ] Crear y modificar órdenes
-- [ ] Estados de orden
-- [ ] División de cuentas
-- [ ] Integración con cocina
+### 🛡️ 1.3 Sistema de Permisos
 
-### 💰 Gestión de Caja
-- [ ] `CajaController` + `CajaService`
-- [ ] Apertura y cierre de caja
-- [ ] Arqueo de caja
-- [ ] Movimientos de efectivo
-- [ ] Reportes de cierre
+#### Componentes de Seguridad
+- [ ] JwtTokenProvider.java (actualizar para nuevo modelo)
+  ```java
+  - Incluir empresaId, sucursalId, rol en claims
+  - Validación de contexto
+  ```
 
----
+- [ ] SecurityConfig.java
+  ```java
+  - Rutas públicas: /api/auth/**
+  - Rutas protegidas: resto
+  ```
 
-## 🔵 FASE 6 – INTEGRACIONES
+- [ ] PermisoService.java
+  ```java
+  - tienePermiso(usuario, empresa, sucursal, accion): boolean
+  - obtenerPermisos(usuarioEmpresaRol): PermisoDTO
+  ```
 
-### 🧾 Facturación Electrónica
-- [ ] Cliente HTTP para API externa
-- [ ] Colas de procesamiento asíncrono
-- [ ] Manejo de reintentos
-- [ ] Almacenamiento de respuestas
+- [ ] @PreAuthorize personalizado
+  ```java
+  @RequierePermiso("productos.crear")
+  @RequiereRol("ADMIN", "JEFE_CAJAS")
+  ```
 
-### 📊 Reportes
-- [ ] Servicio de reportes básicos
-- [ ] Ventas por período
-- [ ] Productos más vendidos
-- [ ] Performance por empleado
+### 👤 1.4 Gestión de Usuarios
 
----
+#### DTOs
+- [ ] UsuarioDTO.java
+- [ ] CrearUsuarioRequest.java
+- [ ] ActualizarUsuarioRequest.java
+- [ ] AsignarRolRequest.java
 
-## 🟣 FASE 7 – OPTIMIZACIONES
+#### Servicios
+- [ ] UsuarioGestionService.java
+  ```java
+  - crearUsuario(CrearUsuarioRequest): UsuarioDTO
+  - actualizarUsuario(Long id, ActualizarUsuarioRequest): UsuarioDTO
+  - asignarRol(Long usuarioId, AsignarRolRequest): void
+  - removerRol(Long usuarioId, Long empresaId, Long sucursalId): void
+  - listarUsuarios(Long empresaId, Long sucursalId): Page<UsuarioDTO>
+  ```
 
-### Performance
-- [ ] Implementar caché Redis
-- [ ] Índices de base de datos optimizados
-- [ ] Lazy loading inteligente
-- [ ] Connection pooling ajustado
+#### Controladores
+- [ ] UsuarioController.java
+  ```java
+  GET    /api/usuarios/perfil
+  PUT    /api/usuarios/perfil
+  GET    /api/usuarios (paginado, filtros)
+  POST   /api/usuarios
+  PUT    /api/usuarios/{id}
+  DELETE /api/usuarios/{id}
+  POST   /api/usuarios/{id}/roles
+  DELETE /api/usuarios/{id}/roles/{rolId}
+  ```
 
-### Monitoreo
-- [ ] Integración con Actuator
-- [ ] Métricas personalizadas
-- [ ] Health checks por tenant
-- [ ] Alertas de sistema
+### 🏢 1.5 Gestión de Empresas y Sucursales
 
----
+#### DTOs
+- [ ] EmpresaDTO.java
+- [ ] SucursalDTO.java
+- [ ] CrearEmpresaRequest.java
+- [ ] CrearSucursalRequest.java
 
-## 📝 DOCUMENTACIÓN
+#### Servicios
+- [ ] EmpresaService.java
+- [ ] SucursalService.java
 
-- [ ] Actualizar README.md ✅
-- [ ] Guía de instalación detallada
-- [ ] Manual de API con ejemplos
-- [ ] Documentación de arquitectura
-- [ ] Guías de troubleshooting
-
----
-
-## 🐛 BUGS CONOCIDOS
-
-1. ~~MapStruct no compila con `@Builder`~~ ✅ RESUELTO
-2. TenantFilter requiere tenant en todas las rutas (debe ser opcional)
-3. Login actual requiere tenant_id (debe eliminarse)
-
----
-
-## 📊 PRIORIDADES INMEDIATAS
-
-### 🔴 Crítico (Esta semana)
-1. Implementar modelo de usuarios globales
-2. Refactorizar login para no requerir tenant
-3. Crear vistas en tenants
-
-### 🟡 Importante (Próximas 2 semanas)
-1. Sistema de detección de sucursal
-2. CRUD de productos
-3. Gestión básica de órdenes
-
-### 🟢 Normal (Próximo mes)
-1. Reportes
-2. Optimizaciones
-3. Documentación completa
-
----
-
-## 🎯 CRITERIOS DE ÉXITO
-
-- [ ] Cajeros pueden hacer login sin ver selectores de empresa
-- [ ] Admins pueden cambiar entre sucursales sin relogin
-- [ ] Un usuario puede tener diferentes roles en diferentes empresas
-- [ ] El sistema detecta automáticamente la sucursal por IP
-- [ ] Cero duplicación de datos de usuarios
-- [ ] Performance < 200ms en operaciones críticas
+#### Controladores
+- [ ] EmpresaController.java
+- [ ] SucursalController.java
 
 ---
 
-## 💡 NOTAS IMPORTANTES
+## 🧪 TESTS FASE 1
 
-- **Multi-tenant**: Cada sucursal = schema PostgreSQL independiente
-- **Usuarios globales**: Todos en schema `public`, acceden según permisos
-- **Seguridad**: Validar SIEMPRE tenant + rol + permisos en cada operación
-- **Performance**: Usar vistas materializadas si las vistas normales son lentas
-- **Simplicidad**: Evitar sobre-ingeniería, empezar simple y evolucionar
+### Tests Unitarios
+- [ ] AuthServiceTest
+- [ ] UsuarioServiceTest
+- [ ] PermisoServiceTest
+- [ ] JwtTokenProviderTest
+
+### Tests de Integración
+- [ ] AuthControllerIntegrationTest
+- [ ] UsuarioControllerIntegrationTest
+- [ ] PermisoIntegrationTest
+
+### Postman Collection
+- [ ] Crear colección con todos los endpoints
+- [ ] Ejemplos para cada tipo de usuario
+- [ ] Tests automatizados
+
+---
+
+## 📝 DOCUMENTACIÓN FASE 1
+
+- [ ] Swagger/OpenAPI configurado
+- [ ] README actualizado con ejemplos
+- [ ] Guía de instalación
+- [ ] Ejemplos de uso de la API
+
+---
+
+## ✅ CRITERIOS DE ÉXITO FASE 1
+
+1. **Login funcional**
+  - [ ] Usuario puede hacer login con email/password
+  - [ ] Recibe JWT válido
+  - [ ] Token incluye información de contexto
+
+2. **Selección de contexto**
+  - [ ] Usuarios admin ven lista de empresas/sucursales
+  - [ ] Pueden seleccionar dónde trabajar
+  - [ ] Usuarios operativos van directo al POS
+
+3. **Permisos funcionando**
+  - [ ] Validación por rol
+  - [ ] Validación por permisos JSON
+  - [ ] Bloqueo de acciones no autorizadas
+
+4. **CRUD usuarios completo**
+  - [ ] Crear usuarios
+  - [ ] Asignar roles por empresa/sucursal
+  - [ ] Modificar permisos
+  - [ ] Activar/desactivar usuarios
 
 ---
 
 ## 🚀 COMANDOS ÚTILES
 
 ```bash
-# Ejecutar migraciones
-./gradlew flywayMigrate
-
-# Limpiar y reconstruir
+# Limpiar y construir
 ./gradlew clean build
 
 # Ejecutar tests
 ./gradlew test
 
+# Ejecutar aplicación
+./gradlew bootRun
+
 # Generar reporte de cobertura
 ./gradlew jacocoTestReport
 
-# Ejecutar con perfil de desarrollo
-./gradlew bootRun --args='--spring.profiles.active=dev'
+# Ver logs SQL
+./gradlew bootRun -Dspring.jpa.show-sql=true
 ```
 
 ---
 
-Última actualización: 2025-01-03 por @equipo-backend
+## 🎯 SIGUIENTES FASES (Después de completar Fase 1)
+
+### FASE 2: Módulos de Negocio Básicos
+- Productos y Categorías
+- Clientes
+- Proveedores
+
+### FASE 3: Punto de Venta
+- Órdenes
+- Mesas
+- Caja y pagos
+
+### FASE 4: Inventario y Reportes
+- Control de inventario
+- Movimientos
+- Reportes básicos
+
+### FASE 5: Facturación Electrónica
+- Integración con API externa
+- Gestión de comprobantes
+
+---
+
+## 💡 NOTAS IMPORTANTES
+
+1. **Sin Multi-tenant**: Todo en una sola base de datos
+2. **Filtrado por contexto**: Siempre filtrar por empresa_id/sucursal_id
+3. **Permisos flexibles**: Usar JSON para permisos granulares
+4. **JWT con contexto**: Token incluye empresa y sucursal actual
+5. **Validación doble**: Por rol Y por permisos específicos
+
+---
+
+Última actualización: 2025-01-03

@@ -1,6 +1,6 @@
 -- =====================================================
 -- MIGRACIÓN: Estructura de Usuarios Globales y Empresas
--- Archivo: V10__create_global_users_structure.sql
+-- Archivo: V5__create_global_users_structure.sql
 -- Ubicación: src/main/resources/db/migration/public/
 -- =====================================================
 

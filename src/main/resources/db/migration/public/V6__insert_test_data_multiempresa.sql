@@ -1,6 +1,6 @@
 -- =====================================================
 -- MIGRACIÓN: Datos de Prueba Multi-Empresa
--- Archivo: V11__insert_test_data_multiempresa.sql
+-- Archivo: V6__insert_test_data_multiempresa.sql
 -- Ubicación: src/main/resources/db/migration/public/
 -- =====================================================
 

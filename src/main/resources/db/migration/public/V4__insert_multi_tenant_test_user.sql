@@ -1,4 +1,4 @@
--- V5__insert_multi_tenant_test_user.sql
+-- V4__insert_multi_tenant_test_user.sql
 -- Crear usuario de prueba con acceso a múltiples tenants
 
 -- =====================================================

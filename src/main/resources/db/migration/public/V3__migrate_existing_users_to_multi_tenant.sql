@@ -1,4 +1,4 @@
--- V4__migrate_existing_users_to_multi_tenant.sql
+-- V3__migrate_existing_users_to_multi_tenant.sql
 -- Migrar usuarios existentes al nuevo modelo multi-tenant
 
 -- =====================================================

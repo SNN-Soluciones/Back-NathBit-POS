@@ -3,7 +3,7 @@
 package com.snnsoluciones.backnathbitpos.entity.operacion;
 
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
-import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.entity.tenant.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
 import jakarta.persistence.*;
@@ -61,7 +61,7 @@ public class Mesa extends BaseEntity {
   // Información de ocupación actual
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "mesero_asignado_id")
-  private Usuario meseroAsignado;
+  private UsuarioGlobal meseroAsignado;
 
   @Column(name = "fecha_apertura")
   private LocalDateTime fechaApertura;
@@ -118,7 +118,7 @@ public class Mesa extends BaseEntity {
     return EstadoMesa.BLOQUEADA.equals(estado);
   }
 
-  public void ocupar(Usuario mesero, Integer comensales, String cliente) {
+  public void ocupar(UsuarioGlobal mesero, Integer comensales, String cliente) {
     this.estado = EstadoMesa.OCUPADA;
     this.meseroAsignado = mesero;
     this.fechaApertura = LocalDateTime.now();

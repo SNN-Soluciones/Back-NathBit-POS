@@ -2,7 +2,7 @@ package com.snnsoluciones.backnathbitpos.entity.operacion;
 
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
 import com.snnsoluciones.backnathbitpos.entity.catalogo.Cliente;
-import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
 import com.snnsoluciones.backnathbitpos.enums.TipoOrden;
 import jakarta.persistence.*;
@@ -45,7 +45,7 @@ public class Orden extends BaseEntity {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "mesero_id")
-  private Usuario mesero;
+  private UsuarioGlobal mesero;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "caja_id")

@@ -2,9 +2,9 @@
 
 package com.snnsoluciones.backnathbitpos.repository;
 
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Mesa;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Orden;
-import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
 import com.snnsoluciones.backnathbitpos.enums.TipoOrden;
 import org.springframework.data.domain.Page;
@@ -30,7 +30,7 @@ public interface OrdenRepository extends JpaRepository<Orden, UUID> {
 
   List<Orden> findByMesaAndEstado(Mesa mesa, EstadoOrden estado);
 
-  List<Orden> findByMesero(Usuario mesero);
+  List<Orden> findByMesero(UsuarioGlobal mesero);
 
   List<Orden> findByTipo(TipoOrden tipo);
 

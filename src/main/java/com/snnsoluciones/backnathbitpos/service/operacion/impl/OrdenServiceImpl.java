@@ -5,12 +5,11 @@ package com.snnsoluciones.backnathbitpos.service.operacion.impl;
 import com.snnsoluciones.backnathbitpos.dto.request.OrdenRequest;
 import com.snnsoluciones.backnathbitpos.dto.response.OrdenResponse;
 import com.snnsoluciones.backnathbitpos.entity.catalogo.Cliente;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Caja;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Mesa;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Orden;
 import com.snnsoluciones.backnathbitpos.entity.operacion.OrdenDetalle;
-import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
-import com.snnsoluciones.backnathbitpos.entity.tenant.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
 import com.snnsoluciones.backnathbitpos.enums.TipoOrden;
@@ -18,6 +17,7 @@ import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.mapper.OrdenMapper;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.repository.global.UsuarioGlobalRepository;
 import com.snnsoluciones.backnathbitpos.service.operacion.OrdenCalculoService;
 import com.snnsoluciones.backnathbitpos.service.operacion.OrdenService;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +43,7 @@ public class OrdenServiceImpl implements OrdenService {
     private final OrdenRepository ordenRepository;
     private final MesaRepository mesaRepository;
     private final ClienteRepository clienteRepository;
-    private final UsuarioRepository usuarioRepository;
+    private final UsuarioGlobalRepository usuarioRepository;
     private final CajaRepository cajaRepository;
     private final SucursalRepository sucursalRepository;
     private final OrdenCalculoService calculoService;
@@ -84,7 +84,7 @@ public class OrdenServiceImpl implements OrdenService {
 
         // Asignar mesero
         if (request.getMeseroId() != null) {
-            Usuario mesero = usuarioRepository.findById(request.getMeseroId())
+            UsuarioGlobal mesero = usuarioRepository.findById(request.getMeseroId())
                 .orElseThrow(() -> new ResourceNotFoundException("Mesero no encontrado"));
             orden.setMesero(mesero);
         }
@@ -205,7 +205,7 @@ public class OrdenServiceImpl implements OrdenService {
 
     @Override
     public List<OrdenResponse> obtenerPorMesero(UUID meseroId) {
-        Usuario mesero = usuarioRepository.findById(meseroId)
+        UsuarioGlobal mesero = usuarioRepository.findById(meseroId)
             .orElseThrow(() -> new ResourceNotFoundException("Mesero no encontrado"));
 
         return ordenRepository.findByMesero(mesero).stream()
@@ -352,7 +352,7 @@ public class OrdenServiceImpl implements OrdenService {
         Orden orden = ordenRepository.findById(ordenId)
             .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada"));
 
-        Usuario mesero = usuarioRepository.findById(meseroId)
+        UsuarioGlobal mesero = usuarioRepository.findById(meseroId)
             .orElseThrow(() -> new ResourceNotFoundException("Mesero no encontrado"));
 
         orden.setMesero(mesero);

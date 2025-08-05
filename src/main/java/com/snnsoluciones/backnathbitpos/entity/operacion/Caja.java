@@ -3,7 +3,7 @@
 package com.snnsoluciones.backnathbitpos.entity.operacion;
 
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
-import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.entity.tenant.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.EstadoCaja;
 import jakarta.persistence.*;
@@ -44,7 +44,7 @@ public class Caja extends BaseEntity {
   // Información de apertura/cierre actual
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "usuario_apertura_id")
-  private Usuario usuarioApertura;
+  private UsuarioGlobal usuarioApertura;
 
   @Column(name = "fecha_apertura")
   private LocalDateTime fechaApertura;
@@ -54,7 +54,7 @@ public class Caja extends BaseEntity {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "usuario_cierre_id")
-  private Usuario usuarioCierre;
+  private UsuarioGlobal usuarioCierre;
 
   @Column(name = "fecha_cierre")
   private LocalDateTime fechaCierre;
@@ -75,7 +75,7 @@ public class Caja extends BaseEntity {
       inverseJoinColumns = @JoinColumn(name = "usuario_id")
   )
   @Builder.Default
-  private Set<Usuario> usuariosAutorizados = new HashSet<>();
+  private Set<UsuarioGlobal> usuariosAutorizados = new HashSet<>();
 
   // Métodos helper
   public boolean estaAbierta() {
@@ -86,7 +86,7 @@ public class Caja extends BaseEntity {
     return EstadoCaja.CERRADA.equals(estado);
   }
 
-  public void abrir(Usuario usuario, BigDecimal montoInicial) {
+  public void abrir(UsuarioGlobal usuario, BigDecimal montoInicial) {
     this.estado = EstadoCaja.ABIERTA;
     this.usuarioApertura = usuario;
     this.fechaApertura = LocalDateTime.now();
@@ -96,7 +96,7 @@ public class Caja extends BaseEntity {
     this.montoCierre = null;
   }
 
-  public void cerrar(Usuario usuario, BigDecimal montoFinal) {
+  public void cerrar(UsuarioGlobal usuario, BigDecimal montoFinal) {
     this.estado = EstadoCaja.CERRADA;
     this.usuarioCierre = usuario;
     this.fechaCierre = LocalDateTime.now();

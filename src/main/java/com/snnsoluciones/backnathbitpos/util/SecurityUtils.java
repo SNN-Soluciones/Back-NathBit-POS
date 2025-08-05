@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.util;
 
-import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -40,7 +40,7 @@ public class SecurityUtils {
   /**
    * Obtiene el usuario autenticado actual.
    */
-  public static Optional<Usuario> getCurrentUser() {
+  public static Optional<UsuarioGlobal> getCurrentUser() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
     if (authentication == null || !authentication.isAuthenticated()) {
@@ -49,8 +49,8 @@ public class SecurityUtils {
 
     Object principal = authentication.getPrincipal();
 
-    if (principal instanceof Usuario) {
-      return Optional.of((Usuario) principal);
+    if (principal instanceof UsuarioGlobal) {
+      return Optional.of((UsuarioGlobal) principal);
     }
 
     return Optional.empty();
@@ -117,13 +117,6 @@ public class SecurityUtils {
 
     return authentication.getAuthorities().stream()
         .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals(authority));
-  }
-
-  /**
-   * Obtiene el tenant ID del usuario actual.
-   */
-  public static Optional<String> getCurrentTenantId() {
-    return getCurrentUser().map(Usuario::getTenantId);
   }
 
   /**

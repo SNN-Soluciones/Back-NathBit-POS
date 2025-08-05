@@ -5,15 +5,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -30,10 +27,11 @@ import java.util.List;
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
+
   private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
   private final TenantFilter tenantFilter;
-  private final UserDetailsService userDetailsService;
+  private final GlobalUserDetailsService globalUserDetailsService;
 
   @Bean
   public PasswordEncoder passwordEncoder() {
@@ -41,79 +39,70 @@ public class SecurityConfig {
   }
 
   @Bean
-  public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-    return config.getAuthenticationManager();
-  }
-
-  @Bean
   public DaoAuthenticationProvider authenticationProvider() {
     DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-    authProvider.setUserDetailsService(userDetailsService);
+    authProvider.setUserDetailsService(globalUserDetailsService);
     authProvider.setPasswordEncoder(passwordEncoder());
     return authProvider;
   }
 
   @Bean
+  public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+    return authConfig.getAuthenticationManager();
+  }
+
+  @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
-        // Deshabilitar CSRF para APIs REST
-        .csrf(AbstractHttpConfigurer::disable)
-
-        // Configurar CORS
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-        // Configurar manejo de excepciones
+        .csrf(csrf -> csrf.disable())
         .exceptionHandling(exception -> exception
             .authenticationEntryPoint(jwtAuthenticationEntryPoint)
         )
-
-        // Configurar política de sesiones
         .sessionManagement(session -> session
             .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
         )
-
-        // Configurar autorización de requests
         .authorizeHttpRequests(authz -> authz
-            // Rutas públicas - sin autenticación
+            // Endpoints públicos - NO requieren tenant
             .requestMatchers(
-                "/api/v2/auth/login",
-                "/api/v2/auth/forgot-password",
-                "/api/v2/auth/reset-password",
-                "/api/v1/auth/login", // Compatibilidad
-                "/api/public/**",
-                "/actuator/health",
-                "/swagger-ui/**",
-                "/v3/api-docs/**",
-                "/error"
+                "/api/auth/login",
+                "/api/auth/refresh",
+                "/api/auth/logout",
+                "/api/auth/forgot-password",
+                "/api/auth/reset-password",
+                "/api/auth/verify-email"
             ).permitAll()
 
-            // Rutas que requieren autenticación pero no tenant específico
+            // Endpoints de selección de contexto - requieren autenticación pero NO tenant
             .requestMatchers(
-                "/api/v2/auth/select-context",
-                "/api/v2/auth/refresh",
-                "/api/v2/auth/validate",
-                "/api/v2/auth/logout"
+                "/api/auth/empresas",
+                "/api/auth/select-context",
+                "/api/auth/validate-token"
             ).authenticated()
 
-            // Rutas administrativas - requieren rol ADMIN o SUPER_ADMIN
-            .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+            // Swagger/OpenAPI
+            .requestMatchers(
+                "/v3/api-docs/**",
+                "/swagger-ui/**",
+                "/swagger-ui.html",
+                "/swagger-resources/**",
+                "/webjars/**"
+            ).permitAll()
 
-            // Rutas de caja - requieren roles específicos
-            .requestMatchers("/api/cajas/**").hasAnyRole("CAJERO", "JEFE_CAJAS", "ADMIN", "SUPER_ADMIN")
+            // Health checks y actuator
+            .requestMatchers(
+                "/actuator/health",
+                "/actuator/info"
+            ).permitAll()
 
-            // Rutas de órdenes - múltiples roles
-            .requestMatchers("/api/ordenes/**").hasAnyRole("MESERO", "CAJERO", "JEFE_CAJAS", "ADMIN", "SUPER_ADMIN")
-
-            // Rutas de reportes
-            .requestMatchers("/api/reportes/**").hasAnyRole("JEFE_CAJAS", "ADMIN", "SUPER_ADMIN", "CONTADOR")
-
-            // Cualquier otra ruta requiere autenticación
+            // Todo lo demás requiere autenticación Y tenant
             .anyRequest().authenticated()
-        )
+        );
 
-        // Agregar filtros personalizados
-        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-        .addFilterAfter(tenantFilter, JwtAuthenticationFilter.class);
+    // Agregar filtros en orden correcto
+    http.authenticationProvider(authenticationProvider());
+    http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+    http.addFilterAfter(tenantFilter, JwtAuthenticationFilter.class);
 
     return http.build();
   }
@@ -121,44 +110,26 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-
-    // Orígenes permitidos
-    configuration.setAllowedOriginPatterns(Arrays.asList(
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://*.nathbitpos.com"
-    ));
-
-    // Métodos permitidos
-    configuration.setAllowedMethods(Arrays.asList(
-        "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
-    ));
-
-    // Headers permitidos
+    configuration.setAllowedOriginPatterns(List.of("*"));
+    configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
     configuration.setAllowedHeaders(Arrays.asList(
         "Authorization",
         "Content-Type",
-        "X-Requested-With",
-        "Accept",
-        "Origin",
-        "Access-Control-Request-Method",
-        "Access-Control-Request-Headers",
-        "X-Terminal-Id" // Para detección de terminal
+        "X-Tenant-ID",
+        "X-Empresa-ID",
+        "X-Sucursal-ID"
     ));
-
-    // Headers expuestos
     configuration.setExposedHeaders(Arrays.asList(
-        "Access-Control-Allow-Origin",
-        "Access-Control-Allow-Credentials",
-        "Authorization"
+        "Authorization",
+        "X-Total-Count",
+        "X-Page-Number",
+        "X-Page-Size"
     ));
-
     configuration.setAllowCredentials(true);
     configuration.setMaxAge(3600L);
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);
-
     return source;
   }
 }

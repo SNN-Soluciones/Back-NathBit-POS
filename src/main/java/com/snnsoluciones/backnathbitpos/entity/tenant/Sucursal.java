@@ -3,10 +3,10 @@
 package com.snnsoluciones.backnathbitpos.entity.tenant;
 
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Caja;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Mesa;
 import com.snnsoluciones.backnathbitpos.entity.operacion.Zona;
-import com.snnsoluciones.backnathbitpos.entity.security.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -107,7 +107,7 @@ public class Sucursal extends BaseEntity {
 
   @ManyToMany(mappedBy = "sucursales", fetch = FetchType.LAZY)
   @Builder.Default
-  private Set<Usuario> usuarios = new HashSet<>();
+  private Set<UsuarioGlobal> usuarios = new HashSet<>();
 
   // Métodos helper
   public String obtenerCodigoCompleto() {

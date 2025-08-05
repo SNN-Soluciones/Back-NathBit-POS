@@ -74,29 +74,22 @@ public class AdminUsuarioController {
      * Asigna sucursales a un usuario.
      */
     @PostMapping("/{id}/sucursales")
-    @Operation(summary = "Asignar sucursales a usuario", 
-              description = "Asigna una o más sucursales a las que el usuario tendrá acceso.")
-    public ResponseEntity<ApiResponse<UsuarioResponse>> asignarSucursales(
-            @Parameter(description = "ID del usuario") @PathVariable UUID id,
-            @Valid @RequestBody AsignarSucursalesRequest request) {
-        
-        log.info("Asignando {} sucursales a usuario {}", request.getSucursalIds().size(), id);
-        
-        UsuarioResponse usuario = usuarioService.asignarSucursales(id, request.getSucursalIds());
-        
-        auditService.logResourceEvent(
-            "ASIGNAR_SUCURSALES", 
-            "USUARIO", 
-            id.toString(), 
-            String.format("Se asignaron %d sucursales al usuario", request.getSucursalIds().size()),
-            true
-        );
-        
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @Operation(summary = "Asignar sucursales",
+        description = "Asigna un usuario a sucursales adicionales de la empresa")
+    public ResponseEntity<ApiResponse<Void>> asignarSucursales(
+        @PathVariable UUID id,
+        @RequestBody @Valid AsignarSucursalesRequest request) {
+
+        log.info("Asignando usuario {} a {} sucursales", id, request.getSucursalesIds().size());
+
+        // Llamar correctamente al servicio pasando todo el request
+        usuarioService.asignarSucursales(id, request);
+
         return ResponseEntity.ok(
-            ApiResponse.<UsuarioResponse>builder()
+            ApiResponse.<Void>builder()
                 .success(true)
                 .message("Sucursales asignadas exitosamente")
-                .data(usuario)
                 .build()
         );
     }

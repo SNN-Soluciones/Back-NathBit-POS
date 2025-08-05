@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity.security;
 
 import com.snnsoluciones.backnathbitpos.entity.base.BaseEntity;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,7 +29,7 @@ public class Rol extends BaseEntity {
   // Cambiado de @ManyToMany a @OneToMany porque un usuario tiene un solo rol
   @OneToMany(mappedBy = "rol", fetch = FetchType.LAZY)
   @Builder.Default
-  private Set<Usuario> usuarios = new HashSet<>();
+  private Set<UsuarioGlobal> usuarios = new HashSet<>();
 
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(

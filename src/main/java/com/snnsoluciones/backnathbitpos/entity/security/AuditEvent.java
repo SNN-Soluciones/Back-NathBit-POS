@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 @ToString
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class AuditEvent extends BaseEntity {
 
     @Column(nullable = false, length = 100)

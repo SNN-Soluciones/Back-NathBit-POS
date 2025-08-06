@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.config;
 
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -33,7 +34,7 @@ public class CorsConfig {
     ));
 
     // Headers permitidos
-    configuration.setAllowedHeaders(Arrays.asList("*"));
+    configuration.setAllowedHeaders(List.of("*"));
 
     // Headers expuestos al cliente
     configuration.setExposedHeaders(Arrays.asList(

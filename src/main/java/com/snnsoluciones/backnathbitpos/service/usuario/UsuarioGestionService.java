@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.usuario.AsignarRolRequest;
 import com.snnsoluciones.backnathbitpos.dto.usuario.CrearUsuarioRequest;
 import com.snnsoluciones.backnathbitpos.dto.usuario.UsuarioDTO;
 import com.snnsoluciones.backnathbitpos.dto.usuario.UsuarioEmpresaRolDTO;
+import java.util.Map;
 import org.apache.coyote.BadRequestException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,7 +43,8 @@ public interface UsuarioGestionService {
      * @param request datos del rol a asignar
      * @return UsuarioEmpresaRolDTO creado
      */
-    UsuarioEmpresaRolDTO asignarRol(Long usuarioId, AsignarRolRequest request);
+    UsuarioEmpresaRolDTO asignarRol(Long usuarioId, AsignarRolRequest request)
+        throws BadRequestException;
     
     /**
      * Remueve un rol específico de un usuario.
@@ -50,7 +52,7 @@ public interface UsuarioGestionService {
      * @param usuarioId ID del usuario
      * @param usuarioEmpresaRolId ID del rol a remover
      */
-    void removerRol(Long usuarioId, Long usuarioEmpresaRolId);
+    void removerRol(Long usuarioId, Long usuarioEmpresaRolId) throws BadRequestException;
     
     /**
      * Lista todos los usuarios de una empresa con filtros.
@@ -83,7 +85,8 @@ public interface UsuarioGestionService {
      * @return UsuarioEmpresaRolDTO actualizado
      */
     UsuarioEmpresaRolDTO actualizarPermisosRol(Long usuarioEmpresaRolId, 
-                                               Map<String, Map<String, Boolean>> permisos);
+                                               Map<String, Map<String, Boolean>> permisos)
+        throws BadRequestException;
     
     /**
      * Establece un rol como principal para el usuario.
@@ -91,7 +94,8 @@ public interface UsuarioGestionService {
      * @param usuarioId ID del usuario
      * @param usuarioEmpresaRolId ID del rol a marcar como principal
      */
-    void establecerRolPrincipal(Long usuarioId, Long usuarioEmpresaRolId);
+    void establecerRolPrincipal(Long usuarioId, Long usuarioEmpresaRolId)
+        throws BadRequestException;
     
     /**
      * Transfiere todos los usuarios de una sucursal a otra.
@@ -101,7 +105,8 @@ public interface UsuarioGestionService {
      * @param sucursalDestinoId ID de la sucursal destino
      * @return cantidad de usuarios transferidos
      */
-    int transferirUsuariosSucursal(Long sucursalOrigenId, Long sucursalDestinoId);
+    int transferirUsuariosSucursal(Long sucursalOrigenId, Long sucursalDestinoId)
+        throws BadRequestException;
     
     /**
      * Desactiva todos los usuarios de una empresa o sucursal.

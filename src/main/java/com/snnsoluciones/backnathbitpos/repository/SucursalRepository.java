@@ -131,4 +131,38 @@ public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
                    "AND CURRENT_TIME BETWEEN s.hora_apertura AND s.hora_cierre", 
            nativeQuery = true)
     List<Sucursal> findSucursalesAbiertasAhora();
+
+
+    /**
+     * Cuenta sucursales activas por empresa.
+     *
+     * @param empresaId ID de la empresa
+     * @return cantidad de sucursales activas
+     */
+    long countByEmpresaIdAndActivaTrue(Long empresaId);
+
+    /**
+     * Busca sucursales por usuario y empresa específica.
+     * Incluye sucursales donde el usuario tiene acceso directo
+     * o acceso a nivel empresa (todas las sucursales).
+     *
+     * @param usuarioId ID del usuario
+     * @param empresaId ID de la empresa
+     * @return Lista de sucursales accesibles
+     */
+    @Query("SELECT DISTINCT s FROM Sucursal s " +
+        "WHERE s.empresa.id = :empresaId " +
+        "AND s.activa = true " +
+        "AND EXISTS (" +
+        "  SELECT uer FROM UsuarioEmpresaRol uer " +
+        "  WHERE uer.usuario.id = :usuarioId " +
+        "  AND uer.activo = true " +
+        "  AND (" +
+        "    (uer.sucursal.id = s.id) OR " +
+        "    (uer.empresa.id = :empresaId AND uer.sucursal IS NULL)" +
+        "  )" +
+        ") " +
+        "ORDER BY s.nombre")
+    List<Sucursal> findByUsuarioIdAndEmpresaId(@Param("usuarioId") Long usuarioId,
+        @Param("empresaId") Long empresaId);
 }

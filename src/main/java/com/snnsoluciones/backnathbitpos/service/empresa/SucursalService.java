@@ -78,7 +78,7 @@ public interface SucursalService {
      * @param activa nuevo estado
      * @return SucursalDTO actualizada
      */
-    SucursalDTO cambiarEstadoSucursal(Long id, boolean activa);
+    SucursalDTO cambiarEstadoSucursal(Long id, boolean activa) throws BadRequestException;
     
     /**
      * Obtiene la configuración de una sucursal.
@@ -138,5 +138,6 @@ public interface SucursalService {
      * @param sucursalOrigenId ID de la sucursal origen
      * @param sucursalDestinoId ID de la sucursal destino
      */
-    void copiarConfiguracion(Long sucursalOrigenId, Long sucursalDestinoId);
+    void copiarConfiguracion(Long sucursalOrigenId, Long sucursalDestinoId)
+        throws BadRequestException;
 }

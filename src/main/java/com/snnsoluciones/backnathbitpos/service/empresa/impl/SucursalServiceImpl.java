@@ -13,6 +13,7 @@ import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
 import com.snnsoluciones.backnathbitpos.service.empresa.SucursalService;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
@@ -147,24 +148,23 @@ public class SucursalServiceImpl implements SucursalService {
             .map(sucursalMapper::toDTO)
             .collect(Collectors.toList());
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public Page<SucursalDTO> listarSucursales(Long empresaId, String search, Pageable pageable) {
-        Page<Sucursal> sucursales;
-        
-        if (search != null && !search.isEmpty()) {
-            sucursales = sucursalRepository.findByEmpresaIdAndNombreContainingIgnoreCaseOrCodigoContainingIgnoreCase(
-                empresaId, search, search, pageable);
-        } else {
-            sucursales = sucursalRepository.findByEmpresaId(empresaId, pageable);
-        }
-        
+        // Buscar sucursales, por defecto solo las activas
+        Page<Sucursal> sucursales = sucursalRepository.buscarPorEmpresa(
+            empresaId,
+            search,     // búsqueda (puede ser null o vacío)
+            true,       // solo activas
+            pageable
+        );
+
         return sucursales.map(sucursalMapper::toDTO);
     }
     
     @Override
-    public SucursalDTO cambiarEstadoSucursal(Long id, boolean activa) {
+    public SucursalDTO cambiarEstadoSucursal(Long id, boolean activa) throws BadRequestException {
         Sucursal sucursal = sucursalRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
         
@@ -218,12 +218,12 @@ public class SucursalServiceImpl implements SucursalService {
             .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
         
         // Desmarcar la actual principal
-        List<Sucursal> sucursalesPrincipales = sucursalRepository
-            .findByEmpresaIdAndEsPrincipalTrue(sucursal.getEmpresa().getId());
+        Sucursal sucursalesPrincipales = sucursalRepository
+            .findSucursalPrincipalByEmpresaId(sucursal.getEmpresa().getId()).orElse(null);
         
-        for (Sucursal s : sucursalesPrincipales) {
-            s.setEsPrincipal(false);
-            sucursalRepository.save(s);
+        if (Objects.nonNull(sucursalesPrincipales) && !sucursalesPrincipales.getId().equals(sucursalId)) {
+            sucursalesPrincipales.setEsPrincipal(false);
+            sucursalRepository.save(sucursalesPrincipales);
         }
         
         // Marcar la nueva principal
@@ -285,7 +285,8 @@ public class SucursalServiceImpl implements SucursalService {
     }
     
     @Override
-    public void copiarConfiguracion(Long sucursalOrigenId, Long sucursalDestinoId) {
+    public void copiarConfiguracion(Long sucursalOrigenId, Long sucursalDestinoId)
+        throws BadRequestException {
         Sucursal origen = sucursalRepository.findById(sucursalOrigenId)
             .orElseThrow(() -> new ResourceNotFoundException("Sucursal origen no encontrada"));
         

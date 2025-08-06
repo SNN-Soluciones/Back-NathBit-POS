@@ -136,21 +136,25 @@ public class UsuarioServiceImpl implements UsuarioService {
         log.info("Usuario actualizado: {}", usuario.getEmail());
         return usuarioMapper.toDTO(usuario);
     }
-    
+
+
     @Override
-    public Page<UsuarioDTO> listarUsuarios(Long empresaId, Long sucursalId, 
-                                          String search, Pageable pageable) {
+    public Page<UsuarioDTO> listarUsuarios(Long empresaId, Long sucursalId,
+        String search, Pageable pageable) {
         Page<Usuario> usuarios;
-        
-        if (sucursalId != null) {
-            usuarios = usuarioRepository.findBySucursalId(sucursalId, pageable);
-        } else if (empresaId != null) {
-            usuarios = usuarioRepository.findByEmpresaId(empresaId, pageable);
+
+        if (search != null && !search.trim().isEmpty()) {
+            usuarios = usuarioRepository.buscarUsuarios(empresaId, sucursalId, search, pageable);
         } else {
-            // Solo SUPER_ADMIN puede ver todos
-            usuarios = usuarioRepository.findAll(pageable);
+            if (sucursalId != null) {
+                usuarios = usuarioRepository.findBySucursalId(sucursalId, pageable);
+            } else if (empresaId != null) {
+                usuarios = usuarioRepository.findByEmpresaId(empresaId, pageable);
+            } else {
+                usuarios = usuarioRepository.findAll(pageable);
+            }
         }
-        
+
         return usuarios.map(usuarioMapper::toDTO);
     }
     

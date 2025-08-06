@@ -133,7 +133,8 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     }
     
     @Override
-    public UsuarioEmpresaRolDTO asignarRol(Long usuarioId, AsignarRolRequest request) {
+    public UsuarioEmpresaRolDTO asignarRol(Long usuarioId, AsignarRolRequest request)
+        throws BadRequestException {
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         
@@ -199,7 +200,7 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     }
     
     @Override
-    public void removerRol(Long usuarioId, Long usuarioEmpresaRolId) {
+    public void removerRol(Long usuarioId, Long usuarioEmpresaRolId) throws BadRequestException {
         UsuarioEmpresaRol uer = usuarioEmpresaRolRepository.findById(usuarioEmpresaRolId)
             .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
         
@@ -260,7 +261,8 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     
     @Override
     public UsuarioEmpresaRolDTO actualizarPermisosRol(Long usuarioEmpresaRolId,
-                                                      Map<String, Map<String, Boolean>> permisos) {
+                                                      Map<String, Map<String, Boolean>> permisos)
+        throws BadRequestException {
         permisoService.actualizarPermisos(usuarioEmpresaRolId, permisos);
         
         UsuarioEmpresaRol uer = usuarioEmpresaRolRepository.findById(usuarioEmpresaRolId)
@@ -270,7 +272,8 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     }
     
     @Override
-    public void establecerRolPrincipal(Long usuarioId, Long usuarioEmpresaRolId) {
+    public void establecerRolPrincipal(Long usuarioId, Long usuarioEmpresaRolId)
+        throws BadRequestException {
         UsuarioEmpresaRol uer = usuarioEmpresaRolRepository.findById(usuarioEmpresaRolId)
             .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
         
@@ -289,7 +292,8 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     }
     
     @Override
-    public int transferirUsuariosSucursal(Long sucursalOrigenId, Long sucursalDestinoId) {
+    public int transferirUsuariosSucursal(Long sucursalOrigenId, Long sucursalDestinoId)
+        throws BadRequestException {
         // Validar sucursales
         Sucursal origen = sucursalRepository.findById(sucursalOrigenId)
             .orElseThrow(() -> new ResourceNotFoundException("Sucursal origen no encontrada"));
@@ -364,7 +368,7 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
         
         // ADMIN puede gestionar usuarios de su empresa
         if (rol == RolNombre.ADMIN) {
-            return usuarioEmpresaRolRepository.existsByUsuarioIdAndEmpresaId(usuarioId, empresaId);
+            return usuarioEmpresaRolRepository.existsByUsuarioIdAndEmpresaIdAndActivoTrue(usuarioId, empresaId);
         }
         
         // JEFE_CAJAS puede gestionar usuarios de su sucursal con roles operativos
@@ -397,10 +401,24 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     // Métodos auxiliares privados
     
     private Long obtenerUsuarioActualId() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof Long) {
-            return (Long) principal;
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+            if (principal instanceof Usuario) {
+                return ((Usuario) principal).getId();
+            } else if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
+                // Si usas un UserDetails personalizado, adaptar según tu implementación
+                String username = ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
+                Usuario usuario = usuarioRepository.findByEmail(username).orElse(null);
+                return usuario != null ? usuario.getId() : null;
+            }
+
+            return null;
+        } catch (Exception e) {
+            log.warn("No se pudo obtener el usuario actual: {}", e.getMessage());
+            return null;
         }
-        return null;
     }
+
+
 }

@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.config.security;
 
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -112,30 +113,6 @@ public class JwtTokenProvider {
   public String getTenantFromToken(String token) {
     Claims claims = getClaims(token);
     return claims.get("tenant_id", String.class);
-  }
-
-  /**
-   * Obtiene el ID de empresa del token
-   */
-  public String getEmpresaIdFromToken(String token) {
-    Claims claims = getClaims(token);
-    return claims.get("empresa_id", String.class);
-  }
-
-  /**
-   * Obtiene el ID de sucursal del token
-   */
-  public String getSucursalIdFromToken(String token) {
-    Claims claims = getClaims(token);
-    return claims.get("sucursal_id", String.class);
-  }
-
-  /**
-   * Obtiene el rol del token
-   */
-  public String getRolFromToken(String token) {
-    Claims claims = getClaims(token);
-    return claims.get("rol", String.class);
   }
 
   /**
@@ -257,4 +234,99 @@ public class JwtTokenProvider {
     long timeUntilExpiration = expiration.getTime() - System.currentTimeMillis();
     return timeUntilExpiration < (5 * 60 * 1000); // 5 minutos
   }
+
+  // Agregar estos métodos a JwtTokenProvider.java:
+
+  /**
+   * Genera un token con contexto completo usando IDs Long
+   */
+  public String generateToken(Long usuarioId, String username, Long empresaId, Long sucursalId, RolNombre rol) {
+    Date now = new Date();
+    Date expiryDate = new Date(now.getTime() + (jwtExpiration * 1000));
+
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("type", "ACCESS");
+    claims.put("usuario_id", usuarioId);
+    claims.put("empresa_id", empresaId);
+    claims.put("sucursal_id", sucursalId);
+    claims.put("rol", rol.name());
+
+    return Jwts.builder()
+        .setClaims(claims)
+        .setSubject(username)
+        .setIssuedAt(now)
+        .setExpiration(expiryDate)
+        .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+        .compact();
+  }
+
+  /**
+   * Genera un refresh token usando el ID del usuario
+   */
+  public String generateRefreshToken(Long usuarioId) {
+    Date now = new Date();
+    Date expiryDate = new Date(now.getTime() + (refreshExpiration * 1000));
+
+    return Jwts.builder()
+        .setSubject(usuarioId.toString())
+        .setIssuedAt(now)
+        .setExpiration(expiryDate)
+        .claim("type", "REFRESH")
+        .claim("usuario_id", usuarioId)
+        .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+        .compact();
+  }
+
+  /**
+   * Obtiene el ID del usuario del token
+   */
+  public Long getUserIdFromToken(String token) {
+    Claims claims = getClaims(token);
+    // Primero intentar obtener de usuario_id, si no del subject
+    Object usuarioId = claims.get("usuario_id");
+    if (usuarioId != null) {
+      return Long.valueOf(usuarioId.toString());
+    }
+    // Si no hay usuario_id, intentar parsear el subject
+    String subject = claims.getSubject();
+    if (subject != null && subject.matches("\\d+")) {
+      return Long.parseLong(subject);
+    }
+    return null;
+  }
+
+  /**
+   * Obtiene el ID de empresa del token como Long
+   */
+  public Long getEmpresaIdFromToken(String token) {
+    Claims claims = getClaims(token);
+    Object empresaId = claims.get("empresa_id");
+    return empresaId != null ? Long.valueOf(empresaId.toString()) : null;
+  }
+
+  /**
+   * Obtiene el ID de sucursal del token como Long
+   */
+  public Long getSucursalIdFromToken(String token) {
+    Claims claims = getClaims(token);
+    Object sucursalId = claims.get("sucursal_id");
+    return sucursalId != null ? Long.valueOf(sucursalId.toString()) : null;
+  }
+
+  /**
+   * Obtiene el rol del token como RolNombre
+   */
+  public RolNombre getRolFromToken(String token) {
+    Claims claims = getClaims(token);
+    String rol = claims.get("rol", String.class);
+    return rol != null ? RolNombre.valueOf(rol) : null;
+  }
+
+  /**
+   * Obtiene el tiempo de expiración en segundos
+   */
+  public Long getExpirationTime() {
+    return jwtExpiration;
+  }
+
 }

@@ -163,9 +163,9 @@ public class EmpresaServiceImpl implements EmpresaService {
         if (activas != null) {
             empresas = empresaRepository.findByActiva(activas, pageable);
         } else if (search != null && !search.isEmpty()) {
-            empresas = empresaRepository.findByNombreContainingIgnoreCaseOrCodigoContainingIgnoreCase(
-                search, search, pageable);
-        } else {
+            empresas = empresaRepository.buscar(search, null, activas, pageable);
+            }
+        else {
             empresas = empresaRepository.findAll(pageable);
         }
         
@@ -271,7 +271,7 @@ public class EmpresaServiceImpl implements EmpresaService {
         estadisticas.setSucursalesActivas(sucursalesActivas);
         
         // Contar usuarios activos
-        long usuariosActivos = usuarioEmpresaRolRepository.(empresaId);
+        long usuariosActivos = usuarioEmpresaRolRepository.countByEmpresaIdAndActivoTrue(empresaId);
         estadisticas.setUsuariosActivos(usuariosActivos);
         
         // Otras métricas básicas

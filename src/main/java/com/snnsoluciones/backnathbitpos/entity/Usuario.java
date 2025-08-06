@@ -1,5 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
+import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -62,7 +64,7 @@ public class Usuario implements UserDetails {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_identificacion", length = 20)
-    private TipoIdentificacion tipoIdentificacion;
+    private TipoIdentificacion tipoIdentificacion = TipoIdentificacion.CEDULA_JURIDICA;
 
     @Column(nullable = false)
     @Builder.Default
@@ -89,6 +91,9 @@ public class Usuario implements UserDetails {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "bloqueado_hasta")
+    private LocalDateTime bloqueadoHasta;
 
     // Relaciones
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

@@ -49,6 +49,15 @@ public interface UsuarioEmpresaRolRepository extends JpaRepository<UsuarioEmpres
     boolean existsByUsuarioIdAndEmpresaIdAndSucursalIsNullAndActivoTrue(
         Long usuarioId, Long empresaId);
 
+    /**
+     * Verifica si existe una relación usuario-sucursal activa.
+     *
+     * @param usuarioId ID del usuario
+     * @param sucursalId ID de la sucursal
+     * @return true si existe y está activa
+     */
+    boolean existsByUsuarioIdAndSucursalIdAndActivoTrue(Long usuarioId, Long sucursalId);
+
     // Búsquedas por rol
     List<UsuarioEmpresaRol> findByRolAndActivoTrue(RolNombre rol);
 
@@ -142,4 +151,44 @@ public interface UsuarioEmpresaRolRepository extends JpaRepository<UsuarioEmpres
            "WHERE uer.asignadoPor = :asignadoPorId " +
            "ORDER BY uer.fechaAsignacion DESC")
     List<UsuarioEmpresaRol> findAsignacionesPorUsuario(@Param("asignadoPorId") Long asignadoPorId);
+
+    /**
+     * Cuenta usuarios activos por empresa.
+     *
+     * @param empresaId ID de la empresa
+     * @return cantidad de usuarios activos
+     */
+    long countByEmpresaIdAndActivoTrue(Long empresaId);
+
+    /**
+     * Cuenta usuarios activos por sucursal.
+     *
+     * @param sucursalId ID de la sucursal
+     * @return cantidad de usuarios activos
+     */
+    long countBySucursalIdAndActivoTrue(Long sucursalId);
+
+    /**
+     * Verifica si existe una relación usuario-empresa activa.
+     *
+     * @param usuarioId ID del usuario
+     * @param empresaId ID de la empresa
+     * @return true si existe y está activa
+     */
+    boolean existsByUsuarioIdAndEmpresaIdAndActivoTrue(Long usuarioId, Long empresaId);
+
+    /**
+     * Busca usuarios por empresa y usuario en una empresa específica.
+     *
+     * @param usuarioId ID del usuario
+     * @param empresaId ID de la empresa
+     * @return Lista de relaciones encontradas
+     */
+    @Query("SELECT uer FROM UsuarioEmpresaRol uer " +
+        "WHERE uer.usuario.id = :usuarioId " +
+        "AND uer.empresa.id = :empresaId " +
+        "AND uer.activo = true")
+    List<UsuarioEmpresaRol> findByUsuarioIdAndEmpresaId(@Param("usuarioId") Long usuarioId,
+        @Param("empresaId") Long empresaId);
+
 }

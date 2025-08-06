@@ -275,4 +275,54 @@ public class GlobalExceptionHandler {
 
     return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
   }
+
+  /**
+   * Maneja ConflictException
+   */
+  @ExceptionHandler(ConflictException.class)
+  public ResponseEntity<ErrorResponse> handleConflictException(
+      ConflictException ex, WebRequest request) {
+    log.error("Conflicto de datos: {}", ex.getMessage());
+
+    ErrorResponse errorResponse = new ErrorResponse();
+    errorResponse.setTimestamp(LocalDateTime.now());
+    errorResponse.setStatus(HttpStatus.CONFLICT.value());
+    errorResponse.setError("Conflicto de datos");
+    errorResponse.setMessage(ex.getMessage());
+    errorResponse.setCode("CONFLICT");
+    errorResponse.setPath(request.getDescription(false).replace("uri=", ""));
+
+    if (ex.getResourceName() != null && ex.getFieldName() != null) {
+      Map<String, Object> details = new HashMap<>();
+      details.put("resource", ex.getResourceName());
+      details.put("field", ex.getFieldName());
+      details.put("value", ex.getFieldValue());
+      errorResponse.setDetails(details);
+    }
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+  }
+
+  /**
+   * Maneja BadRequestException personalizada
+   */
+  @ExceptionHandler(com.snnsoluciones.backnathbitpos.exception.BadRequestException.class)
+  public ResponseEntity<ErrorResponse> handleCustomBadRequestException(
+      com.snnsoluciones.backnathbitpos.exception.BadRequestException ex, WebRequest request) {
+    log.error("Solicitud incorrecta: {}", ex.getMessage());
+
+    ErrorResponse errorResponse = new ErrorResponse();
+    errorResponse.setTimestamp(LocalDateTime.now());
+    errorResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+    errorResponse.setError("Solicitud incorrecta");
+    errorResponse.setMessage(ex.getMessage());
+    errorResponse.setCode(ex.getCode());
+    errorResponse.setPath(request.getDescription(false).replace("uri=", ""));
+
+    if (ex.getDetails() != null) {
+      errorResponse.setDetails(ex.getDetails());
+    }
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+  }
 }

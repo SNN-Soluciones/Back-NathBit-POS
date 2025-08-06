@@ -86,6 +86,9 @@ public class Empresa {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "plan")
+    private PlanSuscripcion plan = PlanSuscripcion.BASICO;
+
     // Relaciones
     @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
@@ -94,6 +97,12 @@ public class Empresa {
     @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<UsuarioEmpresaRol> usuarioEmpresaRoles = new HashSet<>();
+
+    @Column(name = "limite_usuarios")
+    private Integer limiteUsuarios;
+
+    @Column(name = "limite_sucursales")
+    private Integer limiteSucursales;
 
     // Métodos de utilidad
     public void agregarSucursal(Sucursal sucursal) {

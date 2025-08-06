@@ -25,6 +25,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     
     boolean existsByIdentificacion(String identificacion);
 
+    Optional<Usuario> findByIdentificacion(String identificacion);
+
     // Búsquedas con joins
     @Query("SELECT DISTINCT u FROM Usuario u " +
            "LEFT JOIN FETCH u.usuarioEmpresaRoles uer " +
@@ -124,4 +126,55 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
            "WHERE u.ultimoAcceso < :fecha " +
            "OR u.ultimoAcceso IS NULL")
     List<Usuario> findUsuariosSinActividadDesde(@Param("fecha") LocalDateTime fecha);
+
+    // Agregar estos métodos al UsuarioRepository.java:
+
+    /**
+     * Busca usuarios por sucursal específica.
+     * Incluye usuarios que:
+     * 1. Tienen acceso directo a esa sucursal específica
+     * 2. Tienen acceso a todas las sucursales de la empresa (sucursal = null)
+     *
+     * @param sucursalId ID de la sucursal
+     * @param pageable configuración de paginación
+     * @return Página de usuarios con acceso a la sucursal
+     */
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "JOIN u.usuarioEmpresaRoles uer " +
+        "LEFT JOIN uer.sucursal s " +
+        "WHERE uer.activo = true " +
+        "AND u.activo = true " +
+        "AND (" +
+        "  (uer.sucursal.id = :sucursalId) " +  // Acceso directo a la sucursal
+        "  OR " +
+        "  (uer.sucursal IS NULL " +             // Acceso a todas las sucursales
+        "   AND uer.empresa.id = (SELECT suc.empresa.id FROM Sucursal suc WHERE suc.id = :sucursalId))" +
+        ")")
+    Page<Usuario> findBySucursalId(@Param("sucursalId") Long sucursalId, Pageable pageable);
+
+    /**
+     * Busca usuarios con filtro de búsqueda.
+     *
+     * @param empresaId ID de la empresa (opcional)
+     * @param sucursalId ID de la sucursal (opcional)
+     * @param search término de búsqueda (opcional)
+     * @param pageable configuración de paginación
+     * @return Página de usuarios filtrados
+     */
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN u.usuarioEmpresaRoles uer " +
+        "WHERE u.activo = true " +
+        "AND (:empresaId IS NULL OR uer.empresa.id = :empresaId) " +
+        "AND (:sucursalId IS NULL OR " +
+        "     (uer.sucursal.id = :sucursalId OR " +
+        "      (uer.sucursal IS NULL AND uer.empresa.id = (SELECT s.empresa.id FROM Sucursal s WHERE s.id = :sucursalId)))) " +
+        "AND (:search IS NULL OR :search = '' OR " +
+        "     LOWER(u.nombre) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+        "     LOWER(u.apellidos) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+        "     LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+        "     u.identificacion LIKE CONCAT('%', :search, '%'))")
+    Page<Usuario> buscarUsuarios(@Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("search") String search,
+        Pageable pageable);
 }

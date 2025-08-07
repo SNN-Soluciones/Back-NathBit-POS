@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -31,40 +33,61 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+        HttpServletResponse response,
+        FilterChain filterChain) throws ServletException, IOException {
         try {
             // Extraer token del header
             String jwt = getJwtFromRequest(request);
 
             // Validar token y establecer autenticación
             if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
-                
-                // Obtener username del token
-                String username = jwtTokenProvider.getUsernameFromToken(jwt);
-                
-                // Cargar usuario
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                
-                // Crear autenticación con el contexto del token
-                UsernamePasswordAuthenticationToken authentication = 
+
+                // Obtener ID del usuario del token
+                Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
+
+                // En lugar de cargar por username, usar el ID directamente
+                // Esto es más eficiente y preciso
+                CustomUserDetailsService customUserDetailsService =
+                    (CustomUserDetailsService) userDetailsService;
+
+                UserDetails userDetails;
+                try {
+                    // Intentar cargar por ID si tenemos CustomUserDetailsService
+                    userDetails = customUserDetailsService.loadUserById(userId);
+                } catch (Exception e) {
+                    // Fallback: cargar por username
+                    String username = jwtTokenProvider.getUsernameFromToken(jwt);
+                    userDetails = userDetailsService.loadUserByUsername(username);
+                }
+
+                // Crear autenticación
+                // Importante: Usamos el userId como principal para facilitar el acceso en los servicios
+                UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
-                        userDetails,
+                        userId,  // Usamos el ID como principal
                         null,
                         userDetails.getAuthorities()
                     );
-                
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                
+
+                // Agregar detalles adicionales
+                Map<String, Object> details = new HashMap<>();
+                details.put("email", userDetails.getUsername());
+                details.put("empresaId", jwtTokenProvider.getEmpresaIdFromToken(jwt));
+                details.put("sucursalId", jwtTokenProvider.getSucursalIdFromToken(jwt));
+                details.put("rol", jwtTokenProvider.getRolFromToken(jwt));
+
+                authentication.setDetails(details);
+
                 // Establecer en el contexto de seguridad
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-                
-                // Agregar información adicional al request para uso posterior
+
+                // También agregar al request para fácil acceso
+                request.setAttribute("usuario_id", userId);
                 request.setAttribute("empresa_id", jwtTokenProvider.getEmpresaIdFromToken(jwt));
                 request.setAttribute("sucursal_id", jwtTokenProvider.getSucursalIdFromToken(jwt));
                 request.setAttribute("rol", jwtTokenProvider.getRolFromToken(jwt));
-                
-                log.debug("Autenticación establecida para usuario: {}", username);
+
+                log.debug("Autenticación establecida para usuario ID: {}", userId);
             }
         } catch (Exception ex) {
             log.error("No se pudo establecer la autenticación del usuario", ex);

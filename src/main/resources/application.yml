@@ -1,10 +1,11 @@
-# Configuración actualizada para el sistema multi-empresa
+# Actualizar en application.yml
+
 spring:
   application:
     name: nathbit-pos-backend
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nathbitpos}?currentSchema=public
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nathbitpos}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
@@ -17,27 +18,27 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate # Usamos Flyway para las migraciones
+      # CAMBIAR DE validate A none o update
+      ddl-auto: none  # Flyway maneja el esquema
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        default_schema: public
         jdbc:
           lob:
             non_contextual_creation: true
         format_sql: true
     show-sql: false
     open-in-view: false
+    # IMPORTANTE: Diferir la validación hasta después de Flyway
+    defer-datasource-initialization: true
 
   flyway:
     enabled: true
     baseline-on-migrate: true
-    locations:
-      - classpath:db/migration/public
-      - classpath:db/migration/tenant
-    schemas:
-      - public
-    default-schema: public
+    locations: classpath:db/migration
+    # Ejecutar Flyway antes de JPA
+    baseline-version: 0
+    baseline-description: "Initial"
 
 # Configuración JWT
 app:
@@ -49,25 +50,6 @@ app:
   security:
     max-intentos-login: 3
     bloqueo-duracion-minutos: 30
-
-# Configuración de tenants iniciales
-tenants:
-  initial-tenants:
-    - id: tenant_sj_centro
-      nombre: "Sabores San José Centro"
-      tipo: SUCURSAL
-    - id: tenant_escazu
-      nombre: "Sabores Escazú"
-      tipo: SUCURSAL
-    - id: tenant_heredia
-      nombre: "Sabores Heredia"
-      tipo: SUCURSAL
-    - id: tenant_cafe_mp
-      nombre: "Café del Valle - Multiplaza"
-      tipo: SUCURSAL
-    - id: tenant_cafe_lincoln
-      nombre: "Café del Valle - Lincoln"
-      tipo: SUCURSAL
 
 # Configuración de logs
 logging:
@@ -100,12 +82,3 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-
-# Configuración de cache
-spring.cache:
-  type: simple
-  cache-names:
-    - usuarios
-    - sucursal-por-ip
-    - sucursal-por-terminal
-    - permisos-usuario

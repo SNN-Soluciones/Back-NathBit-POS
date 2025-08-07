@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.config;
 import com.snnsoluciones.backnathbitpos.config.security.JwtAuthenticationEntryPoint;
 import com.snnsoluciones.backnathbitpos.config.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,7 +31,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
     securedEnabled = true,  // Habilita @Secured
     jsr250Enabled = true    // Habilita @RolesAllowed
 )
-@RequiredArgsConstructor
 public class SecurityConfig {
 
   private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
@@ -38,6 +38,21 @@ public class SecurityConfig {
   private final UserDetailsService userDetailsService;
   private final PasswordEncoder passwordEncoder;
   private final CorsConfigurationSource corsConfigurationSource;
+
+
+  public SecurityConfig(
+      JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
+      JwtAuthenticationFilter jwtAuthenticationFilter,
+      UserDetailsService userDetailsService,
+      PasswordEncoder passwordEncoder,
+      @Qualifier("customCors") CorsConfigurationSource corsConfigurationSource // 👈 este es el fix
+  ) {
+    this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+    this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    this.userDetailsService = userDetailsService;
+    this.passwordEncoder = passwordEncoder;
+    this.corsConfigurationSource = corsConfigurationSource;
+  }
 
   /**
    * Configuración principal de la cadena de filtros de seguridad.

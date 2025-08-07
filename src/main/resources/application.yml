@@ -1,5 +1,3 @@
-# Actualizar en application.yml
-
 spring:
   application:
     name: nathbit-pos-backend
@@ -15,11 +13,11 @@ spring:
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
+      initialization-fail-timeout: 60000
 
   jpa:
     hibernate:
-      # CAMBIAR DE validate A none o update
-      ddl-auto: none  # Flyway maneja el esquema
+      ddl-auto: validate  # Solo validar, Flyway maneja el esquema
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -27,18 +25,31 @@ spring:
           lob:
             non_contextual_creation: true
         format_sql: true
+        # Importante para evitar errores de lazy loading
+        enable_lazy_load_no_trans: false
+        # Para JSONB
+        types:
+          print:
+            banner: false
     show-sql: false
     open-in-view: false
-    # IMPORTANTE: Diferir la validación hasta después de Flyway
-    defer-datasource-initialization: true
+    # NO diferir la inicialización
+    defer-datasource-initialization: false
 
   flyway:
     enabled: true
     baseline-on-migrate: true
-    locations: classpath:db/migration
-    # Ejecutar Flyway antes de JPA
     baseline-version: 0
     baseline-description: "Initial"
+    locations: classpath:db/migration
+    table: flyway_schema_history
+    schemas: public
+    # Importante: no validar en desarrollo
+    validate-on-migrate: false
+    # Permitir ejecutar fuera de orden
+    out-of-order: true
+    # En Flyway 9.0+ usar ignore-migration-patterns en lugar de las propiedades deprecadas
+    # ignore-migration-patterns: []
 
 # Configuración JWT
 app:
@@ -57,9 +68,12 @@ logging:
     root: INFO
     com.snnsoluciones.backnathbitpos: DEBUG
     org.springframework.security: DEBUG
+    org.springframework.data: DEBUG
+    org.springframework.boot.autoconfigure: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.flywaydb: DEBUG
+    org.flywaydb.core: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 
@@ -71,6 +85,7 @@ server:
   error:
     include-message: always
     include-binding-errors: always
+    include-stacktrace: always
 
 # Actuator para monitoreo
 management:

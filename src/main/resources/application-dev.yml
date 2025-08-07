@@ -2,7 +2,7 @@
 spring:
   # Base de datos desarrollo
   datasource:
-    url: jdbc:postgresql://localhost:5432/restaurant_erp_dev
+    url: jdbc:postgresql://localhost:5432/nathbitpos
     username: postgres
     password: ${DB_PASSWORD:}  # Usa la variable de entorno o postgres por defecto
 

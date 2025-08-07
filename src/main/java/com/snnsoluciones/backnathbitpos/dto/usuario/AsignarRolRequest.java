@@ -8,13 +8,18 @@ import java.util.Map;
 
 @Data
 public class AsignarRolRequest {
+
     @NotNull(message = "La empresa es requerida")
     private Long empresaId;
-    
+
     private Long sucursalId; // Opcional - null = todas las sucursales
-    
+
     @NotNull(message = "El rol es requerido")
     private RolNombre rol;
-    
-    private Map<String, Map<String, Boolean>> permisos; // Opcional - usar defaults si null
+
+    private Map<String, Map<String, Boolean>> permisos;
+
+    private Boolean esPrincipal = false;
+
+    private String notas;
 }

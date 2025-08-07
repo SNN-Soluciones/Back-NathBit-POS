@@ -15,7 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,35 +40,61 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     private final UsuarioMapper usuarioMapper;
     private final UsuarioEmpresaRolMapper usuarioEmpresaRolMapper;
     private final PasswordEncoder passwordEncoder;
-    
+
     @Override
     public UsuarioDTO crearUsuario(CrearUsuarioRequest request) throws BadRequestException {
         // Validar que no exista el usuario
         if (usuarioService.existePorEmail(request.getEmail())) {
             throw new ConflictException("Ya existe un usuario con el email: " + request.getEmail());
         }
-        
-        if (request.getIdentificacion() != null && 
+
+        if (request.getIdentificacion() != null &&
             usuarioService.existePorIdentificacion(request.getIdentificacion())) {
-            throw new ConflictException("Ya existe un usuario con la identificación: " + 
+            throw new ConflictException("Ya existe un usuario con la identificación: " +
                 request.getIdentificacion());
         }
-        
+
+        // Obtener usuario actual (si existe)
+        Long usuarioActualId = null;
+        RolNombre rolCreador = null;
+
+        try {
+            usuarioActualId = obtenerUsuarioActualId();
+            rolCreador = obtenerRolPrincipalUsuario(usuarioActualId);
+
+            // Validar que puede crear este tipo de usuario
+            validarPermisoCreacionUsuario(rolCreador, request.getRol());
+
+        } catch (Exception e) {
+            // Si no hay usuario autenticado, verificar si es el primer usuario ROOT
+            long totalUsuarios = usuarioRepository.count();
+
+            if (totalUsuarios == 0 && request.getRol() == RolNombre.ROOT) {
+                log.warn("Creando primer usuario ROOT del sistema sin autenticación");
+                // Permitir crear el primer ROOT sin autenticación
+            } else {
+                throw new UnauthorizedException("Debe estar autenticado para crear usuarios");
+            }
+        }
+
         // Validar empresa y sucursal
         Empresa empresa = empresaRepository.findById(request.getEmpresaId())
             .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
-        
+
         Sucursal sucursal = null;
         if (request.getSucursalId() != null) {
             sucursal = sucursalRepository.findById(request.getSucursalId())
                 .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
-            
+
             // Validar que la sucursal pertenezca a la empresa
             if (!sucursal.getEmpresa().getId().equals(empresa.getId())) {
                 throw new BadRequestException("La sucursal no pertenece a la empresa indicada");
             }
         }
-        
+
+        // Validaciones adicionales según el rol que se está creando
+        validarContextoParaRol(request.getRol(), rolCreador, empresa, sucursal);
+
         // Crear usuario
         Usuario usuario = new Usuario();
         usuario.setEmail(request.getEmail());
@@ -76,9 +104,9 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
         usuario.setTelefono(request.getTelefono());
         usuario.setIdentificacion(request.getIdentificacion());
         usuario.setActivo(true);
-        
+
         usuario = usuarioRepository.save(usuario);
-        
+
         // Asignar rol inicial
         UsuarioEmpresaRol uer = new UsuarioEmpresaRol();
         uer.setUsuario(usuario);
@@ -87,17 +115,55 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
         uer.setRol(request.getRol());
         uer.setEsPrincipal(true); // Primer rol es principal
         uer.setActivo(true);
-        uer.setAsignadoPor(obtenerUsuarioActualId());
-        
+        uer.setAsignadoPor(usuarioActualId); // Puede ser null para el primer ROOT
+
         // Asignar permisos por defecto del rol
         uer.setPermisos(permisoService.obtenerPermisosDefaultPorRol(request.getRol()));
-        
+
         usuarioEmpresaRolRepository.save(uer);
-        
-        log.info("Usuario creado: {} con rol {} en empresa {}", 
-                usuario.getEmail(), request.getRol(), empresa.getNombre());
-        
+
+        log.info("Usuario creado: {} con rol {} en empresa {} por usuario {}",
+            usuario.getEmail(), request.getRol(), empresa.getNombre(),
+            usuarioActualId != null ? usuarioActualId : "SISTEMA");
+
         return usuarioMapper.toDTO(usuario);
+    }
+
+
+    // Validaciones adicionales según el contexto
+    private void validarContextoParaRol(RolNombre rolACrear, RolNombre rolCreador,
+        Empresa empresa, Sucursal sucursal) throws BadRequestException {
+
+        // Si no hay rol creador (primer usuario), solo validar que sea ROOT
+        if (rolCreador == null) {
+            if (rolACrear != RolNombre.ROOT) {
+                throw new BadRequestException("El primer usuario debe ser ROOT");
+            }
+            return;
+        }
+
+        // Validar que usuarios de sistema (ROOT/SOPORTE) no se asignen a sucursales específicas
+        if (rolACrear.esDeSistema() && sucursal != null) {
+            throw new BadRequestException("Usuarios de sistema no deben asignarse a sucursales específicas");
+        }
+
+        // Validar que SUPER_ADMIN tenga acceso a nivel empresa (sin sucursal específica)
+        if (rolACrear == RolNombre.SUPER_ADMIN && sucursal != null) {
+            throw new BadRequestException("SUPER_ADMIN debe tener acceso a nivel empresa, no sucursal");
+        }
+
+        // Validar que roles operativos tengan sucursal asignada
+        if (rolACrear.esOperativo() && sucursal == null) {
+            throw new BadRequestException("Roles operativos deben estar asignados a una sucursal específica");
+        }
+
+        // Si el creador no es de sistema, validar que solo cree en su propia empresa
+        if (!rolCreador.esDeSistema()) {
+            Long empresaCreadorId = obtenerEmpresaPrincipalUsuario(obtenerUsuarioActualId());
+            if (!empresaCreadorId.equals(empresa.getId())) {
+                throw new UnauthorizedException("Solo puede crear usuarios en su propia empresa");
+            }
+        }
     }
     
     @Override
@@ -399,26 +465,115 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     }
     
     // Métodos auxiliares privados
-    
+
     private Long obtenerUsuarioActualId() {
-        try {
-            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-            if (principal instanceof Usuario) {
-                return ((Usuario) principal).getId();
-            } else if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
-                // Si usas un UserDetails personalizado, adaptar según tu implementación
-                String username = ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
-                Usuario usuario = usuarioRepository.findByEmail(username).orElse(null);
-                return usuario != null ? usuario.getId() : null;
+        if (auth == null || !auth.isAuthenticated() ||
+            auth.getPrincipal().equals("anonymousUser")) {
+            throw new UnauthorizedException("No hay usuario autenticado");
+        }
+
+        // Dependiendo de cómo configures Spring Security, puede ser:
+        // Opción 1: Si usas el ID como principal
+        if (auth.getPrincipal() instanceof Long) {
+            return (Long) auth.getPrincipal();
+        }
+
+        // Opción 2: Si usas UserDetails
+        if (auth.getPrincipal() instanceof UserDetails) {
+            String username = ((UserDetails) auth.getPrincipal()).getUsername();
+            // Si el username es el ID
+            try {
+                return Long.parseLong(username);
+            } catch (NumberFormatException e) {
+                // Si el username es el email
+                Usuario usuario = usuarioRepository.findByEmail(username)
+                    .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+                return usuario.getId();
             }
+        }
 
-            return null;
-        } catch (Exception e) {
-            log.warn("No se pudo obtener el usuario actual: {}", e.getMessage());
-            return null;
+        throw new UnauthorizedException("No se pudo obtener el ID del usuario actual");
+    }
+
+    // Agregar este método en UsuarioGestionServiceImpl
+
+    private void validarPermisoCreacionUsuario(RolNombre rolCreador, RolNombre rolACrear) {
+        // Usar la validación del enum
+        if (!rolCreador.puedeCrear(rolACrear)) {
+            String mensaje = String.format(
+                "Un usuario con rol %s no puede crear usuarios con rol %s",
+                rolCreador.getDisplayName(),
+                rolACrear.getDisplayName()
+            );
+            throw new UnauthorizedException(mensaje);
+        }
+
+        // Log para auditoría
+        log.info("Usuario con rol {} creando usuario con rol {}", rolCreador, rolACrear);
+
+        // Advertencias especiales
+        if (rolCreador == RolNombre.ROOT && rolACrear != RolNombre.SOPORTE &&
+            rolACrear != RolNombre.SUPER_ADMIN) {
+            log.warn("ROOT creando rol {} directamente. Considerar si es necesario.", rolACrear);
         }
     }
 
+    // Método helper para obtener el rol principal del usuario actual
+    private RolNombre obtenerRolPrincipalUsuario(Long usuarioId) {
+        Optional<UsuarioEmpresaRol> rolPrincipal = usuarioEmpresaRolRepository
+            .findRolPrincipalByUsuarioId(usuarioId);
 
+        if (rolPrincipal.isEmpty()) {
+            // Si no tiene rol principal, buscar el de mayor jerarquía
+            List<UsuarioEmpresaRol> roles = usuarioEmpresaRolRepository
+                .findByUsuarioIdAndActivoTrue(usuarioId);
+
+            if (roles.isEmpty()) {
+                throw new UnauthorizedException("Usuario sin roles asignados");
+            }
+
+            // Ordenar por jerarquía y tomar el más alto
+            return roles.stream()
+                .map(UsuarioEmpresaRol::getRol)
+                .min((r1, r2) -> Integer.compare(
+                    r1.getNivelJerarquia(),
+                    r2.getNivelJerarquia()
+                ))
+                .orElseThrow(() -> new UnauthorizedException("No se pudo determinar el rol"));
+        }
+
+        return rolPrincipal.get().getRol();
+    }
+
+    private Long obtenerEmpresaPrincipalUsuario(Long usuarioId) {
+        // Buscar el rol principal del usuario
+        Optional<UsuarioEmpresaRol> rolPrincipal = usuarioEmpresaRolRepository
+            .findRolPrincipalByUsuarioId(usuarioId);
+
+        if (rolPrincipal.isPresent()) {
+            return rolPrincipal.get().getEmpresa().getId();
+        }
+
+        // Si no tiene rol principal, buscar cualquier rol activo
+        List<UsuarioEmpresaRol> roles = usuarioEmpresaRolRepository
+            .findByUsuarioIdAndActivoTrue(usuarioId);
+
+        if (roles.isEmpty()) {
+            throw new UnauthorizedException("Usuario sin roles asignados");
+        }
+
+        // Si el usuario tiene roles en múltiples empresas, esto podría ser un problema
+        // Por ahora, tomamos la primera empresa
+        Set<Long> empresasIds = roles.stream()
+            .map(r -> r.getEmpresa().getId())
+            .collect(Collectors.toSet());
+
+        if (empresasIds.size() > 1) {
+            log.warn("Usuario {} tiene roles en múltiples empresas, usando la primera", usuarioId);
+        }
+
+        return roles.get(0).getEmpresa().getId();
+    }
 }

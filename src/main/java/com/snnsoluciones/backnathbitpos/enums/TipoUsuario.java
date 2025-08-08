@@ -7,7 +7,8 @@ package com.snnsoluciones.backnathbitpos.enums;
  */
 public enum TipoUsuario {
     SISTEMA("Sistema", "Usuarios con acceso total al sistema"),
-    EMPRESARIAL("Empresarial", "Usuarios asignados a empresas/sucursales"),
+    EMPRESARIAL("Empresarial", "Dueños de empresas, único usuario requerido"),
+    GERENCIAL("Administradores de sucursales", "Administradores asignados a sucursales"),
     OPERATIVO("Operativo", "Usuarios operativos por sucursal");
 
     private final String displayName;
@@ -33,11 +34,15 @@ public enum TipoUsuario {
         return this == SISTEMA;
     }
 
+    private Boolean requiereScopeEmpresa() {
+        return this == EMPRESARIAL;
+    }
+
     /**
      * Verifica si el usuario requiere asignación a empresa
      */
     public boolean requiereEmpresa() {
-        return this == EMPRESARIAL;
+        return this == GERENCIAL;
     }
 
     /**

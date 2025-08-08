@@ -2,7 +2,6 @@ package com.snnsoluciones.backnathbitpos.dto.auth;
 
 import com.snnsoluciones.backnathbitpos.dto.usuario.AccesoDTO;
 import com.snnsoluciones.backnathbitpos.dto.usuario.UsuarioDTO;
-import com.snnsoluciones.backnathbitpos.enums.TipoAcceso;
 import com.snnsoluciones.backnathbitpos.enums.TipoUsuario;
 import lombok.Data;
 

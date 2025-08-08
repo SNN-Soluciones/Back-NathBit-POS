@@ -62,21 +62,6 @@ app:
     max-intentos-login: 3
     bloqueo-duracion-minutos: 30
 
-# Configuración de logs
-logging:
-  level:
-    root: INFO
-    com.snnsoluciones.backnathbitpos: DEBUG
-    org.springframework.security: DEBUG
-    org.springframework.data: DEBUG
-    org.springframework.boot.autoconfigure: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-    org.flywaydb: DEBUG
-    org.flywaydb.core: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-
 # Configuración del servidor
 server:
   port: ${SERVER_PORT:8080}

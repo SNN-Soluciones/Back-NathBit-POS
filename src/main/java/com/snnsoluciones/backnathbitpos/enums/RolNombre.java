@@ -75,31 +75,26 @@ public enum RolNombre {
      * Obtiene los roles que este rol puede crear.
      */
     public RolNombre[] rolesQueCrear() {
-        switch (this) {
-            case ROOT:
-                // ROOT normalmente solo crea SOPORTE y SUPER_ADMIN
-                return new RolNombre[]{SOPORTE, SUPER_ADMIN};
-
-            case SOPORTE:
-                // SOPORTE puede crear casi todo excepto ROOT
-                return new RolNombre[]{SUPER_ADMIN, ADMIN, JEFE_CAJAS, CAJERO, MESERO, COCINA};
-
-            case SUPER_ADMIN:
-                // Dueños crean administradores para sus sucursales
-                return new RolNombre[]{ADMIN};
-
-            case ADMIN:
-                // Administradores crean todo el personal de la sucursal
-                return new RolNombre[]{JEFE_CAJAS, CAJERO, MESERO, COCINA};
-
-            case JEFE_CAJAS:
-                // Supervisores solo crean operativos
-                return new RolNombre[]{CAJERO, MESERO, COCINA};
-
-            default:
-                // Roles operativos no crean usuarios
-                return new RolNombre[]{};
-        }
+      return switch (this) {
+        case ROOT ->
+          // ROOT normalmente solo crea SOPORTE y SUPER_ADMIN
+            new RolNombre[]{SOPORTE, SUPER_ADMIN};
+        case SOPORTE ->
+          // SOPORTE puede crear casi todo excepto ROOT
+            new RolNombre[]{SUPER_ADMIN, ADMIN, JEFE_CAJAS, CAJERO, MESERO, COCINA};
+        case SUPER_ADMIN ->
+          // Dueños crean administradores para sus sucursales
+            new RolNombre[]{ADMIN};
+        case ADMIN ->
+          // Administradores crean todo el personal de la sucursal
+            new RolNombre[]{JEFE_CAJAS, CAJERO, MESERO, COCINA};
+        case JEFE_CAJAS ->
+          // Supervisores solo crean operativos
+            new RolNombre[]{CAJERO, MESERO, COCINA};
+        default ->
+          // Roles operativos no crean usuarios
+            new RolNombre[]{};
+      };
     }
 
     /**

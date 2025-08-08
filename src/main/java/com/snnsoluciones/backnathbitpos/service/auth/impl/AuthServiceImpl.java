@@ -6,7 +6,6 @@ import com.snnsoluciones.backnathbitpos.dto.usuario.AccesoDTO;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresaRol;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
-import com.snnsoluciones.backnathbitpos.enums.TipoAcceso;
 import com.snnsoluciones.backnathbitpos.enums.TipoUsuario;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.mapper.UsuarioMapper;
@@ -14,7 +13,6 @@ import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.auth.AuthService;
 import com.snnsoluciones.backnathbitpos.service.usuario.UsuarioService;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -49,221 +47,9 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   public LoginResponse login(LoginRequest loginRequest) {
-    log.debug("Intento de login para: {}", loginRequest.getEmail());
+    log.debug("Intento de login para email: {}", loginRequest.getEmail());
 
-    try {
-      // 1. Buscar usuario por email o username
-      String loginIdentifier = loginRequest.getEmail();
-      Usuario usuario = usuarioRepository.findByEmail(loginIdentifier)
-          .orElseGet(() -> usuarioRepository.findByUsername(loginIdentifier)
-              .orElseThrow(() -> new UnauthorizedException("Credenciales incorrectas")));
-
-      // 2. Autenticar con Spring Security
-      Authentication authentication = authenticationManager.authenticate(
-          new UsernamePasswordAuthenticationToken(
-              usuario.getEmail(),
-              loginRequest.getPassword()
-          )
-      );
-
-      SecurityContextHolder.getContext().setAuthentication(authentication);
-
-      // 3. Validar que el usuario esté activo
-      if (!usuario.getActivo()) {
-        throw new DisabledException("Usuario inactivo");
-      }
-
-      // 4. Actualizar último acceso
-      usuarioService.actualizarUltimoAcceso(usuario.getId());
-
-      // 5. Preparar respuesta
-      LoginResponse response = new LoginResponse();
-      response.setUsuario(usuarioMapper.toDTO(usuario));
-
-      // 6. Obtener accesos del usuario (roles en empresas)
-      List<AccesoDTO> accesos = usuarioService.obtenerAccesos(usuario.getId());
-
-      // 7. Determinar el rol global del usuario
-      RolNombre rolGlobal = determinarRolGlobal(usuario, accesos);
-
-      // 8. Lógica según el rol
-      switch (Objects.requireNonNull(rolGlobal)) {
-        case ROOT:
-        case SOPORTE:
-          // SISTEMA - Acceso total, ven todas las empresas
-          log.info("Login exitoso para {}: {}", rolGlobal, usuario.getEmail());
-
-          String tokenSistema = jwtTokenProvider.generateToken(
-              usuario.getId(),
-              usuario.getEmail(),
-              null, // Sin empresa específica
-              null, // Sin sucursal
-              rolGlobal
-          );
-
-          response.setToken(tokenSistema);
-          response.setTipoAcceso(TipoUsuario.SISTEMA);
-          response.setRefreshToken(jwtTokenProvider.generateRefreshToken(usuario.getId()));
-          response.setRequiereSeleccion(false);
-          response.setMensaje("Acceso total al sistema");
-          break;
-
-        case SUPER_ADMIN:
-          // SUPER_ADMIN - Puede o no tener empresas
-          log.info("Login exitoso para SUPER_ADMIN: {} ({} empresas)",
-              usuario.getEmail(), accesos.size());
-
-          // Super Admin sin empresas aún
-          String tokenSuperAdmin = jwtTokenProvider.generateToken(
-              usuario.getId(),
-              usuario.getEmail(),
-              null,
-              null,
-              RolNombre.SUPER_ADMIN
-          );
-
-          response.setToken(tokenSuperAdmin);
-          response.setTipoAcceso(TipoUsuario.EMPRESARIAL);
-          response.setRefreshToken(jwtTokenProvider.generateRefreshToken(usuario.getId()));
-          response.setRequiereSeleccion(false);
-          response.setMensaje(
-              "Login Exitoso.");
-          break;
-
-        case ADMIN:
-          // ADMIN - Siempre tiene empresa asignada
-          if (accesos.isEmpty()) {
-            throw new UnauthorizedException("Usuario ADMIN sin empresa asignada");
-          }
-
-          // Admin normalmente tiene una sola empresa
-          AccesoDTO acceso = accesos.get(0);
-          String tokenAdmin = jwtTokenProvider.generateToken(
-              usuario.getId(),
-              usuario.getEmail(),
-              acceso.getEmpresa().getId(),
-              null, // Admin ve todas las sucursales
-              RolNombre.ADMIN
-          );
-
-          response.setToken(tokenAdmin);
-          response.setAccesoDirecto(acceso);
-          response.setTipoAcceso(TipoUsuario.EMPRESARIAL);
-          response.setRefreshToken(jwtTokenProvider.generateRefreshToken(usuario.getId()));
-          response.setRequiereSeleccion(false);
-
-          log.info("Login exitoso para ADMIN: {} en empresa {}",
-              usuario.getEmail(), acceso.getEmpresa().getNombre());
-          // Token temporal...
-          break;
-
-        case JEFE_CAJAS:
-        case CAJERO:
-        case MESERO:
-        case COCINA:
-          // OPERATIVOS - Siempre tienen sucursal específica
-          if (accesos.isEmpty()) {
-            throw new UnauthorizedException("Usuario operativo sin sucursal asignada");
-          }
-
-          // Validar que tenga sucursal asignada
-          AccesoDTO accesoOperativo = accesos.stream()
-              .filter(a -> a.getSucursal() != null)
-              .findFirst()
-              .orElseThrow(() -> new UnauthorizedException(
-                  "Usuario operativo sin sucursal específica asignada"));
-
-          // Login directo a su sucursal
-          String tokenOperativo = jwtTokenProvider.generateToken(
-              usuario.getId(),
-              usuario.getEmail(),
-              accesoOperativo.getEmpresa().getId(),
-              accesoOperativo.getSucursal().getId(),
-              accesoOperativo.getRol()
-          );
-
-          response.setToken(tokenOperativo);
-          response.setAccesoDirecto(accesoOperativo);
-          response.setTipoAcceso(TipoUsuario.OPERATIVO);
-          response.setRequiereSeleccion(false);
-          response.setRefreshToken(jwtTokenProvider.generateRefreshToken(usuario.getId()));
-
-          log.info("Login exitoso para {} {}: {} en {}/{}",
-              usuario.getTipoUsuario().getDisplayName(),
-              accesoOperativo.getRol(),
-              usuario.getEmail(),
-              accesoOperativo.getEmpresa().getNombre(),
-              accesoOperativo.getSucursal().getNombre());
-          break;
-
-        default:
-          throw new UnauthorizedException("Tipo de usuario no reconocido");
-      }
-
-      return response;
-
-    } catch (BadCredentialsException e) {
-      log.warn("Credenciales incorrectas para: {}", loginRequest.getEmail());
-      throw new UnauthorizedException("Credenciales incorrectas");
-    } catch (DisabledException e) {
-      log.warn("Usuario inactivo: {}", loginRequest.getEmail());
-      throw e;
-    } catch (Exception e) {
-      log.error("Error en login: {}", e.getMessage(), e);
-      throw new UnauthorizedException("Error en autenticación: " + e.getMessage());
-    }
-  }
-
-  private RolNombre determinarRolGlobal(Usuario usuario, List<AccesoDTO> accesos) {
-    if (usuario.getTipoUsuario().esSistema()) {
-      if (usuario.getEmail().contains("root")) {
-        return RolNombre.ROOT;
-      } else {
-        return RolNombre.SOPORTE; // Antes era DEVELOPER
-      }
-    }
-
-    // Para otros usuarios, buscar el rol más alto
-    if (accesos.isEmpty()) {
-      // Sin accesos, pero podemos inferir por tipo de usuario
-      if (usuario.getTipoUsuario() == TipoUsuario.EMPRESARIAL) {
-        // Probablemente un SUPER_ADMIN recién creado
-        return RolNombre.SUPER_ADMIN;
-      }
-      return null;
-    }
-
-    // Retornar el rol más alto de sus accesos
-    return accesos.stream()
-        .map(AccesoDTO::getRol)
-        .min(Comparator.comparingInt(this::obtenerJerarquiaRol))
-        .orElse(null);
-  }
-
-  private int obtenerJerarquiaRol(RolNombre rol) {
-    return switch (rol) {
-      case ROOT -> 1;
-      case SOPORTE -> 2;
-      case SUPER_ADMIN -> 3;
-      case ADMIN -> 4;
-      case JEFE_CAJAS -> 5;
-      case CAJERO -> 6;
-      case MESERO -> 7;
-      case COCINA -> 8;
-      default -> 99;
-    };
-  }
-
-  // Método auxiliar para obtener el rol de usuarios SISTEMA
-  private RolNombre obtenerRolSistema(Usuario usuario) {
-    // Determinar rol basado en alguna lógica
-    // Por ahora, asumimos que ROOT y DEVELOPER se identifican por email
-    if (usuario.getEmail().contains("root")) {
-      return RolNombre.ROOT;
-    } else if (usuario.getEmail().contains("developer")) {
-      return RolNombre.SOPORTE;
-    }
-    return RolNombre.SOPORTE; // Default para SISTEMA
+    // TODO Implementar logica segun el enum TipoUsuario
   }
 
   @Override
@@ -392,23 +178,6 @@ public class AuthServiceImpl implements AuthService {
 
   // Métodos auxiliares privados
 
-  private TipoAcceso determinarTipoAcceso(List<AccesoDTO> accesos) {
-    if (accesos.size() == 1) {
-      AccesoDTO acceso = accesos.get(0);
-      // Si solo tiene un acceso y es rol operativo
-      if (esRolOperativo(acceso.getRol())) {
-        return TipoAcceso.OPERATIVO;
-      }
-      return TipoAcceso.ADMINISTRATIVO;
-    }
-    return TipoAcceso.MULTIPLE;
-  }
-
-  private boolean esRolOperativo(RolNombre rol) {
-    return rol == RolNombre.CAJERO ||
-        rol == RolNombre.MESERO ||
-        rol == RolNombre.COCINA;
-  }
 
   private Long obtenerUsuarioIdActual() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();

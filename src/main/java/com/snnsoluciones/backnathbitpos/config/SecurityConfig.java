@@ -133,16 +133,16 @@ public class SecurityConfig {
     return http.build();
   }
 
-  /**
-   * Proveedor de autenticación que usa UserDetailsService y PasswordEncoder.
-   */
-  @Bean
-  public DaoAuthenticationProvider authenticationProvider() {
-    DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-    authProvider.setUserDetailsService(userDetailsService);
-    authProvider.setPasswordEncoder(passwordEncoder);
-    return authProvider;
-  }
+//  /**
+//   * Proveedor de autenticación que usa UserDetailsService y PasswordEncoder.
+//   */
+//  @Bean
+//  public DaoAuthenticationProvider authenticationProvider() {
+//    DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+//    authProvider.setUserDetailsService(userDetailsService);
+//    authProvider.setPasswordEncoder(passwordEncoder);
+//    return authProvider;
+//  }
 
   /**
    * Authentication Manager para manejar el proceso de autenticación.

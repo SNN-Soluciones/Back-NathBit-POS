@@ -117,9 +117,6 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
         uer.setActivo(true);
         uer.setAsignadoPor(usuarioActualId); // Puede ser null para el primer ROOT
 
-        // Asignar permisos por defecto del rol
-        uer.setPermisos(permisoService.obtenerPermisosDefaultPorRol(request.getRol()));
-
         usuarioEmpresaRolRepository.save(uer);
 
         log.info("Usuario creado: {} con rol {} en empresa {} por usuario {}",
@@ -239,16 +236,6 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
         uer.setRol(request.getRol());
         uer.setActivo(true);
         uer.setAsignadoPor(obtenerUsuarioActualId());
-        
-        // Establecer permisos
-        if (request.getPermisos() != null && !request.getPermisos().isEmpty()) {
-            if (!permisoService.validarEstructuraPermisos(request.getPermisos())) {
-                throw new BadRequestException("Estructura de permisos inválida");
-            }
-            uer.setPermisos(request.getPermisos());
-        } else {
-            uer.setPermisos(permisoService.obtenerPermisosDefaultPorRol(request.getRol()));
-        }
         
         // Si es el primer rol, marcarlo como principal
         List<UsuarioEmpresaRol> rolesExistentes = usuarioEmpresaRolRepository

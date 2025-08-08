@@ -54,7 +54,7 @@ spring:
 # Configuración JWT
 app:
   jwt:
-    secret: ${JWT_SECRET:TuClaveSecretaSeguraDeAlMenos256BitsParaProduccion2024!}
+    secret: p52L+wQ5tJvF9Xg8VyQGKBD3eJ6kPmRjY2Nw4hZsA7xU9TnL3mK8vB5rD2fN1qX4
     expiration: 3600 # 1 hora en segundos
     refresh-expiration: 604800 # 7 días en segundos
 

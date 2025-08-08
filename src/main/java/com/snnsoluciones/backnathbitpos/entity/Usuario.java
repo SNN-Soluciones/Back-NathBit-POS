@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.enums.TipoUsuario;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -49,6 +50,14 @@ public class Usuario implements UserDetails {
 
     @Column(nullable = false)
     private String password;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_usuario", nullable = false, length = 20)
+    @Builder.Default
+    private TipoUsuario tipoUsuario = TipoUsuario.EMPRESARIAL;
+
+    @Column(name = "username")
+    private String username;
 
     @Column(nullable = false, length = 50)
     private String nombre;
@@ -111,7 +120,7 @@ public class Usuario implements UserDetails {
 
     @Override
     public String getUsername() {
-        return email;
+        return this.username != null ? this.username : this.email;
     }
 
     @Override

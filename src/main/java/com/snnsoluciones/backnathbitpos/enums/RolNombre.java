@@ -16,7 +16,8 @@ public enum RolNombre {
     JEFE_CAJAS("Jefe de Cajas", "Supervisor de turno", 5),
     CAJERO("Cajero", "Operador de caja", 6),
     MESERO("Mesero", "Atención de mesas", 6),
-    COCINA("Cocina", "Personal de cocina", 6);
+    COCINA("Cocina", "Personal de cocina", 6),
+    TEMPORAL("Temporal", "Rol temporal para pruebas", 88);
 
     private final String displayName;
     private final String descripcion;

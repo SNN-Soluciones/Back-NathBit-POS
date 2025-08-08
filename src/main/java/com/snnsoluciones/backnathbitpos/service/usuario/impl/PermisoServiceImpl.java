@@ -83,16 +83,6 @@ public class PermisoServiceImpl implements PermisoService {
             permisoDTO.setSucursalId(usuarioEmpresaRol.getSucursal().getId());
         }
         
-        // Si tiene permisos personalizados, usarlos
-        if (usuarioEmpresaRol.getPermisos() != null && !usuarioEmpresaRol.getPermisos().isEmpty()) {
-            permisoDTO.setPermisos(new HashMap<>(usuarioEmpresaRol.getPermisos()));
-        } else {
-            // Si no, usar los permisos por defecto del rol
-            permisoDTO.setPermisos(obtenerPermisosDefaultPorRol(usuarioEmpresaRol.getRol()));
-        }
-        
-        permisoDTO.setPersonalizados(!usuarioEmpresaRol.getPermisos().isEmpty());
-        
         return permisoDTO;
     }
     
@@ -120,7 +110,6 @@ public class PermisoServiceImpl implements PermisoService {
         }
         
         // Actualizar permisos
-        uer.setPermisos(new HashMap<>(permisos));
         uer = usuarioEmpresaRolRepository.save(uer);
         
         log.info("Permisos actualizados para usuario {} en empresa {}", 

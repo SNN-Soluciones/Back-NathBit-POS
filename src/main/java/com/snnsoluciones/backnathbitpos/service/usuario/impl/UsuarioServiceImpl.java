@@ -228,7 +228,6 @@ public class UsuarioServiceImpl implements UsuarioService {
         
         // Mapear rol y permisos
         acceso.setRol(uer.getRol());
-        acceso.setPermisos(uer.getPermisos());
         acceso.setEsPrincipal(uer.getEsPrincipal());
         
         return acceso;

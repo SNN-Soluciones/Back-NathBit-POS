@@ -60,11 +60,6 @@ public class UsuarioEmpresaRol {
     @Column(nullable = false, length = 30)
     private RolNombre rol;
 
-    @Type(JsonType.class)
-    @Column(columnDefinition = "jsonb")
-    @Builder.Default
-    private Map<String, Map<String, Boolean>> permisos = new HashMap<>();
-
     @Column(name = "es_principal")
     @Builder.Default
     private Boolean esPrincipal = false;
@@ -104,13 +99,6 @@ public class UsuarioEmpresaRol {
         // Si es SUPER_ADMIN y es su empresa, tiene todos los permisos
         if (rol == RolNombre.SUPER_ADMIN) {
             return true;
-        }
-
-        // Verificar permisos específicos
-        if (permisos != null && permisos.containsKey(modulo)) {
-            Map<String, Boolean> accionesModulo = permisos.get(modulo);
-            return accionesModulo != null && 
-                   accionesModulo.getOrDefault(accion, false);
         }
 
         // Permisos por defecto según rol
@@ -154,15 +142,6 @@ public class UsuarioEmpresaRol {
             default:
                 return false;
         }
-    }
-
-    public void setPermiso(String modulo, String accion, boolean permitido) {
-        if (permisos == null) {
-            permisos = new HashMap<>();
-        }
-        
-        Map<String, Boolean> accionesModulo = permisos.computeIfAbsent(modulo, k -> new HashMap<>());
-        accionesModulo.put(accion, permitido);
     }
 
     public boolean esValido() {

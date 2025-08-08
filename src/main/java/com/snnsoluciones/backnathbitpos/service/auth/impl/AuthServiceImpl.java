@@ -127,7 +127,7 @@ public class AuthServiceImpl implements AuthService {
           response.setRefreshToken(jwtTokenProvider.generateRefreshToken(usuario.getId()));
           response.setRequiereSeleccion(false);
           response.setMensaje(
-              "Super Admin sin empresas asignadas. Puede crear su primera empresa.");
+              "Login Exitoso.");
           break;
 
         case ADMIN:

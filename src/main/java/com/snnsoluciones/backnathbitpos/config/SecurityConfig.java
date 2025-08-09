@@ -1,4 +1,4 @@
-package com.snnsoluciones.backnathbitpos.security.jwt;
+package com.snnsoluciones.backnathbitpos.config;
 
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtAuthenticationEntryPoint;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtAuthenticationFilter;

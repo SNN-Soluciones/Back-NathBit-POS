@@ -7,5 +7,5 @@ import lombok.Data;
 @Builder
 public class TokenResponse {
     private String token;
-    private String tipo = "Bearer";
+    private String tipo;
 }

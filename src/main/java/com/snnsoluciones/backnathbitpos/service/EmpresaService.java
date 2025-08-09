@@ -21,4 +21,7 @@ public interface EmpresaService {
     boolean existeCodigo(String codigo);
     
     boolean existeIdentificacion(String identificacion);
+
+    // En EmpresaService.java
+    List<Empresa> listarPorUsuario(Long usuarioId);
 }

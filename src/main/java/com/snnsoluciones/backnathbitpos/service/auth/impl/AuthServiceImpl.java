@@ -106,7 +106,7 @@ public class AuthServiceImpl implements AuthService {
                     .empresa(empresa)
                     .sucursales(sucursales)
                     .requiereSeleccion(true)
-                    .rutaDestino("/dashboard-sucursales/" + empresa.getId())
+                    .rutaDestino("/dashboard-sucursales/")
                     .build();
             }
         }

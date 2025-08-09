@@ -21,4 +21,8 @@ public interface SucursalService {
     void eliminar(Long id);
     
     boolean existeCodigo(String codigo);
+    // En SucursalService.java
+    List<Sucursal> listarPorUsuario(Long usuarioId);
+
+    List<Sucursal> listarPorUsuarioYEmpresa(Long usuarioId, Long empresaId);
 }

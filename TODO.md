@@ -1,127 +1,113 @@
-# ✅ TODO - NathBit POS (Sistema Simplificado)
+## 📝 **TODO.md**
 
-Sistema de punto de venta multi-empresa con arquitectura simplificada.
-**Actualizado**: 2025-01-11
+```markdown
+# 📋 TODO - NathBit POS Backend
 
----
+## ✅ COMPLETADO (Fase 1 - Base del Sistema)
 
-## 🎯 CAMBIOS ARQUITECTÓNICOS PRINCIPALES
+### Entidades y Modelo de Datos
+- [x] Entidad Usuario con rol único
+- [x] Entidad Empresa
+- [x] Entidad Sucursal  
+- [x] Entidad UsuarioEmpresa (relación sin rol)
+- [x] Enums: RolNombre, TipoIdentificacion
 
-### 📐 Nueva Arquitectura:
-- **Un usuario = Un rol global** (eliminar roles múltiples) ✅
-- **Token JWT genérico** (contexto manejado por sesión) ✅
-- **Dashboards diferenciados** (Sistema vs Empresarial) ✅
-- **Navegación en cascada** según nivel de acceso ✅
+### Repositorios
+- [x] UsuarioRepository
+- [x] EmpresaRepository
+- [x] SucursalRepository
+- [x] UsuarioEmpresaRepository
 
----
+### Servicios
+- [x] UsuarioService + Implementación
+- [x] EmpresaService + Implementación
+- [x] SucursalService + Implementación
+- [x] UsuarioEmpresaService + Implementación
+- [x] AuthService + Implementación
 
-## ✅ FASE 1: SISTEMA BASE (COMPLETADO)
+### Seguridad
+- [x] JWT Token Provider
+- [x] JWT Authentication Filter
+- [x] JWT Authentication Entry Point
+- [x] Custom UserDetailsService
+- [x] Security Configuration
+- [x] CORS Configuration
 
-### ✅ Ya implementado:
-- Sistema de autenticación básico
-- Modelo de datos inicial
-- Gestión de usuarios
-- Sistema de permisos
+### Controladores
+- [x] AuthController (login, contexto, refresh)
+- [x] EmpresaController (CRUD)
+- [x] SucursalController (CRUD)
+- [x] UsuarioController (CRUD + asignaciones)
 
----
+### DTOs
+- [x] ApiResponse (common)
+- [x] DTOs de Usuario
+- [x] DTOs de Empresa
+- [x] DTOs de Sucursal
+- [x] DTOs de Auth
 
-## ✅ FASE 2: REFACTORIZACIÓN DEL MODELO (COMPLETADO - 2025-01-11)
+### Configuraciones
+- [x] application.yml
+- [x] Manejo global de excepciones
+- [x] Configuración de base de datos
 
-### ✅ COMPLETADO:
+## 🔄 EN PROGRESO (Fase 2)
 
-#### ✅ 2.1 Base de Datos
-- [x] Migración SQL para nuevo modelo (V2__SIMPLIFICAR_MODELO_USUARIOS.sql)
-- [x] Tabla usuarios con rol global
-- [x] Tabla usuarios_empresas sin rol
-- [x] Scripts de creación desde cero
-- [x] Datos de prueba actualizados
+### Testing
+- [ ] Tests unitarios para servicios
+- [ ] Tests de integración para controladores
+- [ ] Tests de seguridad
 
-#### ✅ 2.2 Entidades JPA
-- [x] Usuario.java con campo rol y métodos de utilidad
-- [x] UsuarioEmpresa.java (renombrada desde UsuarioEmpresaRol)
-- [x] Repositorios actualizados
-- [x] Mappers actualizados
+### Documentación
+- [ ] Swagger/OpenAPI completo
+- [ ] Postman collection
+- [ ] Javadoc en servicios
 
-#### ✅ 2.3 Sistema de Auth
-- [x] LoginResponse con nuevo formato
-- [x] AuthServiceImpl con lógica diferenciada por rol
-- [x] JwtTokenProvider con soporte para contexto
-- [x] ContextoService implementado
-- [x] AuthController completo
+## 📅 PENDIENTE (Fases Futuras)
 
-#### ✅ 2.4 Seguridad
-- [x] CustomUserDetailsService actualizado
-- [x] ContextoFilter para inyectar contexto
-- [x] SecurityConfig con nuevo filtro
-- [x] SeguridadService para validaciones @PreAuthorize
+### Fase 3 - Módulos de Negocio
+- [ ] Entidad Producto
+- [ ] Entidad Categoría
+- [ ] Entidad Cliente
+- [ ] Entidad Inventario
+- [ ] Servicios y controladores correspondientes
 
-#### ✅ 2.5 DTOs y Modelos
-- [x] UsuarioDTO actualizado
-- [x] ContextoDTO creado
-- [x] LoginResponse con estructura por rol
-- [x] DTOs de requests (SeleccionContextoRequest, etc.)
+### Fase 4 - Sistema de Ventas
+- [ ] Entidad Orden
+- [ ] Entidad DetalleOrden
+- [ ] Entidad Mesa
+- [ ] Entidad Caja
+- [ ] Sistema de facturación
 
----
+### Fase 5 - Reportes y Analytics
+- [ ] Dashboard por rol
+- [ ] Reportes de ventas
+- [ ] Reportes de inventario
+- [ ] Métricas por empresa/sucursal
 
-## 🔄 FASE 3: IMPLEMENTAR DASHBOARDS (PARCIALMENTE COMPLETADO)
+### Fase 6 - Optimizaciones
+- [ ] Caché con Redis
+- [ ] Paginación optimizada
+- [ ] Búsquedas con filtros
+- [ ] Auditoría de cambios
 
-### ✅ COMPLETADO:
-- [x] SistemaDashboardController (ROOT/SOPORTE)
-- [x] DTOs para dashboard del sistema
+### Fase 7 - Integraciones
+- [ ] Facturación electrónica
+- [ ] Pasarelas de pago
+- [ ] Notificaciones push
+- [ ] WebSockets para tiempo real
 
-### ❌ PENDIENTE:
-- [ ] Dashboard Empresarial (SUPER_ADMIN)
-- [ ] Dashboard Sucursales (ADMIN)
-- [ ] Dashboard Operativo (CAJERO/MESERO/etc)
+## 🐛 BUGS CONOCIDOS
+- Ninguno reportado
 
----
+## 💡 MEJORAS SUGERIDAS
+- [ ] Implementar refresh token en tabla separada
+- [ ] Agregar logs estructurados
+- [ ] Mejorar mensajes de error
+- [ ] Agregar validaciones de negocio más complejas
 
-## 🆕 FASE 4: GESTIÓN DE USUARIOS (PENDIENTE)
-
-### ❌ PENDIENTE:
-- [ ] UsuarioController con CRUD completo
-- [ ] Asignación de empresas/sucursales
-- [ ] Cambio de contraseña
-- [ ] Recuperación de contraseña
-- [ ] Gestión de permisos
-
----
-
-## 🏢 FASE 5: GESTIÓN EMPRESARIAL (PENDIENTE)
-
-### ❌ PENDIENTE:
-- [ ] EmpresaController
-- [ ] EmpresaService
-- [ ] SucursalController
-- [ ] SucursalService
-- [ ] ConfiguracionController
-
----
-
-## 🛒 FASE 6: MÓDULOS OPERATIVOS (PENDIENTE)
-
-### ❌ PENDIENTE:
-- [ ] Productos
-- [ ] Categorías
-- [ ] Clientes
-- [ ] Órdenes
-- [ ] Facturación
-- [ ] Reportes
-
----
-
-## 📝 NOTAS DE IMPLEMENTACIÓN
-
-### Archivos clave creados/modificados:
-1. **Entidades**: Usuario, UsuarioEmpresa
-2. **Repositorios**: UsuarioRepository, UsuarioEmpresaRepository
-3. **Servicios**: AuthService, ContextoService, SeguridadService
-4. **Controladores**: AuthController, SistemaDashboardController
-5. **Seguridad**: JwtTokenProvider, ContextoFilter, CustomUserDetailsService
-6. **DTOs**: Múltiples DTOs para auth y usuarios
-
-### Decisiones técnicas:
-- JWT contiene contexto empresa/sucursal después de selección
-- Filtro de contexto inyecta información en cada request
-- Authorities basadas en rol global + permisos específicos
-- Sin manejo de archivos/logos (fuera del scope)
+## 📝 NOTAS
+- Mantener el modelo simple: un usuario = un rol
+- El contexto empresa/sucursal se maneja por sesión
+- ROOT y SOPORTE pueden acceder a cualquier empresa
+- Los operativos tienen contexto fijo

@@ -165,4 +165,6 @@ public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
         "ORDER BY s.nombre")
     List<Sucursal> findByUsuarioIdAndEmpresaId(@Param("usuarioId") Long usuarioId,
         @Param("empresaId") Long empresaId);
+
+    List<Sucursal> findByActivaTrue();
 }

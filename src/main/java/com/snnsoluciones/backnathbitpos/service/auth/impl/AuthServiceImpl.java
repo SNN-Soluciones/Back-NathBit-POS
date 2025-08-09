@@ -3,14 +3,15 @@ package com.snnsoluciones.backnathbitpos.service.auth.impl;
 import com.snnsoluciones.backnathbitpos.dto.auth.*;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResumenDTO;
 import com.snnsoluciones.backnathbitpos.dto.empresa.SucursalResumenDTO;
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
-import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresa;
+import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresaRol;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.mapper.UsuarioMapper;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRepository;
+import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.security.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.auth.AuthService;
@@ -30,7 +31,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Implementación del servicio de autenticación adaptado al nuevo modelo
+ * Implementación del servicio de autenticación adaptado al nuevo modelo con UsuarioEmpresaRol
  */
 @Slf4j
 @Service
@@ -39,7 +40,7 @@ public class AuthServiceImpl implements AuthService {
 
   private final AuthenticationManager authenticationManager;
   private final UsuarioRepository usuarioRepository;
-  private final UsuarioEmpresaRepository usuarioEmpresaRepository;
+  private final UsuarioEmpresaRolRepository usuarioEmpresaRolRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtTokenProvider jwtTokenProvider;
   private final UsuarioMapper usuarioMapper;
@@ -65,9 +66,8 @@ public class AuthServiceImpl implements AuthService {
       SecurityContextHolder.getContext().setAuthentication(authentication);
 
       // Obtener usuario
-      Usuario usuario = usuarioRepository.findByEmailOrUsername(
-          loginRequest.getEmail(), loginRequest.getEmail()
-      ).orElseThrow(() -> new UnauthorizedException("Credenciales inválidas"));
+      Usuario usuario = usuarioRepository.findByEmail(loginRequest.getEmail())
+          .orElseThrow(() -> new UnauthorizedException("Credenciales inválidas"));
 
       // Validar estado del usuario
       validarEstadoUsuario(usuario);
@@ -77,44 +77,44 @@ public class AuthServiceImpl implements AuthService {
       usuario.setIntentosFallidos(0);
       usuarioRepository.save(usuario);
 
-      // Generar tokens
-      // Para usuarios del sistema, generar token simple
-      if (usuario.esRolSistema()) {
+      // Obtener roles del usuario
+      List<UsuarioEmpresaRol> rolesUsuario = usuarioEmpresaRolRepository.findByUsuarioId(usuario.getId());
+
+      // Determinar el rol principal del usuario
+      RolNombre rolPrincipal = determinarRolPrincipal(rolesUsuario);
+
+      // Para usuarios ROOT y SOPORTE, generar token simple
+      if (esRolSistema(rolPrincipal)) {
         String token = jwtTokenProvider.generateToken(authentication);
         String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
 
-        // Construir respuesta según el rol
-        LoginResponse response = construirLoginResponse(usuario, token, refreshToken);
-
-        log.info("Login exitoso para usuario: {} con rol: {}", usuario.getEmail(), usuario.getRol());
+        LoginResponse response = construirLoginResponse(usuario, rolesUsuario, rolPrincipal, token, refreshToken);
+        log.info("Login exitoso para usuario: {} con rol: {}", usuario.getEmail(), rolPrincipal);
         return response;
       }
 
       // Para otros usuarios, generar token con información básica
-      // El contexto se establecerá después si es necesario
       String token = jwtTokenProvider.generateToken(
           usuario.getId(),
           usuario.getEmail(),
           null, // empresaId se establecerá al seleccionar contexto
           null, // sucursalId se establecerá al seleccionar contexto
-          usuario.getRol()
+          rolPrincipal
       );
       String refreshToken = jwtTokenProvider.generateRefreshToken(usuario.getId(), usuario.getEmail());
 
-      // Construir respuesta según el rol
-      LoginResponse response = construirLoginResponse(usuario, token, refreshToken);
-
-      log.info("Login exitoso para usuario: {} con rol: {}", usuario.getEmail(), usuario.getRol());
+      LoginResponse response = construirLoginResponse(usuario, rolesUsuario, rolPrincipal, token, refreshToken);
+      log.info("Login exitoso para usuario: {} con rol: {}", usuario.getEmail(), rolPrincipal);
       return response;
 
     } catch (Exception e) {
       log.error("Error en login para: {}", loginRequest.getEmail(), e);
 
       // Incrementar intentos fallidos
-      usuarioRepository.findByEmailOrUsername(loginRequest.getEmail(), loginRequest.getEmail())
+      usuarioRepository.findByEmail(loginRequest.getEmail())
           .ifPresent(u -> {
             u.setIntentosFallidos(u.getIntentosFallidos() + 1);
-            u.setFechaUltimoIntento(LocalDateTime.now());
+            u.setFechaUltimoAcceso(LocalDateTime.now());
 
             // Bloquear después de 5 intentos
             if (u.getIntentosFallidos() >= 5) {
@@ -137,6 +137,11 @@ public class AuthServiceImpl implements AuthService {
     log.info("Selección de contexto - Usuario: {}, Empresa: {}, Sucursal: {}",
         usuarioId, request.getEmpresaId(), request.getSucursalId());
 
+    // Validar que el usuario tiene acceso a ese contexto
+    UsuarioEmpresaRol uer = usuarioEmpresaRolRepository
+        .findByUsuarioIdAndEmpresaIdAndSucursalId(usuarioId, request.getEmpresaId(), request.getSucursalId())
+        .orElseThrow(() -> new UnauthorizedException("No tiene acceso a este contexto"));
+
     // Establecer contexto
     ContextoDTO contexto = contextoService.establecerContexto(
         usuarioId,
@@ -153,7 +158,7 @@ public class AuthServiceImpl implements AuthService {
         usuario.getEmail(),
         contexto.getEmpresaId(),
         contexto.getSucursalId(),
-        usuario.getRol()
+        uer.getRol()
     );
 
     return TokenResponse.builder()
@@ -173,7 +178,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
-    Usuario usuario = usuarioRepository.findByEmailOrUsername(username, username)
+    Usuario usuario = usuarioRepository.findByEmail(username)
         .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
 
     // Generar nuevos tokens
@@ -217,7 +222,7 @@ public class AuthServiceImpl implements AuthService {
 
     // Fallback: obtener por username
     String username = jwtTokenProvider.getUsernameFromToken(token);
-    return usuarioRepository.findByEmailOrUsername(username, username)
+    return usuarioRepository.findByEmail(username)
         .map(Usuario::getId)
         .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
   }
@@ -233,20 +238,20 @@ public class AuthServiceImpl implements AuthService {
       Long usuarioId = obtenerUsuarioIdDesdeToken(token);
 
       // Obtener información adicional de la base de datos
-      UsuarioEmpresa ue = usuarioEmpresaRepository
+      UsuarioEmpresaRol uer = usuarioEmpresaRolRepository
           .findByUsuarioIdAndEmpresaIdAndSucursalId(usuarioId, empresaId, sucursalId)
           .orElse(null);
 
-      if (ue != null) {
+      if (uer != null) {
         return ContextoDTO.builder()
             .usuarioId(usuarioId)
             .empresaId(empresaId)
-            .empresaNombre(ue.getEmpresa().getNombre())
-            .empresaCodigo(ue.getEmpresa().getCodigo())
+            .empresaNombre(uer.getEmpresa().getNombre())
+            .empresaCodigo(uer.getEmpresa().getCodigo())
             .sucursalId(sucursalId)
-            .sucursalNombre(sucursalId != null ? ue.getSucursal().getNombre() : null)
-            .sucursalCodigo(sucursalId != null ? ue.getSucursal().getCodigo() : null)
-            .permisos(ue.getPermisos())
+            .sucursalNombre(sucursalId != null ? uer.getSucursal().getNombre() : null)
+            .sucursalCodigo(sucursalId != null ? uer.getSucursal().getCodigo() : null)
+            .rol(uer.getRol()) // Asumiendo que el ID es el ordinal + 1
             .build();
       }
     }
@@ -257,16 +262,61 @@ public class AuthServiceImpl implements AuthService {
   }
 
   /**
+   * Determina el rol principal del usuario basado en la jerarquía
+   */
+  private RolNombre determinarRolPrincipal(List<UsuarioEmpresaRol> rolesUsuario) {
+    if (rolesUsuario.isEmpty()) {
+      throw new BadRequestException("Usuario sin roles asignados");
+    }
+
+    // Orden de prioridad: ROOT > SOPORTE > SUPER_ADMIN > ADMIN > OPERATIVOS
+    return rolesUsuario.stream()
+        .map(UsuarioEmpresaRol::getRol)
+        .min((r1, r2) -> {
+          List<RolNombre> jerarquia = Arrays.asList(
+              RolNombre.ROOT,
+              RolNombre.SOPORTE,
+              RolNombre.SUPER_ADMIN,
+              RolNombre.ADMIN,
+              RolNombre.JEFE_CAJAS,
+              RolNombre.CAJERO,
+              RolNombre.MESERO,
+              RolNombre.COCINA
+          );
+          return Integer.compare(jerarquia.indexOf(r1), jerarquia.indexOf(r2));
+        })
+        .orElseThrow(() -> new BadRequestException("No se pudo determinar el rol principal"));
+  }
+
+  /**
+   * Verifica si es un rol del sistema (ROOT o SOPORTE)
+   */
+  private boolean esRolSistema(RolNombre rol) {
+    return rol == RolNombre.ROOT || rol == RolNombre.SOPORTE;
+  }
+
+  /**
+   * Verifica si es un rol operativo
+   */
+  private boolean esRolOperativo(RolNombre rol) {
+    return rol == RolNombre.JEFE_CAJAS ||
+        rol == RolNombre.CAJERO ||
+        rol == RolNombre.MESERO ||
+        rol == RolNombre.COCINA;
+  }
+
+  /**
    * Construye la respuesta de login según el rol del usuario
    */
-  private LoginResponse construirLoginResponse(Usuario usuario, String token, String refreshToken) {
+  private LoginResponse construirLoginResponse(Usuario usuario, List<UsuarioEmpresaRol> rolesUsuario,
+      RolNombre rolPrincipal, String token, String refreshToken) {
     LoginResponse.LoginResponseBuilder builder = LoginResponse.builder()
         .token(token)
         .refreshToken(refreshToken)
         .usuario(usuarioMapper.toDto(usuario));
 
     // ROOT y SOPORTE - Acceso directo al dashboard del sistema
-    if (usuario.esRolSistema()) {
+    if (esRolSistema(rolPrincipal)) {
       return builder
           .tipoAcceso("SISTEMA")
           .requiereSeleccion(false)
@@ -275,8 +325,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // SUPER_ADMIN - Múltiples empresas
-    if (usuario.getRol() == RolNombre.SUPER_ADMIN) {
-      List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(usuario);
+    if (rolPrincipal == RolNombre.SUPER_ADMIN) {
+      List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(rolesUsuario);
 
       return builder
           .tipoAcceso("EMPRESARIAL")
@@ -287,8 +337,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // ADMIN - Una empresa con múltiples sucursales
-    if (usuario.getRol() == RolNombre.ADMIN) {
-      List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(usuario);
+    if (rolPrincipal == RolNombre.ADMIN) {
+      List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(rolesUsuario);
 
       // Los ADMIN normalmente tienen una sola empresa
       if (empresas.size() == 1) {
@@ -310,14 +360,16 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // OPERATIVOS - Acceso directo o selección si tienen múltiples asignaciones
-    if (usuario.esRolOperativo()) {
-      Set<UsuarioEmpresa> asignaciones = usuario.getUsuarioEmpresas().stream()
-          .filter(UsuarioEmpresa::esAsignacionVigente)
-          .collect(Collectors.toSet());
+    if (esRolOperativo(rolPrincipal)) {
+      List<UsuarioEmpresaRol> asignacionesActivas = rolesUsuario.stream()
+          .filter(uer -> uer.getActivo() &&
+              uer.getEmpresa().getActiva() &&
+              (uer.getSucursal() == null || uer.getSucursal().getActiva()))
+          .collect(Collectors.toList());
 
-      if (asignaciones.size() == 1) {
+      if (asignacionesActivas.size() == 1) {
         // Acceso directo
-        UsuarioEmpresa asignacion = asignaciones.iterator().next();
+        UsuarioEmpresaRol asignacion = asignacionesActivas.get(0);
         LoginResponse.ContextoOperativoDTO contexto = construirContextoOperativo(asignacion);
 
         return builder
@@ -328,7 +380,7 @@ public class AuthServiceImpl implements AuthService {
             .build();
       } else {
         // Múltiples asignaciones - requiere selección
-        List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(usuario);
+        List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(rolesUsuario);
 
         return builder
             .tipoAcceso("OPERATIVO")
@@ -339,61 +391,75 @@ public class AuthServiceImpl implements AuthService {
       }
     }
 
-    throw new BadRequestException("Rol no reconocido: " + usuario.getRol());
+    throw new BadRequestException("Rol no reconocido: " + rolPrincipal);
   }
 
   /**
    * Obtiene las empresas a las que tiene acceso el usuario
    */
-  private List<LoginResponse.EmpresaAccesoDTO> obtenerEmpresasAcceso(Usuario usuario) {
+  private List<LoginResponse.EmpresaAccesoDTO> obtenerEmpresasAcceso(List<UsuarioEmpresaRol> rolesUsuario) {
     Map<Long, LoginResponse.EmpresaAccesoDTO> empresasMap = new LinkedHashMap<>();
 
-    for (UsuarioEmpresa ue : usuario.getUsuarioEmpresas()) {
-      if (!ue.esAsignacionVigente()) continue;
+    for (UsuarioEmpresaRol uer : rolesUsuario) {
+      if (!uer.getActivo() || !uer.getEmpresa().getActiva()) continue;
 
-      Long empresaId = ue.getEmpresa().getId();
+      Long empresaId = uer.getEmpresa().getId();
 
       LoginResponse.EmpresaAccesoDTO empresaDto = empresasMap.computeIfAbsent(
           empresaId,
           k -> LoginResponse.EmpresaAccesoDTO.builder()
-              .id(ue.getEmpresa().getId())
-              .codigo(ue.getEmpresa().getCodigo())
-              .nombre(ue.getEmpresa().getNombre())
-              .nombreComercial(ue.getEmpresa().getNombreComercial())
-              .logo(ue.getEmpresa().getLogoUrl())
-              .activa(ue.getEmpresa().getActiva())
+              .id(uer.getEmpresa().getId())
+              .codigo(uer.getEmpresa().getCodigo())
+              .nombre(uer.getEmpresa().getNombre())
+              .nombreComercial(uer.getEmpresa().getNombreComercial())
+              .logo(uer.getEmpresa().getLogoUrl())
+              .activa(uer.getEmpresa().getActiva())
               .sucursales(new ArrayList<>())
               .accesoTodasSucursales(false)
               .build()
       );
 
-      if (ue.tieneAccesoTodasSucursales()) {
+      // Si tiene acceso sin sucursal específica, es acceso a todas
+      if (uer.getSucursal() == null) {
         empresaDto.setAccesoTodasSucursales(true);
         // Cargar todas las sucursales de la empresa
-        ue.getEmpresa().getSucursales().stream()
+        uer.getEmpresa().getSucursales().stream()
             .filter(Sucursal::getActiva)
-            .forEach(s -> empresaDto.getSucursales().add(
-                LoginResponse.SucursalAccesoDTO.builder()
-                    .id(s.getId())
-                    .codigo(s.getCodigo())
-                    .nombre(s.getNombre())
-                    .direccion(s.getDireccion())
-                    .activa(s.getActiva())
-                    .esPrincipal(s.getEsPrincipal())
-                    .build()
-            ));
-      } else if (ue.getSucursal() != null) {
+            .forEach(s -> {
+              // Evitar duplicados
+              boolean yaExiste = empresaDto.getSucursales().stream()
+                  .anyMatch(suc -> suc.getId().equals(s.getId()));
+
+              if (!yaExiste) {
+                empresaDto.getSucursales().add(
+                    LoginResponse.SucursalAccesoDTO.builder()
+                        .id(s.getId())
+                        .codigo(s.getCodigo())
+                        .nombre(s.getNombre())
+                        .direccion(s.getDireccion())
+                        .activa(s.getActiva())
+                        .esPrincipal(s.getEsPrincipal())
+                        .build()
+                );
+              }
+            });
+      } else if (uer.getSucursal().getActiva()) {
         // Acceso a sucursal específica
-        empresaDto.getSucursales().add(
-            LoginResponse.SucursalAccesoDTO.builder()
-                .id(ue.getSucursal().getId())
-                .codigo(ue.getSucursal().getCodigo())
-                .nombre(ue.getSucursal().getNombre())
-                .direccion(ue.getSucursal().getDireccion())
-                .activa(ue.getSucursal().getActiva())
-                .esPrincipal(ue.getSucursal().getEsPrincipal())
-                .build()
-        );
+        boolean yaExiste = empresaDto.getSucursales().stream()
+            .anyMatch(s -> s.getId().equals(uer.getSucursal().getId()));
+
+        if (!yaExiste) {
+          empresaDto.getSucursales().add(
+              LoginResponse.SucursalAccesoDTO.builder()
+                  .id(uer.getSucursal().getId())
+                  .codigo(uer.getSucursal().getCodigo())
+                  .nombre(uer.getSucursal().getNombre())
+                  .direccion(uer.getSucursal().getDireccion())
+                  .activa(uer.getSucursal().getActiva())
+                  .esPrincipal(uer.getSucursal().getEsPrincipal())
+                  .build()
+          );
+        }
       }
     }
 
@@ -408,7 +474,7 @@ public class AuthServiceImpl implements AuthService {
   /**
    * Construye el contexto operativo para acceso directo
    */
-  private LoginResponse.ContextoOperativoDTO construirContextoOperativo(UsuarioEmpresa asignacion) {
+  private LoginResponse.ContextoOperativoDTO construirContextoOperativo(UsuarioEmpresaRol asignacion) {
     return LoginResponse.ContextoOperativoDTO.builder()
         .empresa(EmpresaResumenDTO.builder()
             .id(asignacion.getEmpresa().getId())
@@ -419,17 +485,21 @@ public class AuthServiceImpl implements AuthService {
                 .id(asignacion.getSucursal().getId())
                 .nombre(asignacion.getSucursal().getNombre())
                 .build() : null)
-        .permisos(construirPermisosDTO(asignacion.getPermisos()))
+        .permisos(construirPermisosDTO(asignacion.getRol()))
         .build();
   }
 
   /**
-   * Convierte el mapa de permisos a PermisosDTO
+   * Convierte los permisos del rol a PermisosDTO
    */
-  private LoginResponse.PermisosDTO construirPermisosDTO(Map<String, Object> permisos) {
-    // Implementación simplificada - expandir según necesidad
+  private LoginResponse.PermisosDTO construirPermisosDTO(RolNombre rol) {
+    // Implementación simplificada basada en el rol
+    boolean accesoTotal = rol == RolNombre.ROOT ||
+        rol == RolNombre.SUPER_ADMIN ||
+        rol == RolNombre.ADMIN;
+
     return LoginResponse.PermisosDTO.builder()
-        .accesoTotal(Boolean.TRUE.equals(permisos.get("acceso_total")))
+        .accesoTotal(accesoTotal)
         .build();
   }
 
@@ -466,7 +536,7 @@ public class AuthServiceImpl implements AuthService {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     String username = auth.getName();
 
-    return usuarioRepository.findByEmailOrUsername(username, username)
+    return usuarioRepository.findByEmail(username)
         .map(Usuario::getId)
         .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
   }

@@ -46,4 +46,7 @@ public class ContextoDTO {
         }
         return sb.toString();
     }
+
+    public boolean tieneAccesoTodasSucursales() {
+    }
 }

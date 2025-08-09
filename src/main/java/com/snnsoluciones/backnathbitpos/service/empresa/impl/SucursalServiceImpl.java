@@ -6,13 +6,19 @@ import com.snnsoluciones.backnathbitpos.dto.empresa.EstadisticasSucursalDTO;
 import com.snnsoluciones.backnathbitpos.dto.empresa.SucursalDTO;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
+import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresaRol;
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.exception.ConflictException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.mapper.SucursalMapper;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
+import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
 import com.snnsoluciones.backnathbitpos.service.empresa.SucursalService;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
@@ -35,6 +41,7 @@ public class SucursalServiceImpl implements SucursalService {
     private final SucursalRepository sucursalRepository;
     private final EmpresaRepository empresaRepository;
     private final SucursalMapper sucursalMapper;
+    private final UsuarioEmpresaRolRepository usuarioEmpresaRolRepository;
     
     @Override
     public SucursalDTO crearSucursal(Long empresaId, CrearSucursalRequest request)
@@ -256,7 +263,109 @@ public class SucursalServiceImpl implements SucursalService {
         
         return estadisticas;
     }
-    
+
+    @Override
+    public boolean usuarioTieneAcceso(Long usuarioId, Long sucursalId) {
+        log.debug("Verificando acceso del usuario {} a la sucursal {}", usuarioId, sucursalId);
+
+        // Validar parámetros
+        if (usuarioId == null || sucursalId == null) {
+            log.warn("Parámetros nulos: usuarioId={}, sucursalId={}", usuarioId, sucursalId);
+            return false;
+        }
+
+        // Verificar que la sucursal existe y está activa
+        Sucursal sucursal = sucursalRepository.findById(sucursalId)
+            .orElse(null);
+
+        if (sucursal == null || !sucursal.getActiva()) {
+            log.debug("Sucursal {} no existe o no está activa", sucursalId);
+            return false;
+        }
+
+        // Obtener roles del usuario
+        List<UsuarioEmpresaRol> rolesUsuario = usuarioEmpresaRolRepository
+            .findByUsuarioId(usuarioId);
+
+        if (rolesUsuario.isEmpty()) {
+            log.debug("Usuario {} no tiene roles asignados", usuarioId);
+            return false;
+        }
+
+        // Verificar si el usuario tiene algún rol del sistema (ROOT o SOPORTE)
+        boolean esRolSistema = rolesUsuario.stream()
+            .anyMatch(uer -> uer.getRol() == RolNombre.ROOT ||
+                uer.getRol() == RolNombre.SOPORTE);
+
+        if (esRolSistema) {
+            log.debug("Usuario {} tiene rol del sistema, acceso concedido", usuarioId);
+            return true;
+        }
+
+        // Verificar acceso específico a la sucursal
+        boolean tieneAcceso = rolesUsuario.stream()
+            .filter(uer -> uer.getActivo())
+            .anyMatch(uer -> {
+                // Verificar que es de la misma empresa que la sucursal
+                if (!uer.getEmpresa().getId().equals(sucursal.getEmpresa().getId())) {
+                    return false;
+                }
+
+                // Si tiene sucursal null, tiene acceso a todas las sucursales de la empresa
+                if (uer.getSucursal() == null) {
+                    log.debug("Usuario {} tiene acceso a todas las sucursales de la empresa {}",
+                        usuarioId, uer.getEmpresa().getId());
+                    return true;
+                }
+
+                // Si tiene sucursal específica, verificar que sea la misma
+                return uer.getSucursal().getId().equals(sucursalId);
+            });
+
+        log.debug("Resultado de verificación de acceso: usuario={}, sucursal={}, acceso={}",
+            usuarioId, sucursalId, tieneAcceso);
+
+        return tieneAcceso;
+    }
+
+    // Método adicional útil para obtener las sucursales a las que tiene acceso un usuario
+    public List<Sucursal> obtenerSucursalesConAcceso(Long usuarioId) {
+        log.debug("Obteniendo sucursales con acceso para usuario {}", usuarioId);
+
+        List<UsuarioEmpresaRol> rolesUsuario = usuarioEmpresaRolRepository
+            .findByUsuarioId(usuarioId);
+
+        // Si tiene rol del sistema, devolver todas las sucursales activas
+        boolean esRolSistema = rolesUsuario.stream()
+            .anyMatch(uer -> uer.getRol() == RolNombre.ROOT ||
+                uer.getRol() == RolNombre.SOPORTE);
+
+        if (esRolSistema) {
+            return sucursalRepository.findByActivaTrue();
+        }
+
+        // Recopilar sucursales a las que tiene acceso
+        Set<Sucursal> sucursalesConAcceso = new HashSet<>();
+
+        rolesUsuario.stream()
+            .filter(uer -> uer.getActivo())
+            .forEach(uer -> {
+                if (uer.getSucursal() == null) {
+                    // Acceso a todas las sucursales de la empresa
+                    sucursalesConAcceso.addAll(
+                        sucursalRepository.findByEmpresaIdAndActivaTrue(
+                            uer.getEmpresa().getId()
+                        )
+                    );
+                } else if (uer.getSucursal().getActiva()) {
+                    // Acceso a sucursal específica
+                    sucursalesConAcceso.add(uer.getSucursal());
+                }
+            });
+
+        return new ArrayList<>(sucursalesConAcceso);
+    }
+
     @Override
     public void copiarConfiguracion(Long sucursalOrigenId, Long sucursalDestinoId)
         throws BadRequestException {

@@ -200,7 +200,7 @@ public class EmpresaServiceImpl implements EmpresaService {
         config.setEmpresaId(empresaId);
         config.setConfiguracion(empresa.getConfiguracion());
         config.setTipo(empresa.getTipo());
-        config.setPlan(empresa.getPlan());
+        config.setPlan(empresa.getPlanSuscripcion());
         config.setLimiteUsuarios(empresa.getLimiteUsuarios());
         config.setLimiteSucursales(empresa.getLimiteSucursales());
         
@@ -223,7 +223,7 @@ public class EmpresaServiceImpl implements EmpresaService {
         }
         
         if (configuracion.getPlan() != null) {
-            empresa.setPlan(configuracion.getPlan());
+            empresa.getPlanSuscripcion().name();
         }
         
         if (configuracion.getLimiteUsuarios() != null) {
@@ -268,10 +268,15 @@ public class EmpresaServiceImpl implements EmpresaService {
         estadisticas.setSucursalesActivas(sucursalesActivas);
         
         // Otras métricas básicas
-        estadisticas.setPlan(empresa.getPlan());
+        estadisticas.setPlan(empresa.getPlanSuscripcion());
         estadisticas.setLimiteUsuarios(empresa.getLimiteUsuarios());
         estadisticas.setLimiteSucursales(empresa.getLimiteSucursales());
         
         return estadisticas;
+    }
+
+    @Override
+    public boolean usuarioTieneAcceso(Long usuarioId, Long empresaId) {
+        return false;
     }
 }

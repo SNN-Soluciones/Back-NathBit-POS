@@ -72,6 +72,10 @@ public class Usuario implements UserDetails {
     @Builder.Default
     private Boolean bloqueado = false;
 
+    @Column(name = "password_temporal")
+    @Builder.Default
+    private Boolean passwordTemporal = false;
+
     @Column(name = "intentos_fallidos")
     @Builder.Default
     private Integer intentosFallidos = 0;
@@ -81,6 +85,9 @@ public class Usuario implements UserDetails {
 
     @Column(name = "fecha_bloqueo")
     private LocalDateTime fechaBloqueo;
+
+    @Column(name = "fecha_desbloqueo")
+    private LocalDateTime fechaDesbloqueo;
 
     @Column(length = 100)
     private String direccion;

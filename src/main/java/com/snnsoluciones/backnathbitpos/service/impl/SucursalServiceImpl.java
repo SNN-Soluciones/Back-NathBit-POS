@@ -1,9 +1,9 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
-import com.snnsoluciones.backnathbitpos.entity.Usuario;
+import com.snnsoluciones.backnathbitpos.entity.Terminal;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
+import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.service.SucursalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,96 +16,155 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Transactional
 public class SucursalServiceImpl implements SucursalService {
-    
+
     private final SucursalRepository sucursalRepository;
-    private final UsuarioRepository usuarioRepository;
-    
+    private final TerminalRepository terminalRepository;
+
     @Override
     public Sucursal crear(Sucursal sucursal) {
+        // Generar número de sucursal si no se proporciona
+        if (sucursal.getNumeroSucursal() == null || sucursal.getNumeroSucursal().isEmpty()) {
+            Integer maxNumero = sucursalRepository.findMaxNumeroSucursalByEmpresaId(sucursal.getEmpresa().getId());
+            int siguiente = (maxNumero != null ? maxNumero : 0) + 1;
+            sucursal.setNumeroSucursal(String.format("%03d", siguiente));
+        }
+
         return sucursalRepository.save(sucursal);
     }
-    
+
     @Override
     public Sucursal actualizar(Long id, Sucursal sucursal) {
         Sucursal existente = sucursalRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
-        
+
+        // Campos existentes
         existente.setNombre(sucursal.getNombre());
         existente.setCodigo(sucursal.getCodigo());
         existente.setDireccion(sucursal.getDireccion());
         existente.setTelefono(sucursal.getTelefono());
         existente.setEmail(sucursal.getEmail());
         existente.setActiva(sucursal.getActiva());
-        // No cambiar empresa
-        
+
+        // === NUEVOS CAMPOS ===
+        // Validar número de sucursal si cambió
+        if (!existente.getNumeroSucursal().equals(sucursal.getNumeroSucursal())) {
+            if (sucursalRepository.existsNumeroSucursalInEmpresa(
+                existente.getEmpresa().getId(),
+                sucursal.getNumeroSucursal(),
+                id)) {
+                throw new RuntimeException("El número de sucursal ya existe en esta empresa");
+            }
+            existente.setNumeroSucursal(sucursal.getNumeroSucursal());
+        }
+
+        existente.setModoFacturacion(sucursal.getModoFacturacion());
+        existente.setProvincia(sucursal.getProvincia());
+        existente.setCanton(sucursal.getCanton());
+        existente.setDistrito(sucursal.getDistrito());
+        existente.setBarrio(sucursal.getBarrio());
+        existente.setOtrasSenas(sucursal.getOtrasSenas());
+
         return sucursalRepository.save(existente);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public Optional<Sucursal> buscarPorId(Long id) {
         return sucursalRepository.findById(id);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public Optional<Sucursal> buscarPorCodigo(String codigo) {
         return sucursalRepository.findByCodigo(codigo);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public List<Sucursal> listarPorEmpresa(Long empresaId) {
         return sucursalRepository.findByEmpresaId(empresaId);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public List<Sucursal> listarTodas() {
         return sucursalRepository.findAll();
     }
-    
+
     @Override
     public void eliminar(Long id) {
+        // Verificar que no tenga terminales activas
+        if (terminalRepository.countActivasBySucursalId(id) > 0) {
+            throw new RuntimeException("No se puede eliminar una sucursal con terminales activas");
+        }
         sucursalRepository.deleteById(id);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public boolean existeCodigo(String codigo) {
         return sucursalRepository.existsByCodigo(codigo);
     }
 
-    // En SucursalServiceImpl.java
     @Override
     @Transactional(readOnly = true)
     public List<Sucursal> listarPorUsuario(Long usuarioId) {
-        // Obtener usuario para verificar rol
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
-        // Si es ROOT o SOPORTE, devolver todas
-        if (usuario.esRolSistema()) {
-            return sucursalRepository.findAll();
-        }
-
-        // Para otros, buscar por asignaciones
         return sucursalRepository.findByUsuarioId(usuarioId);
     }
 
-    // En SucursalServiceImpl.java
     @Override
     @Transactional(readOnly = true)
     public List<Sucursal> listarPorUsuarioYEmpresa(Long usuarioId, Long empresaId) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        return sucursalRepository.findByUsuarioIdAndEmpresaId(usuarioId, empresaId);
+    }
 
-        // Si es ROOT o SOPORTE, devolver todas las sucursales de esa empresa
-        if (usuario.esRolSistema()) {
-            return sucursalRepository.findByEmpresaId(empresaId);
+    // === NUEVOS MÉTODOS ===
+
+    @Override
+    public Terminal crearTerminal(Long sucursalId, Terminal terminal) {
+        Sucursal sucursal = sucursalRepository.findById(sucursalId)
+            .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
+
+        // Validar límite de terminales
+        long terminalesActivas = terminalRepository.countActivasBySucursalId(sucursalId);
+        if (terminalesActivas >= 2) {
+            throw new RuntimeException("Máximo 2 terminales activas por sucursal");
         }
 
-        // Para otros, buscar por asignaciones específicas
-        return sucursalRepository.findByUsuarioIdAndEmpresaId(usuarioId, empresaId);
+        // Generar número de terminal si no se proporciona
+        if (terminal.getNumeroTerminal() == null || terminal.getNumeroTerminal().isEmpty()) {
+            Integer maxNumero = terminalRepository.findMaxNumeroTerminalBySucursalId(sucursalId);
+            int siguiente = (maxNumero != null ? maxNumero : 0) + 1;
+            terminal.setNumeroTerminal(String.format("%05d", siguiente));
+        }
+
+        terminal.setSucursal(sucursal);
+        return terminalRepository.save(terminal);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Terminal> listarTerminales(Long sucursalId) {
+        return terminalRepository.findBySucursalId(sucursalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Terminal> listarTerminalesActivas(Long sucursalId) {
+        return terminalRepository.findBySucursalIdAndActivaTrue(sucursalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Sucursal> buscarConTerminales(Long id) {
+        return sucursalRepository.findByIdWithTerminales(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean puedeFacturarElectronicamente(Long sucursalId) {
+        return sucursalRepository.findById(sucursalId)
+            .map(Sucursal::puedeFacturarElectronicamente)
+            .orElse(false);
     }
 }

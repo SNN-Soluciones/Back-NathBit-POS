@@ -1,0 +1,126 @@
+package com.snnsoluciones.backnathbitpos.entity;
+
+import com.snnsoluciones.backnathbitpos.enums.AmbienteHacienda;
+import com.snnsoluciones.backnathbitpos.enums.TipoAutenticacionHacienda;
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.ToString;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Data
+@Entity
+@Table(name = "empresa_config_hacienda")
+@ToString(exclude = {"empresa"})
+public class EmpresaConfigHacienda {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id", nullable = false)
+    private Empresa empresa;
+
+    // Ambiente de trabajo
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ambiente", nullable = false)
+    private AmbienteHacienda ambiente = AmbienteHacienda.SANDBOX;
+
+    // Tipo de autenticación
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_autenticacion", nullable = false)
+    private TipoAutenticacionHacienda tipoAutenticacion = TipoAutenticacionHacienda.LLAVE_CRIPTOGRAFICA;
+
+    // === Para Llave ATV (Criptográfica) ===
+    @Column(name = "usuario_hacienda", length = 100)
+    private String usuarioHacienda;
+
+    @Column(name = "clave_hacienda", length = 255)
+    private String claveHacienda; // Se debe encriptar antes de guardar
+
+    // === Para Firma Digital (futuro) ===
+    @Lob
+    @Column(name = "certificado_p12")
+    private byte[] certificadoP12;
+
+    @Column(name = "pin_certificado", length = 255)
+    private String pinCertificado; // Se debe encriptar antes de guardar
+
+    @Column(name = "fecha_emision_certificado")
+    private LocalDate fechaEmisionCertificado;
+
+    @Column(name = "fecha_vencimiento_certificado")
+    private LocalDate fechaVencimientoCertificado;
+
+    // === Tokens de acceso ===
+    @Column(name = "token_access", length = 1000)
+    private String tokenAccess;
+
+    @Column(name = "token_refresh", length = 1000)
+    private String tokenRefresh;
+
+    @Column(name = "token_expiracion")
+    private LocalDateTime tokenExpiracion;
+
+    // === Mensajes personalizados ===
+    @Column(name = "nota_factura", length = 500)
+    private String notaFactura;
+
+    @Column(name = "nota_validez_proforma", length = 200)
+    private String notaValidezProforma;
+
+    @Column(name = "detalle_factura1", length = 200)
+    private String detalleFactura1;
+
+    @Column(name = "detalle_factura2", length = 200)
+    private String detalleFactura2;
+
+    // === Configuraciones adicionales ===
+    @Column(name = "proveedor_sistemas", length = 20)
+    private String proveedorSistemas; // Identificación del proveedor del sistema
+
+    // Auditoría
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Valida si la configuración está completa para el tipo de autenticación
+     */
+    public boolean isConfiguracionCompleta() {
+        if (tipoAutenticacion == TipoAutenticacionHacienda.LLAVE_CRIPTOGRAFICA) {
+            return usuarioHacienda != null && !usuarioHacienda.isEmpty() &&
+                claveHacienda != null && !claveHacienda.isEmpty();
+        } else if (tipoAutenticacion == TipoAutenticacionHacienda.FIRMA_DIGITAL) {
+            return certificadoP12 != null && certificadoP12.length > 0 &&
+                pinCertificado != null && !pinCertificado.isEmpty() &&
+                fechaVencimientoCertificado != null &&
+                fechaVencimientoCertificado.isAfter(LocalDate.now());
+        }
+        return false;
+    }
+
+    /**
+     * Verifica si el token está vigente
+     */
+    public boolean isTokenVigente() {
+        return tokenAccess != null && !tokenAccess.isEmpty() &&
+            tokenExpiracion != null &&
+            tokenExpiracion.isAfter(LocalDateTime.now());
+    }
+}

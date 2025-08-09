@@ -1,30 +1,22 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.RegimenTributario;
 import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import jakarta.persistence.*;
 import lombok.Data;
 import lombok.ToString;
 import org.hibernate.proxy.HibernateProxy;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
 @Data
 @Entity
 @Table(name = "empresas")
-@ToString(exclude = {"sucursales", "usuarioEmpresas"})
+@ToString(exclude = {"sucursales", "usuarioEmpresas", "configHacienda", "actividades"})
 public class Empresa {
 
     @Id
@@ -62,16 +54,78 @@ public class Empresa {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // ===== NUEVOS CAMPOS PARA FACTURACIÓN ELECTRÓNICA =====
+
+    // Datos comerciales adicionales
+    @Column(name = "nombre_comercial", length = 80)
+    private String nombreComercial;
+
+    @Column(name = "nombre_razon_social", length = 100)
+    private String nombreRazonSocial;
+
+    @Column(length = 20)
+    private String fax;
+
+    @Column(name = "email_notificacion", length = 100)
+    private String emailNotificacion;
+
+    // Ubicación completa CR
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "provincia_id")
+    private Provincia provincia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "canton_id")
+    private Canton canton;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "distrito_id")
+    private Distrito distrito;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "barrio_id")
+    private Barrio barrio;
+
+    @Column(name = "otras_senas", length = 500)
+    private String otrasSenas;
+
+    // Configuración fiscal
+    @Column(name = "requiere_hacienda")
+    private Boolean requiereHacienda = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "regimen_tributario")
+    private RegimenTributario regimenTributario = RegimenTributario.REGIMEN_TRADICIONAL;
+
+    @Column(name = "limite_anual_simplificado", precision = 18, scale = 2)
+    private BigDecimal limiteAnualSimplificado;
+
+    // Logo
+    @Column(name = "logo_url")
+    private String logoUrl;
+
+    // ===== RELACIONES EXISTENTES =====
     @OneToMany(mappedBy = "empresa", fetch = FetchType.LAZY)
     private Set<Sucursal> sucursales = new HashSet<>();
 
     @OneToMany(mappedBy = "empresa", fetch = FetchType.LAZY)
     private Set<UsuarioEmpresa> usuarioEmpresas = new HashSet<>();
 
+    // ===== NUEVAS RELACIONES =====
+    @OneToOne(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private EmpresaConfigHacienda configHacienda;
+
+    @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Set<EmpresaActividad> actividades = new HashSet<>();
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        // Si se proporciona nombre pero no razón social, usar el mismo
+        if (nombreRazonSocial == null && nombre != null) {
+            nombreRazonSocial = nombre;
+        }
     }
 
     @PreUpdate
@@ -96,8 +150,8 @@ public class Empresa {
         if (thisEffectiveClass != oEffectiveClass) {
             return false;
         }
-        Empresa empresa = (Empresa) o;
-        return getId() != null && Objects.equals(getId(), empresa.getId());
+        Empresa that = (Empresa) o;
+        return getId() != null && Objects.equals(getId(), that.getId());
     }
 
     @Override

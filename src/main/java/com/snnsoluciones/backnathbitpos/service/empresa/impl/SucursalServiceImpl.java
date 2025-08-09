@@ -11,7 +11,6 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.mapper.SucursalMapper;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
 import com.snnsoluciones.backnathbitpos.service.empresa.SucursalService;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +34,6 @@ public class SucursalServiceImpl implements SucursalService {
     
     private final SucursalRepository sucursalRepository;
     private final EmpresaRepository empresaRepository;
-    private final UsuarioEmpresaRolRepository usuarioEmpresaRolRepository;
     private final SucursalMapper sucursalMapper;
     
     @Override
@@ -251,37 +249,12 @@ public class SucursalServiceImpl implements SucursalService {
         estadisticas.setEmpresaId(sucursal.getEmpresa().getId());
         estadisticas.setNombreEmpresa(sucursal.getEmpresa().getNombre());
         
-        // Contar usuarios activos en la sucursal
-        long usuariosActivos = usuarioEmpresaRolRepository
-            .countBySucursalIdAndActivoTrue(sucursalId);
-        estadisticas.setUsuariosActivos(usuariosActivos);
-        
         // Otras métricas básicas que se agregarán más adelante
         estadisticas.setVentasDelDia(0.0);
         estadisticas.setOrdenesActivas(0L);
         estadisticas.setMesasOcupadas(0L);
         
         return estadisticas;
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public boolean usuarioTieneAcceso(Long usuarioId, Long sucursalId) {
-        // Verificar acceso directo a la sucursal
-        boolean accesoDirecto = usuarioEmpresaRolRepository
-            .existsByUsuarioIdAndSucursalIdAndActivoTrue(usuarioId, sucursalId);
-        
-        if (accesoDirecto) {
-            return true;
-        }
-        
-        // Verificar si tiene acceso a nivel empresa (todas las sucursales)
-        Sucursal sucursal = sucursalRepository.findById(sucursalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
-        
-        return usuarioEmpresaRolRepository
-            .existsByUsuarioIdAndEmpresaIdAndSucursalIsNullAndActivoTrue(
-                usuarioId, sucursal.getEmpresa().getId());
     }
     
     @Override

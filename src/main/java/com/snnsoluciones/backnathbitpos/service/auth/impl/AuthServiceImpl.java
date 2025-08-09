@@ -1,102 +1,167 @@
 package com.snnsoluciones.backnathbitpos.service.auth.impl;
 
-import com.snnsoluciones.backnathbitpos.config.security.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.dto.auth.*;
-import com.snnsoluciones.backnathbitpos.dto.usuario.AccesoDTO;
+import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResumenDTO;
+import com.snnsoluciones.backnathbitpos.dto.empresa.SucursalResumenDTO;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
-import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresaRol;
+import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresa;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
-import com.snnsoluciones.backnathbitpos.enums.TipoUsuario;
+import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.mapper.UsuarioMapper;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
+import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
+import com.snnsoluciones.backnathbitpos.security.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.auth.AuthService;
-import com.snnsoluciones.backnathbitpos.service.usuario.UsuarioService;
-import java.util.HashSet;
-import java.util.Objects;
+import com.snnsoluciones.backnathbitpos.service.auth.ContextoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Set;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * Implementación del servicio de autenticación adaptado al nuevo modelo
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class AuthServiceImpl implements AuthService {
 
   private final AuthenticationManager authenticationManager;
-  private final JwtTokenProvider jwtTokenProvider;
   private final UsuarioRepository usuarioRepository;
-  private final UsuarioEmpresaRolRepository usuarioEmpresaRolRepository;
-  private final UsuarioService usuarioService;
+  private final UsuarioEmpresaRepository usuarioEmpresaRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final JwtTokenProvider jwtTokenProvider;
   private final UsuarioMapper usuarioMapper;
+  private final ContextoService contextoService;
 
-  // Cache simple para tokens revocados (en producción usar Redis)
-  private final Set<String> tokensRevocados = new HashSet<>();
+  // Cache de tokens revocados (en producción usar Redis)
+  private final Set<String> tokensRevocados = Collections.synchronizedSet(new HashSet<>());
 
   @Override
+  @Transactional
   public LoginResponse login(LoginRequest loginRequest) {
-    log.debug("Intento de login para email: {}", loginRequest.getEmail());
+    log.info("Intento de login para: {}", loginRequest.getEmail());
 
-    // TODO Implementar logica segun el enum TipoUsuario
+    try {
+      // Autenticar
+      Authentication authentication = authenticationManager.authenticate(
+          new UsernamePasswordAuthenticationToken(
+              loginRequest.getEmail(),
+              loginRequest.getPassword()
+          )
+      );
+
+      SecurityContextHolder.getContext().setAuthentication(authentication);
+
+      // Obtener usuario
+      Usuario usuario = usuarioRepository.findByEmailOrUsername(
+          loginRequest.getEmail(), loginRequest.getEmail()
+      ).orElseThrow(() -> new UnauthorizedException("Credenciales inválidas"));
+
+      // Validar estado del usuario
+      validarEstadoUsuario(usuario);
+
+      // Actualizar último acceso
+      usuario.setUltimoAcceso(LocalDateTime.now());
+      usuario.setIntentosFallidos(0);
+      usuarioRepository.save(usuario);
+
+      // Generar tokens
+      // Para usuarios del sistema, generar token simple
+      if (usuario.esRolSistema()) {
+        String token = jwtTokenProvider.generateToken(authentication);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
+
+        // Construir respuesta según el rol
+        LoginResponse response = construirLoginResponse(usuario, token, refreshToken);
+
+        log.info("Login exitoso para usuario: {} con rol: {}", usuario.getEmail(), usuario.getRol());
+        return response;
+      }
+
+      // Para otros usuarios, generar token con información básica
+      // El contexto se establecerá después si es necesario
+      String token = jwtTokenProvider.generateToken(
+          usuario.getId(),
+          usuario.getEmail(),
+          null, // empresaId se establecerá al seleccionar contexto
+          null, // sucursalId se establecerá al seleccionar contexto
+          usuario.getRol()
+      );
+      String refreshToken = jwtTokenProvider.generateRefreshToken(usuario.getId(), usuario.getEmail());
+
+      // Construir respuesta según el rol
+      LoginResponse response = construirLoginResponse(usuario, token, refreshToken);
+
+      log.info("Login exitoso para usuario: {} con rol: {}", usuario.getEmail(), usuario.getRol());
+      return response;
+
+    } catch (Exception e) {
+      log.error("Error en login para: {}", loginRequest.getEmail(), e);
+
+      // Incrementar intentos fallidos
+      usuarioRepository.findByEmailOrUsername(loginRequest.getEmail(), loginRequest.getEmail())
+          .ifPresent(u -> {
+            u.setIntentosFallidos(u.getIntentosFallidos() + 1);
+            u.setFechaUltimoIntento(LocalDateTime.now());
+
+            // Bloquear después de 5 intentos
+            if (u.getIntentosFallidos() >= 5) {
+              u.setBloqueado(true);
+              u.setFechaDesbloqueo(LocalDateTime.now().plusMinutes(30));
+            }
+
+            usuarioRepository.save(u);
+          });
+
+      throw new UnauthorizedException("Credenciales inválidas");
+    }
   }
 
   @Override
+  @Transactional
   public TokenResponse seleccionarContexto(SeleccionContextoRequest request) {
     Long usuarioId = obtenerUsuarioIdActual();
 
-    // Validar que el usuario tenga acceso a la empresa/sucursal seleccionada
-    if (!usuarioService.validarAcceso(usuarioId, request.getEmpresaId(), request.getSucursalId())) {
-      throw new UnauthorizedException("No tiene acceso a la empresa/sucursal seleccionada");
-    }
+    log.info("Selección de contexto - Usuario: {}, Empresa: {}, Sucursal: {}",
+        usuarioId, request.getEmpresaId(), request.getSucursalId());
 
-    // Obtener el rol específico para ese contexto
-    UsuarioEmpresaRol usuarioRol;
-    if (request.getSucursalId() != null) {
-      usuarioRol = usuarioEmpresaRolRepository
-          .findByUsuarioIdAndEmpresaIdAndSucursalId(
-              usuarioId, request.getEmpresaId(), request.getSucursalId())
-          .orElseThrow(() -> new UnauthorizedException("Rol no encontrado"));
-    } else {
-      usuarioRol = usuarioEmpresaRolRepository
-          .findByUsuarioIdAndEmpresaIdAndSucursalIsNull(
-              usuarioId, request.getEmpresaId())
-          .orElseThrow(() -> new UnauthorizedException("Rol no encontrado"));
-    }
-
-    Usuario usuario = usuarioRol.getUsuario();
-
-    // Generar token con contexto seleccionado
-    String token = jwtTokenProvider.generateToken(
-        usuario.getId(),
-        usuario.getEmail(),
+    // Establecer contexto
+    ContextoDTO contexto = contextoService.establecerContexto(
+        usuarioId,
         request.getEmpresaId(),
-        request.getSucursalId(),
-        usuarioRol.getRol()
+        request.getSucursalId()
     );
 
-    String refreshToken = jwtTokenProvider.generateRefreshToken(usuario.getId());
+    // Generar nuevo token con contexto
+    Usuario usuario = usuarioRepository.findById(usuarioId)
+        .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
 
-    TokenResponse response = new TokenResponse();
-    response.setToken(token);
-    response.setRefreshToken(refreshToken);
-    response.setExpiresIn(jwtTokenProvider.getExpirationTime());
+    String nuevoToken = jwtTokenProvider.generateToken(
+        usuarioId,
+        usuario.getEmail(),
+        contexto.getEmpresaId(),
+        contexto.getSucursalId(),
+        usuario.getRol()
+    );
 
-    log.info("Contexto seleccionado - Usuario: {}, Empresa: {}, Sucursal: {}",
-        usuario.getEmail(), request.getEmpresaId(), request.getSucursalId());
-
-    return response;
+    return TokenResponse.builder()
+        .token(nuevoToken)
+        .tipo("Bearer")
+        .expiraEn(jwtTokenProvider.getExpirationTime())
+        .contexto(contexto)
+        .build();
   }
 
   @Override
@@ -107,83 +172,302 @@ public class AuthServiceImpl implements AuthService {
       throw new UnauthorizedException("Refresh token inválido");
     }
 
-    Long usuarioId = jwtTokenProvider.getUserIdFromToken(refreshToken);
-    Usuario usuario = usuarioRepository.findById(usuarioId)
+    String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
+    Usuario usuario = usuarioRepository.findByEmailOrUsername(username, username)
         .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
 
-    if (!usuario.getActivo()) {
-      throw new UnauthorizedException("Usuario inactivo");
-    }
-
-    // Obtener contexto actual del token anterior si existe
-    String authHeader = SecurityContextHolder.getContext()
-        .getAuthentication().getCredentials().toString();
-
-    Long empresaId = jwtTokenProvider.getEmpresaIdFromToken(authHeader);
-    Long sucursalId = jwtTokenProvider.getSucursalIdFromToken(authHeader);
-    RolNombre rol = jwtTokenProvider.getRolFromToken(authHeader);
-
-    // Generar nuevo token con el mismo contexto
-    String newToken = jwtTokenProvider.generateToken(
-        usuario.getId(),
-        usuario.getEmail(),
-        empresaId,
-        sucursalId,
-        rol
+    // Generar nuevos tokens
+    Authentication authentication = new UsernamePasswordAuthenticationToken(
+        usuario.getEmail(), null, Collections.emptyList()
     );
 
-    String newRefreshToken = jwtTokenProvider.generateRefreshToken(usuario.getId());
+    String nuevoToken = jwtTokenProvider.generateToken(authentication);
+    String nuevoRefreshToken = jwtTokenProvider.generateRefreshToken(authentication);
 
-    TokenResponse response = new TokenResponse();
-    response.setToken(newToken);
-    response.setRefreshToken(newRefreshToken);
-    response.setExpiresIn(jwtTokenProvider.getExpirationTime());
-
-    return response;
+    return TokenResponse.builder()
+        .token(nuevoToken)
+        .refreshToken(nuevoRefreshToken)
+        .tipo("Bearer")
+        .expiraEn(jwtTokenProvider.getExpirationTime())
+        .build();
   }
 
   @Override
   public void logout(String token) {
-    // Agregar token a lista de revocados
     tokensRevocados.add(token);
 
-    // Limpiar contexto de seguridad
-    SecurityContextHolder.clearContext();
+    // Limpiar contexto del usuario
+    Long usuarioId = obtenerUsuarioIdDesdeToken(token);
+    contextoService.limpiarContexto(usuarioId);
 
-    log.info("Logout exitoso para token: {}", token.substring(0, 20) + "...");
+    log.info("Logout exitoso para usuario: {}", usuarioId);
   }
 
   @Override
   public boolean validarToken(String token) {
-    if (tokensRevocados.contains(token)) {
-      return false;
-    }
-    return jwtTokenProvider.validateToken(token);
+    return jwtTokenProvider.validateToken(token) && !tokensRevocados.contains(token);
   }
 
   @Override
   public Long obtenerUsuarioIdDesdeToken(String token) {
-    return jwtTokenProvider.getUserIdFromToken(token);
+    Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
+    if (usuarioId != null) {
+      return usuarioId;
+    }
+
+    // Fallback: obtener por username
+    String username = jwtTokenProvider.getUsernameFromToken(token);
+    return usuarioRepository.findByEmailOrUsername(username, username)
+        .map(Usuario::getId)
+        .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
   }
 
   @Override
   public ContextoDTO obtenerContextoDesdeToken(String token) {
-    ContextoDTO contexto = new ContextoDTO();
-    contexto.setUsuarioId(jwtTokenProvider.getUserIdFromToken(token));
-    contexto.setEmpresaId(jwtTokenProvider.getEmpresaIdFromToken(token));
-    contexto.setSucursalId(jwtTokenProvider.getSucursalIdFromToken(token));
-    contexto.setRol(jwtTokenProvider.getRolFromToken(token));
-    return contexto;
+    // Primero intentar obtener del token directamente
+    Long empresaId = jwtTokenProvider.getEmpresaIdFromToken(token);
+    Long sucursalId = jwtTokenProvider.getSucursalIdFromToken(token);
+
+    // Si hay contexto en el token, construirlo
+    if (empresaId != null) {
+      Long usuarioId = obtenerUsuarioIdDesdeToken(token);
+
+      // Obtener información adicional de la base de datos
+      UsuarioEmpresa ue = usuarioEmpresaRepository
+          .findByUsuarioIdAndEmpresaIdAndSucursalId(usuarioId, empresaId, sucursalId)
+          .orElse(null);
+
+      if (ue != null) {
+        return ContextoDTO.builder()
+            .usuarioId(usuarioId)
+            .empresaId(empresaId)
+            .empresaNombre(ue.getEmpresa().getNombre())
+            .empresaCodigo(ue.getEmpresa().getCodigo())
+            .sucursalId(sucursalId)
+            .sucursalNombre(sucursalId != null ? ue.getSucursal().getNombre() : null)
+            .sucursalCodigo(sucursalId != null ? ue.getSucursal().getCodigo() : null)
+            .permisos(ue.getPermisos())
+            .build();
+      }
+    }
+
+    // Si no hay contexto en el token, buscar en el servicio
+    Long usuarioId = obtenerUsuarioIdDesdeToken(token);
+    return contextoService.obtenerContextoActual(usuarioId);
   }
 
-  // Métodos auxiliares privados
+  /**
+   * Construye la respuesta de login según el rol del usuario
+   */
+  private LoginResponse construirLoginResponse(Usuario usuario, String token, String refreshToken) {
+    LoginResponse.LoginResponseBuilder builder = LoginResponse.builder()
+        .token(token)
+        .refreshToken(refreshToken)
+        .usuario(usuarioMapper.toDto(usuario));
 
+    // ROOT y SOPORTE - Acceso directo al dashboard del sistema
+    if (usuario.esRolSistema()) {
+      return builder
+          .tipoAcceso("SISTEMA")
+          .requiereSeleccion(false)
+          .rutaDestino("/dashboard-sistema")
+          .build();
+    }
 
+    // SUPER_ADMIN - Múltiples empresas
+    if (usuario.getRol() == RolNombre.SUPER_ADMIN) {
+      List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(usuario);
+
+      return builder
+          .tipoAcceso("EMPRESARIAL")
+          .empresas(empresas)
+          .requiereSeleccion(true)
+          .rutaDestino("/dashboard-empresarial")
+          .build();
+    }
+
+    // ADMIN - Una empresa con múltiples sucursales
+    if (usuario.getRol() == RolNombre.ADMIN) {
+      List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(usuario);
+
+      // Los ADMIN normalmente tienen una sola empresa
+      if (empresas.size() == 1) {
+        LoginResponse.EmpresaAccesoDTO empresa = empresas.get(0);
+        return builder
+            .tipoAcceso("EMPRESARIAL")
+            .empresas(empresas)
+            .requiereSeleccion(empresa.getSucursales().size() > 1)
+            .rutaDestino("/dashboard-sucursales/" + empresa.getId())
+            .build();
+      }
+
+      return builder
+          .tipoAcceso("EMPRESARIAL")
+          .empresas(empresas)
+          .requiereSeleccion(true)
+          .rutaDestino("/dashboard-empresarial")
+          .build();
+    }
+
+    // OPERATIVOS - Acceso directo o selección si tienen múltiples asignaciones
+    if (usuario.esRolOperativo()) {
+      Set<UsuarioEmpresa> asignaciones = usuario.getUsuarioEmpresas().stream()
+          .filter(UsuarioEmpresa::esAsignacionVigente)
+          .collect(Collectors.toSet());
+
+      if (asignaciones.size() == 1) {
+        // Acceso directo
+        UsuarioEmpresa asignacion = asignaciones.iterator().next();
+        LoginResponse.ContextoOperativoDTO contexto = construirContextoOperativo(asignacion);
+
+        return builder
+            .tipoAcceso("OPERATIVO")
+            .contexto(contexto)
+            .requiereSeleccion(false)
+            .rutaDestino("/sistema")
+            .build();
+      } else {
+        // Múltiples asignaciones - requiere selección
+        List<LoginResponse.EmpresaAccesoDTO> empresas = obtenerEmpresasAcceso(usuario);
+
+        return builder
+            .tipoAcceso("OPERATIVO")
+            .empresas(empresas)
+            .requiereSeleccion(true)
+            .rutaDestino("/seleccionar-sucursal")
+            .build();
+      }
+    }
+
+    throw new BadRequestException("Rol no reconocido: " + usuario.getRol());
+  }
+
+  /**
+   * Obtiene las empresas a las que tiene acceso el usuario
+   */
+  private List<LoginResponse.EmpresaAccesoDTO> obtenerEmpresasAcceso(Usuario usuario) {
+    Map<Long, LoginResponse.EmpresaAccesoDTO> empresasMap = new LinkedHashMap<>();
+
+    for (UsuarioEmpresa ue : usuario.getUsuarioEmpresas()) {
+      if (!ue.esAsignacionVigente()) continue;
+
+      Long empresaId = ue.getEmpresa().getId();
+
+      LoginResponse.EmpresaAccesoDTO empresaDto = empresasMap.computeIfAbsent(
+          empresaId,
+          k -> LoginResponse.EmpresaAccesoDTO.builder()
+              .id(ue.getEmpresa().getId())
+              .codigo(ue.getEmpresa().getCodigo())
+              .nombre(ue.getEmpresa().getNombre())
+              .nombreComercial(ue.getEmpresa().getNombreComercial())
+              .logo(ue.getEmpresa().getLogoUrl())
+              .activa(ue.getEmpresa().getActiva())
+              .sucursales(new ArrayList<>())
+              .accesoTodasSucursales(false)
+              .build()
+      );
+
+      if (ue.tieneAccesoTodasSucursales()) {
+        empresaDto.setAccesoTodasSucursales(true);
+        // Cargar todas las sucursales de la empresa
+        ue.getEmpresa().getSucursales().stream()
+            .filter(Sucursal::getActiva)
+            .forEach(s -> empresaDto.getSucursales().add(
+                LoginResponse.SucursalAccesoDTO.builder()
+                    .id(s.getId())
+                    .codigo(s.getCodigo())
+                    .nombre(s.getNombre())
+                    .direccion(s.getDireccion())
+                    .activa(s.getActiva())
+                    .esPrincipal(s.getEsPrincipal())
+                    .build()
+            ));
+      } else if (ue.getSucursal() != null) {
+        // Acceso a sucursal específica
+        empresaDto.getSucursales().add(
+            LoginResponse.SucursalAccesoDTO.builder()
+                .id(ue.getSucursal().getId())
+                .codigo(ue.getSucursal().getCodigo())
+                .nombre(ue.getSucursal().getNombre())
+                .direccion(ue.getSucursal().getDireccion())
+                .activa(ue.getSucursal().getActiva())
+                .esPrincipal(ue.getSucursal().getEsPrincipal())
+                .build()
+        );
+      }
+    }
+
+    // Actualizar total de sucursales
+    empresasMap.values().forEach(e ->
+        e.setTotalSucursales(e.getSucursales().size())
+    );
+
+    return new ArrayList<>(empresasMap.values());
+  }
+
+  /**
+   * Construye el contexto operativo para acceso directo
+   */
+  private LoginResponse.ContextoOperativoDTO construirContextoOperativo(UsuarioEmpresa asignacion) {
+    return LoginResponse.ContextoOperativoDTO.builder()
+        .empresa(EmpresaResumenDTO.builder()
+            .id(asignacion.getEmpresa().getId())
+            .nombre(asignacion.getEmpresa().getNombre())
+            .build())
+        .sucursal(asignacion.getSucursal() != null ?
+            SucursalResumenDTO.builder()
+                .id(asignacion.getSucursal().getId())
+                .nombre(asignacion.getSucursal().getNombre())
+                .build() : null)
+        .permisos(construirPermisosDTO(asignacion.getPermisos()))
+        .build();
+  }
+
+  /**
+   * Convierte el mapa de permisos a PermisosDTO
+   */
+  private LoginResponse.PermisosDTO construirPermisosDTO(Map<String, Object> permisos) {
+    // Implementación simplificada - expandir según necesidad
+    return LoginResponse.PermisosDTO.builder()
+        .accesoTotal(Boolean.TRUE.equals(permisos.get("acceso_total")))
+        .build();
+  }
+
+  /**
+   * Valida el estado del usuario
+   */
+  private void validarEstadoUsuario(Usuario usuario) {
+    if (!usuario.getActivo()) {
+      throw new UnauthorizedException("Usuario inactivo");
+    }
+
+    if (usuario.getBloqueado()) {
+      if (usuario.getFechaDesbloqueo() != null &&
+          usuario.getFechaDesbloqueo().isAfter(LocalDateTime.now())) {
+        throw new UnauthorizedException("Usuario bloqueado hasta: " +
+            usuario.getFechaDesbloqueo());
+      } else {
+        // Desbloquear si ya pasó el tiempo
+        usuario.setBloqueado(false);
+        usuario.setFechaDesbloqueo(null);
+        usuario.setIntentosFallidos(0);
+      }
+    }
+
+    if (usuario.getPasswordTemporal()) {
+      log.warn("Usuario {} tiene contraseña temporal", usuario.getEmail());
+    }
+  }
+
+  /**
+   * Obtiene el ID del usuario actual desde el contexto de seguridad
+   */
   private Long obtenerUsuarioIdActual() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth != null && auth.getPrincipal() instanceof Long) {
-      return (Long) auth.getPrincipal();
-    }
-    throw new UnauthorizedException("Usuario no autenticado");
+    String username = auth.getName();
+
+    return usuarioRepository.findByEmailOrUsername(username, username)
+        .map(Usuario::getId)
+        .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
   }
 }

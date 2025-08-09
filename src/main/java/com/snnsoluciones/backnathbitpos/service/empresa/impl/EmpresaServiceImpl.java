@@ -10,7 +10,6 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.mapper.EmpresaMapper;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
 import com.snnsoluciones.backnathbitpos.service.empresa.EmpresaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +18,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +31,6 @@ public class EmpresaServiceImpl implements EmpresaService {
     
     private final EmpresaRepository empresaRepository;
     private final SucursalRepository sucursalRepository;
-    private final UsuarioEmpresaRolRepository usuarioEmpresaRolRepository;
     private final EmpresaMapper empresaMapper;
     
     @Override
@@ -270,22 +267,11 @@ public class EmpresaServiceImpl implements EmpresaService {
         long sucursalesActivas = sucursalRepository.countByEmpresaIdAndActivaTrue(empresaId);
         estadisticas.setSucursalesActivas(sucursalesActivas);
         
-        // Contar usuarios activos
-        long usuariosActivos = usuarioEmpresaRolRepository.countByEmpresaIdAndActivoTrue(empresaId);
-        estadisticas.setUsuariosActivos(usuariosActivos);
-        
         // Otras métricas básicas
         estadisticas.setPlan(empresa.getPlan());
         estadisticas.setLimiteUsuarios(empresa.getLimiteUsuarios());
         estadisticas.setLimiteSucursales(empresa.getLimiteSucursales());
         
         return estadisticas;
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public boolean usuarioTieneAcceso(Long usuarioId, Long empresaId) {
-        return usuarioEmpresaRolRepository
-            .existsByUsuarioIdAndEmpresaIdAndActivoTrue(usuarioId, empresaId);
     }
 }

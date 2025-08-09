@@ -1,7 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service.usuario;
 
 import com.snnsoluciones.backnathbitpos.dto.usuario.PermisoDTO;
-import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresaRol;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 
 import java.util.Map;

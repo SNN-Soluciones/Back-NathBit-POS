@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.controller;
 
+import com.snnsoluciones.backnathbitpos.dto.auth.CambiarPasswordRequest;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.usuario.*;
 import com.snnsoluciones.backnathbitpos.service.usuario.UsuarioGestionService;

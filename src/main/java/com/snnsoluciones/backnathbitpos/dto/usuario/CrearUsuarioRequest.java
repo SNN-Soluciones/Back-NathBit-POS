@@ -30,4 +30,6 @@ public class CrearUsuarioRequest {
     
     @NotNull(message = "El rol es requerido")
     private RolNombre rol;
+
+    private Boolean passwordTemporal = false;
 }

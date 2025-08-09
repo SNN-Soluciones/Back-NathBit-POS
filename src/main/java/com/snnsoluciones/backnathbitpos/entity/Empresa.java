@@ -68,7 +68,7 @@ public class Empresa {
     @Builder.Default
     private Map<String, Object> configuracion = new HashMap<>();
 
-    @Column(name = "logo_url")
+    @Column(name = "logo_url", length = 500)
     private String logoUrl;
 
     @Column(name = "fecha_inicio_operaciones")
@@ -93,10 +93,6 @@ public class Empresa {
     @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<Sucursal> sucursales = new HashSet<>();
-
-    @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<UsuarioEmpresaRol> usuarioEmpresaRoles = new HashSet<>();
 
     @Column(name = "limite_usuarios")
     private Integer limiteUsuarios;
@@ -155,5 +151,13 @@ public class Empresa {
         return nombreComercial != null && !nombreComercial.isEmpty() 
             ? nombreComercial 
             : nombre;
+    }
+
+    public boolean tienelogo() {
+        return logoUrl != null && !logoUrl.isEmpty();
+    }
+
+    public String getLogoOrDefault() {
+        return tienelogo() ? logoUrl : "/assets/images/default-logo.png";
     }
 }

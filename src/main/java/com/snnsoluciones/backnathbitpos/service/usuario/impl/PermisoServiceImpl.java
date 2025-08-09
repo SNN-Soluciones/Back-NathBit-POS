@@ -1,10 +1,8 @@
 package com.snnsoluciones.backnathbitpos.service.usuario.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.usuario.PermisoDTO;
-import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresaRol;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRolRepository;
 import com.snnsoluciones.backnathbitpos.service.usuario.PermisoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

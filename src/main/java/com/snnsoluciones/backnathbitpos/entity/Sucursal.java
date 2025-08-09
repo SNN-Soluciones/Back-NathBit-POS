@@ -9,16 +9,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -120,11 +117,6 @@ public class Sucursal {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    // Relaciones
-    @OneToMany(mappedBy = "sucursal", fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<UsuarioEmpresaRol> usuarioEmpresaRoles = new HashSet<>();
 
     // Métodos de utilidad
     public String getDireccionCompleta() {

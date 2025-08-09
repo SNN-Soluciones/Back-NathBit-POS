@@ -1,45 +1,32 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
-import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
 import com.snnsoluciones.backnathbitpos.enums.TipoUsuario;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
-import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import jakarta.persistence.*;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.proxy.HibernateProxy;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
+
+/**
+ * Entidad Usuario actualizada con rol global único
+ */
 @Entity
-@Table(name = "usuarios")
-@Data
-@Builder
+@Table(name = "usuarios", indexes = {
+    @Index(name = "idx_usuarios_email", columnList = "email"),
+    @Index(name = "idx_usuarios_username", columnList = "username"),
+    @Index(name = "idx_usuarios_rol", columnList = "rol")
+})
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"usuarioEmpresaRoles"})
-public class Usuario implements UserDetails {
+@Builder
+@ToString(exclude = {"usuarioEmpresas"})
+public class Usuario {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,16 +35,11 @@ public class Usuario implements UserDetails {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
+    @Column(unique = true, length = 50)
+    private String username;
+
     @Column(nullable = false)
     private String password;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_usuario", nullable = false, length = 20)
-    @Builder.Default
-    private TipoUsuario tipoUsuario = TipoUsuario.EMPRESARIAL;
-
-    @Column(name = "username")
-    private String username;
 
     @Column(nullable = false, length = 50)
     private String nombre;
@@ -68,12 +50,16 @@ public class Usuario implements UserDetails {
     @Column(length = 20)
     private String telefono;
 
-    @Column(length = 50)
+    @Column(length = 20)
     private String identificacion;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_identificacion", length = 20)
-    private TipoIdentificacion tipoIdentificacion = TipoIdentificacion.CEDULA_JURIDICA;
+    @Column(nullable = false, length = 30)
+    private RolNombre rol;  // ROL GLOBAL ÚNICO
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_usuario", nullable = false, length = 20)
+    private TipoUsuario tipoUsuario;
 
     @Column(nullable = false)
     @Builder.Default
@@ -87,63 +73,88 @@ public class Usuario implements UserDetails {
     @Builder.Default
     private Integer intentosFallidos = 0;
 
+    @Column(name = "fecha_ultimo_intento")
+    private LocalDateTime fechaUltimoIntento;
+
+    @Column(name = "fecha_desbloqueo")
+    private LocalDateTime fechaDesbloqueo;
+
     @Column(name = "ultimo_acceso")
     private LocalDateTime ultimoAcceso;
 
-    @Column(name = "fecha_cambio_password")
-    private LocalDateTime fechaCambioPassword;
+    @Column(name = "ultimo_cambio_password")
+    private LocalDateTime ultimoCambioPassword;
+
+    @Column(name = "password_temporal")
+    @Builder.Default
+    private Boolean passwordTemporal = false;
+
+    @Column(name = "token_recuperacion")
+    private String tokenRecuperacion;
+
+    @Column(name = "fecha_token_recuperacion")
+    private LocalDateTime fechaTokenRecuperacion;
+
+    @Column(name = "foto_url")
+    private String fotoUrl;
 
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Column(name = "bloqueado_hasta")
-    private LocalDateTime bloqueadoHasta;
-
     // Relaciones
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private Set<UsuarioEmpresaRol> usuarioEmpresaRoles = new HashSet<>();
-
-    // Métodos de UserDetails
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        return usuarioEmpresaRoles.stream()
-                .filter(uer -> uer.getActivo())
-                .map(uer -> new SimpleGrantedAuthority("ROLE_" + uer.getRol().name()))
-                .collect(Collectors.toSet());
-    }
-
-    @Override
-    public String getUsername() {
-        return this.username != null ? this.username : this.email;
-    }
-
-    @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
-
-    @Override
-    public boolean isAccountNonLocked() {
-        return !bloqueado;
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
-
-    @Override
-    public boolean isEnabled() {
-        return activo;
-    }
+    private Set<UsuarioEmpresa> usuarioEmpresas = new HashSet<>();
 
     // Métodos de utilidad
+
+    /**
+     * Verifica si el usuario es de tipo SISTEMA (ROOT o SOPORTE)
+     */
+    public boolean esRolSistema() {
+        return rol == RolNombre.ROOT || rol == RolNombre.SOPORTE;
+    }
+
+    /**
+     * Verifica si el usuario es de tipo administrativo
+     */
+    public boolean esRolAdministrativo() {
+        return rol == RolNombre.SUPER_ADMIN || rol == RolNombre.ADMIN;
+    }
+
+    /**
+     * Verifica si el usuario es de tipo operativo
+     */
+    public boolean esRolOperativo() {
+        return rol == RolNombre.CAJERO || rol == RolNombre.MESERO ||
+            rol == RolNombre.JEFE_CAJAS || rol == RolNombre.COCINA;
+    }
+
+    /**
+     * Verifica si el usuario requiere selección de contexto
+     */
+    public boolean requiereSeleccionContexto() {
+        // ROOT y SOPORTE no requieren selección
+        if (esRolSistema()) return false;
+
+        // Los operativos no requieren selección si tienen una sola empresa/sucursal
+        if (esRolOperativo() && usuarioEmpresas.size() == 1) {
+            return false;
+        }
+
+        // SUPER_ADMIN y ADMIN siempre requieren selección
+        // Operativos con múltiples asignaciones también
+        return true;
+    }
+
+    /**
+     * Obtiene el nombre completo del usuario
+     */
     public String getNombreCompleto() {
         if (apellidos != null && !apellidos.isEmpty()) {
             return nombre + " " + apellidos;
@@ -151,64 +162,10 @@ public class Usuario implements UserDetails {
         return nombre;
     }
 
-    public void incrementarIntentosFallidos() {
-        this.intentosFallidos++;
-        if (this.intentosFallidos >= 3) {
-            this.bloqueado = true;
-        }
-    }
-
-    public void resetearIntentosFallidos() {
-        this.intentosFallidos = 0;
-        this.bloqueado = false;
-    }
-
-    public boolean tieneRolEnEmpresa(Long empresaId, RolNombre rol) {
-        return usuarioEmpresaRoles.stream()
-                .anyMatch(uer -> uer.getActivo() && 
-                                uer.getEmpresa().getId().equals(empresaId) && 
-                                uer.getRol().equals(rol));
-    }
-
-    public boolean tieneAccesoAEmpresa(Long empresaId) {
-        return usuarioEmpresaRoles.stream()
-                .anyMatch(uer -> uer.getActivo() && 
-                                uer.getEmpresa().getId().equals(empresaId));
-    }
-
-    public boolean tieneAccesoASucursal(Long empresaId, Long sucursalId) {
-        return usuarioEmpresaRoles.stream()
-                .anyMatch(uer -> uer.getActivo() && 
-                                uer.getEmpresa().getId().equals(empresaId) &&
-                                (uer.getSucursal() == null || 
-                                 uer.getSucursal().getId().equals(sucursalId)));
-    }
-
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null) {
-            return false;
-        }
-        Class<?> oEffectiveClass = o instanceof HibernateProxy
-            ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass()
-            : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy
-            ? ((HibernateProxy) this).getHibernateLazyInitializer()
-            .getPersistentClass() : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) {
-            return false;
-        }
-        Usuario usuario = (Usuario) o;
-        return getId() != null && Objects.equals(getId(), usuario.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy
-            ? ((HibernateProxy) this).getHibernateLazyInitializer()
-            .getPersistentClass().hashCode() : getClass().hashCode();
+    /**
+     * Verifica si el usuario puede cambiar de contexto
+     */
+    public boolean puedeCambiarContexto() {
+        return !esRolOperativo() || usuarioEmpresas.size() > 1;
     }
 }

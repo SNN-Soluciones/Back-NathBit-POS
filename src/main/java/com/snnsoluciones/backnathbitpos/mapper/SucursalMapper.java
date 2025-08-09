@@ -50,7 +50,6 @@ public interface SucursalMapper {
     @Mapping(target = "empresa", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "usuarioEmpresaRoles", ignore = true)
     @Mapping(target = "configuracion", ignore = true)
     @Mapping(target = "provincia", ignore = true)
     @Mapping(target = "canton", ignore = true)
@@ -72,25 +71,8 @@ public interface SucursalMapper {
     @Mapping(target = "empresa", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "usuarioEmpresaRoles", ignore = true)
     @Mapping(target = "configuracion", ignore = true)
     @Mapping(target = "activa", ignore = true)
     @Mapping(target = "esPrincipal", ignore = true)
     void updateEntityFromDTO(SucursalDTO sucursalDTO, @MappingTarget Sucursal sucursal);
-    
-    /**
-     * Método auxiliar para contar usuarios activos de una sucursal.
-     * Implementación por defecto, puede ser sobrescrita.
-     * 
-     * @param sucursal la sucursal
-     * @return cantidad de usuarios activos
-     */
-    default Integer contarUsuariosActivos(Sucursal sucursal) {
-        if (sucursal == null || sucursal.getUsuarioEmpresaRoles() == null) {
-            return 0;
-        }
-        return (int) sucursal.getUsuarioEmpresaRoles().stream()
-            .filter(uer -> uer.getActivo() != null && uer.getActivo())
-            .count();
-    }
 }

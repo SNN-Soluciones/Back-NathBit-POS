@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.config.security;
 
+import com.snnsoluciones.backnathbitpos.security.JwtTokenProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

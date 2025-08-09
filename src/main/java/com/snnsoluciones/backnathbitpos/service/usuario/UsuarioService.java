@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.usuario.AccesoDTO;
 import com.snnsoluciones.backnathbitpos.dto.usuario.CrearUsuarioRequest;
 import com.snnsoluciones.backnathbitpos.dto.usuario.UsuarioDTO;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -77,7 +78,7 @@ public interface UsuarioService {
      * @param pageable configuración de paginación
      * @return Página de usuarios
      */
-    Page<UsuarioDTO> listarUsuarios(Long empresaId, Long sucursalId, String search, Pageable pageable);
+    Page<UsuarioDTO> listarUsuarios(Long empresaId, Long sucursalId, String search, RolNombre rol, Pageable pageable);
     
     /**
      * Activa o desactiva un usuario.

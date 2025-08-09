@@ -14,6 +14,8 @@ public class AsignarRolRequest {
 
     private Long sucursalId; // Opcional - null = todas las sucursales
 
+    private Long usuarioId;
+
     @NotNull(message = "El rol es requerido")
     private RolNombre rol;
 

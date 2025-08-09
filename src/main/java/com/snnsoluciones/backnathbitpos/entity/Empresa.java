@@ -2,18 +2,33 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.PlanSuscripcion;
 import com.snnsoluciones.backnathbitpos.enums.TipoEmpresa;
-import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.annotations.Type;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
-
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Type;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.proxy.HibernateProxy;
 
 @Entity
 @Table(name = "empresas")
@@ -21,7 +36,6 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(of = "id")
 @ToString(exclude = {"sucursales", "usuarioEmpresaRoles"})
 public class Empresa {
 
@@ -38,7 +52,7 @@ public class Empresa {
     @Column(name = "nombre_comercial", length = 200)
     private String nombreComercial;
 
-    @Column(name = "cedula_juridica", length = 50)
+    @Column(name = "cedula_juridica", unique = true, length = 50)
     private String cedulaJuridica;
 
     @Column(length = 20)
@@ -78,6 +92,12 @@ public class Empresa {
     @Builder.Default
     private String zonaHoraria = "America/Costa_Rica";
 
+    @Column(name = "limite_usuarios")
+    private Integer limiteUsuarios;
+
+    @Column(name = "limite_sucursales")
+    private Integer limiteSucursales;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -86,19 +106,14 @@ public class Empresa {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "plan")
-    private PlanSuscripcion plan = PlanSuscripcion.BASICO;
-
     // Relaciones
     @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<Sucursal> sucursales = new HashSet<>();
 
-    @Column(name = "limite_usuarios")
-    private Integer limiteUsuarios;
-
-    @Column(name = "limite_sucursales")
-    private Integer limiteSucursales;
+    @OneToMany(mappedBy = "empresa", fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<UsuarioEmpresaRol> usuarioEmpresaRoles = new HashSet<>();
 
     // Métodos de utilidad
     public void agregarSucursal(Sucursal sucursal) {
@@ -117,14 +132,29 @@ public class Empresa {
 
     public int getCantidadSucursalesActivas() {
         return (int) sucursales.stream()
-                .filter(Sucursal::getActiva)
-                .count();
+            .filter(Sucursal::getActiva)
+            .count();
     }
 
     public int getCantidadUsuariosActivos() {
         return (int) usuarioEmpresaRoles.stream()
-                .filter(UsuarioEmpresaRol::getActivo)
-                .count();
+            .filter(UsuarioEmpresaRol::getActivo)
+            .count();
+    }
+
+    // Validaciones de límites
+    public boolean puedeAgregarSucursal() {
+        if (limiteSucursales == null) {
+            return true; // Sin límite
+        }
+        return getCantidadSucursalesActivas() < limiteSucursales;
+    }
+
+    public boolean puedeAgregarUsuario() {
+        if (limiteUsuarios == null) {
+            return true; // Sin límite
+        }
+        return getCantidadUsuariosActivos() < limiteUsuarios;
     }
 
     // Métodos para configuración
@@ -141,23 +171,73 @@ public class Empresa {
 
     public <T> T getConfiguracion(String key, Class<T> type) {
         Object value = getConfiguracion(key);
-        if (value != null && type.isInstance(value)) {
+        if (type.isInstance(value)) {
             return type.cast(value);
         }
         return null;
     }
 
+    public boolean tieneConfiguracion(String key) {
+        return configuracion != null && configuracion.containsKey(key);
+    }
+
+    // Métodos de presentación
     public String getNombreParaMostrar() {
-        return nombreComercial != null && !nombreComercial.isEmpty() 
-            ? nombreComercial 
+        return nombreComercial != null && !nombreComercial.isEmpty()
+            ? nombreComercial
             : nombre;
     }
 
-    public boolean tienelogo() {
+    public boolean tieneLogo() {
         return logoUrl != null && !logoUrl.isEmpty();
     }
 
     public String getLogoOrDefault() {
-        return tienelogo() ? logoUrl : "/assets/images/default-logo.png";
+        return tieneLogo() ? logoUrl : "/assets/images/default-logo.png";
+    }
+
+    // Métodos de negocio
+    public boolean esPlanGratuito() {
+        return planSuscripcion == PlanSuscripcion.PERSONALIZADO;
+    }
+
+    public boolean esPlanBasico() {
+        return planSuscripcion == PlanSuscripcion.BASICO;
+    }
+
+    public boolean esPlanProfesional() {
+        return planSuscripcion == PlanSuscripcion.PROFESIONAL;
+    }
+
+    public boolean esPlanEmpresarial() {
+        return planSuscripcion == PlanSuscripcion.EMPRESARIAL;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null) {
+            return false;
+        }
+        Class<?> oEffectiveClass = o instanceof HibernateProxy
+            ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass()
+            : o.getClass();
+        Class<?> thisEffectiveClass = this instanceof HibernateProxy
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+            .getPersistentClass() : this.getClass();
+        if (thisEffectiveClass != oEffectiveClass) {
+            return false;
+        }
+        Empresa empresa = (Empresa) o;
+        return getId() != null && Objects.equals(getId(), empresa.getId());
+    }
+
+    @Override
+    public final int hashCode() {
+        return this instanceof HibernateProxy
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+            .getPersistentClass().hashCode() : getClass().hashCode();
     }
 }

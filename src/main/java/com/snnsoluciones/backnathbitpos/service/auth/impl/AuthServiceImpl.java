@@ -73,7 +73,7 @@ public class AuthServiceImpl implements AuthService {
       validarEstadoUsuario(usuario);
 
       // Actualizar último acceso
-      usuario.setUltimoAcceso(LocalDateTime.now());
+      usuario.setFechaUltimoAcceso(LocalDateTime.now());
       usuario.setIntentosFallidos(0);
       usuarioRepository.save(usuario);
 

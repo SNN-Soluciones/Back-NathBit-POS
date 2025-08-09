@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.usuario;
 
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -18,4 +19,6 @@ public class ActualizarUsuarioRequest {
     
     private String telefono;
     private String identificacion;
+    private String direccion;
+    private RolNombre rol;
 }

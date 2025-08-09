@@ -122,4 +122,7 @@ public class UsuarioDTO {
 
     @Schema(description = "Número de sucursales asignadas", example = "2", accessMode = Schema.AccessMode.READ_ONLY)
     private Integer sucursalesAsignadas;
+
+    private String empresaActual;
+    private String sucursalActual;
 }

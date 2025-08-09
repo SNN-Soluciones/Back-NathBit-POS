@@ -1,32 +1,29 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
+import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
 import com.snnsoluciones.backnathbitpos.enums.TipoUsuario;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Entidad Usuario actualizada con rol global único
- */
 @Entity
-@Table(name = "usuarios", indexes = {
-    @Index(name = "idx_usuarios_email", columnList = "email"),
-    @Index(name = "idx_usuarios_username", columnList = "username"),
-    @Index(name = "idx_usuarios_rol", columnList = "rol")
-})
-@Getter
-@Setter
+@Table(name = "usuarios")
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@ToString(exclude = {"usuarioEmpresas"})
-public class Usuario {
+@ToString(exclude = {"usuarioEmpresaRoles"})
+public class Usuario implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,11 +32,11 @@ public class Usuario {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
-    @Column(unique = true, length = 50)
-    private String username;
-
     @Column(nullable = false)
     private String password;
+
+    @Column(name = "username", unique = true, length = 50)
+    private String username;
 
     @Column(nullable = false, length = 50)
     private String nombre;
@@ -50,16 +47,22 @@ public class Usuario {
     @Column(length = 20)
     private String telefono;
 
-    @Column(length = 20)
+    @Column(length = 50)
     private String identificacion;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_identificacion", length = 20)
+    private TipoIdentificacion tipoIdentificacion;
+
+    // ROL ÚNICO GLOBAL - Cambio principal del modelo
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private RolNombre rol;  // ROL GLOBAL ÚNICO
+    private RolNombre rol;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_usuario", nullable = false, length = 20)
-    private TipoUsuario tipoUsuario;
+    @Builder.Default
+    private TipoUsuario tipoUsuario = TipoUsuario.EMPRESARIAL;
 
     @Column(nullable = false)
     @Builder.Default
@@ -73,99 +76,118 @@ public class Usuario {
     @Builder.Default
     private Integer intentosFallidos = 0;
 
-    @Column(name = "fecha_ultimo_intento")
-    private LocalDateTime fechaUltimoIntento;
+    @Column(name = "fecha_ultimo_acceso")
+    private LocalDateTime fechaUltimoAcceso;
 
-    @Column(name = "fecha_desbloqueo")
-    private LocalDateTime fechaDesbloqueo;
+    @Column(name = "fecha_bloqueo")
+    private LocalDateTime fechaBloqueo;
 
-    @Column(name = "ultimo_acceso")
-    private LocalDateTime ultimoAcceso;
+    @Column(length = 100)
+    private String direccion;
 
-    @Column(name = "ultimo_cambio_password")
-    private LocalDateTime ultimoCambioPassword;
-
-    @Column(name = "password_temporal")
-    @Builder.Default
-    private Boolean passwordTemporal = false;
-
-    @Column(name = "token_recuperacion")
-    private String tokenRecuperacion;
-
-    @Column(name = "fecha_token_recuperacion")
-    private LocalDateTime fechaTokenRecuperacion;
-
-    @Column(name = "foto_url")
-    private String fotoUrl;
+    @Column(name = "imagen_url")
+    private String imagenUrl;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     // Relaciones
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private Set<UsuarioEmpresa> usuarioEmpresas = new HashSet<>();
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private Set<UsuarioEmpresaRol> usuarioEmpresaRoles = new HashSet<>();
 
-    // Métodos de utilidad
+    // Métodos de UserDetails
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        Set<GrantedAuthority> authorities = new HashSet<>();
 
-    /**
-     * Verifica si el usuario es de tipo SISTEMA (ROOT o SOPORTE)
-     */
-    public boolean esRolSistema() {
-        return rol == RolNombre.ROOT || rol == RolNombre.SOPORTE;
-    }
-
-    /**
-     * Verifica si el usuario es de tipo administrativo
-     */
-    public boolean esRolAdministrativo() {
-        return rol == RolNombre.SUPER_ADMIN || rol == RolNombre.ADMIN;
-    }
-
-    /**
-     * Verifica si el usuario es de tipo operativo
-     */
-    public boolean esRolOperativo() {
-        return rol == RolNombre.CAJERO || rol == RolNombre.MESERO ||
-            rol == RolNombre.JEFE_CAJAS || rol == RolNombre.COCINA;
-    }
-
-    /**
-     * Verifica si el usuario requiere selección de contexto
-     */
-    public boolean requiereSeleccionContexto() {
-        // ROOT y SOPORTE no requieren selección
-        if (esRolSistema()) return false;
-
-        // Los operativos no requieren selección si tienen una sola empresa/sucursal
-        if (esRolOperativo() && usuarioEmpresas.size() == 1) {
-            return false;
+        // Agregar rol global
+        if (this.rol != null) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + this.rol.name()));
         }
 
-        // SUPER_ADMIN y ADMIN siempre requieren selección
-        // Operativos con múltiples asignaciones también
+        return authorities;
+    }
+
+    @Override
+    public String getUsername() {
+        return this.email; // Usamos email como username
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
         return true;
     }
 
-    /**
-     * Obtiene el nombre completo del usuario
-     */
-    public String getNombreCompleto() {
-        if (apellidos != null && !apellidos.isEmpty()) {
-            return nombre + " " + apellidos;
-        }
-        return nombre;
+    @Override
+    public boolean isAccountNonLocked() {
+        return !this.bloqueado;
     }
 
-    /**
-     * Verifica si el usuario puede cambiar de contexto
-     */
-    public boolean puedeCambiarContexto() {
-        return !esRolOperativo() || usuarioEmpresas.size() > 1;
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return this.activo && !this.bloqueado;
+    }
+
+    // Métodos helper
+    public String getNombreCompleto() {
+        return String.format("%s %s", nombre, apellidos != null ? apellidos : "").trim();
+    }
+
+    public boolean esUsuarioSistema() {
+        return this.tipoUsuario == TipoUsuario.SISTEMA;
+    }
+
+    public boolean esRolSistema() {
+        return this.rol == RolNombre.ROOT || this.rol == RolNombre.SOPORTE;
+    }
+
+    public boolean requiereSeleccionContexto() {
+        return this.rol == RolNombre.SUPER_ADMIN || this.rol == RolNombre.ADMIN;
+    }
+
+    public boolean esOperativo() {
+        return this.rol == RolNombre.CAJERO ||
+            this.rol == RolNombre.MESERO ||
+            this.rol == RolNombre.JEFE_CAJAS ||
+            this.rol == RolNombre.COCINA;
+    }
+
+    public void incrementarIntentosFallidos() {
+        this.intentosFallidos = (this.intentosFallidos == null ? 0 : this.intentosFallidos) + 1;
+    }
+
+    public void resetearIntentosFallidos() {
+        this.intentosFallidos = 0;
+        this.fechaBloqueo = null;
+        this.bloqueado = false;
+    }
+
+    public void bloquearCuenta() {
+        this.bloqueado = true;
+        this.fechaBloqueo = LocalDateTime.now();
+    }
+
+    // equals y hashCode basados en ID
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Usuario usuario = (Usuario) o;
+        return id != null && id.equals(usuario.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 }

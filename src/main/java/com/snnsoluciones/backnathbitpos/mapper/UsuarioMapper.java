@@ -21,10 +21,8 @@ public interface UsuarioMapper {
      */
     @Mapping(target = "password", ignore = true) // Nunca incluir password en el DTO
     @Mapping(target = "nombreCompleto", expression = "java(usuario.getNombreCompleto())")
-    @Mapping(target = "requiereSeleccionContexto", expression = "java(usuario.requiereSeleccionContexto())")
-    @Mapping(target = "esRolSistema", expression = "java(usuario.esRolSistema())")
-    @Mapping(target = "esRolAdministrativo", expression = "java(usuario.esRolAdministrativo())")
-    @Mapping(target = "esRolOperativo", expression = "java(usuario.esRolOperativo())")
+    @Mapping(target = "empresaActual", ignore = true) // Se setea manualmente cuando se necesita
+    @Mapping(target = "sucursalActual", ignore = true) // Se setea manualmente cuando se necesita
     UsuarioDTO toDto(Usuario usuario);
 
     /**
@@ -37,15 +35,12 @@ public interface UsuarioMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "usuarioEmpresas", ignore = true) // Cambio: usuarioEmpresaRoles → usuarioEmpresas
-    @Mapping(target = "ultimoAcceso", ignore = true)
+    @Mapping(target = "usuarioEmpresaRoles", ignore = true)
+    @Mapping(target = "fechaUltimoAcceso", ignore = true)
     @Mapping(target = "intentosFallidos", ignore = true)
-    @Mapping(target = "fechaUltimoIntento", ignore = true)
-    @Mapping(target = "fechaDesbloqueo", ignore = true)
-    @Mapping(target = "ultimoCambioPassword", ignore = true)
-    @Mapping(target = "tokenRecuperacion", ignore = true)
-    @Mapping(target = "fechaTokenRecuperacion", ignore = true)
+    @Mapping(target = "fechaBloqueo", ignore = true)
     @Mapping(target = "bloqueado", ignore = true)
+    @Mapping(target = "imagenUrl", ignore = true)
     Usuario toEntity(UsuarioDTO usuarioDTO);
 
     /**
@@ -56,24 +51,19 @@ public interface UsuarioMapper {
      * @param usuario entidad a actualizar
      */
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "email", ignore = true) // Email no debe cambiar
+    @Mapping(target = "email", ignore = true) // Email no debe cambiar en updates normales
     @Mapping(target = "username", ignore = true) // Username no debe cambiar
     @Mapping(target = "password", ignore = true)
     @Mapping(target = "rol", ignore = true) // Rol se cambia con endpoint específico
     @Mapping(target = "tipoUsuario", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "usuarioEmpresas", ignore = true)
-    @Mapping(target = "ultimoAcceso", ignore = true)
+    @Mapping(target = "usuarioEmpresaRoles", ignore = true)
+    @Mapping(target = "fechaUltimoAcceso", ignore = true)
     @Mapping(target = "intentosFallidos", ignore = true)
-    @Mapping(target = "fechaUltimoIntento", ignore = true)
-    @Mapping(target = "fechaDesbloqueo", ignore = true)
+    @Mapping(target = "fechaBloqueo", ignore = true)
     @Mapping(target = "bloqueado", ignore = true)
     @Mapping(target = "activo", ignore = true) // Se cambia con endpoint específico
-    @Mapping(target = "ultimoCambioPassword", ignore = true)
-    @Mapping(target = "passwordTemporal", ignore = true)
-    @Mapping(target = "tokenRecuperacion", ignore = true)
-    @Mapping(target = "fechaTokenRecuperacion", ignore = true)
     void updateEntityFromDto(UsuarioDTO usuarioDTO, @MappingTarget Usuario usuario);
 
     /**
@@ -90,18 +80,14 @@ public interface UsuarioMapper {
     @Mapping(target = "rol", ignore = true)
     @Mapping(target = "tipoUsuario", ignore = true)
     @Mapping(target = "identificacion", ignore = true) // Identificación no debe cambiar
+    @Mapping(target = "tipoIdentificacion", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "usuarioEmpresas", ignore = true)
-    @Mapping(target = "ultimoAcceso", ignore = true)
+    @Mapping(target = "usuarioEmpresaRoles", ignore = true)
+    @Mapping(target = "fechaUltimoAcceso", ignore = true)
     @Mapping(target = "intentosFallidos", ignore = true)
-    @Mapping(target = "fechaUltimoIntento", ignore = true)
-    @Mapping(target = "fechaDesbloqueo", ignore = true)
+    @Mapping(target = "fechaBloqueo", ignore = true)
     @Mapping(target = "bloqueado", ignore = true)
     @Mapping(target = "activo", ignore = true)
-    @Mapping(target = "ultimoCambioPassword", ignore = true)
-    @Mapping(target = "passwordTemporal", ignore = true)
-    @Mapping(target = "tokenRecuperacion", ignore = true)
-    @Mapping(target = "fechaTokenRecuperacion", ignore = true)
     void updatePerfilFromDto(UsuarioDTO usuarioDTO, @MappingTarget Usuario usuario);
 }

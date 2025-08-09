@@ -5,8 +5,10 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.enums.TipoUsuario;
 import com.snnsoluciones.backnathbitpos.exception.*;
+import com.snnsoluciones.backnathbitpos.mapper.UsuarioEmpresaRolMapper;
 import com.snnsoluciones.backnathbitpos.mapper.UsuarioMapper;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.service.usuario.PermisoService;
 import com.snnsoluciones.backnathbitpos.service.usuario.UsuarioGestionService;
 import com.snnsoluciones.backnathbitpos.service.usuario.UsuarioService;
 import lombok.RequiredArgsConstructor;
@@ -30,22 +32,20 @@ import java.util.stream.Collectors;
 public class UsuarioGestionServiceImpl implements UsuarioGestionService {
 
     private final UsuarioRepository usuarioRepository;
-    private final UsuarioEmpresaRepository usuarioEmpresaRepository;
+    private final UsuarioEmpresaRolRepository usuarioEmpresaRolRepository;
     private final EmpresaRepository empresaRepository;
     private final SucursalRepository sucursalRepository;
     private final UsuarioService usuarioService;
+    private final PermisoService permisoService;
     private final UsuarioMapper usuarioMapper;
+    private final UsuarioEmpresaRolMapper usuarioEmpresaRolMapper;
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    public UsuarioDTO crearUsuario(CrearUsuarioRequest request) {
-        // Validaciones de unicidad
+    public UsuarioDTO crearUsuario(CrearUsuarioRequest request) throws BadRequestException {
+        // Validar que no exista el usuario
         if (usuarioService.existePorEmail(request.getEmail())) {
             throw new ConflictException("Ya existe un usuario con el email: " + request.getEmail());
-        }
-
-        if (request.getEmail() != null && usuarioService.existePorEmail(request.getEmail())) {
-            throw new ConflictException("Ya existe un usuario con el username: " + request.getEmail());
         }
 
         if (request.getIdentificacion() != null &&
@@ -54,49 +54,32 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
                 request.getIdentificacion());
         }
 
-        // Verificar si hay usuario autenticado
-        Usuario usuarioCreador = null;
-        try {
-            usuarioCreador = obtenerUsuarioActual();
-        } catch (Exception e) {
-            // Permitir crear el primer ROOT sin autenticación
-            long totalUsuarios = usuarioRepository.count();
-            if (totalUsuarios == 0 && request.getRol() == RolNombre.ROOT) {
-                log.warn("Creando primer usuario ROOT del sistema sin autenticación");
-            } else {
-                throw new UnauthorizedException("Debe estar autenticado para crear usuarios");
-            }
-        }
-
-        // Validar permisos de creación
-        if (usuarioCreador != null) {
-            validarPermisoCreacionUsuario(usuarioCreador.getRol(), request.getRol());
-        }
-
-        // Crear usuario con rol global
-        Usuario nuevoUsuario = Usuario.builder()
+        // Crear usuario con rol único global
+        Usuario usuario = Usuario.builder()
             .email(request.getEmail())
-            .username(request.getEmail())
             .password(passwordEncoder.encode(request.getPassword()))
             .nombre(request.getNombre())
             .apellidos(request.getApellidos())
             .telefono(request.getTelefono())
             .identificacion(request.getIdentificacion())
-            .rol(request.getRol()) // ROL GLOBAL
+            .tipoIdentificacion(request.getTipoIdentificacion())
+            .rol(request.getRol()) // ROL ÚNICO GLOBAL
             .tipoUsuario(determinarTipoUsuario(request.getRol()))
             .activo(true)
-            .bloqueado(false)
-            .intentosFallidos(0)
-            .passwordTemporal(request.getPasswordTemporal() != null ? request.getPasswordTemporal() : false)
             .build();
 
-        nuevoUsuario = usuarioRepository.save(nuevoUsuario);
+        // Establecer username si no se proporciona
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            usuario.setUsername(generarUsername(request.getNombre(), request.getApellidos()));
+        } else {
+            usuario.setUsername(request.getEmail());
+        }
 
-        log.info("Usuario creado: {} con rol {} por {}",
-            nuevoUsuario.getEmail(), nuevoUsuario.getRol(),
-            usuarioCreador != null ? usuarioCreador.getEmail() : "SISTEMA");
+        usuario = usuarioRepository.save(usuario);
 
-        return usuarioMapper.toDto(nuevoUsuario);
+        log.info("Usuario creado exitosamente: {} con rol {}", usuario.getEmail(), usuario.getRol());
+
+        return usuarioMapper.toDto(usuario);
     }
 
     @Override
@@ -104,142 +87,135 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
         Usuario usuario = usuarioRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        // Email y username no se pueden cambiar
-        if (!usuario.getEmail().equals(request.getEmail())) {
-            throw new BadRequestException("El email no se puede cambiar");
+        // Validar email único si cambió
+        if (request.getEmail() != null && !request.getEmail().equals(usuario.getEmail())) {
+            if (usuarioService.existePorEmail(request.getEmail())) {
+                throw new ConflictException("El email ya está en uso");
+            }
+            usuario.setEmail(request.getEmail());
         }
 
-        // Validar identificación si cambió
-        if (request.getIdentificacion() != null &&
-            !request.getIdentificacion().equals(usuario.getIdentificacion()) &&
-            usuarioService.existePorIdentificacion(request.getIdentificacion())) {
-            throw new ConflictException("Ya existe un usuario con la identificación: " +
-                request.getIdentificacion());
-        }
+        // Actualizar campos básicos
+        if (request.getNombre() != null) usuario.setNombre(request.getNombre());
+        if (request.getApellidos() != null) usuario.setApellidos(request.getApellidos());
+        if (request.getTelefono() != null) usuario.setTelefono(request.getTelefono());
+        if (request.getDireccion() != null) usuario.setDireccion(request.getDireccion());
 
-        // Actualizar datos básicos
-        usuario.setNombre(request.getNombre());
-        usuario.setApellidos(request.getApellidos());
-        usuario.setTelefono(request.getTelefono());
-        usuario.setIdentificacion(request.getIdentificacion());
+        // Actualizar rol global si se proporciona
+        if (request.getRol() != null) {
+            usuario.setRol(request.getRol());
+            usuario.setTipoUsuario(determinarTipoUsuario(request.getRol()));
+        }
 
         usuario = usuarioRepository.save(usuario);
 
         log.info("Usuario actualizado: {}", usuario.getEmail());
+
         return usuarioMapper.toDto(usuario);
     }
 
-    public UsuarioEmpresaDTO asignarEmpresaSucursal(Long usuarioId, Long empresaId,
-        Long sucursalId, Map<String, Object> permisos) {
+    @Override
+    public UsuarioEmpresaRolDTO asignarRol(Long usuarioId, AsignarRolRequest request)
+        throws BadRequestException {
+        // Validar usuario
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        // Usuarios del sistema no necesitan asignaciones
-        if (usuario.esRolSistema()) {
-            throw new BadRequestException("Usuarios del sistema no requieren asignación a empresas");
-        }
-
-        Empresa empresa = empresaRepository.findById(empresaId)
+        // Validar empresa
+        Empresa empresa = empresaRepository.findById(request.getEmpresaId())
             .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
 
+        // Validar sucursal si se proporciona
         Sucursal sucursal = null;
-        if (sucursalId != null) {
-            sucursal = sucursalRepository.findById(sucursalId)
+        if (request.getSucursalId() != null) {
+            sucursal = sucursalRepository.findById(request.getSucursalId())
                 .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
 
-            if (!sucursal.getEmpresa().getId().equals(empresaId)) {
+            // Verificar que la sucursal pertenece a la empresa
+            if (!sucursal.getEmpresa().getId().equals(empresa.getId())) {
                 throw new BadRequestException("La sucursal no pertenece a la empresa indicada");
             }
         }
 
-        // Validar contexto según rol
-        validarContextoParaRol(usuario.getRol(), empresa, sucursal);
-
-        // Verificar si ya existe asignación
-        Optional<UsuarioEmpresa> existente = sucursalId != null ?
-            usuarioEmpresaRepository.findByUsuarioIdAndEmpresaIdAndSucursalId(usuarioId, empresaId, sucursalId) :
-            usuarioEmpresaRepository.findByUsuarioIdAndEmpresaIdAndSucursalIdIsNull(usuarioId, empresaId);
-
-        if (existente.isPresent() && existente.get().esAsignacionVigente()) {
-            throw new ConflictException("El usuario ya tiene una asignación activa en ese contexto");
+        // Verificar si ya existe la asignación
+        Optional<UsuarioEmpresaRol> existente;
+        if (sucursal != null) {
+            existente = usuarioEmpresaRolRepository.findByUsuarioIdAndEmpresaIdAndSucursalId(
+                usuario.getId(), empresa.getId(), sucursal.getId());
+        } else {
+            existente = usuarioEmpresaRolRepository.findByUsuarioIdAndEmpresaIdAndSucursalIsNull(
+                usuario.getId(), empresa.getId());
         }
 
-        // Crear o reactivar asignación
-        UsuarioEmpresa usuarioEmpresa = existente.orElse(new UsuarioEmpresa());
-        usuarioEmpresa.setUsuario(usuario);
-        usuarioEmpresa.setEmpresa(empresa);
-        usuarioEmpresa.setSucursal(sucursal);
-        usuarioEmpresa.setActivo(true);
-        usuarioEmpresa.setFechaAsignacion(LocalDateTime.now());
-        usuarioEmpresa.setAsignadoPor(obtenerUsuarioActualId());
-        usuarioEmpresa.setFechaRevocacion(null);
-        usuarioEmpresa.setRevocadoPor(null);
+        if (existente.isPresent() && existente.get().getActivo()) {
+            throw new ConflictException("El usuario ya tiene un rol asignado en este contexto");
+        }
 
-        usuarioEmpresa = usuarioEmpresaRepository.save(usuarioEmpresa);
+        // Crear nueva asignación
+        UsuarioEmpresaRol nuevoRol = UsuarioEmpresaRol.builder()
+            .usuario(usuario)
+            .empresa(empresa)
+            .sucursal(sucursal)
+            .rol(usuario.getRol()) // Usar el rol global del usuario
+            .esPrincipal(request.getEsPrincipal() != null ? request.getEsPrincipal() : false)
+            .activo(true)
+            .asignadoPor(obtenerUsuarioActualId())
+            .notas(request.getNotas())
+            .build();
 
-        log.info("Usuario {} asignado a empresa {} - sucursal {}",
+        // Si es principal, desmarcar otros
+        if (Boolean.TRUE.equals(nuevoRol.getEsPrincipal())) {
+            usuarioEmpresaRolRepository.desmarcarOtrosComoPrincipal(
+                usuario.getId(), 0L); // 0L porque aún no tiene ID
+        }
+
+        nuevoRol = usuarioEmpresaRolRepository.save(nuevoRol);
+
+        log.info("Rol asignado: {} a {} en {}",
             usuario.getEmail(), empresa.getNombre(),
-            sucursal != null ? sucursal.getNombre() : "TODAS");
+            sucursal != null ? sucursal.getNombre() : "todas las sucursales");
 
-        return mapearUsuarioEmpresaDTO(usuarioEmpresa);
-    }
-
-    public void removerAsignacion(Long usuarioId, Long usuarioEmpresaId) {
-        UsuarioEmpresa asignacion = usuarioEmpresaRepository.findById(usuarioEmpresaId)
-            .orElseThrow(() -> new ResourceNotFoundException("Asignación no encontrada"));
-
-        // Verificar que la asignación pertenece al usuario
-        if (!asignacion.getUsuario().getId().equals(usuarioId)) {
-            throw new BadRequestException("La asignación no pertenece al usuario indicado");
-        }
-
-        // Revocar asignación
-        asignacion.revocarAcceso(obtenerUsuarioActualId());
-        usuarioEmpresaRepository.save(asignacion);
-
-        log.info("Asignación removida para usuario {} en empresa {}",
-            asignacion.getUsuario().getEmail(),
-            asignacion.getEmpresa().getNombre());
+        return usuarioEmpresaRolMapper.toDTO(nuevoRol);
     }
 
     @Override
-    public UsuarioDTO asignarRol(Long usuarioId, RolNombre nuevoRol) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+    public void removerRol(Long usuarioId, Long usuarioEmpresaRolId) throws BadRequestException {
+        UsuarioEmpresaRol uer = usuarioEmpresaRolRepository.findById(usuarioEmpresaRolId)
+            .orElseThrow(() -> new ResourceNotFoundException("Asignación no encontrada"));
 
-        RolNombre rolAnterior = usuario.getRol();
-
-        // Validaciones
-        if (usuario.esRolSistema()) {
-            throw new BadRequestException("No se puede cambiar el rol de usuarios del sistema");
+        // Verificar que el rol pertenece al usuario
+        if (!uer.getUsuario().getId().equals(usuarioId)) {
+            throw new BadRequestException("El rol no pertenece al usuario especificado");
         }
 
-        Usuario usuarioActual = obtenerUsuarioActual();
-        if (!usuarioActual.getRol().puedeCrear(nuevoRol)) {
-            throw new UnauthorizedException("No tiene permisos para asignar el rol " + nuevoRol);
+        // Verificar que no sea el último rol activo del usuario
+        long rolesActivos = usuarioEmpresaRolRepository
+            .findByUsuarioIdAndActivoTrue(uer.getUsuario().getId())
+            .size();
+
+        if (rolesActivos <= 1 && !uer.getUsuario().esRolSistema()) {
+            throw new BadRequestException("No se puede eliminar el último rol del usuario");
         }
 
-        // Cambiar rol
-        usuario.setRol(nuevoRol);
-        usuario.setTipoUsuario(determinarTipoUsuario(nuevoRol));
+        // Desactivar rol
+        uer.setActivo(false);
+        usuarioEmpresaRolRepository.save(uer);
 
-        // Si cambia a rol operativo, verificar que tenga sucursal asignada
-        if (nuevoRol.esOperativo()) {
-            boolean tieneSucursal = usuario.getUsuarioEmpresas().stream()
-                .anyMatch(ue -> ue.esAsignacionVigente() && ue.getSucursal() != null);
+        // Si era el principal, asignar otro
+        if (uer.getEsPrincipal()) {
+            List<UsuarioEmpresaRol> otrosRoles = usuarioEmpresaRolRepository
+                .findByUsuarioIdAndActivoTrue(uer.getUsuario().getId()).stream()
+                .filter(r -> !r.getId().equals(usuarioEmpresaRolId))
+                .collect(Collectors.toList());
 
-            if (!tieneSucursal) {
-                log.warn("Usuario {} cambiado a rol operativo {} sin sucursal asignada",
-                    usuario.getEmail(), nuevoRol);
+            if (!otrosRoles.isEmpty()) {
+                UsuarioEmpresaRol nuevoPrincipal = otrosRoles.get(0);
+                nuevoPrincipal.setEsPrincipal(true);
+                usuarioEmpresaRolRepository.save(nuevoPrincipal);
             }
         }
 
-        usuario = usuarioRepository.save(usuario);
-
-        log.info("Rol de usuario {} cambiado de {} a {}",
-            usuario.getEmail(), rolAnterior, nuevoRol);
-
-        return usuarioMapper.toDto(usuario);
+        log.info("Rol removido del usuario {}", uer.getUsuario().getEmail());
     }
 
     @Override
@@ -247,121 +223,249 @@ public class UsuarioGestionServiceImpl implements UsuarioGestionService {
     public Page<UsuarioDTO> listarUsuarios(Long empresaId, Long sucursalId,
         String rol, Boolean activo,
         String search, Pageable pageable) {
-        RolNombre rolNombre = rol != null ? RolNombre.valueOf(rol) : null;
-        return usuarioService.listarUsuarios(empresaId, sucursalId, search, rolNombre, pageable);
+
+        RolNombre rolEnum = null;
+        if (rol != null && !rol.isBlank()) {
+            try {
+                rolEnum = RolNombre.valueOf(rol.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.warn("Rol inválido: {}", rol);
+            }
+        }
+
+        Page<UsuarioEmpresaRol> rolesPage = usuarioEmpresaRolRepository.buscarConFiltros(
+            empresaId, sucursalId, rolEnum, activo, search, pageable);
+
+        return rolesPage.map(uer -> {
+            UsuarioDTO dto = usuarioMapper.toDto(uer.getUsuario());
+            // Agregar información del contexto
+            dto.setEmpresaActual(uer.getEmpresa().getNombre());
+            if (uer.getSucursal() != null) {
+                dto.setSucursalActual(uer.getSucursal().getNombre());
+            }
+            return dto;
+        });
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<UsuarioEmpresaDTO> obtenerAsignacionesUsuario(Long usuarioId) {
-        Usuario usuario = usuarioRepository.findByIdWithEmpresas(usuarioId)
-            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+    public List<UsuarioEmpresaRolDTO> obtenerRolesUsuario(Long usuarioId) {
+        List<UsuarioEmpresaRol> roles = usuarioEmpresaRolRepository
+            .findByUsuarioIdWithRelaciones(usuarioId);
 
-        return usuario.getUsuarioEmpresas().stream()
-            .filter(UsuarioEmpresa::esAsignacionVigente)
-            .map(this::mapearUsuarioEmpresaDTO)
+        return roles.stream()
+            .filter(UsuarioEmpresaRol::getActivo)
+            .map(usuarioEmpresaRolMapper::toDTO)
             .collect(Collectors.toList());
     }
 
-    public UsuarioEmpresaDTO actualizarPermisos(Long usuarioEmpresaId, Map<String, Object> permisos) {
-        UsuarioEmpresa asignacion = usuarioEmpresaRepository.findById(usuarioEmpresaId)
-            .orElseThrow(() -> new ResourceNotFoundException("Asignación no encontrada"));
+    @Override
+    public UsuarioEmpresaRolDTO actualizarPermisosRol(Long usuarioEmpresaRolId,
+        Map<String, Map<String, Boolean>> permisos)
+        throws BadRequestException, org.apache.coyote.BadRequestException {
 
-        asignacion = usuarioEmpresaRepository.save(asignacion);
+        PermisoDTO permisoActualizado = permisoService.actualizarPermisos(
+            usuarioEmpresaRolId, permisos);
 
-        log.info("Permisos actualizados para usuario {} en empresa {}",
-            asignacion.getUsuario().getEmail(),
-            asignacion.getEmpresa().getNombre());
+        UsuarioEmpresaRol uer = usuarioEmpresaRolRepository.findById(usuarioEmpresaRolId)
+            .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
 
-        return mapearUsuarioEmpresaDTO(asignacion);
+        return usuarioEmpresaRolMapper.toDTO(uer);
+    }
+
+    @Override
+    public void establecerRolPrincipal(Long usuarioId, Long usuarioEmpresaRolId)
+        throws BadRequestException {
+
+        UsuarioEmpresaRol uer = usuarioEmpresaRolRepository.findById(usuarioEmpresaRolId)
+            .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
+
+        // Verificar que el rol pertenece al usuario
+        if (!uer.getUsuario().getId().equals(usuarioId)) {
+            throw new BadRequestException("El rol no pertenece al usuario especificado");
+        }
+
+        // Verificar que esté activo
+        if (!uer.getActivo()) {
+            throw new BadRequestException("No se puede establecer como principal un rol inactivo");
+        }
+
+        // Desmarcar otros como principal
+        usuarioEmpresaRolRepository.desmarcarOtrosComoPrincipal(usuarioId, usuarioEmpresaRolId);
+
+        // Marcar este como principal
+        uer.setEsPrincipal(true);
+        usuarioEmpresaRolRepository.save(uer);
+
+        log.info("Rol principal establecido para usuario {}: {}",
+            uer.getUsuario().getEmail(), uer.getDescripcionCompleta());
+    }
+
+    @Override
+    @Transactional
+    public int transferirUsuariosSucursal(Long sucursalOrigenId, Long sucursalDestinoId)
+        throws BadRequestException {
+
+        // Validar sucursales
+        Sucursal sucursalOrigen = sucursalRepository.findById(sucursalOrigenId)
+            .orElseThrow(() -> new ResourceNotFoundException("Sucursal origen no encontrada"));
+
+        Sucursal sucursalDestino = sucursalRepository.findById(sucursalDestinoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Sucursal destino no encontrada"));
+
+        // Verificar que pertenecen a la misma empresa
+        if (!sucursalOrigen.getEmpresa().getId().equals(sucursalDestino.getEmpresa().getId())) {
+            throw new BadRequestException("Las sucursales deben pertenecer a la misma empresa");
+        }
+
+        // Obtener usuarios de la sucursal origen
+        List<UsuarioEmpresaRol> usuariosTransferir = usuarioEmpresaRolRepository
+            .findBySucursalId(sucursalOrigenId).stream()
+            .filter(UsuarioEmpresaRol::getActivo)
+            .collect(Collectors.toList());
+
+        // Transferir cada usuario
+        for (UsuarioEmpresaRol uer : usuariosTransferir) {
+            uer.setSucursal(sucursalDestino);
+            usuarioEmpresaRolRepository.save(uer);
+        }
+
+        int cantidad = usuariosTransferir.size();
+        log.info("Transferidos {} usuarios de {} a {}",
+            cantidad, sucursalOrigen.getNombre(), sucursalDestino.getNombre());
+
+        return cantidad;
+    }
+
+    @Override
+    @Transactional
+    public int desactivarUsuariosMasivo(Long empresaId, Long sucursalId) {
+        List<UsuarioEmpresaRol> rolesDesactivar;
+
+        if (sucursalId != null) {
+            rolesDesactivar = usuarioEmpresaRolRepository.findBySucursalId(sucursalId);
+        } else {
+            rolesDesactivar = usuarioEmpresaRolRepository.findByEmpresaId(empresaId);
+        }
+
+        // Filtrar solo los activos
+        rolesDesactivar = rolesDesactivar.stream()
+            .filter(UsuarioEmpresaRol::getActivo)
+            .collect(Collectors.toList());
+
+        // Desactivar cada rol
+        for (UsuarioEmpresaRol uer : rolesDesactivar) {
+            uer.setActivo(false);
+            usuarioEmpresaRolRepository.save(uer);
+        }
+
+        int cantidad = rolesDesactivar.size();
+        log.info("Desactivados {} roles en empresa {} sucursal {}",
+            cantidad, empresaId, sucursalId);
+
+        return cantidad;
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean puedeGestionarUsuario(Long gestorId, Long usuarioId, Long empresaId) {
+        // Si es el mismo usuario, no puede gestionarse
+        if (gestorId.equals(usuarioId)) {
+            return false;
+        }
+
+        // Obtener el usuario gestor
         Usuario gestor = usuarioRepository.findById(gestorId)
             .orElseThrow(() -> new ResourceNotFoundException("Gestor no encontrado"));
 
-        // ROOT y SOPORTE pueden gestionar a cualquiera
+        // Si es ROOT o SOPORTE, puede gestionar a cualquiera
         if (gestor.esRolSistema()) {
             return true;
         }
 
-        // SUPER_ADMIN puede gestionar usuarios de sus empresas
-        if (gestor.getRol() == RolNombre.SUPER_ADMIN) {
-            return usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaIdAndActivoTrue(gestorId, empresaId) &&
-                usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaIdAndActivoTrue(usuarioId, empresaId);
+        // Verificar que el gestor tiene acceso a la empresa
+        boolean tieneAcceso = usuarioEmpresaRolRepository
+            .existsByUsuarioIdAndEmpresaIdAndActivoTrue(gestorId, empresaId);
+
+        if (!tieneAcceso) {
+            return false;
         }
 
-        // ADMIN puede gestionar usuarios de su empresa
-        if (gestor.getRol() == RolNombre.ADMIN) {
-            return usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaIdAndActivoTrue(usuarioId, empresaId);
+        // Obtener el usuario a gestionar
+        Usuario usuarioGestionar = usuarioRepository.findById(usuarioId)
+            .orElse(null);
+
+        if (usuarioGestionar == null) {
+            return true; // Puede crear nuevo usuario
         }
 
-        // JEFE_CAJAS puede ver usuarios de su sucursal (pero no gestionar)
-        return false;
+        // No puede gestionar usuarios con rol superior o igual
+        return esRolSuperior(gestor.getRol(), usuarioGestionar.getRol());
     }
 
-    // Métodos auxiliares privados
-
-    private void validarPermisoCreacionUsuario(RolNombre rolCreador, RolNombre rolACrear) {
-        if (!rolCreador.puedeCrear(rolACrear)) {
-            String mensaje = String.format(
-                "Un usuario con rol %s no puede crear usuarios con rol %s",
-                rolCreador, rolACrear
-            );
-            throw new UnauthorizedException(mensaje);
-        }
-    }
-
-    private void validarContextoParaRol(RolNombre rol, Empresa empresa, Sucursal sucursal) {
-        // SUPER_ADMIN y ADMIN deben tener acceso a nivel empresa
-        if ((rol == RolNombre.SUPER_ADMIN || rol == RolNombre.ADMIN) && sucursal != null) {
-            throw new BadRequestException(rol + " debe tener acceso a nivel empresa, no sucursal específica");
-        }
-
-        // Roles operativos deben tener sucursal específica
-        if (rol.esOperativo() && sucursal == null) {
-            throw new BadRequestException("Roles operativos deben estar asignados a una sucursal específica");
-        }
-    }
-
+    // Métodos auxiliares
     private TipoUsuario determinarTipoUsuario(RolNombre rol) {
-        return (rol == RolNombre.ROOT || rol == RolNombre.SOPORTE) ?
-            TipoUsuario.SISTEMA : TipoUsuario.EMPRESARIAL;
+        switch (rol) {
+            case ROOT:
+            case SOPORTE:
+                return TipoUsuario.SISTEMA;
+            case SUPER_ADMIN:
+                return TipoUsuario.EMPRESARIAL;
+            case ADMIN:
+                return TipoUsuario.GERENCIAL;
+            default:
+                return TipoUsuario.OPERATIVO;
+        }
     }
 
-    private Usuario obtenerUsuarioActual() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new UnauthorizedException("No hay usuario autenticado");
+    private String generarUsername(String nombre, String apellidos) {
+        String base = nombre.toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (apellidos != null && !apellidos.isBlank()) {
+            base += apellidos.substring(0, 1).toLowerCase();
         }
 
-        String username = auth.getName();
-        return usuarioRepository.findByEmailOrUsername(username, username)
-            .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+        // Agregar número si ya existe
+        String username = base;
+        int contador = 1;
+        while (usuarioRepository.existsByUsername(username)) {
+            username = base + contador;
+            contador++;
+        }
+
+        return username;
     }
 
     private Long obtenerUsuarioActualId() {
-        return obtenerUsuarioActual().getId();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof String) {
+            try {
+                return Long.parseLong((String) auth.getPrincipal());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
     }
 
-    private UsuarioEmpresaDTO mapearUsuarioEmpresaDTO(UsuarioEmpresa ue) {
-        return UsuarioEmpresaDTO.builder()
-            .id(ue.getId())
-            .usuarioId(ue.getUsuario().getId())
-            .usuarioNombre(ue.getUsuario().getNombre())
-            .usuarioEmail(ue.getUsuario().getEmail())
-            .empresaId(ue.getEmpresa().getId())
-            .empresaNombre(ue.getEmpresa().getNombre())
-            .empresaCodigo(ue.getEmpresa().getCodigo())
-            .sucursalId(ue.getSucursal() != null ? ue.getSucursal().getId() : null)
-            .sucursalNombre(ue.getSucursal() != null ? ue.getSucursal().getNombre() : null)
-            .sucursalCodigo(ue.getSucursal() != null ? ue.getSucursal().getCodigo() : null)
-            .accesoTodasSucursales(ue.tieneAccesoTodasSucursales())
-            .activo(ue.getActivo())
-            .fechaAsignacion(ue.getFechaAsignacion())
-            .fechaRevocacion(ue.getFechaRevocacion())
-            .notas(ue.getNotas())
-            .build();
+    private boolean esRolSuperior(RolNombre rolGestor, RolNombre rolUsuario) {
+        // Jerarquía: ROOT > SOPORTE > SUPER_ADMIN > ADMIN > JEFE_CAJAS > CAJERO/MESERO/COCINA
+        int nivelGestor = obtenerNivelRol(rolGestor);
+        int nivelUsuario = obtenerNivelRol(rolUsuario);
+
+        return nivelGestor > nivelUsuario;
+    }
+
+    private int obtenerNivelRol(RolNombre rol) {
+        switch (rol) {
+            case ROOT: return 6;
+            case SOPORTE: return 5;
+            case SUPER_ADMIN: return 4;
+            case ADMIN: return 3;
+            case JEFE_CAJAS: return 2;
+            case CAJERO:
+            case MESERO:
+            case COCINA: return 1;
+            default: return 0;
+        }
     }
 }

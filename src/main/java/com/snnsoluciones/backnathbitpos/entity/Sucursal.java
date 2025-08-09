@@ -1,36 +1,26 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import io.hypersistence.utils.hibernate.type.json.JsonType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import jakarta.persistence.*;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Type;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.proxy.HibernateProxy;
 
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 @Entity
-@Table(name = "sucursales", 
-       uniqueConstraints = {
-           @UniqueConstraint(columnNames = {"empresa_id", "codigo"})
-       })
+@Table(name = "sucursales",
+    uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"empresa_id", "codigo"})
+    })
 @Data
 @Builder
 @NoArgsConstructor
@@ -118,6 +108,11 @@ public class Sucursal {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // Relaciones
+    @OneToMany(mappedBy = "sucursal", fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<UsuarioEmpresaRol> usuarioEmpresaRoles = new HashSet<>();
+
     // Métodos de utilidad
     public String getDireccionCompleta() {
         StringBuilder sb = new StringBuilder();
@@ -127,6 +122,18 @@ public class Sucursal {
         if (barrio != null && !barrio.isEmpty()) {
             if (sb.length() > 0) sb.append(", ");
             sb.append("Barrio ").append(barrio);
+        }
+        if (distrito != null && !distrito.isEmpty()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(distrito);
+        }
+        if (canton != null && !canton.isEmpty()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(canton);
+        }
+        if (provincia != null && !provincia.isEmpty()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(provincia);
         }
         if (otrasSenas != null && !otrasSenas.isEmpty()) {
             if (sb.length() > 0) sb.append(". ");
@@ -139,15 +146,19 @@ public class Sucursal {
         if (!activa || horaApertura == null || horaCierre == null) {
             return false;
         }
-        
+
         LocalTime ahora = LocalTime.now();
+        // Manejo de horarios que cruzan medianoche
+        if (horaCierre.isBefore(horaApertura)) {
+            return ahora.isAfter(horaApertura) || ahora.isBefore(horaCierre);
+        }
         return ahora.isAfter(horaApertura) && ahora.isBefore(horaCierre);
     }
 
     public int getCantidadUsuariosActivos() {
         return (int) usuarioEmpresaRoles.stream()
-                .filter(UsuarioEmpresaRol::getActivo)
-                .count();
+            .filter(UsuarioEmpresaRol::getActivo)
+            .count();
     }
 
     // Métodos para configuración
@@ -170,8 +181,32 @@ public class Sucursal {
         return null;
     }
 
+    public boolean tieneConfiguracion(String key) {
+        return configuracion != null && configuracion.containsKey(key);
+    }
+
     public String getCodigoCompleto() {
-        return empresa.getCodigo() + "-" + codigo;
+        return empresa != null ? empresa.getCodigo() + "-" + codigo : codigo;
+    }
+
+    // Métodos de negocio
+    public boolean puedeAgregarMesas(int cantidad) {
+        // Aquí podrías agregar lógica basada en el plan de la empresa
+        return true;
+    }
+
+    public boolean tieneCapacidadDisponible() {
+        return capacidadPersonas == null || capacidadPersonas > 0;
+    }
+
+    public String getHorarioTexto() {
+        if (horaApertura == null || horaCierre == null) {
+            return "Horario no definido";
+        }
+        return String.format("%s - %s (%s)",
+            horaApertura.toString(),
+            horaCierre.toString(),
+            diasOperacion);
     }
 
     @Override

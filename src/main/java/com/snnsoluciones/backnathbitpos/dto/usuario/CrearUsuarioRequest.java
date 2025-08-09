@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.usuario;
 
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
+import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -22,6 +23,8 @@ public class CrearUsuarioRequest {
     
     private String telefono;
     private String identificacion;
+    private TipoIdentificacion tipoIdentificacion;
+    private String direccion;
     
     @NotNull(message = "La empresa es requerida")
     private Long empresaId;

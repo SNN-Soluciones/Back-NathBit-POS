@@ -1,33 +1,25 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
+import lombok.Data;
+import lombok.ToString;
+import org.hibernate.proxy.HibernateProxy;
 
-/**
- * Entidad que representa la relación entre usuarios y empresas/sucursales
- * Sin permisos granulares - todo se maneja por rol
- */
+@Data
 @Entity
-@Table(name = "usuarios_empresas",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uk_usuario_empresa_sucursal",
-            columnNames = {"usuario_id", "empresa_id", "sucursal_id"})
-    },
-    indexes = {
-        @Index(name = "idx_usuarios_empresas_usuario", columnList = "usuario_id"),
-        @Index(name = "idx_usuarios_empresas_empresa", columnList = "empresa_id"),
-        @Index(name = "idx_usuarios_empresas_sucursal", columnList = "sucursal_id")
-    }
-)
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Table(name = "usuarios_empresas")
 @ToString(exclude = {"usuario", "empresa", "sucursal"})
 public class UsuarioEmpresa {
 
@@ -45,67 +37,57 @@ public class UsuarioEmpresa {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sucursal_id")
-    private Sucursal sucursal; // null = acceso a todas las sucursales de la empresa
+    private Sucursal sucursal;
+
+    @Column(name = "fecha_asignacion")
+    private LocalDateTime fechaAsignacion;
 
     @Column(nullable = false)
-    @Builder.Default
     private Boolean activo = true;
 
-    @Column(name = "fecha_asignacion", nullable = false)
-    @Builder.Default
-    private LocalDateTime fechaAsignacion = LocalDateTime.now();
-
-    @Column(name = "fecha_revocacion")
-    private LocalDateTime fechaRevocacion;
-
-    @Column(name = "asignado_por")
-    private Long asignadoPor;
-
-    @Column(name = "revocado_por")
-    private Long revocadoPor;
-
-    @Column(length = 500)
-    private String notas;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Métodos de utilidad
-
-    /**
-     * Verifica si el usuario tiene acceso a todas las sucursales
-     */
-    public boolean tieneAccesoTodasSucursales() {
-        return sucursal == null;
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        fechaAsignacion = LocalDateTime.now();
     }
 
-    /**
-     * Verifica si la asignación está activa y vigente
-     */
-    public boolean esAsignacionVigente() {
-        return activo && fechaRevocacion == null;
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
-    /**
-     * Revoca el acceso
-     */
-    public void revocarAcceso(Long revocadoPorId) {
-        this.activo = false;
-        this.fechaRevocacion = LocalDateTime.now();
-        this.revocadoPor = revocadoPorId;
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null) {
+            return false;
+        }
+        Class<?> oEffectiveClass = o instanceof HibernateProxy
+            ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass()
+            : o.getClass();
+        Class<?> thisEffectiveClass = this instanceof HibernateProxy
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+            .getPersistentClass() : this.getClass();
+        if (thisEffectiveClass != oEffectiveClass) {
+            return false;
+        }
+        UsuarioEmpresa that = (UsuarioEmpresa) o;
+        return getId() != null && Objects.equals(getId(), that.getId());
     }
 
-    /**
-     * Reactiva el acceso
-     */
-    public void reactivarAcceso() {
-        this.activo = true;
-        this.fechaRevocacion = null;
-        this.revocadoPor = null;
+    @Override
+    public final int hashCode() {
+        return this instanceof HibernateProxy
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+            .getPersistentClass().hashCode() : getClass().hashCode();
     }
 }

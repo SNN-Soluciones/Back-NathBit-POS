@@ -29,7 +29,7 @@ public class EmpresaController {
     private final UsuarioService usuarioService;
 
     @Operation(summary = "Listar todas las empresas")
-    @GetMapping
+    @GetMapping("/root")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE')")
     public ResponseEntity<ApiResponse<List<EmpresaResponse>>> listar() {
         List<Empresa> empresas = empresaService.listarTodas();

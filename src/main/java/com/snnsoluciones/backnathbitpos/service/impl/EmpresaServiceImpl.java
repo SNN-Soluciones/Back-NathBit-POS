@@ -3,11 +3,15 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaActividad;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaConfigHacienda;
+import com.snnsoluciones.backnathbitpos.entity.Usuario;
+import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaConfigHaciendaRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +26,7 @@ public class EmpresaServiceImpl implements EmpresaService {
     private final EmpresaRepository empresaRepository;
     private final EmpresaConfigHaciendaRepository configHaciendaRepository;
     private final EmpresaActividadRepository empresaActividadRepository;
+    private final UsuarioServiceImpl usuarioService;
 
     @Override
     public Empresa crear(Empresa empresa) {
@@ -98,8 +103,8 @@ public class EmpresaServiceImpl implements EmpresaService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Empresa> listarPorUsuario(Long usuarioId) {
-        return empresaRepository.findByUsuarioId(usuarioId);
+    public Page<Empresa> listarPorUsuario(Long usuarioId, Pageable pageable) {
+        return empresaRepository.findByUsuarioId(usuarioId, pageable);
     }
 
     // === NUEVOS MÉTODOS ===
@@ -175,5 +180,18 @@ public class EmpresaServiceImpl implements EmpresaService {
     @Transactional(readOnly = true)
     public boolean tieneFacturacionElectronicaConfigurada(Long empresaId) {
         return empresaRepository.tieneFacturacionElectronicaConfigurada(empresaId);
+    }
+
+    public Page<Empresa> listarPorUsuarioPaginado(Long usuarioId, Pageable pageable) {
+        Usuario usuario = usuarioService.buscarPorId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        // Si es ROOT o SOPORTE, puede ver todas
+        if (usuario.esRolSistema()) {
+            return empresaRepository.findAll(pageable);
+        }
+
+        // Si es SUPER_ADMIN, solo sus empresas
+        return listarPorUsuario(usuarioId, pageable);
     }
 }

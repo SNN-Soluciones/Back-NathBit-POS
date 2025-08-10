@@ -6,6 +6,8 @@ import com.snnsoluciones.backnathbitpos.entity.EmpresaConfigHacienda;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface EmpresaService {
 
@@ -18,7 +20,7 @@ public interface EmpresaService {
     void eliminar(Long id);
     boolean existeCodigo(String codigo);
     boolean existeIdentificacion(String identificacion);
-    List<Empresa> listarPorUsuario(Long usuarioId);
+    Page<Empresa> listarPorUsuario(Long usuarioId, Pageable pageable );
 
     // Configuración Hacienda
     EmpresaConfigHacienda crearConfiguracionHacienda(Long empresaId, EmpresaConfigHacienda config);
@@ -31,4 +33,5 @@ public interface EmpresaService {
 
     // Validaciones
     boolean tieneFacturacionElectronicaConfigurada(Long empresaId);
+    Page<Empresa> listarPorUsuarioPaginado(Long usuarioId, Pageable pageable);
 }

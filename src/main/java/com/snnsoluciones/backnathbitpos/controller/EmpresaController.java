@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
+import com.snnsoluciones.backnathbitpos.dto.common.PageResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaRequest;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
@@ -11,6 +12,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -90,12 +95,17 @@ public class EmpresaController {
         return ResponseEntity.ok(ApiResponse.ok("Empresa eliminada", null));
     }
 
-    @Operation(summary = "Listar empresas accesibles por usuario")
+    @Operation(summary = "Listar empresas accesibles por usuario con paginación")
     @GetMapping("/usuario/{usuarioId}")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<ApiResponse<List<EmpresaResponse>>> listarPorUsuario(
-        @PathVariable(name = "usuarioId") Long usuarioId) {
-        // Validación simple: solo puedes ver tus propias empresas (excepto ROOT/SOPORTE)
+    public ResponseEntity<ApiResponse<PageResponse<EmpresaResponse>>> listarPorUsuario(
+        @PathVariable(name = "usuarioId") Long usuarioId,
+        @RequestParam(name = "page", defaultValue = "0") int page,
+        @RequestParam(name = "size", defaultValue = "10") int size,
+        @RequestParam(name = "sortBy", defaultValue = "nombre") String sortBy,
+        @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection) {
+
+        // Validación de permisos
         Long usuarioActualId = getCurrentUserId();
         Usuario usuarioActual = usuarioService.buscarPorId(usuarioActualId)
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
@@ -105,12 +115,20 @@ public class EmpresaController {
                 .body(ApiResponse.error("Solo puede ver sus propias empresas"));
         }
 
-        List<Empresa> empresas = empresaService.listarPorUsuario(usuarioId);
-        List<EmpresaResponse> response = empresas.stream()
-            .map(this::convertirAResponse)
-            .collect(Collectors.toList());
+        // Crear Pageable
+        Sort.Direction direction = sortDirection.equalsIgnoreCase("DESC")
+            ? Sort.Direction.DESC
+            : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        return ResponseEntity.ok(ApiResponse.ok(response));
+        // Obtener página de empresas
+        Page<Empresa> empresasPage = empresaService.listarPorUsuarioPaginado(usuarioId, pageable);
+
+        // Convertir a response
+        Page<EmpresaResponse> responsePage = empresasPage.map(this::convertirAResponse);
+        PageResponse<EmpresaResponse> pageResponse = PageResponse.of(responsePage);
+
+        return ResponseEntity.ok(ApiResponse.ok(pageResponse));
     }
 
     // Métodos de conversión

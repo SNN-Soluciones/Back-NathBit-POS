@@ -1,7 +1,10 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
@@ -10,6 +13,9 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "terminales")
 @ToString(exclude = {"sucursal"})
+@Builder
+@RequiredArgsConstructor
+@AllArgsConstructor
 public class Terminal {
     
     @Id

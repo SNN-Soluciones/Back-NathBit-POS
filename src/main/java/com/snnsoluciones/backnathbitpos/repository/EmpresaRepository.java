@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,7 +28,7 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     AND e.activa = true
     ORDER BY e.nombre
     """)
-    List<Empresa> findByUsuarioId(@Param("usuarioId") Long usuarioId);
+    Page<Empresa> findByUsuarioId(@Param("usuarioId") Long usuarioId, Pageable pageable);
 
     // === NUEVOS MÉTODOS PARA FACTURACIÓN ===
 

@@ -58,7 +58,7 @@ public class ClienteController {
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<ClienteDTO>> crear(
         @Valid @RequestBody ClienteCreateDTO dto,
-        @RequestParam Long sucursalId,
+        @RequestParam(name = "sucursalId") Long sucursalId,
         Authentication auth) {
 
         try {
@@ -94,8 +94,8 @@ public class ClienteController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<Page<ClienteListDTO>>> buscar(
-        @RequestParam Long sucursalId,
-        @RequestParam(required = false) String busqueda,
+        @RequestParam(name = "sucursalId") Long sucursalId,
+        @RequestParam(name = "busqueda", required = false) String busqueda,
         @PageableDefault(size = 20, sort = "razonSocial") Pageable pageable,
         Authentication auth) {
 
@@ -124,7 +124,7 @@ public class ClienteController {
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<ClienteBusquedaDTO>> buscarPorIdentificacion(
         @PathVariable String numeroIdentificacion,
-        @RequestParam Long sucursalId,
+        @RequestParam(name = "sucursalId") Long sucursalId,
         Authentication auth) {
 
         try {
@@ -239,7 +239,7 @@ public class ClienteController {
     @GetMapping("/resumen")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
     public ResponseEntity<ApiResponse<ClienteResumenDTO>> obtenerResumen(
-        @RequestParam Long sucursalId,
+        @RequestParam(name = "sucursalId") Long sucursalId,
         Authentication auth) {
 
         try {

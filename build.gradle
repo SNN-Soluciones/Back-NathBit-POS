@@ -120,3 +120,7 @@ bootRun {
             '-Dfile.encoding=UTF-8'
     ]
 }
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs += '-parameters'
+}

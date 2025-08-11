@@ -106,7 +106,7 @@ POST /api/auth/login
       "sucursal": {"id": 1, "nombre": "Sucursal Centro"}
     },
     "requiereSeleccion": false,
-    "rutaDestino": "/sistema"
+    "rutaDestino": "/pos"
   }
 }
 ```

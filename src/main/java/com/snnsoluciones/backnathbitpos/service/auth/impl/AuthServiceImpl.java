@@ -106,7 +106,7 @@ public class AuthServiceImpl implements AuthService {
                     .empresa(empresa)
                     .sucursales(sucursales)
                     .requiereSeleccion(true)
-                    .rutaDestino("/dashboard-sucursales/")
+                    .rutaDestino("/dashboard-empresa")
                     .build();
             }
         }
@@ -142,7 +142,7 @@ public class AuthServiceImpl implements AuthService {
                     .token(tokenConContexto)
                     .contexto(contexto)
                     .requiereSeleccion(false)
-                    .rutaDestino("/sistema")
+                    .rutaDestino("/pos")
                     .build();
             }
         }

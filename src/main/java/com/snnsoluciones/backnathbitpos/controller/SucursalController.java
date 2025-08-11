@@ -110,7 +110,7 @@ public class SucursalController {
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         // Si no es ROOT/SOPORTE, validar que sea su propio usuario
-        if (!usuarioActual.esRolSistema() && !usuarioActualId.equals(usuarioId)) {
+        if (!usuarioActual.esRolSistema() && !usuarioActualId.equals(usuarioId)) {/**/
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("Solo puede ver sus propias sucursales"));
         }

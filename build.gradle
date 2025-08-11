@@ -67,7 +67,13 @@ dependencies {
 
     // ========== Utilidades ==========
     implementation 'org.apache.commons:commons-lang3:3.14.0'
+    // MapStruct
+    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
 
     // ========== Desarrollo ==========
     developmentOnly 'org.springframework.boot:spring-boot-devtools'

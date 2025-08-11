@@ -9,6 +9,7 @@ import java.util.Optional;
 public interface SucursalService {
 
     // Métodos existentes
+    Optional<Sucursal> finById(Long id);
     Sucursal crear(Sucursal sucursal);
     Sucursal actualizar(Long id, Sucursal sucursal);
     Optional<Sucursal> buscarPorId(Long id);

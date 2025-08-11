@@ -21,6 +21,11 @@ public class SucursalServiceImpl implements SucursalService {
     private final TerminalRepository terminalRepository;
 
     @Override
+    public Optional<Sucursal> finById(Long id) {
+        return sucursalRepository.findById(id);
+    }
+
+    @Override
     public Sucursal crear(Sucursal sucursal) {
         // Generar número de sucursal si no se proporciona
         if (sucursal.getNumeroSucursal() == null || sucursal.getNumeroSucursal().isEmpty()) {

@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.ToString;
@@ -18,10 +19,10 @@ public class TipoCambio {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "moneda_id", nullable = false)
-    private Moneda moneda;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "moneda", nullable = false)
+    private Moneda moneda = Moneda.CRC;
     
     @Column(name = "fecha", nullable = false)
     private LocalDate fecha;

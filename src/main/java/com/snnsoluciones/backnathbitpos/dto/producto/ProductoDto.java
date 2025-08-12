@@ -1,5 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
+import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import lombok.*;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
@@ -19,8 +21,8 @@ public class ProductoDto {
     private String descripcion;
     private EmpresaCABySSelectDto empresaCabys;
     private CategoriaProductoDto categoria;
-    private UnidadMedidaDto unidadMedida;
-    private MonedaDto moneda;
+    private UnidadMedida unidadMedida;
+    private Moneda moneda;
     private BigDecimal precioVenta;
     private List<ProductoImpuestoDto> impuestos;
     private BigDecimal totalImpuestos;

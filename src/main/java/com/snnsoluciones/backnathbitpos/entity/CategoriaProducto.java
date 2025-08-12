@@ -1,6 +1,9 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -54,4 +57,9 @@ public class CategoriaProducto {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @ManyToMany(mappedBy = "categorias", fetch = FetchType.LAZY)
+    @JsonIgnore // Para evitar recursión infinita
+    @Builder.Default
+    private Set<Producto> productos = new HashSet<>();
 }

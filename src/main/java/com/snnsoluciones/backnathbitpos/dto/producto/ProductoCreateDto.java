@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -36,7 +37,7 @@ public class ProductoCreateDto {
     @NotNull(message = "Código CAByS es requerido")
     private Long empresaCabysId;
 
-    private Long categoriaId;
+    private Set<CategoriaProductoDto> categoriaProductoDtos;
 
     @NotNull(message = "Unidad de medida es requerida")
     private UnidadMedida unidadMedida;  // ENUM directamente

@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import java.util.List;
 import lombok.*;
 import java.math.BigDecimal;
 
@@ -13,9 +14,9 @@ public class ProductoListDto {
     private String codigoInterno;
     private String codigoBarras;
     private String nombre;
-    private String categoriaNombre;
+    private List<String> categoriasNombres;
     private BigDecimal precioVenta;
     private String monedaSimbolo;
-    private Boolean esServicio;
+    private Long empresaId;
     private Boolean activo;
 }

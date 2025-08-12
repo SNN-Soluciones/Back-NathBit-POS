@@ -16,5 +16,6 @@ public class ProductoImpuestoDto {
     private TipoImpuesto tipoImpuesto;
     private CodigoTarifaIVA tarifaIva;
     private BigDecimal porcentaje;
+    private BigDecimal porcentajeEfectivo;
     private Boolean activo;
 }

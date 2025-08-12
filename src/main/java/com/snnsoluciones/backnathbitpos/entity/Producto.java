@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import org.mapstruct.Mapper;
 
 @Entity
 @Table(name = "productos", 
@@ -53,10 +54,19 @@ public class Producto {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "empresa_cabys_id", nullable = false)
     private EmpresaCAByS empresaCabys;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "categoria_id")
-    private CategoriaProducto categoria;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "producto_categoria",
+        joinColumns = @JoinColumn(name = "producto_id"),
+        inverseJoinColumns = @JoinColumn(name = "categoria_id"),
+        indexes = {
+            @Index(name = "idx_producto_categoria_producto", columnList = "producto_id"),
+            @Index(name = "idx_producto_categoria_categoria", columnList = "categoria_id")
+        }
+    )
+    @Builder.Default
+    private Set<CategoriaProducto> categorias = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "unidad_medida", nullable = false)  // ✅ CORREGIDO

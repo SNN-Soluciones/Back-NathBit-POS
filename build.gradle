@@ -46,6 +46,7 @@ dependencies {
 
     // Hypersistence para tipos JSON/JSONB en PostgreSQL
     implementation "io.hypersistence:hypersistence-utils-hibernate-63:${hypersistenceVersion}"
+    implementation 'com.amazonaws:aws-java-sdk-s3:1.12.470'
 
     // ========== Seguridad - JWT ==========
     implementation "io.jsonwebtoken:jjwt-api:${jwtVersion}"

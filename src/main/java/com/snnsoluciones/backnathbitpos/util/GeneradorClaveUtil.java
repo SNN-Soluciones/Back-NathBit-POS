@@ -11,7 +11,7 @@ import java.util.Random;
 public class GeneradorClaveUtil {
     
     private static final String CODIGO_PAIS = "506";
-    private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("ddMMyyyy");
+    private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("ddMMyy");
     private static final Random RANDOM = new Random();
     
     /**

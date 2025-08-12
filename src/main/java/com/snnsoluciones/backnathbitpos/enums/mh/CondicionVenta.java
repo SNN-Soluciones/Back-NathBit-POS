@@ -39,4 +39,11 @@ public enum CondicionVenta {
             .filter(tipo -> tipo.codigo.equals(codigo))
             .findFirst();
     }
+
+    public static CondicionVenta fromCodigo(String codigo) {
+        return Arrays.stream(values())
+            .filter(cv -> cv.getCodigo().equals(codigo))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Código de condición venta no válido: " + codigo));
+    }
 }

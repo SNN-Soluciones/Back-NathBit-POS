@@ -31,4 +31,11 @@ public enum MedioPago {
             .filter(tipo -> tipo.codigo.equals(codigo))
             .findFirst();
     }
+
+    public static MedioPago fromCodigo(String codigo) {
+        return Arrays.stream(values())
+            .filter(cv -> cv.getCodigo().equals(codigo))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Código de condición venta no válido: " + codigo));
+    }
 }

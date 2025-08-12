@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "tipos_cambio",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"moneda_id", "fecha"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"moneda", "fecha"}))
 @ToString(exclude = {"moneda"})
 public class TipoCambio {
     

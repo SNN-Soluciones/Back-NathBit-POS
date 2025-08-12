@@ -55,7 +55,9 @@ dependencies {
     // ========== Mapeo y Documentación ==========
     // MapStruct para mapeo de DTOs
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    implementation "jakarta.validation:jakarta.validation-api:3.0.2"
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+    implementation 'org.modelmapper:modelmapper:3.2.0'
 
     // OpenAPI/Swagger para documentación
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"

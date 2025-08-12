@@ -1,4 +1,7 @@
-package com.snnsoluciones.backnathbitpos.enums;
+package com.snnsoluciones.backnathbitpos.enums.mh;
+
+import java.util.Arrays;
+import java.util.Optional;
 
 public enum MedioPago {
     EFECTIVO("01", "Efectivo"),
@@ -20,4 +23,12 @@ public enum MedioPago {
 
     public String getCodigo() { return codigo; }
     public String getDescripcion() { return descripcion; }
+
+    Optional<?> fromCodigoOptional(String codigo) {
+        if (codigo == null) return Optional.empty();
+
+        return Arrays.stream(values())
+            .filter(tipo -> tipo.codigo.equals(codigo))
+            .findFirst();
+    }
 }

@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.documento;
 
-import com.snnsoluciones.backnathbitpos.enums.TipoDocumento;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

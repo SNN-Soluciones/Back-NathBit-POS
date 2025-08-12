@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
-import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

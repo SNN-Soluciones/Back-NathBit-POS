@@ -1,7 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.confighacienda;
 
-import com.snnsoluciones.backnathbitpos.enums.AmbienteHacienda;
-import com.snnsoluciones.backnathbitpos.enums.TipoAutenticacionHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.AmbienteHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoAutenticacionHacienda;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

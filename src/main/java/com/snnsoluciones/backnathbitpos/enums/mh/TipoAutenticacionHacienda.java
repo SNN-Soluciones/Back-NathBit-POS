@@ -1,4 +1,4 @@
-package com.snnsoluciones.backnathbitpos.enums;
+package com.snnsoluciones.backnathbitpos.enums.mh;
 
 public enum TipoAutenticacionHacienda {
     LLAVE_CRIPTOGRAFICA("Llave Criptográfica ATV"),

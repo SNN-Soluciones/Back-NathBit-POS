@@ -1,4 +1,7 @@
-package com.snnsoluciones.backnathbitpos.enums;
+package com.snnsoluciones.backnathbitpos.enums.mh;
+
+import java.util.Arrays;
+import java.util.Optional;
 
 public enum TipoDocumento {
     FACTURA_ELECTRONICA("01", "Factura Electrónica", true),
@@ -27,4 +30,12 @@ public enum TipoDocumento {
     public String getCodigo() { return codigo; }
     public String getDescripcion() { return descripcion; }
     public boolean isElectronico() { return electronico; }
+
+    Optional<?> fromCodigoOptional(String codigo) {
+        if (codigo == null) return Optional.empty();
+
+        return Arrays.stream(values())
+            .filter(tipo -> tipo.codigo.equals(codigo))
+            .findFirst();
+    }
 }

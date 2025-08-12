@@ -1,4 +1,4 @@
-package com.snnsoluciones.backnathbitpos.enums;
+package com.snnsoluciones.backnathbitpos.enums.mh;
 
 import lombok.Getter;
 

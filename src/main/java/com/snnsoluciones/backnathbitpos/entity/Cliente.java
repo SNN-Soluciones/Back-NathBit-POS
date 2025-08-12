@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
-import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

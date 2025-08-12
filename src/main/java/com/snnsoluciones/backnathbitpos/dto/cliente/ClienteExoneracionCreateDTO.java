@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
-import com.snnsoluciones.backnathbitpos.enums.TipoDocumentoExoneracion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

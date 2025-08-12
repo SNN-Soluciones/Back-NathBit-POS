@@ -1,7 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
-import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,7 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
-import com.snnsoluciones.backnathbitpos.enums.TipoDocumento;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 
 import java.util.List;
 import java.util.Optional;

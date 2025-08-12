@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.empresa;
 
-import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;

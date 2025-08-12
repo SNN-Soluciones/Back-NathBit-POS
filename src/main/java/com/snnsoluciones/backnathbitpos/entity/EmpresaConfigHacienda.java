@@ -1,7 +1,8 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
-import com.snnsoluciones.backnathbitpos.enums.AmbienteHacienda;
-import com.snnsoluciones.backnathbitpos.enums.TipoAutenticacionHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.AmbienteHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.ProveedorSistema;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoAutenticacionHacienda;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.ToString;
@@ -32,6 +33,9 @@ public class EmpresaConfigHacienda {
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_autenticacion", nullable = false)
     private TipoAutenticacionHacienda tipoAutenticacion = TipoAutenticacionHacienda.LLAVE_CRIPTOGRAFICA;
+
+    @Column(name = "proveedor_sistemas", length = 20)
+    private String proveedorSistemas = ProveedorSistema.SNN_SOLUCIONES.getIdentificacion();
 
     // === Para Llave ATV (Criptográfica) ===
     @Column(name = "usuario_hacienda", length = 100)
@@ -76,10 +80,6 @@ public class EmpresaConfigHacienda {
 
     @Column(name = "detalle_factura2", length = 200)
     private String detalleFactura2;
-
-    // === Configuraciones adicionales ===
-    @Column(name = "proveedor_sistemas", length = 20)
-    private String proveedorSistemas; // Identificación del proveedor del sistema
 
     // Auditoría
     @Column(name = "created_at")

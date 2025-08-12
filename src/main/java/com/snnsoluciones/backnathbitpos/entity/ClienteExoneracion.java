@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
-import com.snnsoluciones.backnathbitpos.enums.TipoDocumentoExoneracion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

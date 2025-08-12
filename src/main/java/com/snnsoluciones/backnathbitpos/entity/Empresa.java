@@ -1,7 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
-import com.snnsoluciones.backnathbitpos.enums.RegimenTributario;
-import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.enums.mh.RegimenTributario;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.ToString;

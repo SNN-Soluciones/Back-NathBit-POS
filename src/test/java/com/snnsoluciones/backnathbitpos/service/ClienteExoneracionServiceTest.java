@@ -2,7 +2,7 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
-import com.snnsoluciones.backnathbitpos.enums.TipoDocumentoExoneracion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
 import com.snnsoluciones.backnathbitpos.service.impl.ClienteServiceImpl;

@@ -2,7 +2,7 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
-import com.snnsoluciones.backnathbitpos.enums.TipoDocumento;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;

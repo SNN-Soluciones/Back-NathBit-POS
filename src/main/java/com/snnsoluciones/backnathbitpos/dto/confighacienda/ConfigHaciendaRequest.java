@@ -1,7 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.confighacienda;
 
-import com.snnsoluciones.backnathbitpos.enums.AmbienteHacienda;
-import com.snnsoluciones.backnathbitpos.enums.TipoAutenticacionHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.AmbienteHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoAutenticacionHacienda;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

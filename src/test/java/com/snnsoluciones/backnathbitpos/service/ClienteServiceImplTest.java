@@ -2,7 +2,7 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
-import com.snnsoluciones.backnathbitpos.enums.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteUbicacionRepository;
@@ -19,8 +19,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;

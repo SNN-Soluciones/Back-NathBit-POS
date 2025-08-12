@@ -99,7 +99,7 @@ public class ConfigHaciendaController {
             .tipoAutenticacion(config.getTipoAutenticacion())
             .usuarioHacienda(config.getUsuarioHacienda())
             .tieneClaveConfigurada(config.getClaveHacienda() != null)
-            .tieneCertificadoConfigurado(config.getCertificadoP12() != null)
+            .tieneCertificadoConfigurado(config.getCertificadoEncriptado() != null)
             .proveedorSistemas(config.getProveedorSistemas())
             .fechaEmisionCertificado(config.getFechaEmisionCertificado())
             .fechaVencimientoCertificado(config.getFechaVencimientoCertificado())

@@ -13,6 +13,8 @@ import com.snnsoluciones.backnathbitpos.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -148,9 +150,24 @@ public class EmpresaController {
         @RequestParam("certificado") MultipartFile certificado,
         @RequestParam("pin") String pin) {
 
+        log.info("Subiendo certificado para empresa ID: {}", id);
+
         try {
+            // Validar que el archivo sea .p12
+            String filename = certificado.getOriginalFilename();
+            if (filename == null || !filename.toLowerCase().endsWith(".p12")) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("El archivo debe ser un certificado .p12"));
+            }
+
+            // Validar tamaño (máximo 10MB)
+            if (certificado.getSize() > 10 * 1024 * 1024) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("El certificado no debe superar los 10MB"));
+            }
+
             CertificadoResponse response = empresaService.subirCertificado(id, certificado, pin);
-            return ResponseEntity.ok(ApiResponse.ok("Certificado subido exitosamente", response));
+            return ResponseEntity.ok(ApiResponse.ok("Certificado procesado exitosamente", response));
         } catch (Exception e) {
             log.error("Error al subir certificado: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -181,7 +198,7 @@ public class EmpresaController {
      */
     @Operation(summary = "Eliminar certificado de la empresa")
     @DeleteMapping("/{id}/certificado")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> eliminarCertificado(@PathVariable Long id) {
         try {
             empresaService.eliminarCertificado(id);
@@ -198,9 +215,11 @@ public class EmpresaController {
     @Operation(summary = "Subir logo de la empresa")
     @PostMapping(value = "/{id}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<ApiResponse<String>> subirLogo(
+    public ResponseEntity<ApiResponse<Map<String, String>>> subirLogo(
         @PathVariable Long id,
         @RequestParam("logo") MultipartFile logo) {
+
+        log.info("Subiendo logo para empresa ID: {}", id);
 
         try {
             // Validar formato
@@ -217,7 +236,11 @@ public class EmpresaController {
             }
 
             String logoUrl = empresaService.subirLogo(id, logo);
-            return ResponseEntity.ok(ApiResponse.ok("Logo subido exitosamente", logoUrl));
+            Map<String, String> response = new HashMap<>();
+            response.put("url", logoUrl);
+            response.put("mensaje", "Logo subido correctamente");
+
+            return ResponseEntity.ok(ApiResponse.ok("Logo subido exitosamente", response));
 
         } catch (Exception e) {
             log.error("Error al subir logo: {}", e.getMessage());
@@ -242,7 +265,6 @@ public class EmpresaController {
         }
     }
 
-    // Método auxiliar para validar tipos de imagen
     private boolean isValidImageType(String contentType) {
         return contentType != null && (
             contentType.equals("image/jpeg") ||

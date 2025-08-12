@@ -18,4 +18,5 @@ public class CertificadoResponse {
     private String fechaVencimiento;
     private String nombreEmpresa;
     private String identificacion;
+    private String urlCertificadoKey; // Nueva propiedad para retornar la URL/key
 }

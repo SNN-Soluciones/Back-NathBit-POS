@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,12 +31,6 @@ public class ConfigHaciendaRequest {
     @NotBlank(message = "La clave de Hacienda es requerida")
     private String claveHacienda;
 
-    // PIN para llave criptográfica (solo si tipoAutenticacion = LLAVE_CRIPTOGRAFICA)
-    private String pinLlaveCriptografica;
-
-    // Certificado en Base64 (para futuras versiones)
-    private String certificadoBase64;
-
     @NotBlank(message = "El proveedor de sistemas es requerido")
     @Pattern(regexp = "^[0-9]{9,12}$", message = "Identificación del proveedor inválida")
     private String proveedorSistemas;
@@ -46,4 +41,23 @@ public class ConfigHaciendaRequest {
 
     @NotNull(message = "La empresa es requerida")
     private Long empresaId;
+
+    // === CAMPOS PARA EL CERTIFICADO (ya procesado y subido) ===
+
+    // URL/Key del certificado en S3 (viene del endpoint de subir certificado)
+    private String urlCertificadoKey;
+
+    // Fecha de vencimiento del certificado (viene del endpoint de subir certificado)
+    private LocalDate fechaVencimientoCertificado;
+
+    // PIN del certificado - UNIFICADO (se usa este único campo)
+    private String pinCertificado;
+
+    // === CAMPOS OPCIONALES ===
+
+    // Mensajes personalizados para facturas
+    private String notaFactura;
+    private String notaValidezProforma;
+    private String detalleFactura1;
+    private String detalleFactura2;
 }

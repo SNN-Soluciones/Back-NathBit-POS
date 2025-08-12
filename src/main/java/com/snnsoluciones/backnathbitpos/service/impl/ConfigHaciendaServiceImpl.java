@@ -30,35 +30,52 @@ public class ConfigHaciendaServiceImpl implements ConfigHaciendaService {
     }
 
     @Override
+    @Transactional
     public EmpresaConfigHacienda crearOActualizar(ConfigHaciendaRequest request) {
         Empresa empresa = empresaService.buscarPorId(request.getEmpresaId())
             .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
 
-        // Buscar config existente o crear nueva
+        // Buscar o crear configuración
         EmpresaConfigHacienda config = configRepository.findByEmpresaId(request.getEmpresaId())
-            .orElse(new EmpresaConfigHacienda());
+            .orElseGet(() -> {
+                EmpresaConfigHacienda nueva = new EmpresaConfigHacienda();
+                nueva.setEmpresa(empresa);
+                return nueva;
+            });
 
-        // Actualizar valores básicos
-        config.setEmpresa(empresa);
+        // Actualizar campos básicos
         config.setAmbiente(request.getAmbiente());
         config.setTipoAutenticacion(request.getTipoAutenticacion());
         config.setUsuarioHacienda(request.getUsuarioHacienda());
 
-        // Encriptar clave si cambió (no es el placeholder)
+        // Solo actualizar clave si no es el placeholder
         if (request.getClaveHacienda() != null && !request.getClaveHacienda().equals("********")) {
             config.setClaveHacienda(passwordEncoder.encode(request.getClaveHacienda()));
         }
 
-        // Certificado y PIN (para firma digital) - usando los nombres CORRECTOS del DTO original
-        if (request.getCertificadoBase64() != null && !request.getCertificadoBase64().isEmpty()) {
-            config.setCertificadoP12(Base64.getDecoder().decode(request.getCertificadoBase64()));
+        // Si viene URL del certificado, guardarlo
+        if (request.getUrlCertificadoKey() != null && !request.getUrlCertificadoKey().isEmpty()) {
+            config.setUrlCertificadoKey(request.getUrlCertificadoKey());
+            config.setCertificadoEncriptado(true);
+
+            // Si viene fecha de vencimiento del certificado
+            if (request.getFechaVencimientoCertificado() != null) {
+                config.setFechaVencimientoCertificado(request.getFechaVencimientoCertificado());
+            }
         }
 
-        if (request.getPinLlaveCriptografica() != null && !request.getPinLlaveCriptografica().isEmpty()) {
-            config.setPinCertificado(passwordEncoder.encode(request.getPinLlaveCriptografica()));
+        // PIN del certificado (si se proporciona)
+        if (request.getPinCertificado() != null && !request.getPinCertificado().isEmpty()) {
+            config.setPinCertificado(passwordEncoder.encode(request.getPinCertificado()));
         }
 
         config.setProveedorSistemas(request.getProveedorSistemas());
+
+        // Mensajes personalizados
+        config.setNotaFactura(request.getNotaFactura());
+        config.setNotaValidezProforma(request.getNotaValidezProforma());
+        config.setDetalleFactura1(request.getDetalleFactura1());
+        config.setDetalleFactura2(request.getDetalleFactura2());
 
         return configRepository.save(config);
     }

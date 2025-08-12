@@ -14,6 +14,13 @@ spring:
     show-sql: true
 
 app:
+  encryption:
+    master-key: ${ENCRYPTION_MASTER_KEY:TuLlaveMaestraSeguraDe32Caracteres!!}
+  certificados:
+    presigned-url-duration-minutes: 15
+  logos:
+    default-logo-path: "defaults/logo-default.png"
+
   jwt:
     secret: ${JWT_SECRET:oY4vU2yN1tR9kQ8wL6bC0pA3fZ7eH5sM8xG4jV1uK9dT2lQ6wP0nB3rF8cJ6mZ4q
     expiration-in-ms: 86400000 # 24 horas

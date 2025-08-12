@@ -2,8 +2,10 @@ package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.common.PageResponse;
+import com.snnsoluciones.backnathbitpos.dto.empresa.CertificadoResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaRequest;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResponse;
+import com.snnsoluciones.backnathbitpos.dto.empresa.UrlCertificadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
@@ -12,22 +14,26 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/empresas")
 @RequiredArgsConstructor
 @Tag(name = "Empresas", description = "Gestión de empresas")
+@Slf4j
 public class EmpresaController {
 
     private final EmpresaService empresaService;
@@ -129,6 +135,121 @@ public class EmpresaController {
         PageResponse<EmpresaResponse> pageResponse = PageResponse.of(responsePage);
 
         return ResponseEntity.ok(ApiResponse.ok(pageResponse));
+    }
+
+    /**
+     * Subir certificado de facturación electrónica
+     */
+    @Operation(summary = "Subir certificado P12 para facturación electrónica")
+    @PostMapping(value = "/{id}/certificado", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<CertificadoResponse>> subirCertificado(
+        @PathVariable Long id,
+        @RequestParam("certificado") MultipartFile certificado,
+        @RequestParam("pin") String pin) {
+
+        try {
+            CertificadoResponse response = empresaService.subirCertificado(id, certificado, pin);
+            return ResponseEntity.ok(ApiResponse.ok("Certificado subido exitosamente", response));
+        } catch (Exception e) {
+            log.error("Error al subir certificado: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error al procesar certificado: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Obtener URL pre-firmada del certificado
+     */
+    @Operation(summary = "Obtener URL temporal para descargar certificado")
+    @GetMapping("/{id}/certificado-url")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<UrlCertificadoResponse>> obtenerUrlCertificado(
+        @PathVariable Long id) {
+
+        try {
+            UrlCertificadoResponse response = empresaService.generarUrlCertificado(id);
+            return ResponseEntity.ok(ApiResponse.ok(response));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error al generar URL: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Eliminar certificado
+     */
+    @Operation(summary = "Eliminar certificado de la empresa")
+    @DeleteMapping("/{id}/certificado")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE')")
+    public ResponseEntity<ApiResponse<Void>> eliminarCertificado(@PathVariable Long id) {
+        try {
+            empresaService.eliminarCertificado(id);
+            return ResponseEntity.ok(ApiResponse.ok("Certificado eliminado exitosamente", null));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error al eliminar certificado: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Subir logo de la empresa
+     */
+    @Operation(summary = "Subir logo de la empresa")
+    @PostMapping(value = "/{id}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<ApiResponse<String>> subirLogo(
+        @PathVariable Long id,
+        @RequestParam("logo") MultipartFile logo) {
+
+        try {
+            // Validar formato
+            String contentType = logo.getContentType();
+            if (!isValidImageType(contentType)) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Formato de imagen no válido. Use JPG, PNG o SVG"));
+            }
+
+            // Validar tamaño (5MB)
+            if (logo.getSize() > 5 * 1024 * 1024) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("El logo no debe superar los 5MB"));
+            }
+
+            String logoUrl = empresaService.subirLogo(id, logo);
+            return ResponseEntity.ok(ApiResponse.ok("Logo subido exitosamente", logoUrl));
+
+        } catch (Exception e) {
+            log.error("Error al subir logo: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error al subir logo: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Eliminar logo
+     */
+    @Operation(summary = "Eliminar logo de la empresa")
+    @DeleteMapping("/{id}/logo")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> eliminarLogo(@PathVariable Long id) {
+        try {
+            empresaService.eliminarLogo(id);
+            return ResponseEntity.ok(ApiResponse.ok("Logo eliminado exitosamente", null));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error al eliminar logo: " + e.getMessage()));
+        }
+    }
+
+    // Método auxiliar para validar tipos de imagen
+    private boolean isValidImageType(String contentType) {
+        return contentType != null && (
+            contentType.equals("image/jpeg") ||
+                contentType.equals("image/jpg") ||
+                contentType.equals("image/png") ||
+                contentType.equals("image/svg+xml")
+        );
     }
 
     // Métodos de conversión

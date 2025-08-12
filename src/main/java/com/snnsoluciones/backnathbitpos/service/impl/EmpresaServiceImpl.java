@@ -8,8 +8,12 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaConfigHaciendaRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
+import com.snnsoluciones.backnathbitpos.service.CertificadoService;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
+import com.snnsoluciones.backnathbitpos.service.StorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,6 +31,18 @@ public class EmpresaServiceImpl implements EmpresaService {
     private final EmpresaConfigHaciendaRepository configHaciendaRepository;
     private final EmpresaActividadRepository empresaActividadRepository;
     private final UsuarioServiceImpl usuarioService;
+
+    @Autowired
+    private CertificadoService certificadoService;
+
+    @Autowired
+    private StorageService storageService;
+
+    @Value("${app.certificados.presigned-url-duration-minutes:15}")
+    private Integer presignedUrlDurationMinutes;
+
+    @Value("${app.logos.default-logo-path:defaults/logo-default.png}")
+    private String defaultLogoPath;
 
     @Override
     public Empresa crear(Empresa empresa) {

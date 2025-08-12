@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service;
 
+import java.time.Duration;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -60,4 +61,53 @@ public interface StorageService {
      * @return true si existe
      */
     boolean fileExists(String key);
+
+    /**
+     * Sube un archivo a S3 con configuración específica
+     * @param file archivo a subir
+     * @param key ruta completa en S3
+     * @param contentType tipo de contenido
+     * @param isPrivate si el archivo debe ser privado
+     * @return URL del archivo
+     */
+    String subirArchivo(MultipartFile file, String key, String contentType, boolean isPrivate);
+
+    /**
+     * Sube un archivo desde bytes
+     * @param data datos del archivo
+     * @param key ruta completa en S3
+     * @param contentType tipo de contenido
+     * @param isPrivate si el archivo debe ser privado
+     * @return URL del archivo
+     */
+    String subirArchivo(byte[] data, String key, String contentType, boolean isPrivate);
+
+    /**
+     * Genera una URL pre-firmada para acceso temporal
+     * @param key ruta del archivo en S3
+     * @param duracion duración de validez de la URL
+     * @return URL pre-firmada
+     */
+    String generarUrlPreFirmada(String key, Duration duracion);
+
+    /**
+     * Elimina un archivo de S3
+     * @param key ruta del archivo a eliminar
+     * @return true si se eliminó correctamente
+     */
+    boolean eliminarArchivo(String key);
+
+    /**
+     * Verifica si un archivo existe en S3
+     * @param key ruta del archivo
+     * @return true si existe
+     */
+    boolean existeArchivo(String key);
+
+    /**
+     * Obtiene el contenido de un archivo
+     * @param key ruta del archivo
+     * @return contenido del archivo
+     */
+    byte[] obtenerArchivo(String key);
 }

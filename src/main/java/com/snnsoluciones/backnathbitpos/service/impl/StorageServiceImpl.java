@@ -6,8 +6,11 @@ import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
+import com.amazonaws.util.IOUtils;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import jakarta.annotation.PostConstruct;
+import java.io.ByteArrayInputStream;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -147,6 +150,106 @@ public class StorageServiceImpl implements StorageService {
         } catch (Exception e) {
             log.error("Error verificando existencia de archivo: {}", e.getMessage(), e);
             return false;
+        }
+    }
+
+    @Override
+    public String subirArchivo(MultipartFile file, String key, String contentType, boolean isPrivate) {
+        try {
+            return subirArchivo(file.getBytes(), key, contentType, isPrivate);
+        } catch (Exception e) {
+            log.error("Error al subir archivo: {}", e.getMessage());
+            throw new RuntimeException("Error al subir archivo", e);
+        }
+    }
+
+    @Override
+    public String subirArchivo(byte[] data, String key, String contentType, boolean isPrivate) {
+        try {
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentType(contentType);
+            metadata.setContentLength(data.length);
+
+            PutObjectRequest putRequest = new PutObjectRequest(
+                bucketName,
+                key,
+                new ByteArrayInputStream(data),
+                metadata
+            );
+
+            // Configurar ACL según si es privado o público
+            if (!isPrivate) {
+                putRequest.setCannedAcl(CannedAccessControlList.PublicRead);
+            }
+
+            s3Client.putObject(putRequest);
+
+            // Retornar URL completa
+            if (isPrivate) {
+                // Para archivos privados, retornamos solo la key
+                // La URL pre-firmada se generará cuando se necesite
+                return key;
+            } else {
+                // Para archivos públicos, retornamos la URL completa
+                return String.format("%s/%s/%s", endpoint, bucketName, key);
+            }
+
+        } catch (Exception e) {
+            log.error("Error al subir archivo a S3: {}", e.getMessage());
+            throw new RuntimeException("Error al subir archivo a S3", e);
+        }
+    }
+
+    @Override
+    public String generarUrlPreFirmada(String key, Duration duracion) {
+        try {
+            Date expiration = new Date(System.currentTimeMillis() + duracion.toMillis());
+
+            GeneratePresignedUrlRequest generatePresignedUrlRequest =
+                new GeneratePresignedUrlRequest(bucketName, key)
+                    .withMethod(com.amazonaws.HttpMethod.GET)
+                    .withExpiration(expiration);
+
+            URL url = s3Client.generatePresignedUrl(generatePresignedUrlRequest);
+            return url.toString();
+
+        } catch (Exception e) {
+            log.error("Error al generar URL pre-firmada: {}", e.getMessage());
+            throw new RuntimeException("Error al generar URL pre-firmada", e);
+        }
+    }
+
+    @Override
+    public boolean eliminarArchivo(String key) {
+        try {
+            s3Client.deleteObject(new DeleteObjectRequest(bucketName, key));
+            log.info("Archivo eliminado correctamente: {}", key);
+            return true;
+        } catch (Exception e) {
+            log.error("Error al eliminar archivo: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean existeArchivo(String key) {
+        try {
+            return s3Client.doesObjectExist(bucketName, key);
+        } catch (Exception e) {
+            log.error("Error al verificar existencia del archivo: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public byte[] obtenerArchivo(String key) {
+        try {
+            S3Object s3Object = s3Client.getObject(bucketName, key);
+            S3ObjectInputStream inputStream = s3Object.getObjectContent();
+            return IOUtils.toByteArray(inputStream);
+        } catch (Exception e) {
+            log.error("Error al obtener archivo de S3: {}", e.getMessage());
+            throw new RuntimeException("Error al obtener archivo de S3", e);
         }
     }
 

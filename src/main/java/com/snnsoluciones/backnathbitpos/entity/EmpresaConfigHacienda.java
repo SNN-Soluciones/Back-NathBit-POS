@@ -45,9 +45,13 @@ public class EmpresaConfigHacienda {
     private String claveHacienda; // Se debe encriptar antes de guardar
 
     // === Para Firma Digital (futuro) ===
-    @Lob
-    @Column(name = "certificado_p12")
-    private byte[] certificadoP12;
+    @Column(name = "url_certificado_key", length = 500)
+    private String urlCertificadoKey;
+
+    // NUEVO: Para saber si el certificado está encriptado en S3
+    @Column(name = "certificado_encriptado")
+    private Boolean certificadoEncriptado = true;
+
 
     @Column(name = "pin_certificado", length = 255)
     private String pinCertificado; // Se debe encriptar antes de guardar
@@ -107,7 +111,7 @@ public class EmpresaConfigHacienda {
             return usuarioHacienda != null && !usuarioHacienda.isEmpty() &&
                 claveHacienda != null && !claveHacienda.isEmpty();
         } else if (tipoAutenticacion == TipoAutenticacionHacienda.FIRMA_DIGITAL) {
-            return certificadoP12 != null && certificadoP12.length > 0 &&
+            return urlCertificadoKey != null && !urlCertificadoKey.isEmpty() &&
                 pinCertificado != null && !pinCertificado.isEmpty() &&
                 fechaVencimientoCertificado != null &&
                 fechaVencimientoCertificado.isAfter(LocalDate.now());

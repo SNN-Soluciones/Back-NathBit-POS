@@ -1,5 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
+import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -55,14 +57,14 @@ public class Producto {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "categoria_id")
     private CategoriaProducto categoria;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "unidad_medida_id", nullable = false)
-    private UnidadMedida unidadMedida;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "moneda_id", nullable = false)
-    private Moneda moneda;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unidad_medida", nullable = false)  // ✅ CORREGIDO
+    private UnidadMedida unidadMedida = UnidadMedida.UNIDAD;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "moneda", nullable = false)  // ✅ CORREGIDO
+    private Moneda moneda = Moneda.CRC;
     
     @Column(name = "precio_venta", nullable = false, precision = 18, scale = 5)
     private BigDecimal precioVenta;

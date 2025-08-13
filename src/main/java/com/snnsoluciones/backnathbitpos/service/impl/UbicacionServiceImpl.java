@@ -62,8 +62,13 @@ public class UbicacionServiceImpl implements UbicacionService {
 
     @Override
     @Cacheable("barrios")
-    public List<Barrio> listarBarriosPorDistrito(Integer codigoDistrito) {
-        return barrioRepository.findByCodigoProvinciaAndCodigoCantonAndCodigoDistrito(codigoDistrito);
+    public List<Barrio> listarBarriosPorDistrito(
+        Integer codigoProvincia,
+        Integer codigoCanton,
+        Integer codigoDistrito) {
+        return barrioRepository
+            .findByCodigoProvinciaAndCodigoCantonAndCodigoDistrito(
+                codigoProvincia, codigoCanton, codigoDistrito);
     }
     
     @Override

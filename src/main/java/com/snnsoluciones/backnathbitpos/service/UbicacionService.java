@@ -23,6 +23,9 @@ public interface UbicacionService {
     Optional<Distrito> buscarDistritoPorId(Integer id);
 
     // Barrios
-    List<Barrio> listarBarriosPorDistrito(Integer codigoDistrito);
+    List<Barrio> listarBarriosPorDistrito(
+        Integer codigoProvincia,
+        Integer codigoCanton,
+        Integer codigoDistrito);
     Optional<Barrio> buscarBarrioPorId(Integer id);
 }

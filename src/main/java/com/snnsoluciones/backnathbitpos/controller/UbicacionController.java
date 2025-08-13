@@ -17,36 +17,39 @@ import java.util.List;
 @Tag(name = "Ubicación", description = "Catálogo de ubicaciones de Costa Rica")
 public class UbicacionController {
 
-    private final UbicacionService ubicacionService;
+  private final UbicacionService ubicacionService;
 
-    @Operation(summary = "Listar todas las provincias")
-    @GetMapping("/provincias")
-    public ResponseEntity<ApiResponse<List<Provincia>>> listarProvincias() {
-        List<Provincia> provincias = ubicacionService.listarProvincias();
-        return ResponseEntity.ok(ApiResponse.ok(provincias));
-    }
+  @Operation(summary = "Listar todas las provincias")
+  @GetMapping("/provincias")
+  public ResponseEntity<ApiResponse<List<Provincia>>> listarProvincias() {
+    List<Provincia> provincias = ubicacionService.listarProvincias();
+    return ResponseEntity.ok(ApiResponse.ok(provincias));
+  }
 
-    @Operation(summary = "Listar cantones por provincia")
-    @GetMapping("/cantones/{provinciaId}")
-    public ResponseEntity<ApiResponse<List<Canton>>> listarCantonesPorProvincia(
-            @PathVariable Integer provinciaId) {
-        List<Canton> cantones = ubicacionService.listarCantonesPorProvincia(provinciaId);
-        return ResponseEntity.ok(ApiResponse.ok(cantones));
-    }
+  @Operation(summary = "Listar cantones por provincia")
+  @GetMapping("/cantones/{provinciaId}")
+  public ResponseEntity<ApiResponse<List<Canton>>> listarCantonesPorProvincia(
+      @PathVariable Integer provinciaId) {
+    List<Canton> cantones = ubicacionService.listarCantonesPorProvincia(provinciaId);
+    return ResponseEntity.ok(ApiResponse.ok(cantones));
+  }
 
-    @Operation(summary = "Listar distritos por cantón")
-    @GetMapping("/distritos/{cantonId}")
-    public ResponseEntity<ApiResponse<List<Distrito>>> listarDistritosPorCanton(
-            @PathVariable Integer cantonId) {
-        List<Distrito> distritos = ubicacionService.listarDistritosPorCanton(cantonId);
-        return ResponseEntity.ok(ApiResponse.ok(distritos));
-    }
+  @Operation(summary = "Listar distritos por cantón")
+  @GetMapping("/distritos/{cantonId}")
+  public ResponseEntity<ApiResponse<List<Distrito>>> listarDistritosPorCanton(
+      @PathVariable Integer cantonId) {
+    List<Distrito> distritos = ubicacionService.listarDistritosPorCanton(cantonId);
+    return ResponseEntity.ok(ApiResponse.ok(distritos));
+  }
 
-    @Operation(summary = "Listar barrios por distrito")
-    @GetMapping("/barrios/{distritoId}")
-    public ResponseEntity<ApiResponse<List<Barrio>>> listarBarriosPorDistrito(
-            @PathVariable Integer distritoId) {
-        List<Barrio> barrios = ubicacionService.listarBarriosPorDistrito(distritoId);
-        return ResponseEntity.ok(ApiResponse.ok(barrios));
-    }
+  @Operation(summary = "Listar barrios por distrito")
+  @GetMapping("/barrios/{provinciaId}/{cantonId}/{distritoId}")
+  public ResponseEntity<ApiResponse<List<Barrio>>> listarBarriosPorDistrito(
+      @PathVariable Integer provinciaId,
+      @PathVariable Integer cantonId,
+      @PathVariable Integer distritoId) {
+    List<Barrio> barrios = ubicacionService
+        .listarBarriosPorDistrito(provinciaId, cantonId, distritoId);
+    return ResponseEntity.ok(ApiResponse.ok(barrios));
+  }
 }

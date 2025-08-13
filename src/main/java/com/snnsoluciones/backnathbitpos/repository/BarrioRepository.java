@@ -14,9 +14,13 @@ public interface BarrioRepository extends JpaRepository<Barrio, Integer> {
     
     @Query("""
     SELECT b FROM Barrio b
-    WHERE  b.codigoDistrito = :codigoDistrito
-    """)
+    WHERE  b.codigoProvincia = :codigoProvincia
+        and b.codigoCanton = :codigoCanton
+        and b.codigoDistrito = :codigoDistrito\s
+   \s""")
     List<Barrio> findByCodigoProvinciaAndCodigoCantonAndCodigoDistrito(
+        @Param("codigoProvincia") Integer codigoProvincia,
+        @Param("codigoCanton") Integer codigoCanton,
         @Param("codigoDistrito") Integer codigoDistrito
     );
 }

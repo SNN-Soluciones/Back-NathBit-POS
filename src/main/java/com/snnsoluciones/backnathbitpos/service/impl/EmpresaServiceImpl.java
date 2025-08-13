@@ -38,7 +38,6 @@ public class EmpresaServiceImpl implements EmpresaService {
 
     private final EmpresaRepository empresaRepository;
     private final EmpresaConfigHaciendaRepository configHaciendaRepository;
-    private final EmpresaActividadRepository empresaActividadRepository;
     private final UsuarioServiceImpl usuarioService;
 
     @Autowired

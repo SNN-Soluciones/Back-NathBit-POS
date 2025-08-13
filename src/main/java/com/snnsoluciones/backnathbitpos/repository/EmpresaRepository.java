@@ -14,8 +14,6 @@ import java.util.Optional;
 @Repository
 public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
 
-    Optional<Empresa> findByCodigo(String codigo);
-
     boolean existsByIdentificacion(String identificacion);
 
     @Query("""

@@ -39,11 +39,6 @@ public class UbicacionServiceImpl implements UbicacionService {
     }
     
     @Override
-    public Optional<Provincia> buscarProvinciaPorCodigo(Integer codigo) {
-        return provinciaRepository.findByCodigo(codigo);
-    }
-    
-    @Override
     @Cacheable("cantones")
     public List<Canton> listarCantonesPorProvincia(Integer codigoProvincia) {
         return cantonRepository.findByCodigoProvincia(codigoProvincia);
@@ -53,45 +48,26 @@ public class UbicacionServiceImpl implements UbicacionService {
     public Optional<Canton> buscarCantonPorId(Integer id) {
         return cantonRepository.findById(id);
     }
-    
-    @Override
-    public Optional<Canton> buscarCantonPorCodigos(Integer codigoProvincia, Integer codigoCanton) {
-        return cantonRepository.findByCodigoProvinciaAndCodigo(codigoProvincia, codigoCanton);
-    }
-    
+
     @Override
     @Cacheable("distritos")
-    public List<Distrito> listarDistritosPorCanton(Integer codigoProvincia, Integer codigoCanton) {
-        return distritoRepository.findByCodigoProvinciaAndCodigoCanton(codigoProvincia, codigoCanton);
+    public List<Distrito> listarDistritosPorCanton(Integer codigoCanton) {
+        return distritoRepository.findByCodigoProvinciaAndCodigoCanton(codigoCanton);
     }
     
     @Override
     public Optional<Distrito> buscarDistritoPorId(Integer id) {
         return distritoRepository.findById(id);
     }
-    
-    @Override
-    public Optional<Distrito> buscarDistritoPorCodigos(Integer codigoProvincia, Integer codigoCanton, Integer codigoDistrito) {
-        return distritoRepository.findByCodigoProvinciaAndCodigoCantonAndCodigo(
-            codigoProvincia, codigoCanton, codigoDistrito);
-    }
-    
+
     @Override
     @Cacheable("barrios")
-    public List<Barrio> listarBarriosPorDistrito(Integer codigoProvincia, Integer codigoCanton, Integer codigoDistrito) {
-        return barrioRepository.findByCodigoProvinciaAndCodigoCantonAndCodigoDistrito(
-            codigoProvincia, codigoCanton, codigoDistrito);
+    public List<Barrio> listarBarriosPorDistrito(Integer codigoDistrito) {
+        return barrioRepository.findByCodigoProvinciaAndCodigoCantonAndCodigoDistrito(codigoDistrito);
     }
     
     @Override
     public Optional<Barrio> buscarBarrioPorId(Integer id) {
         return barrioRepository.findById(id);
-    }
-    
-    @Override
-    public Optional<Barrio> buscarBarrioPorCodigos(Integer codigoProvincia, Integer codigoCanton, 
-                                                   Integer codigoDistrito, Integer codigoBarrio) {
-        return barrioRepository.findByCodigoProvinciaAndCodigoCantonAndCodigoDistritoAndCodigo(
-            codigoProvincia, codigoCanton, codigoDistrito, codigoBarrio);
     }
 }

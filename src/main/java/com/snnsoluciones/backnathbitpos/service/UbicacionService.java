@@ -13,21 +13,16 @@ public interface UbicacionService {
     // Provincias
     List<Provincia> listarProvincias();
     Optional<Provincia> buscarProvinciaPorId(Integer id);
-    Optional<Provincia> buscarProvinciaPorCodigo(Integer codigo);
-    
+
     // Cantones
     List<Canton> listarCantonesPorProvincia(Integer codigoProvincia);
     Optional<Canton> buscarCantonPorId(Integer id);
-    Optional<Canton> buscarCantonPorCodigos(Integer codigoProvincia, Integer codigoCanton);
-    
+
     // Distritos
-    List<Distrito> listarDistritosPorCanton(Integer codigoProvincia, Integer codigoCanton);
+    List<Distrito> listarDistritosPorCanton(Integer codigoCanton);
     Optional<Distrito> buscarDistritoPorId(Integer id);
-    Optional<Distrito> buscarDistritoPorCodigos(Integer codigoProvincia, Integer codigoCanton, Integer codigoDistrito);
-    
+
     // Barrios
-    List<Barrio> listarBarriosPorDistrito(Integer codigoProvincia, Integer codigoCanton, Integer codigoDistrito);
+    List<Barrio> listarBarriosPorDistrito(Integer codigoDistrito);
     Optional<Barrio> buscarBarrioPorId(Integer id);
-    Optional<Barrio> buscarBarrioPorCodigos(Integer codigoProvincia, Integer codigoCanton, 
-                                            Integer codigoDistrito, Integer codigoBarrio);
 }

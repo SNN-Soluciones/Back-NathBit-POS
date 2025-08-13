@@ -14,23 +14,9 @@ public interface DistritoRepository extends JpaRepository<Distrito, Integer> {
     
     @Query("""
     SELECT d FROM Distrito d
-    WHERE d.codigoProvincia = :codigoProvincia
-    AND d.codigoCanton = :codigoCanton
+    WHERE d.codigoCanton = :codigoCanton
     """)
     List<Distrito> findByCodigoProvinciaAndCodigoCanton(
-        @Param("codigoProvincia") Integer codigoProvincia,
         @Param("codigoCanton") Integer codigoCanton
-    );
-    
-    @Query("""
-    SELECT d FROM Distrito d
-    WHERE d.codigoProvincia = :codigoProvincia
-    AND d.codigoCanton = :codigoCanton
-    AND d.codigo = :codigo
-    """)
-    Optional<Distrito> findByCodigoProvinciaAndCodigoCantonAndCodigo(
-        @Param("codigoProvincia") Integer codigoProvincia,
-        @Param("codigoCanton") Integer codigoCanton,
-        @Param("codigo") Integer codigo
     );
 }

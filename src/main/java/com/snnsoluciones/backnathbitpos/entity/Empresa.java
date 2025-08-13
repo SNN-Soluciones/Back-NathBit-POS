@@ -33,9 +33,6 @@ public class Empresa {
     @Column(unique = true, length = 20)
     private String identificacion;
 
-    @Column(length = 200)
-    private String direccion;
-
     @Column(length = 20)
     private String telefono;
 

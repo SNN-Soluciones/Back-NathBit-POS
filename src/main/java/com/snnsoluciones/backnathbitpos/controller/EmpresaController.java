@@ -281,7 +281,6 @@ public class EmpresaController {
         response.setNombre(empresa.getNombre());
         response.setTipoIdentificacion(empresa.getTipoIdentificacion());
         response.setIdentificacion(empresa.getIdentificacion());
-        response.setDireccion(empresa.getDireccion());
         response.setTelefono(empresa.getTelefono());
         response.setEmail(empresa.getEmail());
         response.setActiva(empresa.getActiva());
@@ -295,7 +294,6 @@ public class EmpresaController {
         empresa.setNombre(request.getNombre());
         empresa.setTipoIdentificacion(request.getTipoIdentificacion());
         empresa.setIdentificacion(request.getIdentificacion());
-        empresa.setDireccion(request.getDireccion());
         empresa.setTelefono(request.getTelefono());
         empresa.setEmail(request.getEmail());
         empresa.setActiva(request.getActiva());

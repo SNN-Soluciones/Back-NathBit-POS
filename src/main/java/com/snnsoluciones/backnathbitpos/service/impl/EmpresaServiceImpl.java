@@ -75,7 +75,6 @@ public class EmpresaServiceImpl implements EmpresaService {
         existente.setNombre(empresa.getNombre());
         existente.setTipoIdentificacion(empresa.getTipoIdentificacion());
         existente.setIdentificacion(empresa.getIdentificacion());
-        existente.setDireccion(empresa.getDireccion());
         existente.setTelefono(empresa.getTelefono());
         existente.setEmail(empresa.getEmail());
         existente.setActiva(empresa.getActiva());

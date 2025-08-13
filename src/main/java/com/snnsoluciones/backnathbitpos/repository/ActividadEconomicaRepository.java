@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.ActividadEconomica;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -24,4 +25,6 @@ public interface ActividadEconomicaRepository extends JpaRepository<ActividadEco
     // Buscar por código parcial
     @Query("SELECT a FROM ActividadEconomica a WHERE a.codigo LIKE :codigoParcial%")
     List<ActividadEconomica> findByCodigoStartsWith(@Param("codigoParcial") String codigoParcial);
+
+  Optional<ActividadEconomica> findByCodigo(String codigo);
 }

@@ -11,7 +11,6 @@ public class EmpresaResponse {
     private String nombre;
     private TipoIdentificacion tipoIdentificacion;
     private String identificacion;
-    private String direccion;
     private String telefono;
     private String email;
     private Boolean activa;

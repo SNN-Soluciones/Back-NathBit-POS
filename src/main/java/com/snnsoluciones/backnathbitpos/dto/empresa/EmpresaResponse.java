@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 public class EmpresaResponse {
     private Long id;
     private String nombre;
-    private String codigo;
     private TipoIdentificacion tipoIdentificacion;
     private String identificacion;
     private String direccion;

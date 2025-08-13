@@ -74,7 +74,6 @@ public class EmpresaServiceImpl implements EmpresaService {
 
         // Campos existentes
         existente.setNombre(empresa.getNombre());
-        existente.setCodigo(empresa.getCodigo());
         existente.setTipoIdentificacion(empresa.getTipoIdentificacion());
         existente.setIdentificacion(empresa.getIdentificacion());
         existente.setDireccion(empresa.getDireccion());
@@ -108,12 +107,6 @@ public class EmpresaServiceImpl implements EmpresaService {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Empresa> buscarPorCodigo(String codigo) {
-        return empresaRepository.findByCodigo(codigo);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public List<Empresa> listarTodas() {
         return empresaRepository.findAll();
     }
@@ -121,12 +114,6 @@ public class EmpresaServiceImpl implements EmpresaService {
     @Override
     public void eliminar(Long id) {
         empresaRepository.deleteById(id);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existeCodigo(String codigo) {
-        return empresaRepository.existsByCodigo(codigo);
     }
 
     @Override
@@ -139,69 +126,6 @@ public class EmpresaServiceImpl implements EmpresaService {
     @Transactional(readOnly = true)
     public Page<Empresa> listarPorUsuario(Long usuarioId, Pageable pageable) {
         return empresaRepository.findByUsuarioId(usuarioId, pageable);
-    }
-
-    // === NUEVOS MÉTODOS ===
-
-    @Override
-    public EmpresaConfigHacienda crearConfiguracionHacienda(Long empresaId, EmpresaConfigHacienda config) {
-        Empresa empresa = empresaRepository.findById(empresaId)
-            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
-
-        // Verificar si ya existe configuración
-        if (configHaciendaRepository.findByEmpresaId(empresaId).isPresent()) {
-            throw new RuntimeException("La empresa ya tiene configuración de Hacienda");
-        }
-
-        config.setEmpresa(empresa);
-        return configHaciendaRepository.save(config);
-    }
-
-    @Override
-    public EmpresaConfigHacienda actualizarConfiguracionHacienda(Long empresaId, EmpresaConfigHacienda config) {
-        EmpresaConfigHacienda existente = configHaciendaRepository.findByEmpresaId(empresaId)
-            .orElseThrow(() -> new RuntimeException("Configuración de Hacienda no encontrada"));
-
-        existente.setAmbiente(config.getAmbiente());
-        existente.setTipoAutenticacion(config.getTipoAutenticacion());
-        existente.setUsuarioHacienda(config.getUsuarioHacienda());
-        if (config.getClaveHacienda() != null && !config.getClaveHacienda().isEmpty()) {
-            // Aquí deberías encriptar la clave antes de guardarla
-            existente.setClaveHacienda(config.getClaveHacienda());
-        }
-        existente.setProveedorSistemas(config.getProveedorSistemas());
-        existente.setNotaFactura(config.getNotaFactura());
-        existente.setNotaValidezProforma(config.getNotaValidezProforma());
-
-        return configHaciendaRepository.save(existente);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<EmpresaConfigHacienda> buscarConfiguracionHacienda(Long empresaId) {
-        return configHaciendaRepository.findByEmpresaId(empresaId);
-    }
-
-    @Override
-    public EmpresaActividad agregarActividad(Long empresaId, String codigoActividad, Boolean esPrincipal) {
-        Empresa empresa = empresaRepository.findById(empresaId)
-            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
-
-        // Si es principal, quitar la marca de principal a las demás
-        if (Boolean.TRUE.equals(esPrincipal)) {
-            empresaActividadRepository.findByEmpresaIdOrderByOrden(empresaId)
-                .forEach(ea -> {
-                    ea.setEsPrincipal(false);
-                    empresaActividadRepository.save(ea);
-                });
-        }
-
-        EmpresaActividad nuevaActividad = new EmpresaActividad();
-        nuevaActividad.setEmpresa(empresa);
-        // Aquí deberías buscar la actividad económica por código
-        nuevaActividad.setEsPrincipal(esPrincipal);
-
-        return empresaActividadRepository.save(nuevaActividad);
     }
 
     @Override
@@ -400,18 +324,6 @@ public class EmpresaServiceImpl implements EmpresaService {
             return filename.substring(lastDot + 1).toLowerCase();
         }
         return "jpg";
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<EmpresaActividad> listarActividades(Long empresaId) {
-        return empresaActividadRepository.findByEmpresaIdOrderByOrden(empresaId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean tieneFacturacionElectronicaConfigurada(Long empresaId) {
-        return empresaRepository.tieneFacturacionElectronicaConfigurada(empresaId);
     }
 
     public Page<Empresa> listarPorUsuarioPaginado(Long usuarioId, Pageable pageable) {

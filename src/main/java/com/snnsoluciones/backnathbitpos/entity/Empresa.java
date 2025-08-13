@@ -26,9 +26,6 @@ public class Empresa {
     @Column(nullable = false, length = 150)
     private String nombre;
 
-    @Column(unique = true, nullable = false, length = 50)
-    private String codigo;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_identificacion", length = 20)
     private TipoIdentificacion tipoIdentificacion;

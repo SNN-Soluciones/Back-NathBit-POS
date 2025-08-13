@@ -16,8 +16,6 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
 
     Optional<Empresa> findByCodigo(String codigo);
 
-    boolean existsByCodigo(String codigo);
-
     boolean existsByIdentificacion(String identificacion);
 
     @Query("""
@@ -30,31 +28,9 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     """)
     Page<Empresa> findByUsuarioId(@Param("usuarioId") Long usuarioId, Pageable pageable);
 
-    // === NUEVOS MÉTODOS PARA FACTURACIÓN ===
-
-    // Buscar empresas que requieren configuración de Hacienda
-    List<Empresa> findByRequiereHaciendaTrue();
-
     // Buscar empresas por régimen tributario
     @Query("SELECT e FROM Empresa e WHERE e.regimenTributario = :regimen")
     List<Empresa> findByRegimenTributario(@Param("regimen") String regimen);
-
-    // Buscar empresa con su configuración de Hacienda
-    @Query("""
-    SELECT e FROM Empresa e
-    LEFT JOIN FETCH e.configHacienda
-    WHERE e.id = :id
-    """)
-    Optional<Empresa> findByIdWithConfigHacienda(@Param("id") Long id);
-
-    // Buscar empresas con actividades
-    @Query("""
-    SELECT DISTINCT e FROM Empresa e
-    LEFT JOIN FETCH e.actividades ea
-    LEFT JOIN FETCH ea.actividad
-    WHERE e.id = :id
-    """)
-    Optional<Empresa> findByIdWithActividades(@Param("id") Long id);
 
     // Verificar si una empresa tiene facturación electrónica configurada
     @Query("""
@@ -66,8 +42,4 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     AND ch.usuarioHacienda IS NOT NULL
     """)
     boolean tieneFacturacionElectronicaConfigurada(@Param("empresaId") Long empresaId);
-
-    // Buscar empresas por provincia
-    @Query("SELECT e FROM Empresa e WHERE e.provincia.id = :provinciaId")
-    List<Empresa> findByProvinciaId(@Param("provinciaId") Integer provinciaId);
 }

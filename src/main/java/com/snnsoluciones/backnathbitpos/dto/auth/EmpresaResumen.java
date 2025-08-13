@@ -8,5 +8,4 @@ import lombok.Data;
 public class EmpresaResumen {
     private Long id;
     private String nombre;
-    private String codigo;
 }

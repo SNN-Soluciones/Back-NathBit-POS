@@ -70,7 +70,7 @@ public class EmpresaController {
         @Valid @RequestBody EmpresaRequest request) {
 
         // Validar código único
-        if (empresaService.existeCodigo(request.getCodigo())) {
+        if (empresaService.existeIdentificacion(request.getIdentificacion())) {
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error("El código ya existe"));
         }
@@ -279,7 +279,6 @@ public class EmpresaController {
         EmpresaResponse response = new EmpresaResponse();
         response.setId(empresa.getId());
         response.setNombre(empresa.getNombre());
-        response.setCodigo(empresa.getCodigo());
         response.setTipoIdentificacion(empresa.getTipoIdentificacion());
         response.setIdentificacion(empresa.getIdentificacion());
         response.setDireccion(empresa.getDireccion());
@@ -294,7 +293,6 @@ public class EmpresaController {
     private Empresa convertirAEntity(EmpresaRequest request) {
         Empresa empresa = new Empresa();
         empresa.setNombre(request.getNombre());
-        empresa.setCodigo(request.getCodigo());
         empresa.setTipoIdentificacion(request.getTipoIdentificacion());
         empresa.setIdentificacion(request.getIdentificacion());
         empresa.setDireccion(request.getDireccion());

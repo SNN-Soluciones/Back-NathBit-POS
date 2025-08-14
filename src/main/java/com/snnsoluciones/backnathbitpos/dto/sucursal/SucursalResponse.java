@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class SucursalResponse {
     private Long id;
     private String nombre;
+    private String numeroSucursal;
     private String telefono;
     private String email;
     private Boolean activa;

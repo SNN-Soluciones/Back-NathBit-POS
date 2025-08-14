@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +38,7 @@ public class SucursalController {
   private final UsuarioService usuarioService;
   private final UsuarioEmpresaService usuarioEmpresaService;
   private final UbicacionService ubicacionService;
+  private final ModelMapper modelMapper;
 
   @Operation(summary = "Listar sucursales por empresa")
   @GetMapping("/empresa/{empresaId}")
@@ -120,6 +122,12 @@ public class SucursalController {
     if (!usuarioActual.esRolSistema() && !usuarioActualId.equals(usuarioId)) {/**/
       return ResponseEntity.status(HttpStatus.FORBIDDEN)
           .body(ApiResponse.error("Solo puede ver sus propias sucursales"));
+    }
+
+    if (usuarioActual.esRolSistema()) {
+      return ResponseEntity.ok(ApiResponse.ok(sucursalService.listarPorEmpresa(empresaId).stream()
+          .map((element) -> modelMapper.map(element, SucursalResponse.class))
+          .collect(Collectors.toList())));
     }
 
     // Validar que el usuario tenga acceso a esa empresa

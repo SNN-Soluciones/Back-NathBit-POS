@@ -27,7 +27,7 @@ public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
     AND ue.activo = true
     AND s.activa = true
     AND (ue.sucursal.id = s.id OR ue.sucursal IS NULL)
-    ORDER BY e.nombre, s.nombre
+    ORDER BY e.nombreRazonSocial, s.nombre
     """)
     List<Sucursal> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 

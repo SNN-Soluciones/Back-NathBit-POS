@@ -80,4 +80,12 @@ public class UsuarioEmpresaServiceImpl implements UsuarioEmpresaService {
         }
         return usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaId(usuarioId, empresaId);
     }
+
+    @Override
+    public boolean existsByUsuarioIdAndEmpresaId(Long usuarioId, Long empresaId) {
+        if (usuarioId == null || empresaId == null) {
+            return false;
+        }
+      return usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaId(usuarioId, empresaId);
+    }
 }

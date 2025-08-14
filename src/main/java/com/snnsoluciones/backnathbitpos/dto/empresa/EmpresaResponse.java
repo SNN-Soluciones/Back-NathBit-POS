@@ -1,14 +1,17 @@
 package com.snnsoluciones.backnathbitpos.dto.empresa;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
+import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
+@Builder
 public class EmpresaResponse {
     private Long id;
-    private String nombre;
+    private String nombreComercial;
+    private String nombreRazonSocial;
     private TipoIdentificacion tipoIdentificacion;
     private String identificacion;
     private String telefono;

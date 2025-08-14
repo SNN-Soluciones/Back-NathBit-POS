@@ -104,7 +104,7 @@ public class ConfigHaciendaController {
             .fechaEmisionCertificado(config.getFechaEmisionCertificado())
             .fechaVencimientoCertificado(config.getFechaVencimientoCertificado())
             .empresaId(config.getEmpresa().getId())
-            .empresaNombre(config.getEmpresa().getNombre())
+            .empresaNombre(config.getEmpresa().getNombreComercial())
             .empresaIdentificacion(config.getEmpresa().getIdentificacion())
             .configuracionCompleta(configuracionCompleta)
             .mensajeEstado(configuracionCompleta ?

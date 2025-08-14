@@ -22,7 +22,7 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     WHERE ue.usuario.id = :usuarioId
     AND ue.activo = true
     AND e.activa = true
-    ORDER BY e.nombre
+    ORDER BY e.nombreRazonSocial
     """)
     Page<Empresa> findByUsuarioId(@Param("usuarioId") Long usuarioId, Pageable pageable);
 
@@ -40,4 +40,6 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     AND ch.usuarioHacienda IS NOT NULL
     """)
     boolean tieneFacturacionElectronicaConfigurada(@Param("empresaId") Long empresaId);
+
+    boolean findByEmail(String email);
 }

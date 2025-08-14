@@ -13,6 +13,7 @@ import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.service.CertificadoService;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
+import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,6 +40,7 @@ public class EmpresaServiceImpl implements EmpresaService {
     private final EmpresaRepository empresaRepository;
     private final EmpresaConfigHaciendaRepository configHaciendaRepository;
     private final UsuarioServiceImpl usuarioService;
+    private final UsuarioEmpresaService usuarioEmpresaRepository;
 
     @Autowired
     private CertificadoService certificadoService;
@@ -72,7 +74,7 @@ public class EmpresaServiceImpl implements EmpresaService {
             .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
 
         // Campos existentes
-        existente.setNombre(empresa.getNombre());
+        existente.setNombreRazonSocial(empresa.getNombreRazonSocial());
         existente.setTipoIdentificacion(empresa.getTipoIdentificacion());
         existente.setIdentificacion(empresa.getIdentificacion());
         existente.setTelefono(empresa.getTelefono());
@@ -165,7 +167,7 @@ public class EmpresaServiceImpl implements EmpresaService {
 
             // Construir ruta en S3
             String nombreComercialSanitizado = certificadoService.sanitizarNombreComercial(
-                empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombre()
+                empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombreRazonSocial()
             );
             String key = String.format("%s/%s/certificado/certificado.p12",
                 baseFolder, nombreComercialSanitizado);
@@ -183,7 +185,7 @@ public class EmpresaServiceImpl implements EmpresaService {
                 .exitoso(true)
                 .mensaje("Certificado validado y procesado correctamente")
                 .fechaVencimiento(fechaVencimiento.format(DateTimeFormatter.ISO_LOCAL_DATE))
-                .nombreEmpresa(empresa.getNombre())
+                .nombreEmpresa(empresa.getNombreRazonSocial())
                 .identificacion(empresa.getIdentificacion())
                 .urlCertificadoKey(urlKey) // Agregamos este campo al response
                 .build();
@@ -259,7 +261,7 @@ public class EmpresaServiceImpl implements EmpresaService {
 
             // Construir nueva ruta
             String nombreComercialSanitizado = certificadoService.sanitizarNombreComercial(
-                empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombre()
+                empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombreRazonSocial()
             );
             String extension = obtenerExtension(logo.getOriginalFilename());
             String key = String.format("%s/%s/logo/logo.%s",
@@ -335,5 +337,11 @@ public class EmpresaServiceImpl implements EmpresaService {
 
         // Si es SUPER_ADMIN, solo sus empresas
         return listarPorUsuario(usuarioId, pageable);
+    }
+
+    @Override
+    public boolean usuarioTieneAcceso(Long usuarioId, Long empresaId) {
+        // Para SUPER_ADMIN, verificar en la tabla usuarios_empresas
+        return usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaId(usuarioId, empresaId);
     }
 }

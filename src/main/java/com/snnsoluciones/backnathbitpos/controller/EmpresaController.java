@@ -1,11 +1,10 @@
+// src/main/java/com/snnsoluciones/backnathbitpos/controller/EmpresaController.java
 package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.common.PageResponse;
-import com.snnsoluciones.backnathbitpos.dto.empresa.CertificadoResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaRequest;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResponse;
-import com.snnsoluciones.backnathbitpos.dto.empresa.UrlCertificadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
@@ -13,8 +12,6 @@ import com.snnsoluciones.backnathbitpos.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.HashMap;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,29 +19,29 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/empresas")
 @RequiredArgsConstructor
-@Tag(name = "Empresas", description = "Gestión de empresas")
+@Tag(name = "Empresas", description = "Consulta y gestión de empresas")
 @Slf4j
 public class EmpresaController {
 
     private final EmpresaService empresaService;
     private final UsuarioService usuarioService;
 
-    @Operation(summary = "Listar todas las empresas")
-    @GetMapping("/root")
+    @Operation(summary = "Listar todas las empresas (ROOT/SOPORTE)")
+    @GetMapping("/todas")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE')")
-    public ResponseEntity<ApiResponse<List<EmpresaResponse>>> listar() {
+    public ResponseEntity<ApiResponse<List<EmpresaResponse>>> listarTodas() {
         List<Empresa> empresas = empresaService.listarTodas();
         List<EmpresaResponse> response = empresas.stream()
             .map(this::convertirAResponse)
@@ -60,26 +57,13 @@ public class EmpresaController {
         Empresa empresa = empresaService.buscarPorId(id)
             .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
 
-        return ResponseEntity.ok(ApiResponse.ok(convertirAResponse(empresa)));
-    }
-
-    @Operation(summary = "Crear nueva empresa")
-    @PostMapping
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<EmpresaResponse>> crear(
-        @Valid @RequestBody EmpresaRequest request) {
-
-        // Validar código único
-        if (empresaService.existeIdentificacion(request.getIdentificacion())) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("El código ya existe"));
+        // Validar acceso para SUPER_ADMIN
+        if (!validarAccesoEmpresa(empresa)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("No tiene acceso a esta empresa"));
         }
 
-        Empresa empresa = convertirAEntity(request);
-        Empresa nuevaEmpresa = empresaService.crear(empresa);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ApiResponse.ok("Empresa creada", convertirAResponse(nuevaEmpresa)));
+        return ResponseEntity.ok(ApiResponse.ok(convertirAResponse(empresa)));
     }
 
     @Operation(summary = "Actualizar empresa")
@@ -89,221 +73,134 @@ public class EmpresaController {
         @PathVariable Long id,
         @Valid @RequestBody EmpresaRequest request) {
 
+        // Verificar que existe
+        Empresa empresaExistente = empresaService.buscarPorId(id)
+            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+
+        // Validar acceso
+        if (!validarAccesoEmpresa(empresaExistente)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("No tiene acceso a esta empresa"));
+        }
+
         Empresa empresa = convertirAEntity(request);
         Empresa actualizada = empresaService.actualizar(id, empresa);
 
-        return ResponseEntity.ok(ApiResponse.ok("Empresa actualizada", convertirAResponse(actualizada)));
+        return ResponseEntity.ok(
+            ApiResponse.ok("Empresa actualizada correctamente", convertirAResponse(actualizada))
+        );
     }
 
-    @Operation(summary = "Eliminar empresa")
+    @Operation(summary = "Eliminar empresa (soft delete)")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE')")
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
         empresaService.eliminar(id);
-        return ResponseEntity.ok(ApiResponse.ok("Empresa eliminada", null));
+        return ResponseEntity.ok(ApiResponse.ok("Empresa eliminada correctamente", null));
     }
 
-    @Operation(summary = "Listar empresas accesibles por usuario con paginación")
-    @GetMapping("/usuario/{usuarioId}")
+    @Operation(summary = "Listar empresas del usuario actual")
+    @GetMapping("/mis-empresas")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<ApiResponse<PageResponse<EmpresaResponse>>> listarPorUsuario(
-        @PathVariable(name = "usuarioId") Long usuarioId,
+    public ResponseEntity<ApiResponse<PageResponse<EmpresaResponse>>> listarMisEmpresas(
         @RequestParam(name = "page", defaultValue = "0") int page,
         @RequestParam(name = "size", defaultValue = "10") int size,
         @RequestParam(name = "sortBy", defaultValue = "nombre") String sortBy,
         @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection) {
 
-        // Validación de permisos
-        Long usuarioActualId = getCurrentUserId();
-        Usuario usuarioActual = usuarioService.buscarPorId(usuarioActualId)
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Long usuarioId = getCurrentUserId();
 
-        if (!usuarioActual.esRolSistema() && !usuarioActualId.equals(usuarioId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error("Solo puede ver sus propias empresas"));
-        }
-
-        // Crear Pageable
         Sort.Direction direction = sortDirection.equalsIgnoreCase("DESC")
             ? Sort.Direction.DESC
             : Sort.Direction.ASC;
+
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
-
-        // Obtener página de empresas
         Page<Empresa> empresasPage = empresaService.listarPorUsuarioPaginado(usuarioId, pageable);
-
-        // Convertir a response
         Page<EmpresaResponse> responsePage = empresasPage.map(this::convertirAResponse);
-        PageResponse<EmpresaResponse> pageResponse = PageResponse.of(responsePage);
 
-        return ResponseEntity.ok(ApiResponse.ok(pageResponse));
+        return ResponseEntity.ok(ApiResponse.ok(PageResponse.of(responsePage)));
     }
 
-    /**
-     * Subir certificado de facturación electrónica
-     */
-    @Operation(summary = "Subir certificado P12 para facturación electrónica")
-    @PostMapping(value = "/{id}/certificado", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Cambiar estado de empresa (activar/desactivar)")
+    @PatchMapping("/{id}/estado")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<CertificadoResponse>> subirCertificado(
+    public ResponseEntity<ApiResponse<EmpresaResponse>> cambiarEstado(
         @PathVariable Long id,
-        @RequestParam("certificado") MultipartFile certificado,
-        @RequestParam("pin") String pin) {
+        @RequestParam Boolean activa) {
 
-        log.info("Subiendo certificado para empresa ID: {}", id);
+        Empresa empresa = empresaService.buscarPorId(id)
+            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
 
-        try {
-            // Validar que el archivo sea .p12
-            String filename = certificado.getOriginalFilename();
-            if (filename == null || !filename.toLowerCase().endsWith(".p12")) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("El archivo debe ser un certificado .p12"));
-            }
-
-            // Validar tamaño (máximo 10MB)
-            if (certificado.getSize() > 10 * 1024 * 1024) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("El certificado no debe superar los 10MB"));
-            }
-
-            CertificadoResponse response = empresaService.subirCertificado(id, certificado, pin);
-            return ResponseEntity.ok(ApiResponse.ok("Certificado procesado exitosamente", response));
-        } catch (Exception e) {
-            log.error("Error al subir certificado: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("Error al procesar certificado: " + e.getMessage()));
+        // Validar acceso
+        if (!validarAccesoEmpresa(empresa)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("No tiene acceso a esta empresa"));
         }
+
+        empresa.setActiva(activa);
+        Empresa actualizada = empresaService.actualizar(id, empresa);
+
+        String mensaje = activa ? "Empresa activada correctamente" : "Empresa desactivada correctamente";
+        return ResponseEntity.ok(ApiResponse.ok(mensaje, convertirAResponse(actualizada)));
     }
 
-    /**
-     * Obtener URL pre-firmada del certificado
-     */
-    @Operation(summary = "Obtener URL temporal para descargar certificado")
-    @GetMapping("/{id}/certificado-url")
+    @Operation(summary = "Verificar si existe una identificación")
+    @GetMapping("/existe-identificacion")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<UrlCertificadoResponse>> obtenerUrlCertificado(
-        @PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Boolean>> existeIdentificacion(
+        @RequestParam String identificacion) {
 
-        try {
-            UrlCertificadoResponse response = empresaService.generarUrlCertificado(id);
-            return ResponseEntity.ok(ApiResponse.ok(response));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("Error al generar URL: " + e.getMessage()));
+        boolean existe = empresaService.existeIdentificacion(identificacion);
+        return ResponseEntity.ok(ApiResponse.ok(existe));
+    }
+
+    // ==================== MÉTODOS AUXILIARES ====================
+
+    private Long getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return Long.parseLong(auth.getName());
+    }
+
+    private boolean validarAccesoEmpresa(Empresa empresa) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("ROLE_ROOT") ||
+                a.getAuthority().equals("ROLE_SOPORTE"))) {
+            return true;
         }
-    }
 
-    /**
-     * Eliminar certificado
-     */
-    @Operation(summary = "Eliminar certificado de la empresa")
-    @DeleteMapping("/{id}/certificado")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> eliminarCertificado(@PathVariable Long id) {
-        try {
-            empresaService.eliminarCertificado(id);
-            return ResponseEntity.ok(ApiResponse.ok("Certificado eliminado exitosamente", null));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("Error al eliminar certificado: " + e.getMessage()));
+        if (auth.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"))) {
+            Long usuarioId = Long.parseLong(auth.getName());
+            return empresaService.usuarioTieneAcceso(usuarioId, empresa.getId());
         }
+
+        return false;
     }
 
-    /**
-     * Subir logo de la empresa
-     */
-    @Operation(summary = "Subir logo de la empresa")
-    @PostMapping(value = "/{id}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<ApiResponse<Map<String, String>>> subirLogo(
-        @PathVariable Long id,
-        @RequestParam("logo") MultipartFile logo) {
-
-        log.info("Subiendo logo para empresa ID: {}", id);
-
-        try {
-            // Validar formato
-            String contentType = logo.getContentType();
-            if (!isValidImageType(contentType)) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Formato de imagen no válido. Use JPG, PNG o SVG"));
-            }
-
-            // Validar tamaño (5MB)
-            if (logo.getSize() > 5 * 1024 * 1024) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("El logo no debe superar los 5MB"));
-            }
-
-            String logoUrl = empresaService.subirLogo(id, logo);
-            Map<String, String> response = new HashMap<>();
-            response.put("url", logoUrl);
-            response.put("mensaje", "Logo subido correctamente");
-
-            return ResponseEntity.ok(ApiResponse.ok("Logo subido exitosamente", response));
-
-        } catch (Exception e) {
-            log.error("Error al subir logo: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("Error al subir logo: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * Eliminar logo
-     */
-    @Operation(summary = "Eliminar logo de la empresa")
-    @DeleteMapping("/{id}/logo")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> eliminarLogo(@PathVariable Long id) {
-        try {
-            empresaService.eliminarLogo(id);
-            return ResponseEntity.ok(ApiResponse.ok("Logo eliminado exitosamente", null));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("Error al eliminar logo: " + e.getMessage()));
-        }
-    }
-
-    private boolean isValidImageType(String contentType) {
-        return contentType != null && (
-            contentType.equals("image/jpeg") ||
-                contentType.equals("image/jpg") ||
-                contentType.equals("image/png") ||
-                contentType.equals("image/svg+xml")
-        );
-    }
-
-    // Métodos de conversión
     private EmpresaResponse convertirAResponse(Empresa empresa) {
-        EmpresaResponse response = new EmpresaResponse();
-        response.setId(empresa.getId());
-        response.setNombre(empresa.getNombre());
-        response.setTipoIdentificacion(empresa.getTipoIdentificacion());
-        response.setIdentificacion(empresa.getIdentificacion());
-        response.setTelefono(empresa.getTelefono());
-        response.setEmail(empresa.getEmail());
-        response.setActiva(empresa.getActiva());
-        response.setCreatedAt(empresa.getCreatedAt());
-        response.setUpdatedAt(empresa.getUpdatedAt());
-        return response;
+        return EmpresaResponse.builder()
+            .id(empresa.getId())
+            .nombreComercial(empresa.getNombreComercial())
+            .tipoIdentificacion(empresa.getTipoIdentificacion())
+            .identificacion(empresa.getIdentificacion())
+            .email(empresa.getEmail())
+            .telefono(empresa.getTelefono())
+            .activa(empresa.getActiva())
+            .createdAt(empresa.getCreatedAt())
+            .updatedAt(empresa.getUpdatedAt())
+            .build();
     }
 
     private Empresa convertirAEntity(EmpresaRequest request) {
         Empresa empresa = new Empresa();
-        empresa.setNombre(request.getNombre());
+        empresa.setNombreComercial(request.getNombreComercial());
         empresa.setTipoIdentificacion(request.getTipoIdentificacion());
         empresa.setIdentificacion(request.getIdentificacion());
-        empresa.setTelefono(request.getTelefono());
         empresa.setEmail(request.getEmail());
+        empresa.setTelefono(request.getTelefono());
         empresa.setActiva(request.getActiva());
         return empresa;
-    }
-
-    private Long getCurrentUserId() {
-        return (Long) org.springframework.security.core.context.SecurityContextHolder
-            .getContext()
-            .getAuthentication()
-            .getPrincipal();
     }
 }

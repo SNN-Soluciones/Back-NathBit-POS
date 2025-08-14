@@ -14,7 +14,7 @@ public class CrearEmpresaCompletaRequest {
     // ===== DATOS BÁSICOS EMPRESA =====
     @NotBlank(message = "El nombre es requerido")
     @Size(max = 100)
-    private String nombre;
+    private String nombreRazonSocial;
     
     @Size(max = 100)
     private String nombreComercial;

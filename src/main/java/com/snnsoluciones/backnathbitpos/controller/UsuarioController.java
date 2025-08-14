@@ -198,7 +198,7 @@ public class UsuarioController {
         response.setUsuarioNombre(ue.getUsuario().getNombre());
         response.setUsuarioEmail(ue.getUsuario().getEmail());
         response.setEmpresaId(ue.getEmpresa().getId());
-        response.setEmpresaNombre(ue.getEmpresa().getNombre());
+        response.setEmpresaNombre(ue.getEmpresa().getNombreComercial());
         
         if (ue.getSucursal() != null) {
             response.setSucursalId(ue.getSucursal().getId());

@@ -26,5 +26,6 @@ public interface ActividadEconomicaRepository extends JpaRepository<ActividadEco
     @Query("SELECT a FROM ActividadEconomica a WHERE a.codigo LIKE :codigoParcial%")
     List<ActividadEconomica> findByCodigoStartsWith(@Param("codigoParcial") String codigoParcial);
 
-  Optional<ActividadEconomica> findByCodigo(String codigo);
+    Optional<ActividadEconomica> findByCodigo(String codigo);
+    boolean existsByCodigo(String codigo);
 }

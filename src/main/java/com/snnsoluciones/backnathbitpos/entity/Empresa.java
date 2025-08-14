@@ -23,9 +23,6 @@ public class Empresa {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 150)
-    private String nombre;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_identificacion", length = 20)
     private TipoIdentificacion tipoIdentificacion;
@@ -47,8 +44,6 @@ public class Empresa {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    // ===== NUEVOS CAMPOS PARA FACTURACIÓN ELECTRÓNICA =====
 
     // Datos comerciales adicionales
     @Column(name = "nombre_comercial", length = 80)
@@ -116,10 +111,6 @@ public class Empresa {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        // Si se proporciona nombre pero no razón social, usar el mismo
-        if (nombreRazonSocial == null && nombre != null) {
-            nombreRazonSocial = nombre;
-        }
     }
 
     @PreUpdate

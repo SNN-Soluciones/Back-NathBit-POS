@@ -60,4 +60,12 @@ public interface EmpresaService {
      * @param empresaId ID de la empresa
      */
     void eliminarLogo(Long empresaId);
+
+    /**
+     * Verifica si un usuario tiene acceso a una empresa
+     * @param usuarioId ID del usuario
+     * @param empresaId ID de la empresa
+     * @return true si tiene acceso
+     */
+    boolean usuarioTieneAcceso(Long usuarioId, Long empresaId);
 }

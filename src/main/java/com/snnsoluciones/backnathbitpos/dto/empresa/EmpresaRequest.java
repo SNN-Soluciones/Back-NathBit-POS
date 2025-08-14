@@ -7,10 +7,10 @@ import lombok.Data;
 
 @Data
 public class EmpresaRequest {
-    
+
     @NotBlank(message = "El nombre es obligatorio")
-    private String nombre;
-    
+    private String nombreComercial;
+
     private TipoIdentificacion tipoIdentificacion;
     
     private String identificacion;

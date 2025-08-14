@@ -8,7 +8,7 @@ import lombok.Data;
 @Builder
 public class CrearEmpresaCompletaResponse {
     private Long empresaId;
-    private String nombre;
+    private String nombreRazonSocial;
     private String nombreComercial;
     private String identificacion;
     private String logoUrl;

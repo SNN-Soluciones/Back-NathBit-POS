@@ -69,7 +69,7 @@ public class AuthServiceImpl implements AuthService {
             List<EmpresaResumen> empresas = asignaciones.stream()
                 .map(ue -> new EmpresaResumen(
                     ue.getEmpresa().getId(),
-                    ue.getEmpresa().getNombre()
+                    ue.getEmpresa().getNombreRazonSocial()
                 ))
                 .distinct()
                 .collect(Collectors.toList());
@@ -88,7 +88,7 @@ public class AuthServiceImpl implements AuthService {
                 UsuarioEmpresa primeraAsignacion = asignaciones.get(0);
                 EmpresaResumen empresa = new EmpresaResumen(
                     primeraAsignacion.getEmpresa().getId(),
-                    primeraAsignacion.getEmpresa().getNombre()
+                    primeraAsignacion.getEmpresa().getNombreRazonSocial()
                 );
                 
                 List<SucursalResumen> sucursales = asignaciones.stream()
@@ -118,7 +118,7 @@ public class AuthServiceImpl implements AuthService {
                 Contexto contexto = Contexto.builder()
                     .empresa(new EmpresaResumen(
                         asignacion.getEmpresa().getId(),
-                        asignacion.getEmpresa().getNombre()))
+                        asignacion.getEmpresa().getNombreRazonSocial()))
                     .sucursal(asignacion.getSucursal() != null ? 
                         new SucursalResumen(
                             asignacion.getSucursal().getId(),

@@ -150,7 +150,7 @@ public class SucursalController {
         response.setEmail(sucursal.getEmail());
         response.setActiva(sucursal.getActiva());
         response.setEmpresaId(sucursal.getEmpresa().getId());
-        response.setEmpresaNombre(sucursal.getEmpresa().getNombre());
+        response.setEmpresaNombre(sucursal.getEmpresa().getNombreComercial());
         response.setCreatedAt(sucursal.getCreatedAt());
         response.setUpdatedAt(sucursal.getUpdatedAt());
         return response;

@@ -16,4 +16,6 @@ public interface UsuarioEmpresaService {
     List<UsuarioEmpresa> listarPorSucursal(Long sucursalId);
     
     boolean tieneAcceso(Long usuarioId, Long empresaId, Long sucursalId);
+
+    boolean existsByUsuarioIdAndEmpresaId(Long usuarioId, Long empresaId);
 }

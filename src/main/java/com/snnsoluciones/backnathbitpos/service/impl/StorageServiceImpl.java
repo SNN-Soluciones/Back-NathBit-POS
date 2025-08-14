@@ -154,49 +154,70 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public String subirArchivo(MultipartFile file, String key, String contentType, boolean isPrivate) {
+    public String subirArchivo(MultipartFile archivo, String carpeta, String nombreArchivo, boolean privado) {
         try {
-            return subirArchivo(file.getBytes(), key, contentType, isPrivate);
-        } catch (Exception e) {
-            log.error("Error al subir archivo: {}", e.getMessage());
-            throw new RuntimeException("Error al subir archivo", e);
-        }
-    }
+            String originalFilename = archivo.getOriginalFilename();
+            String extension = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+            }
 
-    @Override
-    public String subirArchivo(byte[] data, String key, String contentType, boolean isPrivate) {
-        try {
+            String key = carpeta + "/" + nombreArchivo + extension;
+
             ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(contentType);
-            metadata.setContentLength(data.length);
+            metadata.setContentType(archivo.getContentType());
+            metadata.setContentLength(archivo.getSize());
 
             PutObjectRequest putRequest = new PutObjectRequest(
                 bucketName,
                 key,
-                new ByteArrayInputStream(data),
+                archivo.getInputStream(),
                 metadata
             );
 
-            // Configurar ACL según si es privado o público
-            if (!isPrivate) {
+            if (!privado) {
                 putRequest.setCannedAcl(CannedAccessControlList.PublicRead);
             }
 
             s3Client.putObject(putRequest);
 
-            // Retornar URL completa
-            if (isPrivate) {
-                // Para archivos privados, retornamos solo la key
-                // La URL pre-firmada se generará cuando se necesite
-                return key;
+            if (privado) {
+                return key; // Solo la key para archivos privados
             } else {
-                // Para archivos públicos, retornamos la URL completa
-                return String.format("%s/%s/%s", endpoint, bucketName, key);
+                return s3Client.getUrl(bucketName, key).toString(); // URL completa para públicos
             }
 
         } catch (Exception e) {
-            log.error("Error al subir archivo a S3: {}", e.getMessage());
-            throw new RuntimeException("Error al subir archivo a S3", e);
+            throw new RuntimeException("Error al subir archivo: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public String subirArchivo(byte[] bytes, String key, String contentType, boolean privado) {
+        try {
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentType(contentType);
+            metadata.setContentLength(bytes.length);
+
+            ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+
+            PutObjectRequest putRequest = new PutObjectRequest(
+                bucketName,
+                key,
+                bais,
+                metadata
+            );
+
+            if (!privado) {
+                putRequest.setCannedAcl(CannedAccessControlList.PublicRead);
+            }
+
+            s3Client.putObject(putRequest);
+
+            return privado ? key : s3Client.getUrl(bucketName, key).toString();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error al subir archivo: " + e.getMessage(), e);
         }
     }
 

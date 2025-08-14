@@ -22,7 +22,7 @@ public class ConfigHaciendaRequest {
     private AmbienteHacienda ambiente;
 
     @NotNull(message = "El tipo de autenticación es requerido")
-    private TipoAutenticacionHacienda tipoAutenticacion;
+    private TipoAutenticacionHacienda tipoAutenticacion = TipoAutenticacionHacienda.LLAVE_CRIPTOGRAFICA;
 
     @NotBlank(message = "El usuario de Hacienda es requerido")
     @Email(message = "El usuario debe ser un email válido")
@@ -31,18 +31,12 @@ public class ConfigHaciendaRequest {
     @NotBlank(message = "La clave de Hacienda es requerida")
     private String claveHacienda;
 
-    @NotBlank(message = "El proveedor de sistemas es requerido")
-    @Pattern(regexp = "^[0-9]{9,12}$", message = "Identificación del proveedor inválida")
-    private String proveedorSistemas;
-
     // Código de actividad económica principal
     @Pattern(regexp = "^[0-9]{6}$", message = "Código de actividad debe tener 6 dígitos")
     private String actividadEconomicaPrincipal;
 
     @NotNull(message = "La empresa es requerida")
     private Long empresaId;
-
-    // === CAMPOS PARA EL CERTIFICADO (ya procesado y subido) ===
 
     // URL/Key del certificado en S3 (viene del endpoint de subir certificado)
     private String urlCertificadoKey;

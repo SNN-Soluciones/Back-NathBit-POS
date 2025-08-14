@@ -41,5 +41,5 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     """)
     boolean tieneFacturacionElectronicaConfigurada(@Param("empresaId") Long empresaId);
 
-    boolean findByEmail(String email);
+    boolean existsByEmail(String email);
 }

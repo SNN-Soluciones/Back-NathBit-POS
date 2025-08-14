@@ -90,8 +90,7 @@ public class ConfigHaciendaController {
     // Helper para convertir
     private ConfigHaciendaResponse convertirAResponse(EmpresaConfigHacienda config) {
         boolean configuracionCompleta = config.getUsuarioHacienda() != null &&
-            config.getClaveHacienda() != null &&
-            config.getProveedorSistemas() != null;
+            config.getClaveHacienda() != null;
 
         return ConfigHaciendaResponse.builder()
             .id(config.getId())
@@ -100,7 +99,6 @@ public class ConfigHaciendaController {
             .usuarioHacienda(config.getUsuarioHacienda())
             .tieneClaveConfigurada(config.getClaveHacienda() != null)
             .tieneCertificadoConfigurado(config.getCertificadoEncriptado() != null)
-            .proveedorSistemas(config.getProveedorSistemas())
             .fechaEmisionCertificado(config.getFechaEmisionCertificado())
             .fechaVencimientoCertificado(config.getFechaVencimientoCertificado())
             .empresaId(config.getEmpresa().getId())

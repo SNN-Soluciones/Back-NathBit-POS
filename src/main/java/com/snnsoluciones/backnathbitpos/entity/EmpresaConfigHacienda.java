@@ -34,9 +34,6 @@ public class EmpresaConfigHacienda {
     @Column(name = "tipo_autenticacion", nullable = false)
     private TipoAutenticacionHacienda tipoAutenticacion = TipoAutenticacionHacienda.LLAVE_CRIPTOGRAFICA;
 
-    @Column(name = "proveedor_sistemas", length = 20)
-    private String proveedorSistemas = ProveedorSistema.SNN_SOLUCIONES.getIdentificacion();
-
     // === Para Llave ATV (Criptográfica) ===
     @Column(name = "usuario_hacienda", length = 100)
     private String usuarioHacienda;
@@ -61,16 +58,6 @@ public class EmpresaConfigHacienda {
 
     @Column(name = "fecha_vencimiento_certificado")
     private LocalDate fechaVencimientoCertificado;
-
-    // === Tokens de acceso ===
-    @Column(name = "token_access", length = 1000)
-    private String tokenAccess;
-
-    @Column(name = "token_refresh", length = 1000)
-    private String tokenRefresh;
-
-    @Column(name = "token_expiracion")
-    private LocalDateTime tokenExpiracion;
 
     // === Mensajes personalizados ===
     @Column(name = "nota_factura", length = 500)
@@ -119,12 +106,4 @@ public class EmpresaConfigHacienda {
         return false;
     }
 
-    /**
-     * Verifica si el token está vigente
-     */
-    public boolean isTokenVigente() {
-        return tokenAccess != null && !tokenAccess.isEmpty() &&
-            tokenExpiracion != null &&
-            tokenExpiracion.isAfter(LocalDateTime.now());
-    }
 }

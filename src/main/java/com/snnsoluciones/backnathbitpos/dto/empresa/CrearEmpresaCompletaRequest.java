@@ -40,10 +40,10 @@ public class CrearEmpresaCompletaRequest {
     private String fax;
     
     // ===== UBICACIÓN =====
-    private Integer provincia;
-    private Integer canton;
-    private Integer distrito;
-    private Integer barrio;
+    private Integer provinciaId;
+    private Integer cantonId;
+    private Integer distritoId;
+    private Integer barrioId;
 
     @Size(max = 500)
     private String otrasSenas;

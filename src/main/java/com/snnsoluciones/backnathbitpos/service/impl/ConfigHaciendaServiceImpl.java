@@ -69,8 +69,6 @@ public class ConfigHaciendaServiceImpl implements ConfigHaciendaService {
             config.setPinCertificado(passwordEncoder.encode(request.getPinCertificado()));
         }
 
-        config.setProveedorSistemas(request.getProveedorSistemas());
-
         // Mensajes personalizados
         config.setNotaFactura(request.getNotaFactura());
         config.setNotaValidezProforma(request.getNotaValidezProforma());

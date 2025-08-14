@@ -78,12 +78,6 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
           throw new RuntimeException("El PIN del certificado es requerido");
         }
 
-        // VALIDACIÓN COMPLETA DEL CERTIFICADO
-        log.info("   - Validando certificado P12...");
-        if (!certificadoService.validarCertificado(certificado, pin)) {
-          throw new RuntimeException("El certificado no es válido o el PIN es incorrecto");
-        }
-
         // Extraer información adicional
         LocalDate fechaVencimiento = certificadoService.extraerFechaVencimiento(certificado, pin);
         if (fechaVencimiento == null) {
@@ -171,7 +165,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     }
 
     // Validar email único
-    if (empresaRepository.findByEmail(request.getEmail())) {
+    if (empresaRepository.existsByEmail(request.getEmail())) {
       throw new RuntimeException("Ya existe una empresa con el email: " + request.getEmail());
     }
 
@@ -226,7 +220,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
 
     String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
     String nombreArchivo = String.format("%s_logo_%s", nombreBase, timestamp);
-    String carpeta = "empresas/logos";
+    String carpeta = "NathBit-POS/logos";
 
     return storageService.subirArchivo(logo, carpeta, nombreArchivo, false); // Logo público
   }
@@ -242,7 +236,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
       // Generar nombre único
       String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
       String nombreArchivo = String.format("%s_cert_%s", nombreBase, timestamp);
-      String carpeta = "empresas/certificados";
+      String carpeta = "NathBit-POS/certificados";
 
       // Subir archivo encriptado
       return storageService.subirArchivo(
@@ -273,18 +267,18 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     empresa.setFax(request.getFax());
 
     // Ubicación
-    if (request.getProvincia() != null) {
+    if (request.getProvinciaId() != null) {
       empresa.setProvincia(
-          ubicacionService.buscarProvinciaPorId(request.getProvincia()).orElse(null));
+          ubicacionService.buscarProvinciaPorId(request.getProvinciaId()).orElse(null));
     }
-    if (request.getCanton() != null) {
-      empresa.setCanton(ubicacionService.buscarCantonPorId(request.getCanton()).orElse(null));
+    if (request.getCantonId() != null) {
+      empresa.setCanton(ubicacionService.buscarCantonPorId(request.getCantonId()).orElse(null));
     }
-    if (request.getDistrito() != null) {
-      empresa.setDistrito(ubicacionService.buscarDistritoPorId(request.getDistrito()).orElse(null));
+    if (request.getDistritoId() != null) {
+      empresa.setDistrito(ubicacionService.buscarDistritoPorId(request.getDistritoId()).orElse(null));
     }
-    if (request.getBarrio() != null) {
-      empresa.setBarrio(ubicacionService.buscarBarrioPorId(request.getBarrio()).orElse(null));
+    if (request.getBarrioId() != null) {
+      empresa.setBarrio(ubicacionService.buscarBarrioPorId(request.getBarrioId()).orElse(null));
     }
     empresa.setOtrasSenas(request.getOtrasSenas());
 

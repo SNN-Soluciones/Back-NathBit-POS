@@ -54,8 +54,11 @@ public class EmpresaController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<EmpresaResponse>> obtenerPorId(@PathVariable Long id) {
-        Empresa empresa = empresaService.buscarPorId(id)
-            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+        Empresa empresa = empresaService.buscarPorId(id);
+        if (empresa == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Empresa no encontrada"));
+        }
 
         // Validar acceso para SUPER_ADMIN
         if (!validarAccesoEmpresa(empresa)) {
@@ -74,8 +77,11 @@ public class EmpresaController {
         @Valid @RequestBody EmpresaRequest request) {
 
         // Verificar que existe
-        Empresa empresaExistente = empresaService.buscarPorId(id)
-            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+        Empresa empresaExistente = empresaService.buscarPorId(id);
+        if (empresaExistente == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Empresa no encontrada"));
+        }
 
         // Validar acceso
         if (!validarAccesoEmpresa(empresaExistente)) {
@@ -105,7 +111,7 @@ public class EmpresaController {
     public ResponseEntity<ApiResponse<PageResponse<EmpresaResponse>>> listarMisEmpresas(
         @RequestParam(name = "page", defaultValue = "0") int page,
         @RequestParam(name = "size", defaultValue = "10") int size,
-        @RequestParam(name = "sortBy", defaultValue = "nombre") String sortBy,
+        @RequestParam(name = "sortBy", defaultValue = "nombreComercial") String sortBy,
         @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection) {
 
         Long usuarioId = getCurrentUserId();
@@ -128,8 +134,11 @@ public class EmpresaController {
         @PathVariable Long id,
         @RequestParam Boolean activa) {
 
-        Empresa empresa = empresaService.buscarPorId(id)
-            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+        Empresa empresa = empresaService.buscarPorId(id);
+        if (empresa == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Empresa no encontrada"));
+        }
 
         // Validar acceso
         if (!validarAccesoEmpresa(empresa)) {
@@ -188,6 +197,7 @@ public class EmpresaController {
             .identificacion(empresa.getIdentificacion())
             .email(empresa.getEmail())
             .telefono(empresa.getTelefono())
+            .requiereHacienda(empresa.getRequiereHacienda() != null && empresa.getRequiereHacienda())
             .activa(empresa.getActiva())
             .createdAt(empresa.getCreatedAt())
             .updatedAt(empresa.getUpdatedAt())

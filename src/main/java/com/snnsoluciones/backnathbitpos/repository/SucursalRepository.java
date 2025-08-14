@@ -13,11 +13,7 @@ import java.util.Optional;
 @Repository
 public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
 
-    Optional<Sucursal> findByCodigo(String codigo);
-
     List<Sucursal> findByEmpresaId(Long empresaId);
-
-    boolean existsByCodigo(String codigo);
 
     @Query("""
     SELECT DISTINCT s FROM Sucursal s
@@ -97,4 +93,6 @@ public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
         @Param("numeroSucursal") String numeroSucursal,
         @Param("sucursalId") Long sucursalId
     );
+
+    boolean existsByNumeroSucursalAndEmpresaId(String numeroSucursal, Long empresaId);
 }

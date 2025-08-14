@@ -47,8 +47,11 @@ public class ConfigHaciendaController {
     public ResponseEntity<ApiResponse<ConfigHaciendaResponse>> crearOActualizar(
         @Valid @RequestBody ConfigHaciendaRequest request) {
 
-        Empresa empresa = empresaService.buscarPorId(request.getEmpresaId())
-            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+        Empresa empresa = empresaService.buscarPorId(request.getEmpresaId());
+        if (empresa == null) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("La empresa no existe"));
+        }
 
         // Verificar si la empresa requiere Hacienda
         if (!empresa.getRequiereHacienda()) {

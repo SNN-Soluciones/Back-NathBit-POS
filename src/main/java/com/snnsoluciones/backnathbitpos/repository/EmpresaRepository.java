@@ -21,8 +21,7 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     JOIN UsuarioEmpresa ue ON ue.empresa.id = e.id
     WHERE ue.usuario.id = :usuarioId
     AND ue.activo = true
-    AND e.activa = true
-    ORDER BY e.nombreRazonSocial
+    ORDER BY e.nombreRazonSocial, e.nombreComercial
     """)
     Page<Empresa> findByUsuarioId(@Param("usuarioId") Long usuarioId, Pageable pageable);
 

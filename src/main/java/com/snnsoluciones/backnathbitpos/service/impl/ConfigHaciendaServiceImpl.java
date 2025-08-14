@@ -32,8 +32,10 @@ public class ConfigHaciendaServiceImpl implements ConfigHaciendaService {
     @Override
     @Transactional
     public EmpresaConfigHacienda crearOActualizar(ConfigHaciendaRequest request) {
-        Empresa empresa = empresaService.buscarPorId(request.getEmpresaId())
-            .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+        Empresa empresa = empresaService.buscarPorId(request.getEmpresaId());
+        if (empresa == null) {
+            throw new RuntimeException("Empresa no encontrada");
+        }
 
         // Buscar o crear configuración
         EmpresaConfigHacienda config = configRepository.findByEmpresaId(request.getEmpresaId())

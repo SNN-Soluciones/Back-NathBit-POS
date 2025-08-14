@@ -19,7 +19,6 @@ public class TerminalResponse {
     private String nombre;
     private String descripcion;
     private Boolean activa;
-    private String impresoraPredeterminada;
     private Boolean imprimirAutomatico;
     
     // Información de la sucursal

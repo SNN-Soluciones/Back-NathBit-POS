@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.TipoImpresion;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -72,10 +73,8 @@ public class Terminal {
     
     @Column(name = "consecutivo_orden_pedido")
     private Long consecutivoOrdenPedido = 0L;
-    
-    // === Configuración de impresión ===
-    @Column(name = "impresora_predeterminada", length = 100)
-    private String impresoraPredeterminada;
+
+    private TipoImpresion tipoImpresion = TipoImpresion.TICKET;
     
     @Column(name = "imprimir_automatico")
     private Boolean imprimirAutomatico = false;

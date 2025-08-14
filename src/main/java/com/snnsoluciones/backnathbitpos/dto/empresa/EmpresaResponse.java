@@ -17,6 +17,7 @@ public class EmpresaResponse {
     private String telefono;
     private String email;
     private Boolean activa;
+    private Boolean requiereHacienda;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -95,8 +95,7 @@ public class AuthServiceImpl implements AuthService {
                     .filter(ue -> ue.getSucursal() != null)
                     .map(ue -> new SucursalResumen(
                         ue.getSucursal().getId(),
-                        ue.getSucursal().getNombre(),
-                        ue.getSucursal().getCodigo()
+                        ue.getSucursal().getNombre()
                     ))
                     .collect(Collectors.toList());
                 
@@ -122,8 +121,7 @@ public class AuthServiceImpl implements AuthService {
                     .sucursal(asignacion.getSucursal() != null ? 
                         new SucursalResumen(
                             asignacion.getSucursal().getId(),
-                            asignacion.getSucursal().getNombre(),
-                            asignacion.getSucursal().getCodigo()
+                            asignacion.getSucursal().getNombre()
                         ) : null)
                     .build();
                 

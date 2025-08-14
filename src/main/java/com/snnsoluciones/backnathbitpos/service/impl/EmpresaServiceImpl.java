@@ -101,8 +101,8 @@ public class EmpresaServiceImpl implements EmpresaService {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Empresa> buscarPorId(Long id) {
-        return empresaRepository.findById(id);
+    public Empresa buscarPorId(Long id) {
+        return empresaRepository.findById(id).orElse(null);
     }
 
     @Override
@@ -132,9 +132,10 @@ public class EmpresaServiceImpl implements EmpresaService {
     @Transactional
     public CertificadoResponse subirCertificado(Long empresaId, MultipartFile certificado, String pin) {
         // Buscar empresa
-        Empresa empresa = buscarPorId(empresaId)
-            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
-
+        Empresa empresa = buscarPorId(empresaId);
+        if (empresa == null) {
+            throw  new ResourceNotFoundException("Empresa no encontrada");
+        }
         // Validar que requiere facturación electrónica
         if (!Boolean.TRUE.equals(empresa.getRequiereHacienda())) {
             throw new RuntimeException("Esta empresa no requiere facturación electrónica");
@@ -246,8 +247,10 @@ public class EmpresaServiceImpl implements EmpresaService {
     @Override
     @Transactional
     public String subirLogo(Long empresaId, MultipartFile logo) {
-        Empresa empresa = buscarPorId(empresaId)
-            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
+        Empresa empresa = buscarPorId(empresaId);
+        if (empresa == null) {
+            throw  new ResourceNotFoundException("Empresa no encontrada");
+        }
 
         try {
             // Eliminar logo anterior si existe
@@ -290,8 +293,10 @@ public class EmpresaServiceImpl implements EmpresaService {
     @Override
     @Transactional
     public void eliminarLogo(Long empresaId) {
-        Empresa empresa = buscarPorId(empresaId)
-            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
+        Empresa empresa = buscarPorId(empresaId);
+        if (empresa == null) {
+            throw  new ResourceNotFoundException("Empresa no encontrada");
+        }
 
         if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().contains("defaults")) {
             // Extraer key del URL

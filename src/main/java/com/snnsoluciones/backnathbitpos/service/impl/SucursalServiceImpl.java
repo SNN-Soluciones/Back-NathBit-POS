@@ -44,8 +44,6 @@ public class SucursalServiceImpl implements SucursalService {
 
         // Campos existentes
         existente.setNombre(sucursal.getNombre());
-        existente.setCodigo(sucursal.getCodigo());
-        existente.setDireccion(sucursal.getDireccion());
         existente.setTelefono(sucursal.getTelefono());
         existente.setEmail(sucursal.getEmail());
         existente.setActiva(sucursal.getActiva());
@@ -80,12 +78,6 @@ public class SucursalServiceImpl implements SucursalService {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Sucursal> buscarPorCodigo(String codigo) {
-        return sucursalRepository.findByCodigo(codigo);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public List<Sucursal> listarPorEmpresa(Long empresaId) {
         return sucursalRepository.findByEmpresaId(empresaId);
     }
@@ -107,8 +99,8 @@ public class SucursalServiceImpl implements SucursalService {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean existeCodigo(String codigo) {
-        return sucursalRepository.existsByCodigo(codigo);
+    public boolean existeCodigo(Long codigo) {
+        return sucursalRepository.findById(codigo).orElse(null) != null;
     }
 
     @Override
@@ -121,6 +113,11 @@ public class SucursalServiceImpl implements SucursalService {
     @Transactional(readOnly = true)
     public List<Sucursal> listarPorUsuarioYEmpresa(Long usuarioId, Long empresaId) {
         return sucursalRepository.findByUsuarioIdAndEmpresaId(usuarioId, empresaId);
+    }
+
+    @Override
+    public Boolean existsNumeroSucursalYEmpresaId(String numeroSucursal, Long empresaId) {
+        return sucursalRepository.existsByNumeroSucursalAndEmpresaId(numeroSucursal, empresaId);
     }
 
     // === NUEVOS MÉTODOS ===
@@ -157,19 +154,5 @@ public class SucursalServiceImpl implements SucursalService {
     @Transactional(readOnly = true)
     public List<Terminal> listarTerminalesActivas(Long sucursalId) {
         return terminalRepository.findBySucursalIdAndActivaTrue(sucursalId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<Sucursal> buscarConTerminales(Long id) {
-        return sucursalRepository.findByIdWithTerminales(id);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean puedeFacturarElectronicamente(Long sucursalId) {
-        return sucursalRepository.findById(sucursalId)
-            .map(Sucursal::puedeFacturarElectronicamente)
-            .orElse(false);
     }
 }

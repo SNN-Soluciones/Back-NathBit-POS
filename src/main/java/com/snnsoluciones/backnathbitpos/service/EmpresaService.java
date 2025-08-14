@@ -17,7 +17,7 @@ public interface EmpresaService {
     // Métodos existentes
     Empresa crear(Empresa empresa);
     Empresa actualizar(Long id, Empresa empresa);
-    Optional<Empresa> buscarPorId(Long id);
+    Empresa buscarPorId(Long id);
     List<Empresa> listarTodas();
     void eliminar(Long id);
     boolean existeIdentificacion(String identificacion);

@@ -65,7 +65,6 @@ public class TerminalController {
             .nombre(request.getNombre())
             .descripcion(request.getDescripcion())
             .activa(request.getActiva())
-            .impresoraPredeterminada(request.getImpresoraPredeterminada())
             .imprimirAutomatico(request.getImprimirAutomatico())
             .build();
 
@@ -90,7 +89,6 @@ public class TerminalController {
             .nombre(request.getNombre())
             .descripcion(request.getDescripcion())
             .activa(request.getActiva())
-            .impresoraPredeterminada(request.getImpresoraPredeterminada())
             .imprimirAutomatico(request.getImprimirAutomatico())
             .build();
 
@@ -138,7 +136,6 @@ public class TerminalController {
             .nombre(terminal.getNombre())
             .descripcion(terminal.getDescripcion())
             .activa(terminal.getActiva())
-            .impresoraPredeterminada(terminal.getImpresoraPredeterminada())
             .imprimirAutomatico(terminal.getImprimirAutomatico())
             .sucursalId(terminal.getSucursal().getId())
             .sucursalNombre(terminal.getSucursal().getNombre())

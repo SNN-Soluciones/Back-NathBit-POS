@@ -1,5 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.terminal;
 
+import com.snnsoluciones.backnathbitpos.enums.TipoImpresion;
+import jakarta.persistence.Column;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -29,11 +31,21 @@ public class TerminalRequest {
     @NotNull(message = "El estado activa es requerido")
     private Boolean activa = true;
     
-    // Configuración de impresión (opcional para v1.0)
-    private String impresoraPredeterminada;
-    
     private Boolean imprimirAutomatico = false;
+
+    private TipoImpresion tipoImpresion = TipoImpresion.TICKET;
     
     // Para crear terminal en una sucursal específica
     private Long sucursalId;
+    private Long consecutivoOrdenPedido = 0L;
+    private Long consecutivoFacturaElectronica = 0L;
+    private Long consecutivoTiqueteElectronico = 0L;
+    private Long consecutivoNotaCredito = 0L;
+    private Long consecutivoNotaDebito = 0L;
+    private Long consecutivoFacturaCompra = 0L;
+    private Long consecutivoFacturaExportacion = 0L;
+    private Long consecutivoReciboPago = 0L;
+    private Long consecutivoTiqueteInterno = 0L;
+    private Long consecutivoFacturaInterna = 0L;
+    private Long consecutivoProforma = 0L;
 }

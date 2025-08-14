@@ -39,7 +39,6 @@ public class TerminalServiceImpl implements TerminalService {
         existente.setNombre(terminal.getNombre());
         existente.setDescripcion(terminal.getDescripcion());
         existente.setActiva(terminal.getActiva());
-        existente.setImpresoraPredeterminada(terminal.getImpresoraPredeterminada());
         existente.setImprimirAutomatico(terminal.getImprimirAutomatico());
 
         return terminalRepository.save(existente);

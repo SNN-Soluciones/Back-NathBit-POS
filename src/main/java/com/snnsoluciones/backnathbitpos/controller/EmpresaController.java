@@ -182,6 +182,7 @@ public class EmpresaController {
     private EmpresaResponse convertirAResponse(Empresa empresa) {
         return EmpresaResponse.builder()
             .id(empresa.getId())
+            .nombreRazonSocial(empresa.getNombreRazonSocial())
             .nombreComercial(empresa.getNombreComercial())
             .tipoIdentificacion(empresa.getTipoIdentificacion())
             .identificacion(empresa.getIdentificacion())
@@ -195,6 +196,7 @@ public class EmpresaController {
 
     private Empresa convertirAEntity(EmpresaRequest request) {
         Empresa empresa = new Empresa();
+        empresa.setNombreRazonSocial(request.getNombreComercial());
         empresa.setNombreComercial(request.getNombreComercial());
         empresa.setTipoIdentificacion(request.getTipoIdentificacion());
         empresa.setIdentificacion(request.getIdentificacion());

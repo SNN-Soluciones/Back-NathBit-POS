@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.CrearEmpresaCompletaRequest;
 import com.snnsoluciones.backnathbitpos.dto.empresa.CrearEmpresaCompletaResponse;
 import com.snnsoluciones.backnathbitpos.service.EmpresaCreacionService;
+import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -15,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,6 +30,7 @@ public class EmpresaCreacionController {
 
     private final EmpresaCreacionService empresaCreacionService;
     private final ObjectMapper objectMapper;
+    private final UsuarioEmpresaService usuarioEmpresaService;
 
     @Operation(summary = "Crear empresa completa",
         description = "Crea una empresa con todos sus datos, logo, certificado y configuración de Hacienda en una sola operación")
@@ -35,7 +39,8 @@ public class EmpresaCreacionController {
     public ResponseEntity<ApiResponse<CrearEmpresaCompletaResponse>> crearEmpresaCompleta(
         @RequestPart("datos") String datosJson,
         @RequestPart(value = "logo", required = false) MultipartFile logo,
-        @RequestPart(value = "certificado", required = false) MultipartFile certificado) {
+        @RequestPart(value = "certificado", required = false) MultipartFile certificado,
+        Authentication auth) {
 
         try {
             // 1. Parsear el JSON de los datos
@@ -92,6 +97,8 @@ public class EmpresaCreacionController {
 
             log.info("Empresa creada exitosamente con ID: {}", response.getEmpresaId());
 
+            usuarioEmpresaService.asignar(Long.parseLong(auth.getName()), response.getEmpresaId(), null);
+
             return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Empresa creada exitosamente", response));
@@ -134,5 +141,10 @@ public class EmpresaCreacionController {
             log.error("Error validando certificado: ", e);
             return ResponseEntity.ok(ApiResponse.error("Certificado inválido o PIN incorrecto"));
         }
+    }
+
+    private Long getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return Long.parseLong(auth.getName());
     }
 }

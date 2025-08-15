@@ -29,7 +29,7 @@ public class AuthServiceImpl implements AuthService {
     private final UsuarioService usuarioService;
     private final UsuarioEmpresaService usuarioEmpresaService;
     private final JwtTokenProvider tokenProvider;
-    
+
     @Override
     public LoginResponse login(LoginRequest request) {
         // Autenticar
@@ -69,7 +69,10 @@ public class AuthServiceImpl implements AuthService {
             List<EmpresaResumen> empresas = asignaciones.stream()
                 .map(ue -> new EmpresaResumen(
                     ue.getEmpresa().getId(),
-                    ue.getEmpresa().getNombreRazonSocial()
+                    ue.getEmpresa().getNombreRazonSocial(),
+                    ue.getEmpresa().getNombreComercial(),
+                    ue.getEmpresa().getEmail(),
+                    ue.getEmpresa().getIdentificacion()
                 ))
                 .distinct()
                 .collect(Collectors.toList());
@@ -88,7 +91,10 @@ public class AuthServiceImpl implements AuthService {
                 UsuarioEmpresa primeraAsignacion = asignaciones.get(0);
                 EmpresaResumen empresa = new EmpresaResumen(
                     primeraAsignacion.getEmpresa().getId(),
-                    primeraAsignacion.getEmpresa().getNombreRazonSocial()
+                    primeraAsignacion.getEmpresa().getNombreRazonSocial(),
+                    primeraAsignacion.getEmpresa().getNombreComercial(),
+                    primeraAsignacion.getEmpresa().getEmail(),
+                    primeraAsignacion.getEmpresa().getIdentificacion()
                 );
                 
                 List<SucursalResumen> sucursales = asignaciones.stream()
@@ -117,7 +123,10 @@ public class AuthServiceImpl implements AuthService {
                 Contexto contexto = Contexto.builder()
                     .empresa(new EmpresaResumen(
                         asignacion.getEmpresa().getId(),
-                        asignacion.getEmpresa().getNombreRazonSocial()))
+                        asignacion.getEmpresa().getNombreRazonSocial(),
+                        asignacion.getEmpresa().getNombreComercial(),
+                        asignacion.getEmpresa().getEmail(),
+                        asignacion.getEmpresa().getIdentificacion()))
                     .sucursal(asignacion.getSucursal() != null ? 
                         new SucursalResumen(
                             asignacion.getSucursal().getId(),

@@ -1,20 +1,33 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
-import jakarta.persistence.*;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.ToString;
-
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import lombok.Data;
+import lombok.ToString;
+import org.hibernate.proxy.HibernateProxy;
 
 @Data
 @Entity
 @Table(name = "usuarios")
-@ToString(exclude = {"usuarioEmpresas"})
-@EqualsAndHashCode(exclude = {"usuarioEmpresas"})
+@ToString(exclude = {"usuarioEmpresas", "usuarioSucursales"})
 public class Usuario {
 
     @Id
@@ -33,6 +46,9 @@ public class Usuario {
     @Column(length = 100)
     private String apellidos;
 
+    @Column(length = 8)
+    private String telefono;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private RolNombre rol;
@@ -46,8 +62,14 @@ public class Usuario {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "requiere_cambio_password")
+    private Boolean requiereCambioPassword = false;
+
     @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
     private Set<UsuarioEmpresa> usuarioEmpresas = new HashSet<>();
+
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UsuarioSucursal> usuarioSucursales = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
@@ -76,5 +98,33 @@ public class Usuario {
     public boolean esRolOperativo() {
         return rol == RolNombre.CAJERO || rol == RolNombre.MESERO
             || rol == RolNombre.COCINA || rol == RolNombre.JEFE_CAJAS;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null) {
+            return false;
+        }
+        Class<?> oEffectiveClass = o instanceof HibernateProxy
+            ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass()
+            : o.getClass();
+        Class<?> thisEffectiveClass = this instanceof HibernateProxy
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+            .getPersistentClass() : this.getClass();
+        if (thisEffectiveClass != oEffectiveClass) {
+            return false;
+        }
+        Usuario usuario = (Usuario) o;
+        return getId() != null && Objects.equals(getId(), usuario.getId());
+    }
+
+    @Override
+    public final int hashCode() {
+        return this instanceof HibernateProxy
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+            .getPersistentClass().hashCode() : getClass().hashCode();
     }
 }

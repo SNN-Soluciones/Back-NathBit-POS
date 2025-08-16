@@ -35,11 +35,11 @@ public class Cliente {
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sucursal_id", nullable = false)
-    private Sucursal sucursal;
+    @JoinColumn(name = "empresa_id", nullable = false)
+    private Empresa empresa;
     
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_identificacion", nullable = false, length = 2)
+    @Column(name = "tipo_identificacion", nullable = false)
     private TipoIdentificacion tipoIdentificacion;
     
     @Column(name = "numero_identificacion", nullable = false, length = 20)
@@ -47,6 +47,12 @@ public class Cliente {
     
     @Column(name = "razon_social", nullable = false, length = 100)
     private String razonSocial;
+
+    @Column(name = "inscrito_hacienda")
+    private Boolean inscritoHacienda = false;
+
+    @Column(name = "fecha_verificacion_hacienda")
+    private LocalDateTime fechaVerificacionHacienda;
     
     @Column(nullable = false, columnDefinition = "TEXT")
     private String emails; // Separados por coma, máximo 4

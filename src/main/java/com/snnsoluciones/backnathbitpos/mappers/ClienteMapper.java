@@ -24,24 +24,25 @@ import java.util.stream.Collectors;
 public interface ClienteMapper {
     
     // Mapeos principales Cliente
-    @Mapping(target = "sucursalId", source = "sucursal.id")
-    @Mapping(target = "sucursalNombre", source = "sucursal.nombre")
+    @Mapping(target = "empresaId", source = "empresa.id")
+    @Mapping(target = "empresaNombre", source = "empresa.nombreRazonSocial")
     @Mapping(target = "emails", source = "emails", qualifiedByName = "stringToList")
     @Mapping(target = "telefonoCompleto", expression = "java(formatearTelefono(cliente))")
     @Mapping(target = "exoneracionesActivas", expression = "java(contarExoneracionesActivas(cliente))")
     @Mapping(target = "tieneExoneracionVigente", expression = "java(tieneExoneracionVigente(cliente))")
     ClienteDTO toDTO(Cliente cliente);
     
-    @Mapping(target = "sucursal", ignore = true)
+    @Mapping(target = "empresa", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "ubicacion", ignore = true)
     @Mapping(target = "exoneraciones", ignore = true)
     @Mapping(target = "activo", constant = "true")
+    @Mapping(target = "inscritoHacienda", source = "inscritoHacienda")
     Cliente toEntity(ClienteCreateDTO dto);
     
-    @Mapping(target = "sucursal", ignore = true)
+    @Mapping(target = "empresa", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

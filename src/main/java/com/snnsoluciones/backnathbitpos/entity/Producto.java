@@ -86,6 +86,10 @@ public class Producto {
     @Column(nullable = false)
     @Builder.Default
     private Boolean activo = true;
+
+    @Column(name = "incluye_iva", nullable = false)
+    @Builder.Default
+    private Boolean incluyeIVA = true;
     
     @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL, 
                orphanRemoval = true, fetch = FetchType.LAZY)

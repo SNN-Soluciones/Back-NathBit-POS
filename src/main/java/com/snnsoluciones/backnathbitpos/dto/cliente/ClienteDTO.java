@@ -15,8 +15,8 @@ import java.util.List;
 @AllArgsConstructor
 public class ClienteDTO {
     private Long id;
-    private Long sucursalId;
-    private String sucursalNombre;
+    private Long empresaId;
+    private String empresaNombre;
     private TipoIdentificacion tipoIdentificacion;
     private String numeroIdentificacion;
     private String razonSocial;

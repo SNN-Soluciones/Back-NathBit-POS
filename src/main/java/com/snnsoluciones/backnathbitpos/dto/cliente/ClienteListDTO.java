@@ -19,4 +19,6 @@ public class ClienteListDTO {
     private String telefonoCompleto;
     private Boolean tieneExoneracion;
     private Boolean activo;
+    private Boolean inscritoHacienda;
+    private Boolean permiteCredito;
 }

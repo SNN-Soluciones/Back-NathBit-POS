@@ -45,11 +45,11 @@ public class ClienteServiceImpl implements ClienteService {
         }
         
         // Verificar si ya existe
-        if (existeCliente(cliente.getSucursal().getId(), 
+        if (existeCliente(cliente.getEmpresa().getId(),
                          cliente.getNumeroIdentificacion(), 
                          cliente.getEmails())) {
             throw new IllegalArgumentException(
-                "Ya existe un cliente con esa identificación y emails en esta sucursal"
+                "Ya existe un cliente con esa identificación y emails en esta empresa"
             );
         }
         
@@ -74,7 +74,7 @@ public class ClienteServiceImpl implements ClienteService {
         if (!clienteExistente.getNumeroIdentificacion().equals(clienteActualizado.getNumeroIdentificacion()) ||
             !clienteExistente.getEmails().equals(clienteActualizado.getEmails())) {
             
-            if (existeCliente(clienteExistente.getSucursal().getId(),
+            if (existeCliente(clienteExistente.getEmpresa().getId(),
                             clienteActualizado.getNumeroIdentificacion(),
                             clienteActualizado.getEmails())) {
                 throw new IllegalArgumentException(
@@ -121,30 +121,30 @@ public class ClienteServiceImpl implements ClienteService {
     
     @Override
     @Transactional(readOnly = true)
-    public Page<Cliente> buscarPorSucursal(Long sucursalId, String busqueda, Pageable pageable) {
-        return clienteRepository.buscarPorSucursal(sucursalId, busqueda, pageable);
+    public Page<Cliente> buscarPorEmpresa(Long empresaId, String busqueda, Pageable pageable) {
+        return clienteRepository.buscarPorEmpresa(empresaId, busqueda, pageable);
     }
     
     @Override
     @Transactional(readOnly = true)
-    public List<Cliente> buscarPorIdentificacion(Long sucursalId, String numeroIdentificacion) {
-        return clienteRepository.findBySucursalIdAndNumeroIdentificacionAndActivoTrue(
-            sucursalId, numeroIdentificacion
+    public List<Cliente> buscarPorIdentificacion(Long empresaId, String numeroIdentificacion) {
+        return clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndActivoTrue(
+            empresaId, numeroIdentificacion
         );
     }
     
     @Override
     @Transactional(readOnly = true)
-    public Cliente buscarPorIdentificacionYEmails(Long sucursalId, String numeroIdentificacion, String emails) {
-        return clienteRepository.findBySucursalIdAndNumeroIdentificacionAndEmails(
-            sucursalId, numeroIdentificacion, emails
+    public Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion, String emails) {
+        return clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndEmails(
+            empresaId, numeroIdentificacion, emails
         ).orElse(null);
     }
     
     @Override
     @Transactional(readOnly = true)
-    public List<Cliente> obtenerClientesConExoneracion(Long sucursalId) {
-        return clienteRepository.findClientesConExoneracionActiva(sucursalId);
+    public List<Cliente> obtenerClientesConExoneracion(Long empresaId) {
+        return clienteRepository.findClientesConExoneracionActiva(empresaId);
     }
     
     // Gestión de ubicación
@@ -283,9 +283,9 @@ public class ClienteServiceImpl implements ClienteService {
     // Validaciones
     @Override
     @Transactional(readOnly = true)
-    public boolean existeCliente(Long sucursalId, String numeroIdentificacion, String emails) {
-        return clienteRepository.existsBySucursalIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
-            sucursalId, numeroIdentificacion, emails
+    public boolean existeCliente(Long empresaId, String numeroIdentificacion, String emails) {
+        return clienteRepository.existsByEmpresaIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
+            empresaId, numeroIdentificacion, emails
         );
     }
 
@@ -354,8 +354,8 @@ public class ClienteServiceImpl implements ClienteService {
     // Utilidades
     @Override
     @Transactional(readOnly = true)
-    public long contarClientesPorSucursal(Long sucursalId) {
-        return clienteRepository.countBySucursalIdAndActivoTrue(sucursalId);
+    public long contarClientesPorEmpresa(Long empresaId) {
+        return clienteRepository.countByEmpresaIdAndActivoTrue(empresaId);
     }
 
     @Override

@@ -16,30 +16,30 @@ import java.util.Optional;
 public interface ClienteRepository extends JpaRepository<Cliente, Long> {
 
     // Buscar por sucursal y número de identificación (puede devolver múltiples)
-    List<Cliente> findBySucursalIdAndNumeroIdentificacionAndActivoTrue(
+    List<Cliente> findByEmpresaIdAndNumeroIdentificacionAndActivoTrue(
         Long sucursalId,
         String numeroIdentificacion
     );
 
     // Buscar por sucursal, número y emails específicos
-    Optional<Cliente> findBySucursalIdAndNumeroIdentificacionAndEmails(
+    Optional<Cliente> findByEmpresaIdAndNumeroIdentificacionAndEmails(
         Long sucursalId,
         String numeroIdentificacion,
         String emails
     );
 
     // Búsqueda por sucursal con paginación
-    Page<Cliente> findBySucursalIdAndActivoTrue(Long sucursalId, Pageable pageable);
+    Page<Cliente> findByEmpresaIdAndActivoTrue(Long sucursalId, Pageable pageable);
 
     // Búsqueda con filtros
-    @Query("SELECT c FROM Cliente c WHERE c.sucursal.id = :sucursalId " +
+    @Query("SELECT c FROM Cliente c WHERE c.empresa.id = :empresaId " +
         "AND c.activo = true " +
         "AND (:busqueda IS NULL OR :busqueda = '' OR " +
         "     LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR " +
         "     c.numeroIdentificacion LIKE CONCAT('%', :busqueda, '%') OR " +
         "     LOWER(c.emails) LIKE LOWER(CONCAT('%', :busqueda, '%')))")
-    Page<Cliente> buscarPorSucursal(
-        @Param("sucursalId") Long sucursalId,
+    Page<Cliente> buscarPorEmpresa(
+        @Param("empresaId") Long empresaId,
         @Param("busqueda") String busqueda,
         Pageable pageable
     );
@@ -47,25 +47,25 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     // Buscar clientes con exoneración activa
     @Query("SELECT DISTINCT c FROM Cliente c " +
         "JOIN c.exoneraciones e " +
-        "WHERE c.sucursal.id = :sucursalId " +
+        "WHERE c.empresa.id = :empresaId " +
         "AND c.activo = true " +
         "AND c.tieneExoneracion = true " +
         "AND e.activo = true")
-    List<Cliente> findClientesConExoneracionActiva(@Param("sucursalId") Long sucursalId);
+    List<Cliente> findClientesConExoneracionActiva(@Param("empresaId") Long empresaId);
 
     // Verificar si existe cliente activo con la misma identificación y emails
-    boolean existsBySucursalIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
-        Long sucursalId,
+    boolean existsByEmpresaIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
+        Long empresaId,
         String numeroIdentificacion,
         String emails
     );
 
-    // Contar clientes por sucursal
-    long countBySucursalIdAndActivoTrue(Long sucursalId);
+    // Contar clientes por empresa
+    long countByEmpresaIdAndActivoTrue(Long empresaId);
 
     // Buscar por tipo de identificación
-    List<Cliente> findBySucursalIdAndTipoIdentificacionAndActivoTrue(
-        Long sucursalId,
+    List<Cliente> findByEmpresaIdAndTipoIdentificacionAndActivoTrue(
+        Long empresaId,
         TipoIdentificacion tipoIdentificacion
     );
 }

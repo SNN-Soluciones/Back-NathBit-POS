@@ -38,7 +38,7 @@ public interface ClienteExoneracionRepository extends JpaRepository<ClienteExone
     
     // Buscar exoneraciones próximas a vencer
     @Query("SELECT e FROM ClienteExoneracion e " +
-           "WHERE e.cliente.sucursal.id = :sucursalId " +
+           "WHERE e.cliente.empresa.id = :sucursalId " +
            "AND e.activo = true " +
            "AND e.fechaVencimiento BETWEEN :fechaInicio AND :fechaFin " +
            "ORDER BY e.fechaVencimiento ASC")
@@ -56,7 +56,7 @@ public interface ClienteExoneracionRepository extends JpaRepository<ClienteExone
     
     // Contar exoneraciones activas por sucursal
     @Query("SELECT COUNT(e) FROM ClienteExoneracion e " +
-           "WHERE e.cliente.sucursal.id = :sucursalId " +
+           "WHERE e.cliente.empresa.id = :sucursalId " +
            "AND e.activo = true")
     long countExoneracionesActivasPorSucursal(@Param("sucursalId") Long sucursalId);
     

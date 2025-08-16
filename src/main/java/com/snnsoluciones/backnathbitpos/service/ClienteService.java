@@ -22,13 +22,13 @@ public interface ClienteService {
     void activarDesactivar(Long id, boolean activo);
     
     // Búsquedas
-    Page<Cliente> buscarPorSucursal(Long sucursalId, String busqueda, Pageable pageable);
+    Page<Cliente> buscarPorEmpresa(Long empresaId, String busqueda, Pageable pageable);
     
-    List<Cliente> buscarPorIdentificacion(Long sucursalId, String numeroIdentificacion);
+    List<Cliente> buscarPorIdentificacion(Long empresaId, String numeroIdentificacion);
     
-    Cliente buscarPorIdentificacionYEmails(Long sucursalId, String numeroIdentificacion, String emails);
+    Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion, String emails);
     
-    List<Cliente> obtenerClientesConExoneracion(Long sucursalId);
+    List<Cliente> obtenerClientesConExoneracion(Long empresaId);
     
     // Gestión de ubicación
     ClienteUbicacion guardarUbicacion(Long clienteId, ClienteUbicacion ubicacion);
@@ -47,14 +47,14 @@ public interface ClienteService {
     void desactivarExoneracion(Long exoneracionId);
     
     // Validaciones
-    boolean existeCliente(Long sucursalId, String numeroIdentificacion, String emails);
+    boolean existeCliente(Long empresaId, String numeroIdentificacion, String emails);
     
     void validarEmailsFormato(String emails);
     
     void validarTelefonos(String codigoPais, String numero);
     
     // Utilidades
-    long contarClientesPorSucursal(Long sucursalId);
+    long contarClientesPorEmpresa(Long empresaId);
     
     void procesarExoneracionesVencidas();
 }

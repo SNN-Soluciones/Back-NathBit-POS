@@ -8,10 +8,10 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteResumenDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUpdateDTO;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
-import com.snnsoluciones.backnathbitpos.entity.Sucursal;
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.mappers.ClienteMapper;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
-import com.snnsoluciones.backnathbitpos.service.SucursalService;
+import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -39,7 +39,7 @@ public class ClienteController {
 
     private final ClienteService clienteService;
     private final ClienteMapper clienteMapper;
-    private final SucursalService sucursalService;
+    private final EmpresaService empresaService;
 
     // Helper para obtener el userId del token JWT
     private Long getCurrentUserId(Authentication auth) {
@@ -57,20 +57,16 @@ public class ClienteController {
     @PostMapping
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<ClienteDTO>> crear(
-        @Valid @RequestBody ClienteCreateDTO dto,
-        @RequestParam(name = "sucursalId") Long sucursalId,
+        @RequestBody ClienteCreateDTO dto,
+        @RequestParam(name = "empresaId") Long empresaId,
         Authentication auth) {
 
         try {
-            // Validar acceso a la sucursal
-            Sucursal sucursal = sucursalService.buscarPorId(sucursalId)
-                .orElseThrow(() -> new IllegalArgumentException("Sucursal no encontrada"));
-
-            // TODO: Validar que el usuario tiene acceso a esta sucursal
-            // Por ahora asumimos que el acceso ya fue validado por el frontend
+            // Validar acceso a la empresa
+            Empresa empresa = empresaService.buscarPorId(empresaId);
 
             Cliente cliente = clienteMapper.toEntity(dto);
-            cliente.setSucursal(sucursal);
+            cliente.setEmpresa(empresa);
 
             Cliente clienteCreado = clienteService.crear(cliente);
             ClienteDTO response = clienteMapper.toDTO(clienteCreado);
@@ -90,24 +86,24 @@ public class ClienteController {
         }
     }
 
-    @Operation(summary = "Buscar clientes por sucursal")
+    @Operation(summary = "Buscar clientes por empresa")
     @GetMapping
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<Page<ClienteListDTO>>> buscar(
-        @RequestParam(name = "sucursalId") Long sucursalId,
+        @RequestParam(name = "empresaId") Long empresaId,
         @RequestParam(name = "busqueda", required = false) String busqueda,
         @PageableDefault(size = 20, sort = "razonSocial") Pageable pageable,
         Authentication auth) {
 
         try {
-            Sucursal sucursal = sucursalService.finById(sucursalId).orElse(null);
-            // Validar que la sucursal existe
-            if (Optional.ofNullable(sucursal).isEmpty() && !esRolSistema(auth)) {
+            Empresa empresa = empresaService.buscarPorId(empresaId);
+            // Validar que la empresa existe
+            if (Optional.ofNullable(empresa).isEmpty() && !esRolSistema(auth)) {
                 return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Sucursal no encontrada"));
+                    .body(ApiResponse.error("Empresa no encontrada"));
             }
 
-            Page<Cliente> clientes = clienteService.buscarPorSucursal(sucursalId, busqueda, pageable);
+            Page<Cliente> clientes = clienteService.buscarPorEmpresa(empresaId, busqueda, pageable);
             Page<ClienteListDTO> response = clientes.map(clienteMapper::toListDTO);
 
             return ResponseEntity.ok(ApiResponse.ok(response));
@@ -124,18 +120,18 @@ public class ClienteController {
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<ClienteBusquedaDTO>> buscarPorIdentificacion(
         @PathVariable String numeroIdentificacion,
-        @RequestParam(name = "sucursalId") Long sucursalId,
+        @RequestParam(name = "empresaId") Long empresaId,
         Authentication auth) {
 
         try {
-            Sucursal sucursal = sucursalService.finById(sucursalId).orElse(null);
-            // Validar que la sucursal existe
-            if (Optional.ofNullable(sucursal).isEmpty() && !esRolSistema(auth)) {
+            Empresa empresa = empresaService.buscarPorId(empresaId);
+            // Validar que la empresa existe
+            if (Optional.ofNullable(empresa).isEmpty() && !esRolSistema(auth)) {
                 return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Sucursal no encontrada"));
+                    .body(ApiResponse.error("Empresa no encontrada"));
             }
 
-            List<Cliente> clientes = clienteService.buscarPorIdentificacion(sucursalId, numeroIdentificacion);
+            List<Cliente> clientes = clienteService.buscarPorIdentificacion(empresaId, numeroIdentificacion);
 
             ClienteBusquedaDTO response = ClienteBusquedaDTO.builder()
                 .numeroIdentificacion(numeroIdentificacion)
@@ -235,16 +231,16 @@ public class ClienteController {
         }
     }
 
-    @Operation(summary = "Obtener resumen de clientes por sucursal")
+    @Operation(summary = "Obtener resumen de clientes por empresa")
     @GetMapping("/resumen")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
     public ResponseEntity<ApiResponse<ClienteResumenDTO>> obtenerResumen(
-        @RequestParam(name = "sucursalId") Long sucursalId,
+        @RequestParam(name = "empresaId") Long empresaId,
         Authentication auth) {
 
         try {
-            long totalClientes = clienteService.contarClientesPorSucursal(sucursalId);
-            List<Cliente> clientesConExoneracion = clienteService.obtenerClientesConExoneracion(sucursalId);
+            long totalClientes = clienteService.contarClientesPorEmpresa(empresaId);
+            List<Cliente> clientesConExoneracion = clienteService.obtenerClientesConExoneracion(empresaId);
 
             ClienteResumenDTO resumen = ClienteResumenDTO.builder()
                 .totalClientes(totalClientes)

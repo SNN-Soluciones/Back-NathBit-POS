@@ -20,7 +20,7 @@ public interface ClienteUbicacionRepository extends JpaRepository<ClienteUbicaci
     
     // Buscar clientes por ubicación geográfica
     @Query("SELECT cu FROM ClienteUbicacion cu " +
-           "WHERE cu.cliente.sucursal.id = :sucursalId " +
+           "WHERE cu.cliente.empresa.id = :sucursalId " +
            "AND cu.provincia.id = :provinciaId " +
            "AND (:cantonId IS NULL OR cu.canton.id = :cantonId) " +
            "AND (:distritoId IS NULL OR cu.distrito.id = :distritoId)")
@@ -33,7 +33,7 @@ public interface ClienteUbicacionRepository extends JpaRepository<ClienteUbicaci
     
     // Contar clientes con ubicación por sucursal
     @Query("SELECT COUNT(cu) FROM ClienteUbicacion cu " +
-           "WHERE cu.cliente.sucursal.id = :sucursalId " +
+           "WHERE cu.cliente.empresa.id = :sucursalId " +
            "AND cu.cliente.activo = true")
     long countClientesConUbicacionPorSucursal(@Param("sucursalId") Long sucursalId);
 }

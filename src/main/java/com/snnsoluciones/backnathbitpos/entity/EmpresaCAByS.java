@@ -30,9 +30,6 @@ public class EmpresaCAByS {
     @JoinColumn(name = "codigo_cabys_id", nullable = false)
     private CodigoCAByS codigoCabys;
     
-    @Column(name = "descripcion_personalizada", length = 200)
-    private String descripcionPersonalizada;
-    
     @Column(nullable = false)
     @Builder.Default
     private Boolean activo = true;

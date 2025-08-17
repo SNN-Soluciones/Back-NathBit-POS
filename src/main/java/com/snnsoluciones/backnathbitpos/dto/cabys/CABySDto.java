@@ -1,17 +1,18 @@
-package com.snnsoluciones.backnathbitpos.dto.producto;
+package com.snnsoluciones.backnathbitpos.dto.cabys;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-// DTO para listados y búsquedas
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CodigoCABySDto {
+public class CABySDto {
     private Long id;
     private String codigo;
     private String descripcion;
-    private String tipo;
     private String impuestoSugerido;
     private Boolean activo;
 }

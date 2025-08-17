@@ -22,9 +22,6 @@ public class CodigoCAByS {
     @Column(name = "descripcion", nullable = false, columnDefinition = "TEXT")
     private String descripcion;
     
-    @Column(name = "tipo", length = 50)
-    private String tipo; // BIEN o SERVICIO
-    
     @Column(name = "impuesto_sugerido", length = 100)
     private String impuestoSugerido;
     

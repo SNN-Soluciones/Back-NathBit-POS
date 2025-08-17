@@ -35,6 +35,12 @@ public class CrearFacturaRequest {
     @NotNull(message = "Los medios de pago son requeridos")
     @Size(min = 1, message = "Debe incluir al menos un medio de pago")
     private List<MedioPagoRequest> mediosPago;
+
+    @NotNull(message = "Terminal es requerida")
+    private Long terminalId;
+
+    @NotNull(message = "Sesión de caja es requerida")
+    private Long sesionCajaId;
     
     // Descuento global (opcional)
     private BigDecimal descuento = BigDecimal.ZERO;

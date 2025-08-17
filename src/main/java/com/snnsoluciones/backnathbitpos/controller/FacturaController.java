@@ -3,10 +3,12 @@ package com.snnsoluciones.backnathbitpos.controller;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.enums.mh.CondicionVenta;
 import com.snnsoluciones.backnathbitpos.enums.mh.MedioPago;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,35 +39,50 @@ public class FacturaController {
     private final TerminalRepository terminalRepository;
     private final SesionCajaRepository sesionCajaRepository;
     private final UsuarioRepository usuarioRepository;
-    
-    @Operation(summary = "Crear nueva factura")
+    private final JwtTokenProvider jwtService;
+
     @PostMapping
     @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<FacturaResponse>> crear(
-            @Valid @RequestBody CrearFacturaRequest request,
-            HttpServletRequest httpRequest) {
-        
+        @Valid @RequestBody CrearFacturaRequest request,
+        HttpServletRequest httpRequest) {
+
         try {
             log.info("Creando factura para cliente: {}", request.getClienteId());
-            
-            // Obtener datos del contexto (sesión, terminal, etc)
-            Long usuarioId = obtenerUsuarioId(httpRequest);
-            Usuario cajero = usuarioRepository.findById(usuarioId)
+
+            // Obtener usuario del JWT
+            String authHeader = httpRequest.getHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                throw new RuntimeException("Token no válido");
+            }
+
+            String token = authHeader.substring(7);
+            String username = jwtService.getEmailFromToken(token); // Asumo que tienes JwtService
+
+            Usuario cajero = usuarioRepository.findByEmail(username)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-            
-            // TODO: Obtener de sesión real
-            Long terminalId = 1L; // Por ahora hardcodeado
-            Terminal terminal = terminalRepository.findById(terminalId)
+
+            // Obtener terminal del request
+            Terminal terminal = terminalRepository.findById(request.getTerminalId())
                 .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
-            
-            // Obtener sesión de caja activa
-            SesionCaja sesionCaja = sesionCajaRepository.findSesionAbiertaByTerminalId(terminalId)
-                .orElseThrow(() -> new RuntimeException("No hay sesión de caja abierta"));
-            
+
+            // Obtener sesión de caja del request
+            SesionCaja sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
+                .orElseThrow(() -> new RuntimeException("Sesión de caja no encontrada"));
+
+            // Validar que la sesión esté abierta y sea de la terminal correcta
+            if (!sesionCaja.getEstado().equals(EstadoSesion.ABIERTA)) {
+                throw new RuntimeException("La sesión de caja está cerrada");
+            }
+
+            if (!sesionCaja.getTerminal().getId().equals(request.getTerminalId())) {
+                throw new RuntimeException("La sesión no corresponde a la terminal seleccionada");
+            }
+
             // Obtener cliente
             Cliente cliente = clienteRepository.findById(request.getClienteId())
                 .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
-            
+
             // Construir entidad Factura
             Factura factura = new Factura();
             factura.setCliente(cliente);
@@ -78,15 +95,15 @@ public class FacturaController {
             factura.setCajero(cajero);
             factura.setDescuentos(request.getDescuento() != null ? request.getDescuento() : BigDecimal.ZERO);
             factura.setFechaEmision(LocalDateTime.now());
-            
+
             // Construir detalles
             List<FacturaDetalle> detalles = new ArrayList<>();
             int numeroLinea = 1;
-            
+
             for (DetalleFacturaRequest detalleReq : request.getDetalles()) {
                 Producto producto = productoRepository.findById(detalleReq.getProductoId())
                     .orElseThrow(() -> new RuntimeException("Producto no encontrado: " + detalleReq.getProductoId()));
-                
+
                 FacturaDetalle detalle = new FacturaDetalle();
                 detalle.setNumeroLinea(numeroLinea++);
                 detalle.setProducto(producto);
@@ -95,13 +112,13 @@ public class FacturaController {
                 detalle.setMontoDescuento(detalleReq.getDescuento() != null ? detalleReq.getDescuento() : BigDecimal.ZERO);
                 detalle.setUnidadMedida(producto.getUnidadMedida().name());
                 detalle.setCodigoCabys(producto.getEmpresaCabys().getCodigoCabys().getCodigo());
-                detalle.setDetalle(detalleReq.getDescripcionPersonalizada() != null 
-                    ? detalleReq.getDescripcionPersonalizada() 
+                detalle.setDetalle(detalleReq.getDescripcionPersonalizada() != null
+                    ? detalleReq.getDescripcionPersonalizada()
                     : producto.getDescripcion());
-                
+
                 detalles.add(detalle);
             }
-            
+
             // Construir medios de pago
             List<FacturaMedioPago> mediosPago = new ArrayList<>();
             for (MedioPagoRequest medioPagoReq : request.getMediosPago()) {
@@ -110,20 +127,20 @@ public class FacturaController {
                 medioPago.setMonto(medioPagoReq.getMonto());
                 medioPago.setReferencia(medioPagoReq.getReferencia());
                 medioPago.setBanco(medioPagoReq.getBanco());
-                
+
                 mediosPago.add(medioPago);
             }
-            
+
             // Crear factura
             Factura facturaCreada = facturaService.crear(factura, detalles, mediosPago);
-            
+
             // Construir respuesta
             FacturaResponse response = construirResponse(facturaCreada);
             response.setMensaje("Factura creada exitosamente");
-            
+
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Factura creada exitosamente", response));
-                
+
         } catch (Exception e) {
             log.error("Error creando factura: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -148,19 +165,17 @@ public class FacturaController {
             .map(factura -> ResponseEntity.ok(ApiResponse.ok(construirResponse(factura))))
             .orElse(ResponseEntity.notFound().build());
     }
-    
-    @Operation(summary = "Listar facturas de la sesión actual")
+
     @GetMapping("/sesion-actual")
     @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS')")
-    public ResponseEntity<ApiResponse<List<FacturaListaResponse>>> listarSesionActual(HttpServletRequest request) {
-        // TODO: Obtener sesión real del token
-        Long sesionId = 1L; // Hardcodeado por ahora
-        
-        List<Factura> facturas = facturaService.listarPorSesionCaja(sesionId);
+    public ResponseEntity<ApiResponse<List<FacturaListaResponse>>> listarSesionActual(
+        @RequestParam Long sesionCajaId) { // Ahora viene como parámetro
+
+        List<Factura> facturas = facturaService.listarPorSesionCaja(sesionCajaId);
         List<FacturaListaResponse> response = facturas.stream()
             .map(this::construirListaResponse)
             .toList();
-        
+
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
     

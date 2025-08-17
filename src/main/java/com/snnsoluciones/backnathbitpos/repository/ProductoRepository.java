@@ -25,7 +25,7 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
     boolean existsByCodigoBarrasAndEmpresaId(String codigoBarras, Long empresaId);
 
     // Productos de una empresa (solo activos)
-    Page<Producto> findByEmpresaIdAndActivoTrue(Long empresaId, Pageable pageable);
+    Page<Producto> findByEmpresaId(Long empresaId, Pageable pageable);
 
     // Búsqueda general
     @Query("""

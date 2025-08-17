@@ -77,4 +77,13 @@ public class GlobalExceptionHandler {
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ApiResponse.error("Error interno del servidor"));
     }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException e) {
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.<Void>builder()
+                .success(false)
+                .message(e.getMessage())
+                .build());
+    }
 }

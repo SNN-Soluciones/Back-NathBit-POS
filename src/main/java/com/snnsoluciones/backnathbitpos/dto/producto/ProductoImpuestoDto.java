@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 public class ProductoImpuestoDto {
     private Long id;
     private TipoImpuesto tipoImpuesto;
-    private CodigoTarifaIVA tarifaIva;
+    private CodigoTarifaIVA codigoTarifaIVA;
     private BigDecimal porcentaje;
     private BigDecimal porcentajeEfectivo;
     private Boolean activo;

@@ -3,15 +3,18 @@ package com.snnsoluciones.backnathbitpos.controller;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.service.ProductoCrudService;
+import com.snnsoluciones.backnathbitpos.service.ProductoImagenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
@@ -21,17 +24,21 @@ import org.springframework.web.bind.annotation.*;
 public class ProductoController {
     
     private final ProductoCrudService productoCrudService;
-    
-    @PostMapping("/{empresaId}")
+    private final ProductoImagenService productoImagenService;
+
+    @PostMapping(value = "/{empresaId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
-    @Operation(summary = "Crear producto", description = "Crea un nuevo producto para una empresa")
-    public ResponseEntity<ApiResponse<ProductoDto>> crear(
-            @PathVariable Long empresaId,
-            @Valid @RequestBody ProductoCreateDto dto) {
-        
-        log.info("Creando producto para empresa: {}", empresaId);
-        ProductoDto producto = productoCrudService.crear(empresaId, dto);
-        
+    @Operation(summary = "Crear producto con imagen", description = "Crea un nuevo producto con imagen opcional")
+    public ResponseEntity<ApiResponse<ProductoDto>> crearConImagen(
+        @PathVariable Long empresaId,
+        @RequestPart("producto") @Valid ProductoCreateDto dto,
+        @RequestPart(value = "imagen", required = false) MultipartFile imagen) {
+
+        log.info("Creando producto para empresa: {} con imagen: {}",
+            empresaId, imagen != null ? imagen.getOriginalFilename() : "sin imagen");
+
+        ProductoDto producto = productoCrudService.crear(empresaId, dto, imagen);
+
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(ApiResponse.<ProductoDto>builder()
                 .success(true)
@@ -39,22 +46,41 @@ public class ProductoController {
                 .data(producto)
                 .build());
     }
-    
-    @PutMapping("/{empresaId}/{productoId}")
+
+    @PutMapping(value = "/{empresaId}/{productoId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
-    @Operation(summary = "Actualizar producto", description = "Actualiza un producto existente")
-    public ResponseEntity<ApiResponse<ProductoDto>> actualizar(
-            @PathVariable Long empresaId,
-            @PathVariable Long productoId,
-            @Valid @RequestBody ProductoUpdateDto dto) {
-        
-        log.info("Actualizando producto: {} de empresa: {}", productoId, empresaId);
-        ProductoDto producto = productoCrudService.actualizar(empresaId, productoId, dto);
-        
+    @Operation(summary = "Actualizar producto con imagen", description = "Actualiza un producto con imagen opcional")
+    public ResponseEntity<ApiResponse<ProductoDto>> actualizarConImagen(
+        @PathVariable Long empresaId,
+        @PathVariable Long productoId,
+        @RequestPart("producto") @Valid ProductoUpdateDto dto,
+        @RequestPart(value = "imagen", required = false) MultipartFile imagen) {
+
+        log.info("Actualizando producto: {} de empresa: {} con imagen: {}",
+            productoId, empresaId, imagen != null ? imagen.getOriginalFilename() : "sin cambios");
+
+        ProductoDto producto = productoCrudService.actualizar(empresaId, productoId, dto, imagen);
+
         return ResponseEntity.ok(ApiResponse.<ProductoDto>builder()
             .success(true)
             .message("Producto actualizado exitosamente")
             .data(producto)
+            .build());
+    }
+
+    @DeleteMapping("/{empresaId}/{productoId}/imagen")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+    @Operation(summary = "Eliminar imagen", description = "Elimina la imagen de un producto")
+    public ResponseEntity<ApiResponse<Void>> eliminarImagen(
+        @PathVariable Long empresaId,
+        @PathVariable Long productoId) {
+
+        log.info("Eliminando imagen del producto: {} de empresa: {}", productoId, empresaId);
+        productoImagenService.eliminarImagen(empresaId, productoId);
+
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+            .success(true)
+            .message("Imagen eliminada exitosamente")
             .build());
     }
     

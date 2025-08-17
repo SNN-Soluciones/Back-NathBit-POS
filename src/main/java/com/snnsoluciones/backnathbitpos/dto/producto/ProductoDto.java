@@ -28,7 +28,8 @@ public class ProductoDto {
     private BigDecimal totalImpuestos;
     private BigDecimal precioFinal;
     private Boolean aplicaServicio;
-    private Boolean esServicio;
+    private Boolean incluyeIVA = true;
+    private String imagenUrl;
     private Boolean activo;
     private String createdAt;
     private String updatedAt;

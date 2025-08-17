@@ -1,6 +1,8 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import java.util.List;
+import java.util.Set;
 import lombok.*;
 import java.math.BigDecimal;
 
@@ -14,9 +16,11 @@ public class ProductoListDto {
     private String codigoInterno;
     private String codigoBarras;
     private String nombre;
-    private List<String> categoriasNombres;
+    private Set<CategoriaProductoDto> categorias;
+    private List<ProductoImpuestoDto> impuestos;
     private BigDecimal precioVenta;
-    private String monedaSimbolo;
+    private Moneda moneda;
     private Long empresaId;
     private Boolean activo;
+    private Boolean aplicaServicio = false;
 }

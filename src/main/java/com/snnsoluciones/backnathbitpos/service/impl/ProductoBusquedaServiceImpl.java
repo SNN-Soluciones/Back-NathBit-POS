@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoQueryRepository;
 import com.snnsoluciones.backnathbitpos.service.ProductoBusquedaService;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -34,9 +35,9 @@ public class ProductoBusquedaServiceImpl implements ProductoBusquedaService {
     public Page<ProductoListDto> listarPorEmpresa(Long empresaId, Pageable pageable) {
         log.debug("Listando productos de empresa: {}", empresaId);
         
-        Page<Producto> productos = productoRepository.findByEmpresaIdAndActivoTrue(empresaId, pageable);
+        Page<Producto> productos = productoRepository.findByEmpresaId(empresaId, pageable);
         
-        return productos.map(this::convertirAListDto);
+        return productos.map((element) -> modelMapper.map(element, ProductoListDto.class));
     }
     
     @Override
@@ -49,8 +50,8 @@ public class ProductoBusquedaServiceImpl implements ProductoBusquedaService {
         }
         
         Page<Producto> productos = productoRepository.buscarPorEmpresa(empresaId, busqueda.trim(), pageable);
-        
-        return productos.map(this::convertirAListDto);
+
+        return productos.map((element) -> modelMapper.map(element, ProductoListDto.class));
     }
     
     @Override
@@ -59,8 +60,8 @@ public class ProductoBusquedaServiceImpl implements ProductoBusquedaService {
         log.debug("Listando productos de categoría: {}", categoriaId);
         
         Page<Producto> productos = productoRepository.findByCategoriaId(categoriaId, pageable);
-        
-        return productos.map(this::convertirAListDto);
+
+        return productos.map((element) -> modelMapper.map(element, ProductoListDto.class));
     }
     
     @Override
@@ -129,19 +130,22 @@ public class ProductoBusquedaServiceImpl implements ProductoBusquedaService {
     }
     
     // Método auxiliar para convertir a DTO de lista (más ligero)
-    private ProductoListDto convertirAListDto(Producto producto) {
-        ProductoListDto dto = modelMapper.map(producto, ProductoListDto.class);
-        dto.setEmpresaId(producto.getEmpresa().getId());
-        
-        // Categorías (solo nombres)
-        dto.setCategoriasNombres(
-            producto.getCategorias().stream()
-                .map(CategoriaProducto::getNombre)
-                .collect(Collectors.toList())
-        );
-        
-        return dto;
-    }
+//    private ProductoListDto convertirAListDto(Producto producto) {
+//        ProductoListDto dto = modelMapper.map(producto, ProductoListDto.class);
+//        dto.setEmpresaId(producto.getEmpresa().getId());
+//
+//        Set<CategoriaProducto> categoriasProducto = producto.getCategorias();
+//        if (categoriasProducto != null && !categoriasProducto.isEmpty()) {
+//            Set<CategoriaProductoDto> categoriaProductoDtos = categoriasProducto.stream()
+//                .map((element) -> modelMapper.map(element, CategoriaProductoDto.class))
+//                .collect(Collectors.toSet());
+//            dto.setCategoriasNombres(categoriaProductoDtos);
+//        }
+//
+//        // Categorías (solo nombres)
+//
+//        return dto;
+//    }
     
     private ProductoDto convertirADto(Producto producto) {
         ProductoDto dto = modelMapper.map(producto, ProductoDto.class);

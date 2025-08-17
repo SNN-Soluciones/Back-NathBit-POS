@@ -53,6 +53,8 @@ public class ProductoCreateDto {
     @Builder.Default
     private Boolean aplicaServicio = false;
 
+    private Boolean incluyeIVA;
+
     @Builder.Default
     private Boolean activo = true;
 

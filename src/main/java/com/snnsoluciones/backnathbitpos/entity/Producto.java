@@ -103,7 +103,13 @@ public class Producto {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-    
+
+    @Column(name = "imagen_url", length = 500)
+    private String imagenUrl;
+
+    @Column(name = "imagen_key", length = 255)
+    private String imagenKey;
+
     // Métodos helper
     public void agregarImpuesto(ProductoImpuesto impuesto) {
         impuestos.add(impuesto);

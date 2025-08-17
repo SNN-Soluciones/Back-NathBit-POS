@@ -109,7 +109,7 @@ public class TerminalController {
 
     @Operation(summary = "Generar siguiente consecutivo")
     @PostMapping("/{id}/siguiente-consecutivo")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CAJERO', 'JEFE_CAJAS')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
     public ResponseEntity<ApiResponse<String>> generarConsecutivo(
         @PathVariable Long id,
         @Valid @RequestBody GenerarConsecutivoRequest request) {

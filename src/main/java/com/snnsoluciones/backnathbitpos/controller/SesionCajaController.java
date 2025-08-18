@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.controller;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.sesion.*;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
+import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class SesionCajaController {
     
     private final SesionCajaService sesionCajaService;
+    private final JwtTokenProvider jwtTokenProvider;
     
     @Operation(summary = "Abrir sesión de caja")
     @PostMapping("/abrir")
@@ -37,8 +39,10 @@ public class SesionCajaController {
             HttpServletRequest httpRequest) {
         
         try {
+            String token = httpRequest.getHeader("Authorization");
+            token = token.substring(7, token.length());
             // Obtener usuario del JWT
-            Long usuarioId = obtenerUsuarioIdDelToken(httpRequest);
+            Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
 
             // Verificar si ya tiene sesión abierta
             if (sesionCajaService.usuarioTieneSesionAbierta(usuarioId)) {
@@ -133,8 +137,10 @@ public class SesionCajaController {
     @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
     public ResponseEntity<ApiResponse<SesionCajaResponse>> obtenerMiSesionActiva(
             HttpServletRequest request) {
+
+
         
-        Long usuarioId = obtenerUsuarioIdDelToken(request);
+        Long usuarioId = jwtTokenProvider.getUserIdFromToken(getToken(request));
         
         return sesionCajaService.buscarSesionActiva(usuarioId)
             .map(sesion -> ResponseEntity.ok(ApiResponse.ok(construirResponse(sesion))))
@@ -221,5 +227,11 @@ public class SesionCajaController {
             .totalVentas(sesion.getTotalVentas())
             .diferencia(sesion.getDiferenciaCierre())
             .build();
+    }
+
+    private String getToken(HttpServletRequest httpRequest) {
+        String token = httpRequest.getHeader("Authorization");
+        token = token.substring(7, token.length());
+        return token;
     }
 }

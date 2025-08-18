@@ -42,7 +42,7 @@ public class Factura {
     @Column(length = 20, nullable = false, unique = true)
     private String consecutivo;
 
-    @Column(name = "tipo_documento", length = 2, nullable = false)
+    @Column(name = "tipo_documento", nullable = false)
     @Enumerated(EnumType.STRING)
     private TipoDocumento tipoDocumento;
 
@@ -75,7 +75,7 @@ public class Factura {
     private Usuario cajero;
 
     // Datos de venta
-    @Column(name = "condicion_venta", length = 2, nullable = false)
+    @Column(name = "condicion_venta", nullable = false)
     @Enumerated(EnumType.STRING)
     private CondicionVenta condicionVenta = CondicionVenta.CONTADO;
 

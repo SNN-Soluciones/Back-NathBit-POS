@@ -86,7 +86,7 @@ public class FacturaController {
             // Construir entidad Factura
             Factura factura = new Factura();
             factura.setCliente(cliente);
-            factura.setTipoDocumento(TipoDocumento.valueOf(request.getTipoDocumento()));
+            factura.setTipoDocumento(request.getTipoDocumento());
             factura.setCondicionVenta(CondicionVenta.fromCodigo(request.getCondicionVenta()));
             factura.setPlazoCredito(request.getPlazoCredito());
             factura.setTerminal(terminal);

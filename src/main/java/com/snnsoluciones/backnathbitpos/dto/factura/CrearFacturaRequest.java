@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.factura;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,11 +20,9 @@ public class CrearFacturaRequest {
     private Long clienteId;
     
     @NotNull(message = "El tipo de documento es requerido")
-    @Pattern(regexp = "^(01|04|TI|FI)$", message = "Tipo documento inválido")
-    private String tipoDocumento; // 01=Factura, 04=Tiquete, TI=Interno, FI=Fact.Interna
+    private TipoDocumento tipoDocumento;
     
     @NotBlank(message = "La condición de venta es requerida")
-    @Pattern(regexp = "^(01|02)$", message = "Condición venta inválida")
     private String condicionVenta; // 01=Contado, 02=Crédito
     
     private Integer plazoCredito; // Requerido si condicionVenta = 02

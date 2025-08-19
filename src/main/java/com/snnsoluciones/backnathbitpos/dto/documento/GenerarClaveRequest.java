@@ -19,7 +19,7 @@ public class GenerarClaveRequest {
     private String consecutivo;
     
     @NotNull(message = "La fecha de emisión es requerida")
-    private LocalDateTime fechaEmision;
+    private String fechaEmision;
     
     @NotBlank(message = "La identificación del emisor es requerida")
     @Pattern(regexp = "^[0-9]{9,12}$", message = "Identificación inválida")

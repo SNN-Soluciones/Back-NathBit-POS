@@ -1,54 +1,60 @@
 package com.snnsoluciones.backnathbitpos.service;
 
-import com.snnsoluciones.backnathbitpos.entity.Factura;
-import com.snnsoluciones.backnathbitpos.entity.FacturaDetalle;
-import com.snnsoluciones.backnathbitpos.entity.FacturaMedioPago;
+import com.snnsoluciones.backnathbitpos.dto.factura.CrearFacturaRequest;
 
+import com.snnsoluciones.backnathbitpos.dto.factura.ValidacionTotalesRequest;
+import com.snnsoluciones.backnathbitpos.dto.factura.ValidacionTotalesResponse;
+import com.snnsoluciones.backnathbitpos.entity.Factura;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Servicio principal para gestión de facturas
+ * Servicio para gestión de facturas
  */
 public interface FacturaService {
-    
+
     /**
-     * Crea una nueva factura con generación inmediata de consecutivo y clave
-     * 
-     * @param factura Datos de la factura
-     * @param detalles Lista de productos
-     * @param mediosPago Lista de medios de pago
-     * @return Factura creada con clave y consecutivo
+     * Crear nueva factura con todos sus componentes
      */
-    Factura crear(Factura factura, List<FacturaDetalle> detalles, List<FacturaMedioPago> mediosPago);
-    
+    Factura crear(CrearFacturaRequest request);
+
     /**
-     * Busca una factura por su clave única
+     * Buscar factura por ID
+     */
+    Optional<Factura> buscarPorId(Long id);
+
+    /**
+     * Buscar factura por clave
      */
     Optional<Factura> buscarPorClave(String clave);
-    
+
     /**
-     * Busca una factura por su consecutivo
+     * Buscar factura por consecutivo
      */
     Optional<Factura> buscarPorConsecutivo(String consecutivo);
-    
+
     /**
-     * Lista las facturas de una sesión de caja
+     * Listar facturas por sesión de caja
      */
     List<Factura> listarPorSesionCaja(Long sesionCajaId);
-    
+
     /**
-     * Lista facturas con error de una sucursal
+     * Listar facturas con error de una sucursal
      */
     List<Factura> listarFacturasConError(Long sucursalId);
-    
+
     /**
-     * Anula una factura (si el estado lo permite)
+     * Anular factura
      */
     Factura anular(Long facturaId, String motivo);
-    
+
     /**
-     * Reenvía una factura rechazada o con error
+     * Reenviar factura a Hacienda
      */
     void reenviar(Long facturaId);
+
+    /**
+     * Validar totales antes de crear la factura
+     */
+    ValidacionTotalesResponse validarTotales(ValidacionTotalesRequest request);
 }

@@ -19,11 +19,18 @@ public enum SituacionDocumento {
     public String getCodigo() { return codigo; }
     public String getDescripcion() { return descripcion; }
 
-    Optional<?> fromCodigoOptional(String codigo) {
+    public static Optional<?> fromCodigoOptional(String codigo) {
         if (codigo == null) return Optional.empty();
 
         return Arrays.stream(values())
             .filter(tipo -> tipo.codigo.equals(codigo))
             .findFirst();
+    }
+
+    public static SituacionDocumento fromCodigo(String codigo) {
+        return Arrays.stream(values())
+            .filter(cv -> cv.getCodigo().equals(codigo))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Código de condición venta no válido: " + codigo));
     }
 }

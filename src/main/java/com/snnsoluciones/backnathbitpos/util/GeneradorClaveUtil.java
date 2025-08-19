@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.util;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.Random;
 
 /**
@@ -26,7 +27,7 @@ public class GeneradorClaveUtil {
      * @return Clave de 50 dígitos
      */
     public static String generarClave(
-            LocalDateTime fechaEmision,
+            String fechaEmision,
             int tipoIdentificacion,
             String identificacion,
             String consecutivo,
@@ -39,7 +40,17 @@ public class GeneradorClaveUtil {
         }
         
         // Componentes
-        String fecha = fechaEmision.format(FORMATO_FECHA);
+        LocalDateTime Time = LocalDateTime.now();
+        String dia = String.valueOf(Time.getDayOfMonth());
+        if(dia.length() == 1) {
+            dia = "0" + dia;
+        }
+        String mes = String.valueOf(Time.getMonthValue());
+        if (mes.length() == 1) {
+            mes = "0" + mes;
+        }
+        String anho = String.valueOf(Time.getYear()).substring(2, 4);
+        String fecha = dia + mes + anho;
         String identificacionFormateada = formatearIdentificacion(tipoIdentificacion, identificacion);
         String codigoSeguridad = generarCodigoSeguridad(documentoId);
         

@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.ToString;
@@ -78,8 +79,8 @@ public class OtroCargo {
     private Integer numeroLinea;
     
     // Campos para terceros (cuando tipoDocumentoOC = '04')
-    @Column(name = "tercero_tipo_identificacion", length = 2)
-    private String terceroTipoIdentificacion;
+    @Column(name = "tercero_tipo_identificacion")
+    private TipoIdentificacion terceroTipoIdentificacion;
     
     @Column(name = "tercero_numero_identificacion", length = 20)
     private String terceroNumeroIdentificacion;

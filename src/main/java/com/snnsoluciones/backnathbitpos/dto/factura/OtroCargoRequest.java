@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.factura;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -57,7 +58,7 @@ public class OtroCargoRequest {
     private BigDecimal montoCargo;
     
     // Campos para terceros (cuando tipoDocumentoOC = '04')
-    private String terceroTipoIdentificacion;
+    private TipoIdentificacion terceroTipoIdentificacion;
     
     @Size(max = 20, message = "La identificación no puede exceder 20 caracteres")
     private String terceroNumeroIdentificacion;

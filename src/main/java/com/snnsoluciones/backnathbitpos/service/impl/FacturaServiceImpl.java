@@ -3,19 +3,11 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
-import com.snnsoluciones.backnathbitpos.enums.mh.CondicionVenta;
-import com.snnsoluciones.backnathbitpos.enums.mh.MedioPago;
-import com.snnsoluciones.backnathbitpos.enums.mh.SituacionDocumento;
-import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
+import com.snnsoluciones.backnathbitpos.enums.mh.*;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.FacturaJobService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
-import com.snnsoluciones.backnathbitpos.util.GeneradorClaveUtil;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,36 +16,49 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Implementación del servicio de Factura con validación completa
+ * "¡Piensa McFly, piensa!" - Doc Brown
+ * Arquitectura La Jachuda 🚀
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class FacturaServiceImpl implements FacturaService {
 
   private final FacturaRepository facturaRepository;
   private final ProductoRepository productoRepository;
   private final ClienteRepository clienteRepository;
   private final TerminalService terminalService;
-  private final FacturaJobService facturaJobService;
-  private final OtroCargoRepository otroCargoRepository;
-  private final FacturaDescuentoRepository facturaDescuentoRepository;
   private final SesionCajaRepository sesionCajaRepository;
   private final UsuarioRepository usuarioRepository;
+  private final FacturaJobService facturaJobService;
 
   @Override
+  @Transactional
   public Factura crear(CrearFacturaRequest request) {
-    log.info("Creando factura tipo: {} para cliente: {}",
-        request.getTipoDocumento(), request.getClienteId());
+    log.info("Creando factura tipo: {}", request.getTipoDocumento());
 
-    // Validaciones del request
-    validarRequest(request);
+    // 1. Validaciones de negocio básicas
+    validarRequestBasico(request);
 
-    // Crear entidad Factura
+    // 2. Validación completa de totales (El checkeo del Doc)
+    ValidacionTotalesResponse validacion = validarTotalesCompleto(request);
+    if (!validacion.isEsValido()) {
+      throw new IllegalArgumentException("Validación de totales falló: " + validacion.getMensaje());
+    }
+
+    // 3. Crear entidad factura
     Factura factura = new Factura();
+
+    // Datos básicos
     factura.setTipoDocumento(request.getTipoDocumento());
     factura.setCondicionVenta(CondicionVenta.fromCodigo(request.getCondicionVenta()));
     factura.setPlazoCredito(request.getPlazoCredito());
@@ -62,7 +67,7 @@ public class FacturaServiceImpl implements FacturaService {
     factura.setTipoCambio(request.getTipoCambio());
     factura.setObservaciones(request.getObservaciones());
 
-    // Asignar cliente si viene (opcional para TE)
+    // Cliente (opcional para TE)
     if (request.getClienteId() != null) {
       Cliente cliente = clienteRepository.findById(request.getClienteId())
           .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
@@ -73,10 +78,13 @@ public class FacturaServiceImpl implements FacturaService {
     Terminal terminal = terminalService.buscarPorId(request.getTerminalId())
         .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
     factura.setTerminal(terminal);
-
     factura.setSucursal(terminal.getSucursal());
-    sesionCajaRepository.findById(request.getSesionCajaId()).ifPresent(factura::setSesionCaja);
-    usuarioRepository.findById(request.getUsuarioId()).ifPresent(factura::setCajero);
+
+    sesionCajaRepository.findById(request.getSesionCajaId())
+        .ifPresent(factura::setSesionCaja);
+
+    usuarioRepository.findById(request.getUsuarioId())
+        .ifPresent(factura::setCajero);
 
     // Generar consecutivo
     String consecutivo = terminalService.generarNumeroConsecutivo(
@@ -85,10 +93,9 @@ public class FacturaServiceImpl implements FacturaService {
     );
     factura.setConsecutivo(consecutivo);
 
+    // Fecha emisión
     ZonedDateTime fechaEmisionCR = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
     factura.setFechaEmision(fechaEmisionCR.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-
-    //generar cajero(usuario)
 
     // Generar clave y código seguridad si es electrónica
     if (factura.esElectronica()) {
@@ -98,35 +105,33 @@ public class FacturaServiceImpl implements FacturaService {
       log.info("Clave generada: {} para consecutivo: {}", clave, consecutivo);
     }
 
-    // Procesar detalles con descuentos
-    procesarDetalles(factura, request.getDetalles());
+    // 4. Asignar totales ya validados (confiamos en el frontend validado)
+    asignarTotales(factura, request);
 
-    // Aplicar descuento global si existe
+    // 5. Guardar descuento global si existe
     if (request.getDescuentoGlobalPorcentaje() != null) {
       factura.setDescuentoGlobalPorcentaje(request.getDescuentoGlobalPorcentaje());
-      factura.aplicarDescuentoGlobal();
-    } else if (request.getMontoDescuentoGlobal() != null) {
       factura.setMontoDescuentoGlobal(request.getMontoDescuentoGlobal());
+      factura.setMotivoDescuentoGlobal(request.getMotivoDescuentoGlobal());
     }
-    factura.setMotivoDescuentoGlobal(request.getMotivoDescuentoGlobal());
 
-    // Procesar otros cargos (servicio 10%)
-    procesarOtrosCargos(factura, request.getOtrosCargos(), request.getDetalles());
+    // 6. Procesar detalles (sin calcular, solo guardar)
+    procesarDetalles(factura, request.getDetalles());
 
-    // Calcular totales finales
-    calcularTotalesFinales(factura);
+    // 7. Procesar otros cargos
+    procesarOtrosCargos(factura, request.getOtrosCargos());
 
-    // Procesar medios de pago
+    // 8. Procesar medios de pago
     procesarMediosPago(factura, request.getMediosPago());
 
-    // Validar que totales coincidan
-    validarTotales(factura);
+    // 9. Procesar resumen de impuestos
+    procesarResumenImpuestos(factura, request.getResumenImpuestos());
 
-    // Guardar factura
+    // 10. Guardar factura
     factura.setEstado(EstadoFactura.GENERADA);
     Factura facturaGuardada = facturaRepository.save(factura);
 
-    // Si es electrónica, crear job para procesamiento asíncrono
+    // 11. Si es electrónica, crear job para procesamiento asíncrono
     if (factura.esElectronica() && factura.getClave() != null) {
       facturaJobService.crearJob(facturaGuardada.getId(), facturaGuardada.getClave());
       log.info("Job creado para procesar factura: {}", facturaGuardada.getClave());
@@ -136,215 +141,391 @@ public class FacturaServiceImpl implements FacturaService {
   }
 
   /**
-   * Validar el request completo
+   * Validaciones básicas del request
    */
-  private void validarRequest(CrearFacturaRequest request) {
-    // Validación general del request
-    if (!request.isValid()) {
-      throw new IllegalArgumentException("Request inválido");
-    }
-
-    // Validar tipo documento vs cliente
+  private void validarRequestBasico(CrearFacturaRequest request) {
+    // Tipo documento vs cliente
     if (request.getTipoDocumento() == TipoDocumento.FACTURA_ELECTRONICA
         && request.getClienteId() == null) {
-      throw new IllegalArgumentException(
-          "Factura Electrónica requiere cliente obligatorio"
-      );
+      throw new IllegalArgumentException("Factura Electrónica requiere cliente");
     }
 
-    // Validar condición crédito
-    if ("02".equals(request.getCondicionVenta())
-        && (request.getPlazoCredito() == null || request.getPlazoCredito() <= 0)) {
-      throw new IllegalArgumentException(
-          "Condición crédito requiere plazo mayor a 0"
-      );
+    // Validar al menos un detalle
+    if (request.getDetalles() == null || request.getDetalles().isEmpty()) {
+      throw new IllegalArgumentException("La factura debe tener al menos un detalle");
     }
 
-    // Validar moneda y tipo cambio
-    if (!request.getMoneda().isMonedaLocal()
-        && request.getTipoCambio().compareTo(BigDecimal.ONE) <= 0) {
-      throw new IllegalArgumentException(
-          "Moneda extranjera requiere tipo de cambio válido"
-      );
+    // Validar medios de pago
+    if (request.getMediosPago() == null || request.getMediosPago().isEmpty()) {
+      throw new IllegalArgumentException("La factura debe tener al menos un medio de pago");
     }
   }
 
   /**
-   * Procesar detalles con sus descuentos
+   * VALIDACIÓN COMPLETA - El checkeo del Doc
+   * Validamos TODOS los cálculos sin recalcular
    */
-  private void procesarDetalles(Factura factura, List<DetalleFacturaRequest> detallesRequest) {
-    BigDecimal subtotal = BigDecimal.ZERO;
-    BigDecimal totalImpuestos = BigDecimal.ZERO;
-    int numeroLinea = 1;
+  private ValidacionTotalesResponse validarTotalesCompleto(CrearFacturaRequest request) {
+    List<String> advertencias = new ArrayList<>();
+    boolean esValido = true;
 
-    for (DetalleFacturaRequest detalleReq : detallesRequest) {
-      Producto producto = productoRepository.findById(detalleReq.getProductoId())
-          .orElseThrow(
-              () -> new RuntimeException("Producto no encontrado: " + detalleReq.getProductoId()));
+    try {
+      // 1. Validar totales de líneas
+      BigDecimal sumaTotalLineas = BigDecimal.ZERO;
+      BigDecimal sumaDescuentosLineas = BigDecimal.ZERO;
+      BigDecimal sumaImpuestosLineas = BigDecimal.ZERO;
 
-      FacturaDetalle detalle = new FacturaDetalle();
-      detalle.setNumeroLinea(numeroLinea++);
-      detalle.setProducto(producto);
-      detalle.setCantidad(detalleReq.getCantidad());
-      detalle.setPrecioUnitario(detalleReq.getPrecioUnitario());
-      detalle.setUnidadMedida(producto.getUnidadMedida().name());
-      detalle.setCodigoCabys(producto.getEmpresaCabys().getCodigoCabys().getCodigo());
+      for (DetalleFacturaRequest detalle : request.getDetalles()) {
+        // Validar que precio * cantidad = montoTotal
+        BigDecimal montoCalculado = detalle.getCantidad()
+            .multiply(detalle.getPrecioUnitario())
+            .setScale(5, RoundingMode.HALF_UP);
 
-      // Descripción personalizada o del producto
-      detalle.setDetalle(detalleReq.getDescripcionPersonalizada() != null
-          ? detalleReq.getDescripcionPersonalizada()
-          : producto.getNombre());
+        if (!sonIguales(montoCalculado, detalle.getMontoTotal())) {
+          advertencias.add(String.format(
+              "Línea %d: Monto total no cuadra. Esperado: %.2f, Recibido: %.2f",
+              detalle.getNumeroLinea(), montoCalculado, detalle.getMontoTotal()
+          ));
+          esValido = false;
+        }
 
-      // Código tarifa IVA (del request o del producto)
-      if (detalleReq.getCodigoTarifaIVA() != null) {
-        detalle.setCodigoTarifaIVA(detalleReq.getCodigoTarifaIVA());
-      } else {
-        // TODO: Obtener del producto o usar default
-        detalle.setCodigoTarifaIVA("08"); // 13% por defecto
+        // Validar descuentos no excedan el monto
+        if (detalle.getMontoDescuento().compareTo(detalle.getMontoTotal()) > 0) {
+          advertencias.add(String.format(
+              "Línea %d: Descuento (%.2f) excede monto total (%.2f)",
+              detalle.getNumeroLinea(), detalle.getMontoDescuento(), detalle.getMontoTotal()
+          ));
+          esValido = false;
+        }
+
+        // Validar subtotal = montoTotal - descuentos
+        BigDecimal subtotalCalculado = detalle.getMontoTotal()
+            .subtract(detalle.getMontoDescuento());
+
+        if (!sonIguales(subtotalCalculado, detalle.getSubtotal())) {
+          advertencias.add(String.format(
+              "Línea %d: Subtotal no cuadra. Esperado: %.2f, Recibido: %.2f",
+              detalle.getNumeroLinea(), subtotalCalculado, detalle.getSubtotal()
+          ));
+          esValido = false;
+        }
+
+        // Validar total línea = subtotal + impuestos
+        BigDecimal totalLineaCalculado = detalle.getSubtotal()
+            .add(detalle.getMontoImpuesto());
+
+        if (!sonIguales(totalLineaCalculado, detalle.getMontoTotalLinea())) {
+          advertencias.add(String.format(
+              "Línea %d: Total línea no cuadra. Esperado: %.2f, Recibido: %.2f",
+              detalle.getNumeroLinea(), totalLineaCalculado, detalle.getMontoTotalLinea()
+          ));
+          esValido = false;
+        }
+
+        // Acumular para validación general
+        sumaTotalLineas = sumaTotalLineas.add(detalle.getMontoTotalLinea());
+        sumaDescuentosLineas = sumaDescuentosLineas.add(detalle.getMontoDescuento());
+        sumaImpuestosLineas = sumaImpuestosLineas.add(detalle.getMontoImpuesto());
       }
 
-      // Procesar descuentos de la línea
-      procesarDescuentosLinea(detalle, detalleReq.getDescuentos());
+      // 2. Validar descuento global
+      if (request.getMontoDescuentoGlobal() != null &&
+          request.getMontoDescuentoGlobal().compareTo(BigDecimal.ZERO) > 0) {
+        // Si hay porcentaje, validar cálculo
+        if (request.getDescuentoGlobalPorcentaje() != null) {
+          // El descuento global se aplica sobre el subtotal después de descuentos de línea
+          BigDecimal baseDescuentoGlobal = request.getTotalVenta();
+          BigDecimal descuentoCalculado = baseDescuentoGlobal
+              .multiply(request.getDescuentoGlobalPorcentaje())
+              .divide(new BigDecimal("100"), 5, RoundingMode.HALF_UP);
 
-      // Calcular totales de la línea
-      detalle.calcularTotales();
+          if (!sonIguales(descuentoCalculado, request.getMontoDescuentoGlobal())) {
+            advertencias.add(String.format(
+                "Descuento global no cuadra. Esperado: %.2f, Recibido: %.2f",
+                descuentoCalculado, request.getMontoDescuentoGlobal()
+            ));
+            esValido = false;
+          }
+        }
+      }
 
-      // Agregar a la factura
-      factura.agregarDetalle(detalle);
+      // 3. Validar total descuentos
+      BigDecimal totalDescuentosCalculado = sumaDescuentosLineas
+          .add(request.getMontoDescuentoGlobal() != null ? request.getMontoDescuentoGlobal() : BigDecimal.ZERO);
 
-      // Acumular totales
-      subtotal = subtotal.add(detalle.getSubtotal());
-      totalImpuestos = totalImpuestos.add(detalle.getImpuesto());
+      if (!sonIguales(totalDescuentosCalculado, request.getTotalDescuentos())) {
+        advertencias.add(String.format(
+            "Total descuentos no cuadra. Esperado: %.2f, Recibido: %.2f",
+            totalDescuentosCalculado, request.getTotalDescuentos()
+        ));
+        esValido = false;
+      }
+
+      // 4. Validar otros cargos (incluye servicio 10%)
+      BigDecimal sumaOtrosCargos = BigDecimal.ZERO;
+      if (request.getOtrosCargos() != null) {
+        sumaOtrosCargos = request.getOtrosCargos().stream()
+            .map(OtroCargoRequest::getMontoCargo)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+      }
+
+      if (!sonIguales(sumaOtrosCargos, request.getTotalOtrosCargos())) {
+        advertencias.add(String.format(
+            "Total otros cargos no cuadra. Esperado: %.2f, Recibido: %.2f",
+            sumaOtrosCargos, request.getTotalOtrosCargos()
+        ));
+        esValido = false;
+      }
+
+      // 5. Validar resumen de impuestos
+      if (request.getResumenImpuestos() != null) {
+        BigDecimal sumaResumenImpuestos = request.getResumenImpuestos().stream()
+            .map(ResumenImpuestoRequest::getTotalImpuestoNeto)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (!sonIguales(sumaResumenImpuestos, request.getTotalImpuesto())) {
+          advertencias.add(String.format(
+              "Total impuestos no cuadra. Esperado: %.2f, Recibido: %.2f",
+              sumaResumenImpuestos, request.getTotalImpuesto()
+          ));
+          esValido = false;
+        }
+      }
+
+      // 6. Validar total venta neta = totalVenta - totalDescuentos
+      BigDecimal totalVentaNetaCalculado = request.getTotalVenta()
+          .subtract(request.getTotalDescuentos());
+
+      if (!sonIguales(totalVentaNetaCalculado, request.getTotalVentaNeta())) {
+        advertencias.add(String.format(
+            "Total venta neta no cuadra. Esperado: %.2f, Recibido: %.2f",
+            totalVentaNetaCalculado, request.getTotalVentaNeta()
+        ));
+        esValido = false;
+      }
+
+      // 7. Validar total comprobante
+      BigDecimal totalComprobanteCalculado = request.getTotalVentaNeta()
+          .add(request.getTotalImpuesto())
+          .add(request.getTotalOtrosCargos());
+
+      if (!sonIguales(totalComprobanteCalculado, request.getTotalComprobante())) {
+        advertencias.add(String.format(
+            "Total comprobante no cuadra. Esperado: %.2f, Recibido: %.2f",
+            totalComprobanteCalculado, request.getTotalComprobante()
+        ));
+        esValido = false;
+      }
+
+      // 8. Validar total medios de pago
+      BigDecimal totalMediosPago = request.getMediosPago().stream()
+          .map(MedioPagoRequest::getMonto)
+          .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+      if (!sonIguales(totalMediosPago, request.getTotalComprobante())) {
+        advertencias.add(String.format(
+            "Total medios de pago (%.2f) no coincide con total comprobante (%.2f)",
+            totalMediosPago, request.getTotalComprobante()
+        ));
+        esValido = false;
+      }
+
+      // 9. Validaciones específicas de Hacienda
+      // Validar que si hay gravados, hay impuestos
+      if (request.getTotalGravado().compareTo(BigDecimal.ZERO) > 0 &&
+          request.getTotalImpuesto().compareTo(BigDecimal.ZERO) == 0) {
+        advertencias.add("Hay montos gravados pero no hay impuestos");
+        esValido = false;
+      }
+
+      // Validar totales de servicios y mercancías
+      BigDecimal totalServiciosCalculado = request.getTotalServiciosGravados()
+          .add(request.getTotalServiciosExentos())
+          .add(request.getTotalServiciosExonerados())
+          .add(request.getTotalServiciosNoSujetos());
+
+      BigDecimal totalMercanciasCalculado = request.getTotalMercanciasGravadas()
+          .add(request.getTotalMercanciasExentas())
+          .add(request.getTotalMercanciasExoneradas())
+          .add(request.getTotalMercanciasNoSujetas());
+
+      BigDecimal totalVentaCalculado = totalServiciosCalculado.add(totalMercanciasCalculado);
+
+      if (!sonIguales(totalVentaCalculado, request.getTotalVenta())) {
+        advertencias.add(String.format(
+            "Total venta (%.2f) no coincide con suma de servicios+mercancías (%.2f)",
+            request.getTotalVenta(), totalVentaCalculado
+        ));
+        esValido = false;
+      }
+
+    } catch (Exception e) {
+      log.error("Error en validación de totales", e);
+      advertencias.add("Error interno en validación: " + e.getMessage());
+      esValido = false;
     }
 
-    factura.setSubtotal(subtotal);
-    factura.setImpuestos(totalImpuestos);
+    return ValidacionTotalesResponse.builder()
+        .esValido(esValido)
+        .mensaje(esValido ? "Validación exitosa" : "Validación falló")
+        .advertencias(advertencias)
+        .build();
   }
 
   /**
-   * Procesar descuentos de una línea
+   * Helper para comparar BigDecimals con tolerancia
    */
-  private void procesarDescuentosLinea(FacturaDetalle detalle,
-      List<DescuentoRequest> descuentosReq) {
-    if (descuentosReq == null || descuentosReq.isEmpty()) {
+  private boolean sonIguales(BigDecimal valor1, BigDecimal valor2) {
+    if (valor1 == null || valor2 == null) {
+      return valor1 == valor2;
+    }
+    // Tolerancia de 1 centavo
+    return valor1.subtract(valor2).abs().compareTo(new BigDecimal("0.01")) <= 0;
+  }
+
+  /**
+   * Asignar totales ya validados a la factura
+   */
+  private void asignarTotales(Factura factura, CrearFacturaRequest request) {
+    // Totales por tipo
+    factura.setTotalServiciosGravados(request.getTotalServiciosGravados());
+    factura.setTotalServiciosExentos(request.getTotalServiciosExentos());
+    factura.setTotalServiciosExonerados(request.getTotalServiciosExonerados());
+    factura.setTotalServiciosNoSujetos(request.getTotalServiciosNoSujetos());
+
+    factura.setTotalMercanciasGravadas(request.getTotalMercanciasGravadas());
+    factura.setTotalMercanciasExentas(request.getTotalMercanciasExentas());
+    factura.setTotalMercanciasExoneradas(request.getTotalMercanciasExoneradas());
+    factura.setTotalMercanciasNoSujetas(request.getTotalMercanciasNoSujetas());
+
+    // Totales generales
+    factura.setTotalGravado(request.getTotalGravado());
+    factura.setTotalExento(request.getTotalExento());
+    factura.setTotalExonerado(request.getTotalExonerado());
+    factura.setTotalNoSujeto(request.getTotalNoSujeto());
+
+    factura.setTotalVenta(request.getTotalVenta());
+    factura.setTotalDescuentos(request.getTotalDescuentos());
+    factura.setTotalVentaNeta(request.getTotalVentaNeta());
+    factura.setTotalImpuesto(request.getTotalImpuesto());
+    factura.setTotalIVADevuelto(request.getTotalIVADevuelto());
+    factura.setTotalOtrosCargos(request.getTotalOtrosCargos());
+    factura.setTotalComprobante(request.getTotalComprobante());
+  }
+
+  /**
+   * Procesar detalles sin calcular, solo guardar
+   */
+  private void procesarDetalles(Factura factura, List<DetalleFacturaRequest> detallesReq) {
+    for (DetalleFacturaRequest detalleReq : detallesReq) {
+      // Buscar producto
+      Producto producto = productoRepository.findById(detalleReq.getProductoId())
+          .orElseThrow(() -> new RuntimeException("Producto no encontrado: " + detalleReq.getProductoId()));
+
+      // Crear detalle
+      FacturaDetalle detalle = new FacturaDetalle();
+      detalle.setNumeroLinea(detalleReq.getNumeroLinea());
+      detalle.setProducto(producto);
+      detalle.setCantidad(detalleReq.getCantidad());
+      detalle.setUnidadMedida(detalleReq.getUnidadMedida());
+      detalle.setPrecioUnitario(detalleReq.getPrecioUnitario());
+      detalle.setCodigoCabys(detalleReq.getCodigoCabys() != null ?
+          detalleReq.getCodigoCabys() : producto.getEmpresaCabys().getCodigoCabys().getCodigo());
+      detalle.setDetalle(detalleReq.getDescripcionPersonalizada() != null ?
+          detalleReq.getDescripcionPersonalizada() : producto.getNombre());
+
+      // Asignar flags
+      detalle.setEsServicio(detalleReq.getEsServicio());
+      detalle.setAplicaImpuestoServicio(detalleReq.getAplicaImpuestoServicio());
+
+      // Asignar montos ya calculados
+      detalle.setMontoTotal(detalleReq.getMontoTotal());
+      detalle.setMontoDescuento(detalleReq.getMontoDescuento());
+      detalle.setSubtotal(detalleReq.getSubtotal());
+      detalle.setMontoImpuesto(detalleReq.getMontoImpuesto());
+      detalle.setMontoTotalLinea(detalleReq.getMontoTotalLinea());
+
+      // Procesar descuentos de la línea
+      if (detalleReq.getDescuentos() != null) {
+        for (DescuentoRequest descReq : detalleReq.getDescuentos()) {
+          FacturaDescuento descuento = new FacturaDescuento();
+          descuento.setCodigoDescuento(descReq.getCodigoDescuento());
+          descuento.setCodigoDescuentoOTRO(descReq.getCodigoDescuentoOTRO());
+          descuento.setNaturalezaDescuento(descReq.getNaturalezaDescuento());
+          descuento.setPorcentaje(descReq.getPorcentaje());
+          descuento.setMontoDescuento(descReq.getMontoDescuento());
+          descuento.setOrden(descReq.getOrden());
+
+          detalle.agregarDescuento(descuento);
+        }
+      }
+
+      // Procesar impuestos de la línea
+      if (detalleReq.getImpuestos() != null) {
+        for (ImpuestoLineaRequest impReq : detalleReq.getImpuestos()) {
+          FacturaDetalleImpuesto impuesto = FacturaDetalleImpuesto.builder()
+              .codigoImpuesto(impReq.getCodigoImpuesto())
+              .codigoTarifaIVA(impReq.getCodigoTarifaIVA())
+              .tarifa(impReq.getTarifa())
+              .montoImpuesto(impReq.getMontoImpuesto())
+              .baseImponible(impReq.getBaseImponible())
+              .tieneExoneracion(impReq.getTieneExoneracion())
+              .montoExoneracion(impReq.getMontoExoneracion())
+              .impuestoNeto(impReq.getImpuestoNeto())
+              .build();
+
+          // Si tiene exoneración, agregar datos
+          if (impReq.getTieneExoneracion() && impReq.getExoneracion() != null) {
+            ExoneracionRequest exo = impReq.getExoneracion();
+            impuesto.setTipoDocumentoExoneracion(exo.getTipoDocumentoExoneracion());
+            impuesto.setNumeroDocumentoExoneracion(exo.getNumeroDocumentoExoneracion());
+            impuesto.setNombreInstitucion(exo.getNombreInstitucion());
+            impuesto.setFechaEmisionExoneracion(exo.getFechaEmisionExoneracion());
+            impuesto.setTarifaExonerada(exo.getTarifaExonerada());
+          }
+
+          detalle.agregarImpuesto(impuesto);
+        }
+      }
+
+      factura.agregarDetalle(detalle);
+    }
+  }
+
+  /**
+   * Procesar otros cargos
+   */
+  private void procesarOtrosCargos(Factura factura, List<OtroCargoRequest> otrosCargosReq) {
+    if (otrosCargosReq == null || otrosCargosReq.isEmpty()) {
       return;
     }
 
-    int orden = 1;
-    for (DescuentoRequest descReq : descuentosReq) {
-      FacturaDescuento descuento = new FacturaDescuento();
-      descuento.setCodigoDescuento(descReq.getCodigoDescuento());
-      descuento.setCodigoDescuentoOTRO(descReq.getCodigoDescuentoOTRO());
-      descuento.setNaturalezaDescuento(descReq.getNaturalezaDescuento());
-      descuento.setPorcentaje(descReq.getPorcentaje());
-      descuento.setMontoDescuento(descReq.getMontoDescuento());
-      descuento.setOrden(orden++);
+    for (OtroCargoRequest cargoReq : otrosCargosReq) {
+      OtroCargo cargo = new OtroCargo();
+      cargo.setTipoDocumentoOC(cargoReq.getTipoDocumentoOC());
+      cargo.setTipoDocumentoOTROS(cargoReq.getTipoDocumentoOTROS());
+      cargo.setNombreCargo(cargoReq.getNombreCargo());
+      cargo.setPorcentaje(cargoReq.getPorcentaje());
+      cargo.setMontoCargo(cargoReq.getMontoCargo());
 
-      detalle.agregarDescuento(descuento);
-    }
-  }
-
-  /**
-   * Procesar otros cargos incluyendo servicio 10%
-   */
-  private void procesarOtrosCargos(Factura factura, List<OtroCargoRequest> otrosCargosReq,
-      List<DetalleFacturaRequest> detalles) {
-    // Primero, calcular si hay servicio 10% automático
-    BigDecimal montoServicio = calcularMontoServicio(factura);
-
-    if (montoServicio.compareTo(BigDecimal.ZERO) > 0) {
-      // Crear otro cargo para servicio 10%
-      OtroCargo servicioOC = new OtroCargo();
-      servicioOC.setTipoDocumentoOC("06"); // Código para servicio 10%
-      servicioOC.setNombreCargo("Impuesto de servicio 10%");
-      servicioOC.setPorcentaje(new BigDecimal("10"));
-      servicioOC.setMontoCargo(montoServicio);
-
-      factura.agregarOtroCargo(servicioOC);
-    }
-
-    // Procesar otros cargos del request
-    if (otrosCargosReq != null) {
-      for (OtroCargoRequest ocReq : otrosCargosReq) {
-        // Si ya agregamos servicio automático, saltar si viene duplicado
-        if ("06".equals(ocReq.getTipoDocumentoOC())
-            && montoServicio.compareTo(BigDecimal.ZERO) > 0) {
-          continue;
-        }
-
-        OtroCargo otroCargo = new OtroCargo();
-        otroCargo.setTipoDocumentoOC(ocReq.getTipoDocumentoOC());
-        otroCargo.setTipoDocumentoOTROS(ocReq.getTipoDocumentoOTROS());
-        otroCargo.setNombreCargo(ocReq.getNombreCargo());
-        otroCargo.setPorcentaje(ocReq.getPorcentaje());
-        otroCargo.setMontoCargo(ocReq.getMontoCargo());
-
-        // Datos de tercero si aplica
-        if ("04".equals(ocReq.getTipoDocumentoOC())) {
-          otroCargo.setTerceroTipoIdentificacion(ocReq.getTerceroTipoIdentificacion());
-          otroCargo.setTerceroNumeroIdentificacion(ocReq.getTerceroNumeroIdentificacion());
-          otroCargo.setTerceroNombre(ocReq.getTerceroNombre());
-        }
-
-        factura.agregarOtroCargo(otroCargo);
+      // Si es cobro de tercero (04)
+      if ("04".equals(cargoReq.getTipoDocumentoOC()) && cargoReq.getTerceroTipoIdentificacion() != null) {
+        cargo.setTerceroTipoIdentificacion(cargoReq.getTerceroTipoIdentificacion());
+        cargo.setTerceroNumeroIdentificacion(cargoReq.getTerceroNumeroIdentificacion());
+        cargo.setTerceroNombre(cargoReq.getTerceroNombre());
       }
+
+      factura.agregarOtroCargo(cargo);
     }
   }
 
-  /**
-   * Calcular monto de servicio 10% basado en productos que aplican
-   */
-  private BigDecimal calcularMontoServicio(Factura factura) {
-    BigDecimal montoServicio = BigDecimal.ZERO;
-
-    for (FacturaDetalle detalle : factura.getDetalles()) {
-      if (detalle.aplicaServicio()) {
-        // Servicio se calcula sobre el subtotal (después de descuentos)
-        BigDecimal servicioLinea = detalle.getSubtotal()
-            .multiply(new BigDecimal("0.10"))
-            .setScale(5, RoundingMode.HALF_UP);
-        montoServicio = montoServicio.add(servicioLinea);
-      }
-    }
-
-    return montoServicio;
-  }
-
-  /**
-   * Calcular totales finales de la factura
-   */
-  private void calcularTotalesFinales(Factura factura) {
-    // Total otros cargos
-    factura.setTotalOtrosCargos(factura.calcularTotalOtrosCargos());
-
-    // Total descuentos (líneas + global)
-    factura.setTotalDescuentos(factura.calcularTotalDescuentos());
-
-    // Calcular total final
-    BigDecimal totalFinal = factura.getSubtotal()
-        .add(factura.getTotalOtrosCargos())
-        .add(factura.getImpuestos())
-        .subtract(factura.getTotalDescuentos());
-
-    factura.setTotal(totalFinal);
-
-    // Convertir a moneda local si aplica
-    factura.calcularTotalMonedaLocal();
-  }
-
-  /**
-   * Procesar medios de pago
-   */
   /**
    * Procesar medios de pago
    */
   private void procesarMediosPago(Factura factura, List<MedioPagoRequest> mediosPagoReq) {
     for (MedioPagoRequest mpReq : mediosPagoReq) {
       FacturaMedioPago medioPago = new FacturaMedioPago();
-
-      // Usar fromCodigo en lugar de valueOf
       medioPago.setMedioPago(MedioPago.fromCodigo(mpReq.getMedioPago()));
-
       medioPago.setMonto(mpReq.getMonto());
       medioPago.setReferencia(mpReq.getReferencia());
       medioPago.setBanco(mpReq.getBanco());
@@ -354,18 +535,25 @@ public class FacturaServiceImpl implements FacturaService {
   }
 
   /**
-   * Validar que los totales coincidan
+   * Procesar resumen de impuestos
    */
-  private void validarTotales(Factura factura) {
-    BigDecimal totalCalculado = factura.getTotal();
-    BigDecimal totalMediosPago = factura.getTotalMediosPago();
+  private void procesarResumenImpuestos(Factura factura, List<ResumenImpuestoRequest> resumenReq) {
+    if (resumenReq == null || resumenReq.isEmpty()) {
+      return;
+    }
 
-    // Permitir pequeña diferencia por redondeos (1 colón)
-    if (totalCalculado.subtract(totalMediosPago).abs().compareTo(BigDecimal.ONE) > 0) {
-      throw new IllegalArgumentException(
-          String.format("Total factura (%.2f) no coincide con medios de pago (%.2f)",
-              totalCalculado, totalMediosPago)
-      );
+    for (ResumenImpuestoRequest resumen : resumenReq) {
+      FacturaResumenImpuesto resumenImpuesto = FacturaResumenImpuesto.builder()
+          .codigoImpuesto(resumen.getCodigoImpuesto())
+          .codigoTarifaIVA(resumen.getCodigoTarifaIVA())
+          .totalMontoImpuesto(resumen.getTotalMontoImpuesto())
+          .totalBaseImponible(resumen.getTotalBaseImponible())
+          .totalMontoExoneracion(resumen.getTotalMontoExoneracion())
+          .totalImpuestoNeto(resumen.getTotalImpuestoNeto())
+          .cantidadLineas(resumen.getCantidadLineas())
+          .build();
+
+      factura.agregarResumenImpuesto(resumenImpuesto);
     }
   }
 
@@ -373,29 +561,45 @@ public class FacturaServiceImpl implements FacturaService {
    * Generar clave de 50 dígitos según Hacienda
    */
   private String generarClave(Factura factura) {
-    Empresa empresa = factura.getSucursal().getEmpresa();
+    // Implementación de generación de clave
+    // [PAÍS(3)] + [FECHA(8)] + [IDENTIFICACIÓN(12)] + [CONSECUTIVO(20)] + [SITUACIÓN(1)] + [SEGURIDAD(8)]
 
-    // Convertir tipo identificación
-    int tipoIdentificacion = switch (empresa.getTipoIdentificacion()) {
-      case CEDULA_FISICA -> 1;
-      case CEDULA_JURIDICA -> 2;
-      case DIMEX -> 3;
-      case NITE -> 4;
-      case EXTRANJERO -> 5;
-    };
+    StringBuilder clave = new StringBuilder();
 
-    // Generar clave
-    return GeneradorClaveUtil.generarClave(
-        factura.getFechaEmision(),
-        tipoIdentificacion,
-        empresa.getIdentificacion(),
-        factura.getConsecutivo(),
-        Integer.parseInt(factura.getSituacionComprobante()),
-        Long.parseLong(factura.getCodigoSeguridad())
-    );
+    // País (Costa Rica)
+    clave.append("506");
+
+    // Fecha DDMMAAAA
+    LocalDateTime fecha = LocalDateTime.now();
+    clave.append(String.format("%02d%02d%04d",
+        fecha.getDayOfMonth(),
+        fecha.getMonthValue(),
+        fecha.getYear()));
+
+    // Identificación del emisor (12 dígitos)
+    String identificacion = factura.getSucursal().getEmpresa().getIdentificacion();
+    identificacion = identificacion.replaceAll("[^0-9]", "");
+    clave.append(String.format("%012d", Long.parseLong(identificacion)));
+
+    // Consecutivo (20 dígitos)
+    clave.append(factura.getConsecutivo());
+
+    // Situación (1=Normal, 2=Contingencia, 3=Sin Internet)
+    clave.append(factura.getSituacion().getCodigo());
+
+    // Código seguridad (8 dígitos)
+    clave.append(factura.getCodigoSeguridad());
+
+    return clave.toString();
   }
 
-  // Implementar otros métodos del servicio...
+  // Implementar otros métodos de la interfaz...
+
+  @Override
+  @Transactional(readOnly = true)
+  public Optional<Factura> buscarPorId(Long id) {
+    return facturaRepository.findById(id);
+  }
 
   @Override
   @Transactional(readOnly = true)
@@ -412,41 +616,40 @@ public class FacturaServiceImpl implements FacturaService {
   @Override
   @Transactional(readOnly = true)
   public List<Factura> listarPorSesionCaja(Long sesionCajaId) {
-    LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
-    return facturaRepository.findBySesionCajaHoy(sesionCajaId, inicioDia);
+    return facturaRepository.findBySesionCajaId(sesionCajaId);
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<Factura> listarFacturasConError(Long sucursalId) {
-    return facturaRepository.findFacturasConError(sucursalId);
+    return facturaRepository.findBySucursalIdAndEstado(sucursalId, EstadoFactura.ERROR);
   }
 
   @Override
+  @Transactional
   public Factura anular(Long facturaId, String motivo) {
     Factura factura = facturaRepository.findById(facturaId)
         .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
 
     if (!factura.getEstado().puedeAnularse()) {
-      throw new RuntimeException(
-          "La factura no puede ser anulada en estado: " + factura.getEstado());
+      throw new RuntimeException("La factura no puede ser anulada en estado: " + factura.getEstado());
     }
 
     factura.setEstado(EstadoFactura.ANULADA);
-    // TODO: En fase 2, generar nota de crédito si es necesario
+    factura.setObservaciones(factura.getObservaciones() + " | ANULADA: " + motivo);
 
     log.info("Factura {} anulada. Motivo: {}", factura.getClave(), motivo);
     return facturaRepository.save(factura);
   }
 
   @Override
+  @Transactional
   public void reenviar(Long facturaId) {
     Factura factura = facturaRepository.findById(facturaId)
         .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
 
     if (!factura.getEstado().puedeReprocesarse()) {
-      throw new RuntimeException(
-          "La factura no puede ser reenviada en estado: " + factura.getEstado());
+      throw new RuntimeException("La factura no puede ser reenviada en estado: " + factura.getEstado());
     }
 
     // Crear nuevo job para reintento
@@ -459,183 +662,8 @@ public class FacturaServiceImpl implements FacturaService {
   }
 
   @Override
-  @Transactional(readOnly = true)
-  public Optional<Factura> buscarPorId(Long id) {
-    return facturaRepository.findById(id);
-  }
-
-  @Override
   public ValidacionTotalesResponse validarTotales(ValidacionTotalesRequest request) {
-    try {
-      // Simular el cálculo sin persistir
-      BigDecimal subtotal = BigDecimal.ZERO;
-      BigDecimal totalDescuentosLineas = BigDecimal.ZERO;
-      BigDecimal totalImpuestos = BigDecimal.ZERO;
-      BigDecimal totalServicio = BigDecimal.ZERO;
-
-      // Calcular por cada línea
-      for (DetalleFacturaRequest detalle : request.getDetalles()) {
-        // Buscar producto para obtener información
-        Producto producto = productoRepository.findById(detalle.getProductoId())
-            .orElseThrow(() -> new RuntimeException("Producto no encontrado: " + detalle.getProductoId()));
-
-        // Monto línea
-        BigDecimal montoLinea = detalle.getCantidad().multiply(detalle.getPrecioUnitario());
-
-        // Aplicar descuentos en cascada
-        BigDecimal montoConDescuentos = montoLinea;
-        BigDecimal descuentosLinea = BigDecimal.ZERO;
-
-        for (DescuentoRequest desc : detalle.getDescuentos()) {
-          BigDecimal montoDesc;
-          if (desc.getMontoDescuento() != null) {
-            montoDesc = desc.getMontoDescuento();
-          } else if (desc.getPorcentaje() != null) {
-            montoDesc = montoConDescuentos
-                .multiply(desc.getPorcentaje())
-                .divide(new BigDecimal("100"), 5, RoundingMode.HALF_UP);
-          } else {
-            continue;
-          }
-          montoConDescuentos = montoConDescuentos.subtract(montoDesc);
-          descuentosLinea = descuentosLinea.add(montoDesc);
-        }
-
-        // Calcular servicio si aplica
-        if (Boolean.TRUE.equals(producto.getAplicaServicio())) {
-          BigDecimal servicioLinea = montoConDescuentos
-              .multiply(new BigDecimal("0.10"))
-              .setScale(5, RoundingMode.HALF_UP);
-          totalServicio = totalServicio.add(servicioLinea);
-        }
-
-        // Calcular IVA
-        String codigoTarifa = detalle.getCodigoTarifaIVA() != null
-            ? detalle.getCodigoTarifaIVA()
-            : "08"; // Default 13%
-
-        BigDecimal tasaImpuesto = obtenerTasaImpuesto(codigoTarifa);
-        BigDecimal impuestoLinea = montoConDescuentos
-            .multiply(tasaImpuesto)
-            .divide(new BigDecimal("100"), 5, RoundingMode.HALF_UP);
-
-        // Acumular totales
-        subtotal = subtotal.add(montoConDescuentos);
-        totalDescuentosLineas = totalDescuentosLineas.add(descuentosLinea);
-        totalImpuestos = totalImpuestos.add(impuestoLinea);
-      }
-
-      // Aplicar descuento global
-      BigDecimal montoDescuentoGlobal = BigDecimal.ZERO;
-      if (request.getDescuentoGlobalPorcentaje() != null) {
-        montoDescuentoGlobal = subtotal
-            .multiply(request.getDescuentoGlobalPorcentaje())
-            .divide(new BigDecimal("100"), 5, RoundingMode.HALF_UP);
-      } else if (request.getMontoDescuentoGlobal() != null) {
-        montoDescuentoGlobal = request.getMontoDescuentoGlobal();
-      }
-
-      // Procesar otros cargos
-      BigDecimal totalOtrosCargos = totalServicio; // Servicio ya calculado
-
-      if (request.getOtrosCargos() != null) {
-        for (OtroCargoRequest oc : request.getOtrosCargos()) {
-          // Si ya incluimos servicio automático, no duplicar
-          if (!"06".equals(oc.getTipoDocumentoOC()) || totalServicio.equals(BigDecimal.ZERO)) {
-            totalOtrosCargos = totalOtrosCargos.add(oc.getMontoCargo());
-          }
-        }
-      }
-
-      // Calcular totales finales
-      BigDecimal totalDescuentos = totalDescuentosLineas.add(montoDescuentoGlobal);
-      BigDecimal totalCalculado = subtotal
-          .add(totalOtrosCargos)
-          .add(totalImpuestos)
-          .subtract(montoDescuentoGlobal);
-
-      // Validar contra medios de pago
-      BigDecimal totalMediosPago = request.getMediosPago().stream()
-          .map(MedioPagoRequest::getMonto)
-          .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-      boolean esValido = totalCalculado.subtract(totalMediosPago).abs()
-          .compareTo(BigDecimal.ONE) <= 0;
-
-      String mensaje = esValido
-          ? "Totales válidos"
-          : String.format("Total calculado (%.2f) no coincide con medios de pago (%.2f)",
-              totalCalculado, totalMediosPago);
-
-      return ValidacionTotalesResponse.builder()
-          .esValido(esValido)
-          .mensaje(mensaje)
-          .subtotalCalculado(subtotal)
-          .totalDescuentosCalculado(totalDescuentos)
-          .totalOtrosCargosCalculado(totalOtrosCargos)
-          .totalImpuestosCalculado(totalImpuestos)
-          .totalCalculado(totalCalculado)
-          .desglosePorLinea(construirDesglosePorLinea(request))
-          .build();
-
-    } catch (Exception e) {
-      log.error("Error al validar totales", e);
-      return ValidacionTotalesResponse.builder()
-          .esValido(false)
-          .mensaje("Error al validar: " + e.getMessage())
-          .build();
-    }
-  }
-
-  /**
-   * Construir desglose detallado por línea para validación
-   */
-  private List<DesglosePorLinea> construirDesglosePorLinea(ValidacionTotalesRequest request) {
-    List<DesglosePorLinea> desglose = new ArrayList<>();
-
-    for (int i = 0; i < request.getDetalles().size(); i++) {
-      DetalleFacturaRequest detalle = request.getDetalles().get(i);
-
-      try {
-        Producto producto = productoRepository.findById(detalle.getProductoId())
-            .orElse(null);
-
-        if (producto != null) {
-          BigDecimal montoLinea = detalle.getCantidad().multiply(detalle.getPrecioUnitario());
-          BigDecimal subtotalConDescuentos = detalle.calcularSubtotalConDescuentos();
-
-          desglose.add(DesglosePorLinea.builder()
-              .numeroLinea(i + 1)
-              .productoNombre(producto.getNombre())
-              .cantidad(detalle.getCantidad())
-              .precioUnitario(detalle.getPrecioUnitario())
-              .montoTotal(montoLinea)
-              .descuentos(montoLinea.subtract(subtotalConDescuentos))
-              .subtotal(subtotalConDescuentos)
-              .aplicaServicio(producto.getAplicaServicio())
-              .build());
-        }
-      } catch (Exception e) {
-        log.error("Error calculando línea {}", i, e);
-      }
-    }
-
-    return desglose;
-  }
-
-  /**
-   * Helper para obtener tasa de impuesto
-   */
-  private BigDecimal obtenerTasaImpuesto(String codigoTarifaIVA) {
-    return switch (codigoTarifaIVA) {
-      case "01", "05", "10", "11" -> BigDecimal.ZERO;
-      case "09" -> new BigDecimal("0.5");
-      case "02" -> BigDecimal.ONE;
-      case "03" -> new BigDecimal("2");
-      case "04", "06" -> new BigDecimal("4");
-      case "07" -> new BigDecimal("8");
-      case "08" -> new BigDecimal("13");
-      default -> new BigDecimal("13");
-    };
+    // Usar la misma validación completa
+    return validarTotalesCompleto(request);
   }
 }

@@ -55,6 +55,8 @@ public class DescuentoRequest {
     @DecimalMin(value = "0.00", message = "El monto no puede ser negativo")
     @Digits(integer = 13, fraction = 5, message = "Formato de monto inválido")
     private BigDecimal montoDescuento;
+
+    private Integer orden;
     
     /**
      * Validación: debe tener porcentaje O monto

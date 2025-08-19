@@ -90,7 +90,7 @@ public class Factura {
     @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<FacturaMedioPago> mediosPago = new ArrayList<>();
 
-    @Column(name = "situacion", length = 1, nullable = false)
+    @Column(name = "situacion", nullable = false)
     @Enumerated(EnumType.STRING)
     private SituacionDocumento situacion = SituacionDocumento.NORMAL;
 

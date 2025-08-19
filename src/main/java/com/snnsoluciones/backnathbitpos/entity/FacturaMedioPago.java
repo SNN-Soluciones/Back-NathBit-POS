@@ -32,7 +32,7 @@ public class FacturaMedioPago {
     @JoinColumn(name = "factura_id", nullable = false)
     private Factura factura;
     
-    @Column(name = "medio_pago", length = 2, nullable = false)
+    @Column(name = "medio_pago", nullable = false)
     @Enumerated(EnumType.STRING)
     private MedioPago medioPago;
     

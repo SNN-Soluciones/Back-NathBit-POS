@@ -47,14 +47,13 @@ public class FacturaResponseBuilder {
         .tipoCambio(factura.getTipoCambio())
 
         // Totales
-        .subtotal(factura.getSubtotal())
+        .subtotal(factura.getTotalVentaNeta())
         .totalDescuentosLineas(calcularTotalDescuentosLineas(factura))
         .montoDescuentoGlobal(factura.getMontoDescuentoGlobal())
         .totalDescuentos(factura.getTotalDescuentos())
         .totalOtrosCargos(factura.getTotalOtrosCargos())
-        .totalImpuestos(factura.getImpuestos())
-        .total(factura.getTotal())
-        .totalMonedaLocal(factura.getTotalMonedaLocal())
+        .totalImpuestos(factura.getTotalImpuesto())
+        .total(factura.getTotalComprobante())
 
         // Detalles
         .detalles(construirDetalles(factura.getDetalles()))
@@ -71,7 +70,7 @@ public class FacturaResponseBuilder {
         .sucursalNombre(factura.getSucursal().getNombre())
         .terminalNombre(factura.getTerminal().getNombre())
         .cajeroNombre(obtenerNombreCajero(factura))
-        .situacionComprobante(factura.getSituacionComprobante())
+        .situacionComprobante(factura.getSituacion().name())
 
         // Hacienda
 //            .mensajeHacienda(factura.getMensajeRespuesta())
@@ -92,7 +91,7 @@ public class FacturaResponseBuilder {
         .clienteNombre(obtenerNombreCliente(factura))
         .estado(factura.getEstado().name())
         .moneda(factura.getMoneda())
-        .total(factura.getTotal())
+        .total(factura.getTotalComprobante())
         .build();
   }
 
@@ -118,12 +117,9 @@ public class FacturaResponseBuilder {
         .cantidad(detalle.getCantidad())
         .unidadMedida(detalle.getUnidadMedida())
         .precioUnitario(detalle.getPrecioUnitario())
-        .totalDescuentosLinea(detalle.getTotalDescuentosLinea())
         .subtotal(detalle.getSubtotal())
-        .codigoTarifaIVA(detalle.getCodigoTarifaIVA())
-        .tasaImpuesto(obtenerTasaImpuesto(detalle.getCodigoTarifaIVA()))
-        .montoImpuesto(detalle.getImpuesto())
-        .total(detalle.getTotal())
+        .montoImpuesto(detalle.getMontoImpuesto())
+        .total(detalle.getFactura().getTotalComprobante())
         .descuentos(construirDescuentos(detalle.getDescuentos()))
         .build();
   }
@@ -190,7 +186,7 @@ public class FacturaResponseBuilder {
 
   private BigDecimal calcularTotalDescuentosLineas(Factura factura) {
     return factura.getDetalles().stream()
-        .map(FacturaDetalle::getTotalDescuentosLinea)
+        .map(FacturaDetalle::getMontoDescuento)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
   }
 

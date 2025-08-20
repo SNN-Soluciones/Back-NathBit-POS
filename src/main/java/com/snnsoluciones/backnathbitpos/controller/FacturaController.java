@@ -39,12 +39,6 @@ public class FacturaController {
             request.getTipoDocumento(), request.getClienteId());
 
         try {
-            // Validación adicional del request
-            if (!request.isValid()) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Datos de factura inválidos"));
-            }
-
             // Crear factura
             Factura factura = facturaService.crear(request);
 

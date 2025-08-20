@@ -351,7 +351,27 @@ public class FacturaServiceImpl implements FacturaService {
 
       BigDecimal totalVentaCalculado = totalServiciosCalculado.add(totalMercanciasCalculado);
 
-      if (!sonIguales(totalVentaCalculado, request.getTotalVenta())) {
+      // Justo antes de la validación de totales de servicios y mercancías
+      log.info("=== VALIDACIÓN DE TOTALES ===");
+      log.info("totalServiciosGravados: {}", request.getTotalServiciosGravados());
+      log.info("totalServiciosExentos: {}", request.getTotalServiciosExentos());
+      log.info("totalServiciosExonerados: {}", request.getTotalServiciosExonerados());
+      log.info("totalServiciosNoSujetos: {}", request.getTotalServiciosNoSujetos());
+      log.info("totalServiciosCalculado: {}", totalServiciosCalculado);
+
+      log.info("totalMercanciasGravadas: {}", request.getTotalMercanciasGravadas());
+      log.info("totalMercanciasExentas: {}", request.getTotalMercanciasExentas());
+      log.info("totalMercanciasExoneradas: {}", request.getTotalMercanciasExoneradas());
+      log.info("totalMercanciasNoSujetas: {}", request.getTotalMercanciasNoSujetas());
+      log.info("totalMercanciasCalculado: {}", totalMercanciasCalculado);
+
+      log.info("totalVentaCalculado: {}", totalVentaCalculado);
+      log.info("totalVenta request: {}", request.getTotalVenta());
+      log.info("Son iguales?: {}", sonIguales(totalVentaCalculado, request.getTotalVenta()));
+
+      BigDecimal totalVentas = request.getTotalVenta();
+
+      if (!sonIguales(totalVentaCalculado, totalVentas)) {
         advertencias.add(String.format(
             "Total venta (%.2f) no coincide con suma de servicios+mercancías (%.2f)",
             request.getTotalVenta(), totalVentaCalculado

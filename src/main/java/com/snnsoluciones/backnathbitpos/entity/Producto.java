@@ -82,6 +82,10 @@ public class Producto {
     @Column(name = "aplica_servicio", nullable = false)
     @Builder.Default
     private Boolean aplicaServicio = false;
+
+    @Column(name = "es_servicio", nullable = false)
+    @Builder.Default
+    private Boolean esServicio = false;
     
     @Column(nullable = false)
     @Builder.Default

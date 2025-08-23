@@ -55,11 +55,11 @@ public class ProductoImpuestoServiceImpl implements ProductoImpuestoService {
         
         // Configurar según el tipo
         if (dto.getTipoImpuesto() == TipoImpuesto.IVA) {
-            if (dto.getCodigoTarifaIVA() == null) {
+            if (dto.getTarifaIva() == null) {
                 throw new BusinessException("Debe especificar la tarifa IVA");
             }
-            impuesto.setTarifaIva(dto.getCodigoTarifaIVA());
-            impuesto.setPorcentaje(dto.getCodigoTarifaIVA().getPorcentaje());
+            impuesto.setTarifaIva(dto.getTarifaIva());
+            impuesto.setPorcentaje(dto.getTarifaIva().getPorcentaje());
         } else {
             if (dto.getPorcentaje() == null || dto.getPorcentaje().compareTo(BigDecimal.ZERO) < 0) {
                 throw new BusinessException("Debe especificar un porcentaje válido");
@@ -93,11 +93,11 @@ public class ProductoImpuestoServiceImpl implements ProductoImpuestoService {
                 impuesto.setActivo(true);
                 
                 if (dto.getTipoImpuesto() == TipoImpuesto.IVA) {
-                    if (dto.getCodigoTarifaIVA() == null) {
+                    if (dto.getTarifaIva() == null) {
                         throw new BusinessException("Debe especificar la tarifa IVA");
                     }
-                    impuesto.setTarifaIva(dto.getCodigoTarifaIVA());
-                    impuesto.setPorcentaje(dto.getCodigoTarifaIVA().getPorcentaje());
+                    impuesto.setTarifaIva(dto.getTarifaIva());
+                    impuesto.setPorcentaje(dto.getTarifaIva().getPorcentaje());
                 } else {
                     if (dto.getPorcentaje() == null || dto.getPorcentaje().compareTo(BigDecimal.ZERO) < 0) {
                         throw new BusinessException("Debe especificar un porcentaje válido para " + dto.getTipoImpuesto());

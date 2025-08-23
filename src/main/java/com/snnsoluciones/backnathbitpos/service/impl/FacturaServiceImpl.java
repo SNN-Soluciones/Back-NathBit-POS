@@ -8,6 +8,10 @@ import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.FacturaJobService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
+import io.hypersistence.utils.common.StringUtils;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,6 +49,9 @@ public class FacturaServiceImpl implements FacturaService {
   @Transactional
   public Factura crear(CrearFacturaRequest request) {
     log.info("Creando factura tipo: {}", request.getTipoDocumento());
+    validarEstructuraV44(request);
+
+    recomputarTotalesAutoritativo(request);
 
     // 1. Validaciones de negocio básicas
     validarRequestBasico(request);
@@ -497,11 +504,11 @@ public class FacturaServiceImpl implements FacturaService {
           // Si tiene exoneración, agregar datos
           if (impReq.getTieneExoneracion() && impReq.getExoneracion() != null) {
             ExoneracionRequest exo = impReq.getExoneracion();
-            impuesto.setTipoDocumentoExoneracion(exo.getTipoDocumentoExoneracion());
-            impuesto.setNumeroDocumentoExoneracion(exo.getNumeroDocumentoExoneracion());
-            impuesto.setNombreInstitucion(exo.getNombreInstitucion());
-            impuesto.setFechaEmisionExoneracion(exo.getFechaEmisionExoneracion());
-            impuesto.setTarifaExonerada(exo.getTarifaExonerada());
+            impuesto.setTipoDocumentoExoneracion(exo.getTipoDocumentoEX());
+            impuesto.setNumeroDocumentoExoneracion(exo.getNumeroDocumentoEX());
+            impuesto.setNombreInstitucion(exo.getInstitucionOtorgante());
+            impuesto.setFechaEmisionExoneracion(exo.getFechaEmisionExoneracion().toString());
+            impuesto.setTarifaExonerada(exo.getPorcentajeExonerado());
           }
 
           detalle.agregarImpuesto(impuesto);
@@ -685,5 +692,212 @@ public class FacturaServiceImpl implements FacturaService {
   public ValidacionTotalesResponse validarTotales(ValidacionTotalesRequest request) {
     // Usar la misma validación completa
     return validarTotalesCompleto(request);
+  }
+
+  /**
+   * Valida estructura de la factura según v4.4 (sin armar XML):
+   * - Catálogos/códigos presentes y con formato válido
+   * - Exoneraciones completas cuando se marcan en una línea
+   * - Servicio 10% NO como impuesto; debe venir en Otros Cargos (código 06)
+   * - Descuento 99 OTROS con código OTRO y naturaleza obligatoria
+   * - Medios de pago válidos y suma = totalComprobante (con tolerancia)
+   * - Campos de No Sujetos presentes
+   * - versionCatalogos presente
+   */
+  private void validarEstructuraV44(CrearFacturaRequest request) {
+    final Pattern P_UNIDAD = Pattern.compile("^[0-9A-Z._-]{1,8}$");
+    final Pattern P_CABYS  = Pattern.compile("^[0-9]{13}$");
+    final Set<String> MEDIOS_VALIDOS = Set.of("01","02","03","04","05","06","07","99");
+    final BigDecimal TOLERANCIA = new BigDecimal("0.01");
+
+    // ------ Encabezado mínimo ------
+    requireNonBlank(request.getMoneda().name(), "Moneda es requerida");
+    if (Objects.equals(request.getMoneda().getCodigo(), "USD")) {
+      requireNotNull(request.getTipoCambio(), "Tipo de cambio es requerido para USD");
+    }
+    requireNonBlank(request.getCondicionVenta(), "Condición de venta es requerida");
+    // Si condición = 99 (OTROS), idealmente validar detalleCondicion (si tienes ese campo en DTO)
+
+    // ------ versionCatalogos ------
+    requireNonBlank(request.getVersionCatalogos(), "versionCatalogos es requerido");
+
+    // ------ No Sujetos ------
+    requireNotNull(request.getTotalServiciosNoSujeto(), "totalServiciosNoSujeto es requerido (puede ser 0)");
+    requireNotNull(request.getTotalMercanciasNoSujeto(), "totalMercanciasNoSujeto es requerido (puede ser 0)");
+    requireNotNull(request.getTotalNoSujeto(), "totalNoSujeto es requerido (puede ser 0)");
+
+    // ------ Detalles ------
+    if (request.getDetalles() == null || request.getDetalles().isEmpty()) {
+      throw new IllegalArgumentException("Debe incluir al menos un detalle de línea");
+    }
+
+    for (int i = 0; i < request.getDetalles().size(); i++) {
+      var d = request.getDetalles().get(i);
+      final String ctx = " (línea " + (i+1) + ")";
+
+      // Unidad de medida
+      requireNonBlank(d.getUnidadMedida(), "Unidad de medida es requerida" + ctx);
+      requireRegex(P_UNIDAD, d.getUnidadMedida(), "Unidad de medida inválida" + ctx);
+
+      // CAByS
+      requireNonBlank(d.getCodigoCabys(), "Código CAByS es requerido" + ctx);
+      requireRegex(P_CABYS, d.getCodigoCabys(), "CAByS debe tener 13 dígitos" + ctx);
+
+      // Descuentos de línea
+      if (d.getDescuentos() != null) {
+        for (var desc : d.getDescuentos()) {
+          requireNonBlank(desc.getCodigoDescuento(), "Código de descuento es requerido" + ctx);
+          if ("99".equals(desc.getCodigoDescuento())) {
+            requireNonBlank(desc.getCodigoDescuentoOTRO(), "Para código 99 (OTROS) se requiere 'codigoDescuentoOTRO'" + ctx);
+            requireNonBlank(desc.getNaturalezaDescuento(), "Para código 99 (OTROS) se requiere 'naturalezaDescuento'" + ctx);
+          }
+        }
+      }
+
+      // Impuestos de línea
+      if (d.getImpuestos() != null) {
+        for (var imp : d.getImpuestos()) {
+          // Bloqueo: servicio 10% no puede venir como impuesto
+          if ("12".equals(imp.getCodigoImpuesto())) { // ese 12 lo usaban en FE para "servicio"
+            throw new IllegalArgumentException("El 10% de servicio NO debe enviarse como impuesto; use Otros Cargos (código 06) en el resumen" + ctx);
+          }
+          requireNonBlank(imp.getCodigoImpuesto(), "codigoImpuesto requerido" + ctx);
+          requireNonBlank(imp.getCodigoTarifaIVA(), "codigoTarifaIVA requerido" + ctx);
+
+          // Exoneración coherente
+          if (Boolean.TRUE.equals(imp.getTieneExoneracion())) {
+            if (imp.getExoneracion() == null) {
+              throw new IllegalArgumentException("Se marcó tieneExoneracion pero falta ExoneracionRequest" + ctx);
+            }
+            var ex = imp.getExoneracion();
+            requireNonBlank(ex.getTipoDocumentoEX(), "Exoneración: tipoDocumentoEX requerido" + ctx);
+            requireNonBlank(ex.getNumeroDocumentoEX(), "Exoneración: numeroDocumentoEX requerido" + ctx);
+            requireNotNull(ex.getFechaEmisionExoneracion(), "Exoneración: fechaEmisionExoneracion requerida" + ctx);
+            requireNonBlank(ex.getInstitucionOtorgante(), "Exoneración: institucionOtorgante requerida" + ctx);
+            requireNotNull(ex.getPorcentajeExonerado(), "Exoneración: porcentajeExonerado requerido" + ctx);
+            if (ex.getPorcentajeExonerado().compareTo(BigDecimal.ZERO) < 0
+                || ex.getPorcentajeExonerado().compareTo(new BigDecimal("100")) > 0) {
+              throw new IllegalArgumentException("Exoneración: porcentajeExonerado debe estar entre 0 y 100" + ctx);
+            }
+          }
+
+          // Impuesto asumido (si marcas la bandera, debe traer monto)
+          if (Boolean.TRUE.equals(imp.getImpuestoAsumidoPorEmisor())) {
+            if (imp.getMontoImpuestoAsumido() == null || imp.getMontoImpuestoAsumido().compareTo(BigDecimal.ZERO) < 0) {
+              throw new IllegalArgumentException("Impuesto asumido por emisor marcado pero sin monto válido" + ctx);
+            }
+          }
+        }
+      }
+    }
+
+    // ------ Otros Cargos (Servicio 10%) ------
+    if (request.getOtrosCargos() != null) {
+      for (var oc : request.getOtrosCargos()) {
+        // Si tu catálogo usa "06" como código para servicio 10%, aquí podrías reforzarlo:
+        // if ("06".equals(oc.getTipoDocumentoOC())) { ...validar porcentaje 10... }
+        // Al menos, validar estructura básica:
+        requireNonBlank(oc.getTipoDocumentoOC(), "Otros Cargos: tipoDocumentoOC requerido");
+        requireNotNull(oc.getMontoCargo(), "Otros Cargos: monto requerido");
+        if (oc.getMontoCargo().compareTo(BigDecimal.ZERO) < 0) {
+          throw new IllegalArgumentException("Otros Cargos: monto no puede ser negativo");
+        }
+      }
+    }
+
+    // ------ Resumen impuestos (shape) ------
+    if (request.getResumenImpuestos() != null) {
+      for (var r : request.getResumenImpuestos()) {
+        requireNonBlank(r.getCodigoImpuesto(), "ResumenImpuesto: codigoImpuesto requerido");
+        requireNonBlank(r.getCodigoTarifaIVA(), "ResumenImpuesto: codigoTarifaIVA requerido");
+        // No validamos totales aquí; el recálculo authoritative se encargará
+      }
+    }
+
+    // ------ Medios de pago ------
+    if (request.getMediosPago() == null || request.getMediosPago().isEmpty()) {
+      throw new IllegalArgumentException("Debe incluir al menos un medio de pago");
+    }
+    BigDecimal sumaPagos = BigDecimal.ZERO;
+    for (var mp : request.getMediosPago()) {
+      requireNonBlank(mp.getMedioPago(), "Medio de pago: código requerido");
+      if (!MEDIOS_VALIDOS.contains(mp.getMedioPago())) {
+        throw new IllegalArgumentException("Medio de pago: código inválido: " + mp.getMedioPago());
+      }
+      requireNotNull(mp.getMonto(), "Medio de pago: monto requerido");
+      if (mp.getMonto().compareTo(BigDecimal.ZERO) < 0) {
+        throw new IllegalArgumentException("Medio de pago: monto no puede ser negativo");
+      }
+      sumaPagos = sumaPagos.add(mp.getMonto());
+    }
+
+    // Cuadre de pagos vs. totalComprobante (lo que venga en request)
+    requireNotNull(request.getTotalComprobante(), "totalComprobante es requerido");
+    if (!casiIgual(sumaPagos, request.getTotalComprobante(), TOLERANCIA)) {
+      throw new IllegalArgumentException(
+          "La sumatoria de medios de pago (" + sumaPagos + ") no cuadra con totalComprobante (" +
+              request.getTotalComprobante() + ")");
+    }
+  }
+
+  private void recomputarTotalesAutoritativo(CrearFacturaRequest req) {
+    // Esqueleto mínimo: sumar impuestos netos, otros cargos y cerrar totalComprobante
+    BigDecimal totalImpuestoNeto = BigDecimal.ZERO;
+    BigDecimal totalOtrosCargos = BigDecimal.ZERO;
+
+    if (req.getDetalles() != null) {
+      for (var d : req.getDetalles()) {
+        if (d.getImpuestos() != null) {
+          for (var imp : d.getImpuestos()) {
+            BigDecimal neto = defaultZero(imp.getImpuestoNeto());
+            totalImpuestoNeto = totalImpuestoNeto.add(neto);
+          }
+        }
+      }
+    }
+    if (req.getOtrosCargos() != null) {
+      for (var oc : req.getOtrosCargos()) {
+        totalOtrosCargos = totalOtrosCargos.add(defaultZero(oc.getMontoCargo()));
+      }
+    }
+
+    // Aquí podrías recalcular ventaNeta según tus reglas; como mínimo, cierra totalComprobante:
+    BigDecimal ventaNeta = defaultZero(req.getTotalVentaNeta()); // o recálcúlala si tienes la base
+
+    BigDecimal totalComprobante = ventaNeta
+        .add(totalImpuestoNeto)
+        .add(totalOtrosCargos)
+        .setScale(5, RoundingMode.HALF_UP);
+
+    // Sobreescribe los campos del request (o del entity) con estos valores
+    req.setTotalImpuesto(totalImpuestoNeto.setScale(5, RoundingMode.HALF_UP));
+    req.setTotalOtrosCargos(totalOtrosCargos.setScale(5, RoundingMode.HALF_UP));
+    req.setTotalComprobante(totalComprobante);
+  }
+
+  private static BigDecimal defaultZero(BigDecimal x) {
+    return x == null ? BigDecimal.ZERO : x;
+  }
+
+// ====== Helpers (pegar también dentro de FacturaServiceImpl) ======
+
+  private static void requireNonBlank(String val, String msg) {
+    if (StringUtils.isBlank(val)) {
+      throw new IllegalArgumentException(msg);
+    }
+  }
+  private static void requireNotNull(Object val, String msg) {
+    if (val == null) {
+      throw new IllegalArgumentException(msg);
+    }
+  }
+  private static void requireRegex(Pattern p, String val, String msg) {
+    if (val == null || !p.matcher(val).matches()) {
+      throw new IllegalArgumentException(msg);
+    }
+  }
+  private static boolean casiIgual(BigDecimal a, BigDecimal b, BigDecimal tolerancia) {
+    if (a == null || b == null) return false;
+    return a.subtract(b).abs().compareTo(tolerancia) <= 0;
   }
 }

@@ -40,14 +40,8 @@ public class FacturaDetalle {
     @JoinColumn(name = "producto_id", nullable = false)
     private Producto producto;
 
-    @Column(nullable = false, precision = 16, scale = 3)
-    private BigDecimal cantidad;
-
     @Column(name = "unidad_medida", length = 15, nullable = false)
     private String unidadMedida = "Unid";
-
-    @Column(name = "precio_unitario", nullable = false, precision = 18, scale = 5)
-    private BigDecimal precioUnitario;
 
     // Campos para facturación electrónica
     @Column(name = "codigo_cabys", length = 13)
@@ -56,34 +50,31 @@ public class FacturaDetalle {
     @Column(name = "detalle", length = 200)
     private String detalle;
 
-    /**
-     * Indica si es servicio (true) o mercancía (false)
-     * Necesario para los totales del ResumenFactura
-     */
     @Column(name = "es_servicio", nullable = false)
-    private Boolean esServicio = false;
+    private Boolean esServicio = Boolean.FALSE;
 
-    /**
-     * Indica si esta línea aplica el impuesto de servicio 10%
-     * Solo marca, el cálculo lo hace el frontend
-     */
     @Column(name = "aplica_impuesto_servicio", nullable = false)
-    private Boolean aplicaImpuestoServicio = false;
+    private Boolean aplicaImpuestoServicio = Boolean.FALSE;
 
-    // Montos calculados por el frontend
-    @Column(name = "monto_total", nullable = false, precision = 18, scale = 5)
+    @Column(name = "cantidad", precision = 19, scale = 5, nullable = false)
+    private BigDecimal cantidad;
+
+    @Column(name = "precio_unitario", precision = 19, scale = 5, nullable = false)
+    private BigDecimal precioUnitario;
+
+    @Column(name = "monto_total", precision = 19, scale = 5, nullable = false)
     private BigDecimal montoTotal;
 
-    @Column(name = "monto_descuento", nullable = false, precision = 18, scale = 5)
+    @Column(name = "monto_descuento", precision = 19, scale = 5, nullable = false)
     private BigDecimal montoDescuento = BigDecimal.ZERO;
 
-    @Column(nullable = false, precision = 18, scale = 5)
+    @Column(name = "subtotal", precision = 19, scale = 5, nullable = false)
     private BigDecimal subtotal;
 
-    @Column(name = "monto_impuesto", nullable = false, precision = 18, scale = 5)
-    private BigDecimal montoImpuesto = BigDecimal.ZERO;
+    @Column(name = "monto_impuesto", precision = 19, scale = 5, nullable = false)
+    private BigDecimal montoImpuesto;
 
-    @Column(name = "monto_total_linea", nullable = false, precision = 18, scale = 5)
+    @Column(name = "monto_total_linea", precision = 19, scale = 5, nullable = false)
     private BigDecimal montoTotalLinea;
 
     // Relaciones

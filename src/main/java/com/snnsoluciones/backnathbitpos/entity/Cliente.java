@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.persistence.*;
+import java.util.Comparator;
+import java.util.Optional;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -93,4 +95,19 @@ public class Cliente {
     @OneToMany(mappedBy = "cliente", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<ClienteExoneracion> exoneraciones = new HashSet<>();
+
+    public Optional<ClienteExoneracion> getExoneracionVigente() {
+        if (this.getExoneraciones() == null || this.getExoneraciones().isEmpty()) return Optional.empty();
+
+        // 1) si tienes campo boolean vigente, priorízalo
+        var vigente = this.getExoneraciones().stream()
+            .filter(ClienteExoneracion::estaVigente) // ajusta al nombre real del getter
+            .findFirst();
+        if (vigente.isPresent()) return vigente;
+
+        // 2) si no hay flag, toma la más “reciente” por fechaEmision (o por id máx)
+        return this.getExoneraciones().stream()
+            .filter(e -> e.getFechaEmision() != null)
+            .max(Comparator.comparing(ClienteExoneracion::getFechaEmision));
+    }
 }

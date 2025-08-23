@@ -3,7 +3,7 @@ package com.snnsoluciones.backnathbitpos.controller;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteBusquedaDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteDTO;
-import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteListDTO;
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteResumenDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUpdateDTO;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
@@ -83,35 +83,6 @@ public class ClienteController {
             log.error("Error al crear cliente", e);
             return ResponseEntity.internalServerError()
                 .body(ApiResponse.error("Error al crear cliente"));
-        }
-    }
-
-    @Operation(summary = "Buscar clientes por empresa")
-    @GetMapping
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
-    public ResponseEntity<ApiResponse<Page<ClienteListDTO>>> buscar(
-        @RequestParam(name = "empresaId") Long empresaId,
-        @RequestParam(name = "busqueda", required = false) String busqueda,
-        @PageableDefault(size = 20, sort = "razonSocial") Pageable pageable,
-        Authentication auth) {
-
-        try {
-            Empresa empresa = empresaService.buscarPorId(empresaId);
-            // Validar que la empresa existe
-            if (Optional.ofNullable(empresa).isEmpty() && !esRolSistema(auth)) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Empresa no encontrada"));
-            }
-
-            Page<Cliente> clientes = clienteService.buscarPorEmpresa(empresaId, busqueda, pageable);
-            Page<ClienteListDTO> response = clientes.map(clienteMapper::toListDTO);
-
-            return ResponseEntity.ok(ApiResponse.ok(response));
-
-        } catch (Exception e) {
-            log.error("Error al buscar clientes", e);
-            return ResponseEntity.internalServerError()
-                .body(ApiResponse.error("Error al buscar clientes"));
         }
     }
 

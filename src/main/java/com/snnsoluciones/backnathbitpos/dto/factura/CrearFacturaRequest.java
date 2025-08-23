@@ -73,6 +73,9 @@ public class CrearFacturaRequest {
     @NotEmpty(message = "Debe incluir al menos un medio de pago")
     @Valid
     private List<MedioPagoRequest> mediosPago;
+
+    @NotBlank
+    private String versionCatalogos; // ej: "MH-4.4-2025-08-21"
     
     // Resumen de impuestos
     @Valid
@@ -128,10 +131,6 @@ public class CrearFacturaRequest {
     
     @NotNull
     @DecimalMin(value = "0.00")
-    private BigDecimal totalNoSujeto;
-    
-    @NotNull
-    @DecimalMin(value = "0.00")
     private BigDecimal totalVenta;
     
     @NotNull
@@ -153,6 +152,15 @@ public class CrearFacturaRequest {
     @NotNull
     @DecimalMin(value = "0.00")
     private BigDecimal totalOtrosCargos;
+
+    @NotNull @DecimalMin("0.00")
+    private BigDecimal totalServiciosNoSujeto;
+
+    @NotNull @DecimalMin("0.00")
+    private BigDecimal totalMercanciasNoSujeto;
+
+    @NotNull @DecimalMin("0.00")
+    private BigDecimal totalNoSujeto; // suma de los dos
     
     @NotNull
     @DecimalMin(value = "0.01", message = "Total del comprobante debe ser mayor a 0")

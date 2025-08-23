@@ -43,5 +43,10 @@ public class ImpuestoLineaRequest {
     
     @Valid
     private ExoneracionRequest exoneracion;
+
+    // Nuevo soporte v4.4
+    private Boolean impuestoAsumidoPorEmisor; // default false
+    @DecimalMin("0.00")
+    private BigDecimal montoImpuestoAsumido;  // si aplica
 }
 

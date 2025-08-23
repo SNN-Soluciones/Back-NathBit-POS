@@ -62,7 +62,7 @@ public class OtroCargo {
      * Porcentaje del cargo si aplica
      * Ej: 10.00 para servicio 10%
      */
-    @Column(precision = 5, scale = 2)
+    @Column(name = "porcentaje", precision = 9, scale = 5)
     private BigDecimal porcentaje;
     
     /**

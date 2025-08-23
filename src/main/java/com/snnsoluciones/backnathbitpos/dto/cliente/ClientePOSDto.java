@@ -1,20 +1,27 @@
+// ClientePOSDto.java  (extiende el tuyo)
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
+import lombok.*;
+import java.io.Serializable;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ClientePOSDto {
+public class ClientePOSDto implements Serializable {
     private Long id;
-    private String tipoIdentificacion;
+    private TipoIdentificacion tipoIdentificacion;
     private String numeroIdentificacion;
     private String razonSocial;
-    private String primerEmail;
+    private String emails; // Solo el primer email para el listado
     private String telefonoNumero;
-    private boolean activo;
+    private Boolean tieneExoneracion;
+    private Boolean activo;
+    private Boolean inscritoHacienda;
+    private Boolean permiteCredito;
+
+    // NUEVO
+    private boolean exonerado;
+    private ExoneracionClienteDto exoneracion; // null si no aplica
 }

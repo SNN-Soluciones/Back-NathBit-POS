@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +14,6 @@ import lombok.NoArgsConstructor;
 public class EmpresaCABySSelectDto {
     private Long id;
     private String codigo;
-    private String descripcion;
-    private String descripcionPersonalizada;
+    private CodigoCABySDto codigoCabys;
+    private Boolean activo;
 }

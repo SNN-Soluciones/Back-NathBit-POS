@@ -118,7 +118,12 @@ public class ClienteServiceImpl implements ClienteService {
         cliente.setActivo(activo);
         clienteRepository.save(cliente);
     }
-    
+
+    @Override
+    public Page<Cliente> buscarPorEmpresaActivos(Long empresaId, Pageable pageable) {
+        return this.clienteRepository.findAllByEmpresaId(empresaId, pageable);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<Cliente> buscarPorEmpresa(Long empresaId, String busqueda, Pageable pageable) {

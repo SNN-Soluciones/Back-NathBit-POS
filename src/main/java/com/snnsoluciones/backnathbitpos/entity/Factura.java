@@ -157,9 +157,6 @@ public class Factura {
     @Column(name = "total_exonerado", precision = 18, scale = 5)
     private BigDecimal totalExonerado = BigDecimal.ZERO;
 
-    @Column(name = "total_no_sujeto", precision = 18, scale = 5)
-    private BigDecimal totalNoSujeto = BigDecimal.ZERO;
-
     @Column(name = "total_venta", precision = 18, scale = 5)
     private BigDecimal totalVenta = BigDecimal.ZERO;
 
@@ -207,6 +204,18 @@ public class Factura {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "total_servicios_no_sujeto", precision = 19, scale = 5, nullable = false)
+    private BigDecimal totalServiciosNoSujeto = BigDecimal.ZERO;
+
+    @Column(name = "total_mercancias_no_sujeto", precision = 19, scale = 5, nullable = false)
+    private BigDecimal totalMercanciasNoSujeto = BigDecimal.ZERO;
+
+    @Column(name = "total_no_sujeto", precision = 19, scale = 5, nullable = false)
+    private BigDecimal totalNoSujeto = BigDecimal.ZERO;
+
+    @Column(name = "version_catalogos", length = 64, nullable = false)
+    private String versionCatalogos;
 
     // ========== MÉTODOS HELPER (Solo relaciones) ==========
 

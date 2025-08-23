@@ -27,14 +27,9 @@ public class DetalleFacturaRequest {
     @DecimalMin(value = "0.001", message = "Cantidad debe ser mayor a 0")
     private BigDecimal cantidad;
     
-    @NotBlank
-    private String unidadMedida;
-    
     @NotNull
     @DecimalMin(value = "0.00")
     private BigDecimal precioUnitario;
-    
-    private String codigoCabys;
     
     private String descripcionPersonalizada;
     
@@ -64,6 +59,14 @@ public class DetalleFacturaRequest {
     @NotNull
     @DecimalMin(value = "0.00")
     private BigDecimal montoTotalLinea;
+
+    @NotBlank(message = "Unidad de medida es requerida")
+    @Pattern(regexp = "^[0-9A-Z._-]{1,8}$", message = "Unidad de medida inválida")
+    private String unidadMedida;
+
+    @NotBlank(message = "Código CAByS es requerido")
+    @Pattern(regexp = "^[0-9]{13}$", message = "CAByS debe tener 13 dígitos")
+    private String codigoCabys;
     
     // Listas de componentes
     @Valid

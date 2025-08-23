@@ -20,6 +20,8 @@ public interface ClienteService {
     void eliminar(Long id);
     
     void activarDesactivar(Long id, boolean activo);
+
+    Page<Cliente> buscarPorEmpresaActivos(Long empresaId, Pageable pageable);
     
     // Búsquedas
     Page<Cliente> buscarPorEmpresa(Long empresaId, String busqueda, Pageable pageable);

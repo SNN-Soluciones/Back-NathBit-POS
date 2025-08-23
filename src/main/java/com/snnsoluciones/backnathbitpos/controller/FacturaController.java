@@ -33,7 +33,7 @@ public class FacturaController {
     @PostMapping
     @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<FacturaResponse>> crear(
-        @Valid @RequestBody CrearFacturaRequest request) {
+        @RequestBody CrearFacturaRequest request) {
 
         log.info("Creando factura tipo: {} para cliente: {}",
             request.getTipoDocumento(), request.getClienteId());

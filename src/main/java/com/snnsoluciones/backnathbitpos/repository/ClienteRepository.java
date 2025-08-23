@@ -28,8 +28,7 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
         String emails
     );
 
-    // Búsqueda por sucursal con paginación
-    Page<Cliente> findByEmpresaIdAndActivoTrue(Long sucursalId, Pageable pageable);
+    Page<Cliente> findAllByEmpresaId(Long empresaId, Pageable pageable);
 
     // Búsqueda con filtros
     @Query("SELECT c FROM Cliente c WHERE c.empresa.id = :empresaId " +

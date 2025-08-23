@@ -70,12 +70,45 @@ public class ClienteExoneracion {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "codigo_autorizacion", length = 50, nullable = false)
+    private String codigoAutorizacion;
+
+    @Column(name = "numero_autorizacion")
+    private Integer numeroAutorizacion; // opcional
+
+    @Column(name = "posee_cabys", nullable = false)
+    @Builder.Default
+    private Boolean poseeCabys = false;
+
+    @Column(name = "verificado_en")
+    private LocalDateTime verificadoEn;
+
+    @Lob
+    @Column(name = "payload_json")
+    private String payloadJson;
+
+    @Column(name = "origen", length = 30)
+    private String origen; // ej. "HACIENDA_API"
+
+    @OneToMany(mappedBy = "exoneracion", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.Set<ClienteExoneracionCabys> cabysAutorizados = new java.util.HashSet<>();
     
-    // Método helper para verificar vigencia
     public boolean estaVigente() {
         if (!activo) return false;
         if (fechaVencimiento == null) return true;
         return LocalDate.now().isBefore(fechaVencimiento) || 
                LocalDate.now().isEqual(fechaVencimiento);
+    }
+
+    public boolean aplicaParaCabys(String codigoCabys, java.util.function.Function<String, Boolean> existsInLista) {
+        // No vigente o no activa => no aplica
+        if (!estaVigente()) return false;
+
+        // Si no posee lista de CAByS, aplica a todos (según política que definas)
+        if (Boolean.FALSE.equals(poseeCabys)) return true;
+
+        // Si posee lista, valida pertenencia
+        return existsInLista.apply(codigoCabys);
     }
 }

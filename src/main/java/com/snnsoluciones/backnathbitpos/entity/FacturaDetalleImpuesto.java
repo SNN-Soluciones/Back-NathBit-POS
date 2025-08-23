@@ -128,6 +128,17 @@ public class FacturaDetalleImpuesto {
      */
     @Column(name = "impuesto_neto", nullable = false, precision = 18, scale = 5)
     private BigDecimal impuestoNeto;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "detalle_id", nullable = false)
+    private FacturaDetalle detalle;
+
+    // ---- IMPUESTO ASUMIDO (v4.4) ----
+    @Column(name = "impuesto_asumido_por_emisor")
+    private Boolean impuestoAsumidoPorEmisor = Boolean.FALSE;
+
+    @Column(name = "monto_impuesto_asumido", precision = 19, scale = 5)
+    private BigDecimal montoImpuestoAsumido;
     
     // ========== MÉTODOS DE CÁLCULO ==========
     

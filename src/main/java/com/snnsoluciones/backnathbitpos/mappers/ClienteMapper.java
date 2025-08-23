@@ -5,7 +5,6 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionDTO;
-import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteListDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUpdateDTO;
@@ -22,7 +21,7 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 @Component
 public interface ClienteMapper {
-    
+
     // Mapeos principales Cliente
     @Mapping(target = "empresaId", source = "empresa.id")
     @Mapping(target = "empresaNombre", source = "empresa.nombreRazonSocial")
@@ -31,7 +30,7 @@ public interface ClienteMapper {
     @Mapping(target = "exoneracionesActivas", expression = "java(contarExoneracionesActivas(cliente))")
     @Mapping(target = "tieneExoneracionVigente", expression = "java(tieneExoneracionVigente(cliente))")
     ClienteDTO toDTO(Cliente cliente);
-    
+
     @Mapping(target = "empresa", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
@@ -41,7 +40,7 @@ public interface ClienteMapper {
     @Mapping(target = "activo", constant = "true")
     @Mapping(target = "inscritoHacienda", source = "inscritoHacienda")
     Cliente toEntity(ClienteCreateDTO dto);
-    
+
     @Mapping(target = "empresa", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
@@ -51,18 +50,13 @@ public interface ClienteMapper {
     @Mapping(target = "tieneExoneracion", ignore = true)
     @Mapping(target = "activo", ignore = true)
     Cliente toEntity(ClienteUpdateDTO dto);
-    
-    // Mapeo para listados
-    @Mapping(target = "primerEmail", expression = "java(obtenerPrimerEmail(cliente.getEmails()))")
-    @Mapping(target = "telefonoCompleto", expression = "java(formatearTelefono(cliente))")
-    ClienteListDTO toListDTO(Cliente cliente);
-    
+
     // Mapeo para búsquedas
     @Mapping(target = "emails", source = "emails", qualifiedByName = "stringToList")
     @Mapping(target = "telefonoCompleto", expression = "java(formatearTelefono(cliente))")
     @Mapping(target = "ubicacionResumen", expression = "java(obtenerUbicacionResumen(cliente))")
     ClienteBusquedaDTO.ClienteOpcionDTO toOpcionDTO(Cliente cliente);
-    
+
     // Mapeos de Ubicación
     @Mapping(target = "provinciaId", source = "provincia.id")
     @Mapping(target = "provinciaNombre", source = "provincia.provincia")
@@ -74,7 +68,7 @@ public interface ClienteMapper {
     @Mapping(target = "barrioNombre", source = "barrio.barrio")
     @Mapping(target = "direccionCompleta", expression = "java(formatearDireccionCompleta(ubicacion))")
     ClienteUbicacionDTO toDTO(ClienteUbicacion ubicacion);
-    
+
     @Mapping(target = "cliente", ignore = true)
     @Mapping(target = "provincia", ignore = true)
     @Mapping(target = "canton", ignore = true)
@@ -84,21 +78,21 @@ public interface ClienteMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     ClienteUbicacion toEntity(ClienteUbicacionCreateDTO dto);
-    
+
     // Mapeos de Exoneración
     @Mapping(target = "clienteId", source = "cliente.id")
     @Mapping(target = "clienteNombre", source = "cliente.razonSocial")
     @Mapping(target = "vigente", expression = "java(exoneracion.estaVigente())")
     @Mapping(target = "diasParaVencer", expression = "java(calcularDiasParaVencer(exoneracion))")
     ClienteExoneracionDTO toDTO(ClienteExoneracion exoneracion);
-    
+
     @Mapping(target = "cliente", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "activo", constant = "true")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     ClienteExoneracion toEntity(ClienteExoneracionCreateDTO dto);
-    
+
     // Métodos auxiliares
     @Named("stringToList")
     default List<String> stringToList(String emails) {
@@ -109,14 +103,14 @@ public interface ClienteMapper {
             .map(String::trim)
             .collect(Collectors.toList());
     }
-    
+
     default String formatearTelefono(Cliente cliente) {
         if (cliente.getTelefonoCodigoPais() == null || cliente.getTelefonoNumero() == null) {
             return null;
         }
         return "+" + cliente.getTelefonoCodigoPais() + " " + cliente.getTelefonoNumero();
     }
-    
+
     default String obtenerPrimerEmail(String emails) {
         if (emails == null || emails.trim().isEmpty()) {
             return null;
@@ -124,7 +118,7 @@ public interface ClienteMapper {
         String[] emailArray = emails.split(",");
         return emailArray[0].trim();
     }
-    
+
     default Integer contarExoneracionesActivas(Cliente cliente) {
         if (cliente.getExoneraciones() == null) {
             return 0;
@@ -133,7 +127,7 @@ public interface ClienteMapper {
             .filter(ClienteExoneracion::getActivo)
             .count();
     }
-    
+
     default Boolean tieneExoneracionVigente(Cliente cliente) {
         if (cliente.getExoneraciones() == null || cliente.getExoneraciones().isEmpty()) {
             return false;
@@ -141,7 +135,7 @@ public interface ClienteMapper {
         return cliente.getExoneraciones().stream()
             .anyMatch(ClienteExoneracion::estaVigente);
     }
-    
+
     default String obtenerUbicacionResumen(Cliente cliente) {
         if (cliente.getUbicacion() == null) {
             return null;
@@ -149,38 +143,40 @@ public interface ClienteMapper {
         ClienteUbicacion ub = cliente.getUbicacion();
         return ub.getProvincia().getProvincia() + ", " + ub.getCanton().getCanton();
     }
-    
+
     default String formatearDireccionCompleta(ClienteUbicacion ubicacion) {
         if (ubicacion == null) {
             return null;
         }
-        
+
         StringBuilder direccion = new StringBuilder();
         direccion.append(ubicacion.getProvincia().getProvincia()).append(", ");
         direccion.append(ubicacion.getCanton().getCanton()).append(", ");
         direccion.append(ubicacion.getDistrito().getDistrito());
-        
+
         if (ubicacion.getBarrio() != null) {
             direccion.append(", ").append(ubicacion.getBarrio().getBarrio());
         }
-        
+
         if (ubicacion.getOtrasSenas() != null && !ubicacion.getOtrasSenas().isEmpty()) {
             direccion.append(" - ").append(ubicacion.getOtrasSenas());
         }
-        
+
         return direccion.toString();
     }
-    
+
     default Integer calcularDiasParaVencer(ClienteExoneracion exoneracion) {
         if (exoneracion.getFechaVencimiento() == null) {
             return null;
         }
-        
+
         long dias = java.time.temporal.ChronoUnit.DAYS.between(
-            java.time.LocalDate.now(), 
+            java.time.LocalDate.now(),
             exoneracion.getFechaVencimiento()
         );
-        
+
         return dias < 0 ? 0 : (int) dias;
     }
+
+    Cliente toEntity(Cliente cliente);
 }

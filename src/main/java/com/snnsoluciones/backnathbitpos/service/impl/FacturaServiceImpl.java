@@ -69,7 +69,7 @@ public class FacturaServiceImpl implements FacturaService {
     factura.setTipoDocumento(request.getTipoDocumento());
     factura.setCondicionVenta(CondicionVenta.fromCodigo(request.getCondicionVenta()));
     factura.setPlazoCredito(request.getPlazoCredito());
-    factura.setSituacion(SituacionDocumento.fromCodigo(request.getSituacionComprobante()));
+    factura.setSituacion(SituacionDocumento.valueOf(request.getSituacionComprobante()));
     factura.setMoneda(request.getMoneda());
     factura.setTipoCambio(request.getTipoCambio());
     factura.setObservaciones(request.getObservaciones());
@@ -80,6 +80,18 @@ public class FacturaServiceImpl implements FacturaService {
           .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
       factura.setCliente(cliente);
     }
+    BigDecimal tc = null;
+
+    if (request.getTipoCambio() != null) {
+      tc = request.getTipoCambio();
+    } else {
+      // Si moneda es CRC, es 1.00000; si es USD y no vino, decide tu regla (puede ser obligatorio)
+      tc = BigDecimal.ONE; // o lanza excepción si USD debe traer TC real
+    }
+
+    factura.setTipoCambio(tc);
+
+    factura.setVersionCatalogos(request.getVersionCatalogos());
 
     // Terminal y sesión
     Terminal terminal = terminalService.buscarPorId(request.getTerminalId())
@@ -598,10 +610,10 @@ public class FacturaServiceImpl implements FacturaService {
 
     // Fecha DDMMAAAA
     LocalDateTime fecha = LocalDateTime.now();
-    clave.append(String.format("%02d%02d%04d",
+    clave.append(String.format("%02d%02d%02d",
         fecha.getDayOfMonth(),
         fecha.getMonthValue(),
-        fecha.getYear()));
+        fecha.getYear() % 100));
 
     // Identificación del emisor (12 dígitos)
     String identificacion = factura.getSucursal().getEmpresa().getIdentificacion();
@@ -722,8 +734,8 @@ public class FacturaServiceImpl implements FacturaService {
     requireNonBlank(request.getVersionCatalogos(), "versionCatalogos es requerido");
 
     // ------ No Sujetos ------
-    requireNotNull(request.getTotalServiciosNoSujeto(), "totalServiciosNoSujeto es requerido (puede ser 0)");
-    requireNotNull(request.getTotalMercanciasNoSujeto(), "totalMercanciasNoSujeto es requerido (puede ser 0)");
+    requireNotNull(request.getTotalServiciosNoSujetos(), "totalServiciosNoSujetos es requerido (puede ser 0)");
+    requireNotNull(request.getTotalMercanciasNoSujetas(), "totalMercanciasNoSujetos es requerido (puede ser 0)");
     requireNotNull(request.getTotalNoSujeto(), "totalNoSujeto es requerido (puede ser 0)");
 
     // ------ Detalles ------

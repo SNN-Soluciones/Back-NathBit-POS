@@ -29,10 +29,6 @@ public class FacturaDetalleImpuesto {
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "factura_detalle_id", nullable = false)
-    private FacturaDetalle facturaDetalle;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "producto_impuesto_id")
     private ProductoImpuesto productoImpuesto;
     

@@ -59,7 +59,7 @@ public class Factura {
     @Enumerated(EnumType.STRING)
     private EstadoFactura estado = EstadoFactura.GENERADA;
 
-    @Column(name = "situacion", nullable = false)
+    @Column(name = "situacion_comprobante", nullable = false)
     @Enumerated(EnumType.STRING)
     private SituacionDocumento situacion = SituacionDocumento.NORMAL;
 
@@ -204,12 +204,6 @@ public class Factura {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    @Column(name = "total_servicios_no_sujeto", precision = 19, scale = 5, nullable = false)
-    private BigDecimal totalServiciosNoSujeto = BigDecimal.ZERO;
-
-    @Column(name = "total_mercancias_no_sujeto", precision = 19, scale = 5, nullable = false)
-    private BigDecimal totalMercanciasNoSujeto = BigDecimal.ZERO;
 
     @Column(name = "total_no_sujeto", precision = 19, scale = 5, nullable = false)
     private BigDecimal totalNoSujeto = BigDecimal.ZERO;

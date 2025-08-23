@@ -82,7 +82,7 @@ public class FacturaDetalle {
     @OrderBy("orden ASC")
     private List<FacturaDescuento> descuentos = new ArrayList<>();
 
-    @OneToMany(mappedBy = "facturaDetalle", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "detalle", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("codigoImpuesto ASC")
     private List<FacturaDetalleImpuesto> impuestos = new ArrayList<>();
 
@@ -98,6 +98,6 @@ public class FacturaDetalle {
 
     public void agregarImpuesto(FacturaDetalleImpuesto impuesto) {
         impuestos.add(impuesto);
-        impuesto.setFacturaDetalle(this);
+        impuesto.setDetalle(this);
     }
 }

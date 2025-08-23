@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.factura;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.CondicionVenta;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import lombok.AllArgsConstructor;
@@ -152,12 +153,6 @@ public class CrearFacturaRequest {
     @NotNull
     @DecimalMin(value = "0.00")
     private BigDecimal totalOtrosCargos;
-
-    @NotNull @DecimalMin("0.00")
-    private BigDecimal totalServiciosNoSujeto;
-
-    @NotNull @DecimalMin("0.00")
-    private BigDecimal totalMercanciasNoSujeto;
 
     @NotNull @DecimalMin("0.00")
     private BigDecimal totalNoSujeto; // suma de los dos

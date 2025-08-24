@@ -9,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaCAByS;
+import com.snnsoluciones.backnathbitpos.mappers.ClienteMapper;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionCabysRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
@@ -42,6 +43,7 @@ public class ClientePOSController {
     private final ClienteExoneracionRepository exoneracionRepository;
     private final ClienteRepository clienteRepository;
     private final ProductoCrudService productoCrudService;
+    private final ClienteMapper clienteMapper;
     private final ModelMapper modelMapper;
     
     @Operation(summary = "Buscar cliente por identificación exacta")
@@ -84,7 +86,7 @@ public class ClientePOSController {
         @RequestParam(defaultValue = "10") int size) {
 
         try {
-            Page<Cliente> clientes = clienteService.buscarPorEmpresaActivos(
+            Page<ClientePOSDto> clientes = clienteService.buscarPorEmpresaActivosDTO(
                 empresaId,
                 PageRequest.of(page, size)
             );
@@ -93,8 +95,7 @@ public class ClientePOSController {
                 ? "No se encontraron clientes"
                 : "Se encontraron " + clientes.getTotalElements() + " clientes";
 
-            return ResponseEntity.ok(ApiResponse.ok(mensaje, clientes.map(
-                this::convertirAClientePOSDto)));
+            return ResponseEntity.ok(ApiResponse.ok(mensaje, clientes));
         } catch (Exception e) {
             log.error("Error en búsqueda rápida de clientes: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -116,7 +117,7 @@ public class ClientePOSController {
                     .body(ApiResponse.error("El término de búsqueda debe tener al menos 3 caracteres"));
             }
 
-            Page<Cliente> clientes = clienteService.buscarPorEmpresa(
+            Page<ClientePOSDto> clientes = clienteService.buscarPorEmpresaDto(
                 empresaId,
                 termino.trim(),
                 PageRequest.of(page, size)
@@ -126,9 +127,7 @@ public class ClientePOSController {
                 ? "No se encontraron clientes"
                 : "Se encontraron " + clientes.getTotalElements() + " clientes";
 
-
-            return ResponseEntity.ok(ApiResponse.ok(mensaje, clientes.map(
-                this::convertirAClientePOSDto)));
+            return ResponseEntity.ok(ApiResponse.ok(mensaje, clientes));
 
         } catch (Exception e) {
             log.error("Error en búsqueda rápida de clientes: {}", e.getMessage());
@@ -202,48 +201,12 @@ public class ClientePOSController {
                 .body(ApiResponse.error("Error al validar exoneración: " + e.getMessage()));
         }
     }
-
-    private ClientePOSDto convertirAClientePOSDto(Cliente cliente) {
-        var exoOpt = cliente.getExoneracionVigente();
-
-        ExoneracionClienteDto exoDto = exoOpt.map(e ->
-            ExoneracionClienteDto.builder()
-                .vigente(e.estaVigente())
-                .tipoDocumento(e.getTipoDocumento() != null ? e.getTipoDocumento().name() : null)
-                .numeroDocumento(e.getNumeroDocumento())
-                .fechaEmision(e.getFechaEmision())
-                .fechaVencimiento(e.getFechaVencimiento())
-                .nombreInstitucion(e.getNombreInstitucion())
-                .porcentajeExoneracion(e.getPorcentajeExoneracion())
-                .codigoAutorizacion(e.getCodigoAutorizacion()) // si tu entidad lo tiene
-                .poseeCabys(Boolean.TRUE.equals(e.getPoseeCabys()))
-                .categoriaCompra(e.getCategoriaCompra())
-                .montoMaximo(e.getMontoMaximo())
-                .numeroAutorizacion(e.getNumeroAutorizacion())
-                .totalCabysAutorizados(e.getCabysAutorizados().size())
-                .build()
-        ).orElse(null);
-
-        return ClientePOSDto.builder()
-            .id(cliente.getId())
-            .tipoIdentificacion(cliente.getTipoIdentificacion())
-            .numeroIdentificacion(cliente.getNumeroIdentificacion())
-            .razonSocial(cliente.getRazonSocial())
-            .emails(cliente.getEmails())
-            .telefonoNumero(cliente.getTelefonoNumero())
-            .activo(cliente.getActivo())
-            .exonerado(exoDto != null)
-            .inscritoHacienda(cliente.getInscritoHacienda())
-            .tieneExoneracion(cliente.getTieneExoneracion())
-            .permiteCredito(cliente.getPermiteCredito())
-            .exoneracion(exoDto)
-            .build();
-    }
     
     @Operation(summary = "Crear cliente rápido desde POS")
     @PostMapping("/crear-rapido")
     public ResponseEntity<ApiResponse<ClienteDTO>> crearClienteRapido(
-            @RequestBody CrearClienteRapidoRequest request) {
+            @RequestBody ClientePOSDto request,
+        @RequestParam Long empresaId) {
         
         try {
             // Validaciones básicas
@@ -252,25 +215,7 @@ public class ClientePOSController {
                     .body(ApiResponse.error("La identificación es requerida"));
             }
             
-            if (request.getNombre() == null || request.getNombre().trim().isEmpty()) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("El nombre es requerido"));
-            }
-            
-            // Crear cliente con datos mínimos
-            Cliente cliente = new Cliente();
-            cliente.setEmpresa(new Empresa());
-            cliente.getEmpresa().setId(request.getEmpresaId());
-            cliente.setTipoIdentificacion(request.getTipoIdentificacion());
-            cliente.setNumeroIdentificacion(request.getNumeroIdentificacion());
-            cliente.setRazonSocial(request.getNombre());
-            cliente.setEmails(request.getEmail() != null ? request.getEmail() : "sincorreo@pos.com");
-            cliente.setTelefonoCodigoPais("506");
-            cliente.setTelefonoNumero(request.getTelefono() != null ? request.getTelefono() : "00000000");
-            cliente.setPermiteCredito(false);
-            cliente.setTieneExoneracion(false);
-            
-            Cliente clienteCreado = clienteService.crear(cliente);
+            Cliente clienteCreado = clienteService.crear(request, empresaId);
             ClienteDTO clienteDto = modelMapper.map(clienteCreado, ClienteDTO.class);
             
             return ResponseEntity.ok(ApiResponse.ok("Cliente creado exitosamente", clienteDto));

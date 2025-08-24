@@ -51,7 +51,7 @@ public class ClienteUbicacionController {
                     ApiResponse.ok("El cliente no tiene ubicación registrada", null)
                 );
             }
-            
+
             ClienteUbicacionDTO response = clienteMapper.toDTO(ubicacion);
             return ResponseEntity.ok(ApiResponse.ok(response));
             

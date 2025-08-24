@@ -11,6 +11,9 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUpdateDTO;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import org.mapstruct.*;
 import org.springframework.stereotype.Component;
 
@@ -58,15 +61,11 @@ public interface ClienteMapper {
     ClienteBusquedaDTO.ClienteOpcionDTO toOpcionDTO(Cliente cliente);
 
     // Mapeos de Ubicación
-    @Mapping(target = "provinciaId", source = "provincia.id")
-    @Mapping(target = "provinciaNombre", source = "provincia.provincia")
-    @Mapping(target = "cantonId", source = "canton.id")
-    @Mapping(target = "cantonNombre", source = "canton.canton")
-    @Mapping(target = "distritoId", source = "distrito.id")
-    @Mapping(target = "distritoNombre", source = "distrito.distrito")
-    @Mapping(target = "barrioId", source = "barrio.id")
-    @Mapping(target = "barrioNombre", source = "barrio.barrio")
-    @Mapping(target = "direccionCompleta", expression = "java(formatearDireccionCompleta(ubicacion))")
+    @Mapping(target = "provincia", source = "provincia.id")
+    @Mapping(target = "canton", source = "canton.id")
+    @Mapping(target = "distrito", source = "distrito.id")
+    @Mapping(target = "barrio", source = "barrio.id")
+    @Mapping(target = "otrasSenas", source = "otrasSenas")
     ClienteUbicacionDTO toDTO(ClienteUbicacion ubicacion);
 
     @Mapping(target = "cliente", ignore = true)
@@ -84,13 +83,19 @@ public interface ClienteMapper {
     @Mapping(target = "clienteNombre", source = "cliente.razonSocial")
     @Mapping(target = "vigente", expression = "java(exoneracion.estaVigente())")
     @Mapping(target = "diasParaVencer", expression = "java(calcularDiasParaVencer(exoneracion))")
+    @Mapping(target = "codigosCabys", expression = "java(mapearCodigosCabys(exoneracion))")
+    @Mapping(target = "totalCabys", expression = "java(contarCabys(exoneracion))")
     ClienteExoneracionDTO toDTO(ClienteExoneracion exoneracion);
 
     @Mapping(target = "cliente", ignore = true)
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "activo", constant = "true")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "verificadoEn", ignore = true)
+    @Mapping(target = "payloadJson", ignore = true)
+    @Mapping(target = "origen", ignore = true)
+    @Mapping(target = "cabysAutorizados", ignore = true)
+        // Se maneja en el service
     ClienteExoneracion toEntity(ClienteExoneracionCreateDTO dto);
 
     // Métodos auxiliares
@@ -165,18 +170,33 @@ public interface ClienteMapper {
         return direccion.toString();
     }
 
+    Cliente toEntity(Cliente cliente);
+
+    default List<String> mapearCodigosCabys(ClienteExoneracion exoneracion) {
+        if (exoneracion.getCabysAutorizados() == null || exoneracion.getCabysAutorizados()
+            .isEmpty()) {
+            return new ArrayList<>();
+        }
+        return exoneracion.getCabysAutorizados().stream()
+            .map(cec -> cec.getCabys().getCodigo())
+            .sorted() // Ordenar para consistencia
+            .collect(Collectors.toList());
+    }
+
+    default Integer contarCabys(ClienteExoneracion exoneracion) {
+        if (exoneracion.getCabysAutorizados() == null) {
+            return 0;
+        }
+        return exoneracion.getCabysAutorizados().size();
+    }
+
     default Integer calcularDiasParaVencer(ClienteExoneracion exoneracion) {
         if (exoneracion.getFechaVencimiento() == null) {
             return null;
         }
-
-        long dias = java.time.temporal.ChronoUnit.DAYS.between(
-            java.time.LocalDate.now(),
-            exoneracion.getFechaVencimiento()
-        );
-
-        return dias < 0 ? 0 : (int) dias;
+        long dias = ChronoUnit.DAYS.between(LocalDate.now(), exoneracion.getFechaVencimiento());
+        return (int) dias;
     }
 
-    Cliente toEntity(Cliente cliente);
+    ClienteExoneracion toEntity(ClienteExoneracionDTO clienteExoneracionDTO);
 }

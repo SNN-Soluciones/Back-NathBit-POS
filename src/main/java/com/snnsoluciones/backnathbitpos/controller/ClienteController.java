@@ -1,7 +1,6 @@
 package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteBusquedaDTO;
-import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteResumenDTO;
@@ -15,13 +14,11 @@ import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
-import org.springframework.http.HttpStatus;
+import org.modelmapper.ModelMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -36,6 +33,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Tag(name = "Clientes", description = "Gestión de clientes del sistema POS")
 public class ClienteController {
+
+    private final ModelMapper modelMapper;
 
     private final ClienteService clienteService;
     private final ClienteMapper clienteMapper;
@@ -53,37 +52,14 @@ public class ClienteController {
                 a.getAuthority().equals("ROLE_SOPORTE"));
     }
 
-    @Operation(summary = "Crear nuevo cliente")
+    @Operation(summary = "Crear nuevo cliente (vía POS DTO)")
     @PostMapping
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
-    public ResponseEntity<ApiResponse<ClienteDTO>> crear(
-        @RequestBody ClienteCreateDTO dto,
-        @RequestParam(name = "empresaId") Long empresaId,
-        Authentication auth) {
-
-        try {
-            // Validar acceso a la empresa
-            Empresa empresa = empresaService.buscarPorId(empresaId);
-
-            Cliente cliente = clienteMapper.toEntity(dto);
-            cliente.setEmpresa(empresa);
-
-            Cliente clienteCreado = clienteService.crear(cliente);
-            ClienteDTO response = clienteMapper.toDTO(clienteCreado);
-
-            return new ResponseEntity<>(
-                ApiResponse.ok("Cliente creado exitosamente", response),
-                HttpStatus.CREATED
-            );
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Error al crear cliente", e);
-            return ResponseEntity.internalServerError()
-                .body(ApiResponse.error("Error al crear cliente"));
-        }
+    public ResponseEntity<ApiResponse<?>> crear(
+        @RequestBody ClientePOSDto dto,
+        @RequestParam(name = "empresaId") Long empresaId) {
+        Cliente cliente =  this.clienteService.crear(dto, empresaId);
+        return ResponseEntity.ok(ApiResponse.ok(clienteMapper.toDTO(cliente)));
     }
 
     @Operation(summary = "Buscar clientes por identificación")
@@ -185,6 +161,10 @@ public class ClienteController {
 
         try {
             Cliente cliente = clienteService.obtenerPorId(id);
+
+            if(Objects.isNull(cliente)) {
+                return ResponseEntity.notFound().build();
+            }
 
             // Solo ROOT, SOPORTE, SUPER_ADMIN y ADMIN pueden eliminar
 

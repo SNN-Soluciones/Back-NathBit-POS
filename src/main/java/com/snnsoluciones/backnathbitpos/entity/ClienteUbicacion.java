@@ -19,9 +19,8 @@ public class ClienteUbicacion {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_id", nullable = false, unique = true)
+
+    @OneToOne(mappedBy = "ubicacion", fetch = FetchType.LAZY)
     private Cliente cliente;
     
     @ManyToOne(fetch = FetchType.LAZY)

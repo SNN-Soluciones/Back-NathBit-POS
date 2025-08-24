@@ -53,6 +53,7 @@ public interface ClienteExoneracionRepository extends JpaRepository<ClienteExone
         Long clienteId,
         TipoDocumentoExoneracion tipoDocumento
     );
+
     
     // Contar exoneraciones activas por sucursal
     @Query("SELECT COUNT(e) FROM ClienteExoneracion e " +

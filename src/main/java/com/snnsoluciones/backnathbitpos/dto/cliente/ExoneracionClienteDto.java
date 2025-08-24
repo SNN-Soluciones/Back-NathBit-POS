@@ -2,6 +2,7 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
 import java.util.List;
+import java.util.Set;
 import lombok.*;
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -34,4 +35,6 @@ public class ExoneracionClienteDto implements Serializable {
   // Opcionales informativos
   private String categoriaCompra;           // si lo manejas
   private BigDecimal montoMaximo;
+
+  private List<String> codigosCabys;
 }

@@ -1,14 +1,39 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionDTO;
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
+import com.snnsoluciones.backnathbitpos.dto.cliente.ExoneracionClienteDto;
+import com.snnsoluciones.backnathbitpos.entity.Barrio;
+import com.snnsoluciones.backnathbitpos.entity.Canton;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
+import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracionCabys;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
+import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
+import com.snnsoluciones.backnathbitpos.entity.Distrito;
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
+import com.snnsoluciones.backnathbitpos.entity.Provincia;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionCabysRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteUbicacionRepository;
+import com.snnsoluciones.backnathbitpos.repository.CodigoCABySRepository;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
+import com.snnsoluciones.backnathbitpos.service.EmpresaService;
+import com.snnsoluciones.backnathbitpos.service.UbicacionService;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,366 +48,811 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 @Transactional
 public class ClienteServiceImpl implements ClienteService {
-    
-    private final ClienteRepository clienteRepository;
-    private final ClienteUbicacionRepository ubicacionRepository;
-    private final ClienteExoneracionRepository exoneracionRepository;
-    
-    private static final Pattern EMAIL_PATTERN = Pattern.compile(
-        "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$"
-    );
-    private static final int MAX_EMAILS = 4;
-    
-    @Override
-    public Cliente crear(Cliente cliente) {
-        log.info("Creando nuevo cliente: {} - {}", 
-            cliente.getTipoIdentificacion(), cliente.getNumeroIdentificacion());
-        
-        // Validaciones
-        validarEmailsFormato(cliente.getEmails());
-        if (cliente.getTelefonoNumero() != null || cliente.getTelefonoCodigoPais() != null) {
-            validarTelefonos(cliente.getTelefonoCodigoPais(), cliente.getTelefonoNumero());
+
+  private final ClienteRepository clienteRepository;
+  private final ClienteUbicacionRepository ubicacionRepository;
+  private final ClienteExoneracionRepository exoneracionRepository;
+  private final ClienteExoneracionCabysRepository exoneracionCabysRepository;
+  private final CodigoCABySRepository codigoCabysRepository;
+  private final UbicacionService ubicacionService;
+  private final EmpresaService empresaService;
+
+  private static final Pattern EMAIL_PATTERN = Pattern.compile(
+      "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$"
+  );
+  private static final int MAX_EMAILS = 4;
+
+  @Override
+  public Cliente crear(ClientePOSDto dto, Long empresaId) {
+    // =========================
+    // 0) Validaciones mínimas
+    // =========================
+    validarMinimo(dto);
+
+    final TipoIdentificacion tipo = Objects.requireNonNull(dto.getTipoIdentificacion(),
+        "tipoIdentificacion requerido");
+    final String numeroId = normalizarIdentificacion(dto.getNumeroIdentificacion());
+    if (!tipo.esValido(numeroId)) {
+      throw new IllegalArgumentException("Identificación no válida para el tipo " + tipo.name());
+    }
+    if (empresaId == null) {
+      throw new IllegalArgumentException("empresaId es requerido");
+    }
+
+    // =========================
+    // 1) Empresa
+    // =========================
+    final Empresa empresa = empresaService.buscarPorId(empresaId);
+
+    // =========================
+    // 2) Cliente base
+    // =========================
+    final Cliente cliente = new Cliente();
+    cliente.setEmpresa(empresa);
+    cliente.setTipoIdentificacion(tipo);
+    cliente.setNumeroIdentificacion(numeroId);
+    cliente.setRazonSocial(StringUtils.trimToEmpty(dto.getRazonSocial()));
+    cliente.setEmails(StringUtils.trimToEmpty(dto.getEmails()));          // primer email o CSV
+    cliente.setTelefonoCodigoPais("506");                                  // CR por defecto
+    cliente.setTelefonoNumero(StringUtils.trimToEmpty(dto.getTelefonoNumero()));
+    cliente.setPermiteCredito(Boolean.TRUE.equals(dto.getPermiteCredito()));
+    cliente.setInscritoHacienda(Boolean.TRUE.equals(dto.getInscritoHacienda()));
+    cliente.setActivo(Boolean.TRUE.equals(dto.getActivo()));
+
+    // =========================
+// 3) Ubicación (Cliente es dueño)
+// =========================
+    if (dto.getUbicacion() != null) {
+      var u = dto.getUbicacion();
+
+      // Solo si TODOS los IDs vienen presentes
+      boolean tieneIds =
+          u.getProvincia() != null &&
+              u.getCanton() != null &&
+              u.getDistrito() != null &&
+              u.getBarrio() != null;
+
+      if (tieneIds) {
+        var provincia = ubicacionService.buscarProvinciaPorId(u.getProvincia()).orElse(null);
+        var canton = ubicacionService.buscarCantonPorId(u.getCanton()).orElse(null);
+        var distrito = ubicacionService.buscarDistritoPorId(u.getDistrito()).orElse(null);
+        var barrio = ubicacionService.buscarBarrioPorId(u.getBarrio()).orElse(null);
+
+        if (provincia != null && canton != null && distrito != null && barrio != null) {
+          var ubic = new ClienteUbicacion();
+          ubic.setProvincia(provincia);
+          ubic.setCanton(canton);
+          ubic.setDistrito(distrito);
+          ubic.setBarrio(barrio);
+          ubic.setOtrasSenas(u.getOtrasSenas());
+          cliente.setUbicacion(ubic); // Cliente es dueño
         }
-        
-        // Verificar si ya existe
-        if (existeCliente(cliente.getEmpresa().getId(),
-                         cliente.getNumeroIdentificacion(), 
-                         cliente.getEmails())) {
-            throw new IllegalArgumentException(
-                "Ya existe un cliente con esa identificación y emails en esta empresa"
-            );
+      }
+    }
+
+    // =========================
+    // 4) Exoneración (Cliente es dueño vía @OneToMany + @JoinColumn)
+    // =========================
+    if (dto.getExoneracion() != null) {
+      final var exDto = dto.getExoneracion();
+
+      // Validaciones clave (simplificadas — puedes endurecer si quieres)
+      if (StringUtils.isBlank(exDto.getCodigoAutorizacion())) {
+        throw new IllegalArgumentException("codigoAutorizacion es requerido para la exoneración");
+      }
+      if (exDto.getPorcentajeExoneracion() == null) {
+        throw new IllegalArgumentException("porcentajeExoneracion es requerido");
+      }
+      if (exDto.getFechaEmision() == null) {
+        throw new IllegalArgumentException("fechaEmision es requerida");
+      }
+      if (exDto.getFechaVencimiento() != null && exDto.getFechaVencimiento()
+          .isBefore(exDto.getFechaEmision())) {
+        throw new IllegalArgumentException("fechaVencimiento no puede ser anterior a fechaEmision");
+      }
+
+      final ClienteExoneracion exo = new ClienteExoneracion();
+      exo.setTipoDocumento(
+          mapTipoDocumento(exDto.getTipoDocumento())); // mapea "04"/"EXONERACION" a tu enum
+      exo.setNumeroDocumento(StringUtils.trimToEmpty(exDto.getNumeroDocumento()));
+      exo.setNombreInstitucion(StringUtils.trimToEmpty(exDto.getNombreInstitucion()));
+      exo.setFechaEmision(exDto.getFechaEmision());        // ya es LocalDate
+      exo.setFechaVencimiento(exDto.getFechaVencimiento());// ya es LocalDate (o null)
+      exo.setPorcentajeExoneracion(parsePorcentaje(exDto.getPorcentajeExoneracion()));
+      exo.setCategoriaCompra(exDto.getCategoriaCompra());
+      exo.setMontoMaximo(exDto.getMontoMaximo());
+      exo.setActivo(true);
+
+      // Campos faltantes en tu primer intento (muy importantes)
+      exo.setCodigoAutorizacion(StringUtils.trimToEmpty(exDto.getCodigoAutorizacion()));
+      exo.setNumeroAutorizacion(exDto.getNumeroAutorizacion());
+      exo.setPoseeCabys(Boolean.TRUE.equals(exDto.getPoseeCabys()));
+
+      // CAByS autorizados (si aplica). Valida 13 dígitos y evita nulls.
+      if (exDto.getCodigosCabys() != null && !exDto.getCodigosCabys().isEmpty()) {
+        final Set<ClienteExoneracionCabys> links = new HashSet<>();
+        for (String codigoCabys : exDto.getCodigosCabys()) {
+          if (codigoCabys == null || !codigoCabys.matches("\\d{13}")) {
+            continue;
+          }
+          final var cabys = codigoCabysRepository.findByCodigo(codigoCabys).orElse(null);
+          if (cabys == null) {
+            continue;
+          }
+
+          final var link = new ClienteExoneracionCabys();
+          link.setCabys(cabys);
+          link.setExoneracion(exo); // dueño natural del link es ClienteExoneracion
+          links.add(link);
         }
-        
-        return clienteRepository.save(cliente);
-    }
-    
-    @Override
-    public Cliente actualizar(Long id, Cliente clienteActualizado) {
-        log.info("Actualizando cliente ID: {}", id);
-        
-        Cliente clienteExistente = obtenerPorId(id);
-        
-        // Validaciones
-        validarEmailsFormato(clienteActualizado.getEmails());
-        if (clienteActualizado.getTelefonoNumero() != null || 
-            clienteActualizado.getTelefonoCodigoPais() != null) {
-            validarTelefonos(clienteActualizado.getTelefonoCodigoPais(), 
-                           clienteActualizado.getTelefonoNumero());
-        }
-        
-        // Verificar unicidad si cambió identificación o emails
-        if (!clienteExistente.getNumeroIdentificacion().equals(clienteActualizado.getNumeroIdentificacion()) ||
-            !clienteExistente.getEmails().equals(clienteActualizado.getEmails())) {
-            
-            if (existeCliente(clienteExistente.getEmpresa().getId(),
-                            clienteActualizado.getNumeroIdentificacion(),
-                            clienteActualizado.getEmails())) {
-                throw new IllegalArgumentException(
-                    "Ya existe otro cliente con esa identificación y emails"
-                );
-            }
-        }
-        
-        // Actualizar campos
-        clienteExistente.setTipoIdentificacion(clienteActualizado.getTipoIdentificacion());
-        clienteExistente.setNumeroIdentificacion(clienteActualizado.getNumeroIdentificacion());
-        clienteExistente.setRazonSocial(clienteActualizado.getRazonSocial());
-        clienteExistente.setEmails(clienteActualizado.getEmails());
-        clienteExistente.setTelefonoCodigoPais(clienteActualizado.getTelefonoCodigoPais());
-        clienteExistente.setTelefonoNumero(clienteActualizado.getTelefonoNumero());
-        clienteExistente.setPermiteCredito(clienteActualizado.getPermiteCredito());
-        clienteExistente.setObservaciones(clienteActualizado.getObservaciones());
-        
-        return clienteRepository.save(clienteExistente);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public Cliente obtenerPorId(Long id) {
-        return clienteRepository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Cliente no encontrado: " + id));
-    }
-    
-    @Override
-    public void eliminar(Long id) {
-        log.info("Eliminando cliente ID: {}", id);
-        Cliente cliente = obtenerPorId(id);
-        cliente.setActivo(false);
-        clienteRepository.save(cliente);
-    }
-    
-    @Override
-    public void activarDesactivar(Long id, boolean activo) {
-        log.info("Cambiando estado del cliente ID: {} a {}", id, activo ? "activo" : "inactivo");
-        Cliente cliente = obtenerPorId(id);
-        cliente.setActivo(activo);
-        clienteRepository.save(cliente);
+        exo.setCabysAutorizados(links);
+      }
+
+      // Como Cliente es dueño del OneToMany, basta con agregar a la colección:
+      cliente.getExoneraciones().add(exo);
+
+      // marca resumen en cliente
+      cliente.setTieneExoneracion(true);
+    } else {
+      cliente.setTieneExoneracion(false);
     }
 
-    @Override
-    public Page<Cliente> buscarPorEmpresaActivos(Long empresaId, Pageable pageable) {
-        return this.clienteRepository.findAllByEmpresaId(empresaId, pageable);
-    }
+    // =========================
+    // 5) Persistir todo (cascade desde Cliente)
+    // =========================
+    return clienteRepository.save(cliente);
+  }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Page<Cliente> buscarPorEmpresa(Long empresaId, String busqueda, Pageable pageable) {
-        return clienteRepository.buscarPorEmpresa(empresaId, busqueda, pageable);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public List<Cliente> buscarPorIdentificacion(Long empresaId, String numeroIdentificacion) {
-        return clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndActivoTrue(
-            empresaId, numeroIdentificacion
-        );
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion, String emails) {
-        return clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndEmails(
-            empresaId, numeroIdentificacion, emails
-        ).orElse(null);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public List<Cliente> obtenerClientesConExoneracion(Long empresaId) {
-        return clienteRepository.findClientesConExoneracionActiva(empresaId);
-    }
-    
-    // Gestión de ubicación
-    @Override
-    public ClienteUbicacion guardarUbicacion(Long clienteId, ClienteUbicacion ubicacion) {
-        log.info("Guardando ubicación para cliente ID: {}", clienteId);
+  @Override
+  public Cliente actualizar(Long id, Cliente clienteActualizado) {
+    log.info("Actualizando cliente ID: {}", id);
 
-        Cliente cliente = obtenerPorId(clienteId);
-
-        // Verificar si ya tiene ubicación
-        ClienteUbicacion ubicacionExistente = ubicacionRepository.findByClienteId(clienteId)
-            .orElse(null);
-
-        if (ubicacionExistente != null) {
-            // Actualizar existente
-            ubicacionExistente.setProvincia(ubicacion.getProvincia());
-            ubicacionExistente.setCanton(ubicacion.getCanton());
-            ubicacionExistente.setDistrito(ubicacion.getDistrito());
-            ubicacionExistente.setBarrio(ubicacion.getBarrio());
-            ubicacionExistente.setOtrasSenas(ubicacion.getOtrasSenas());
-            return ubicacionRepository.save(ubicacionExistente);
-        } else {
-            // Crear nueva
-            ubicacion.setCliente(cliente);
-            return ubicacionRepository.save(ubicacion);
-        }
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public ClienteUbicacion obtenerUbicacion(Long clienteId) {
-        return ubicacionRepository.findByClienteId(clienteId)
-            .orElse(null);
-    }
-
-    @Override
-    public void eliminarUbicacion(Long clienteId) {
-        log.info("Eliminando ubicación del cliente ID: {}", clienteId);
-
-        ClienteUbicacion ubicacion = ubicacionRepository.findByClienteId(clienteId)
-            .orElseThrow(() -> new IllegalArgumentException(
-                "El cliente no tiene ubicación registrada"
-            ));
-
-        ubicacionRepository.delete(ubicacion);
-    }
-
-    // Gestión de exoneraciones
-    @Override
-    public ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion) {
-        log.info("Agregando exoneración para cliente ID: {}", clienteId);
-
-        Cliente cliente = obtenerPorId(clienteId);
-
-        // Verificar si el número de documento ya existe
-        if (exoneracionRepository.existsByNumeroDocumentoAndClienteIdNotAndActivoTrue(
-            exoneracion.getNumeroDocumento(), clienteId)) {
-            throw new IllegalArgumentException(
-                "Ya existe una exoneración activa con ese número de documento"
-            );
-        }
-
-        exoneracion.setCliente(cliente);
-        exoneracion.setActivo(true);
-
-        // Actualizar flag en cliente
-        cliente.setTieneExoneracion(true);
-        clienteRepository.save(cliente);
-
-        return exoneracionRepository.save(exoneracion);
-    }
-
-    @Override
-    public ClienteExoneracion actualizarExoneracion(Long exoneracionId, ClienteExoneracion exoneracionActualizada) {
-        log.info("Actualizando exoneración ID: {}", exoneracionId);
-
-        ClienteExoneracion exoneracionExistente = exoneracionRepository.findById(exoneracionId)
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Exoneración no encontrada: " + exoneracionId
-            ));
-
-        // Verificar número documento si cambió
-        if (!exoneracionExistente.getNumeroDocumento().equals(exoneracionActualizada.getNumeroDocumento())) {
-            if (exoneracionRepository.existsByNumeroDocumentoAndClienteIdNotAndActivoTrue(
-                exoneracionActualizada.getNumeroDocumento(),
-                exoneracionExistente.getCliente().getId())) {
-                throw new IllegalArgumentException(
-                    "Ya existe otra exoneración activa con ese número de documento"
-                );
-            }
-        }
-
-        // Actualizar campos
-        exoneracionExistente.setTipoDocumento(exoneracionActualizada.getTipoDocumento());
-        exoneracionExistente.setNumeroDocumento(exoneracionActualizada.getNumeroDocumento());
-        exoneracionExistente.setNombreInstitucion(exoneracionActualizada.getNombreInstitucion());
-        exoneracionExistente.setFechaEmision(exoneracionActualizada.getFechaEmision());
-        exoneracionExistente.setFechaVencimiento(exoneracionActualizada.getFechaVencimiento());
-        exoneracionExistente.setPorcentajeExoneracion(exoneracionActualizada.getPorcentajeExoneracion());
-        exoneracionExistente.setCategoriaCompra(exoneracionActualizada.getCategoriaCompra());
-        exoneracionExistente.setMontoMaximo(exoneracionActualizada.getMontoMaximo());
-        exoneracionExistente.setObservaciones(exoneracionActualizada.getObservaciones());
-
-        return exoneracionRepository.save(exoneracionExistente);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<ClienteExoneracion> obtenerExoneracionesVigentes(Long clienteId) {
-        return exoneracionRepository.findExoneracionesVigentes(clienteId, LocalDate.now());
-    }
-
-    @Override
-    public void desactivarExoneracion(Long exoneracionId) {
-        log.info("Desactivando exoneración ID: {}", exoneracionId);
-
-        ClienteExoneracion exoneracion = exoneracionRepository.findById(exoneracionId)
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Exoneración no encontrada: " + exoneracionId
-            ));
-
-        exoneracion.setActivo(false);
-        exoneracionRepository.save(exoneracion);
-
-        // Verificar si el cliente tiene más exoneraciones activas
-        Cliente cliente = exoneracion.getCliente();
-        List<ClienteExoneracion> exoneracionesActivas =
-            exoneracionRepository.findByClienteIdAndActivoTrue(cliente.getId());
-
-        if (exoneracionesActivas.isEmpty()) {
-            cliente.setTieneExoneracion(false);
-            clienteRepository.save(cliente);
-        }
-    }
+    Cliente clienteExistente = obtenerPorId(id);
 
     // Validaciones
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existeCliente(Long empresaId, String numeroIdentificacion, String emails) {
-        return clienteRepository.existsByEmpresaIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
-            empresaId, numeroIdentificacion, emails
+    validarEmailsFormato(clienteActualizado.getEmails());
+    if (clienteActualizado.getTelefonoNumero() != null ||
+        clienteActualizado.getTelefonoCodigoPais() != null) {
+      validarTelefonos(clienteActualizado.getTelefonoCodigoPais(),
+          clienteActualizado.getTelefonoNumero());
+    }
+
+    // Verificar unicidad si cambió identificación o emails
+    if (!clienteExistente.getNumeroIdentificacion()
+        .equals(clienteActualizado.getNumeroIdentificacion()) ||
+        !clienteExistente.getEmails().equals(clienteActualizado.getEmails())) {
+
+      if (existeCliente(clienteExistente.getEmpresa().getId(),
+          clienteActualizado.getNumeroIdentificacion(),
+          clienteActualizado.getEmails())) {
+        throw new IllegalArgumentException(
+            "Ya existe otro cliente con esa identificación y emails"
         );
+      }
     }
 
-    @Override
-    public void validarEmailsFormato(String emails) {
-        if (emails == null || emails.trim().isEmpty()) {
-            throw new IllegalArgumentException("Debe proporcionar al menos un email");
+    // Actualizar campos
+    clienteExistente.setTipoIdentificacion(clienteActualizado.getTipoIdentificacion());
+    clienteExistente.setNumeroIdentificacion(clienteActualizado.getNumeroIdentificacion());
+    clienteExistente.setRazonSocial(clienteActualizado.getRazonSocial());
+    clienteExistente.setEmails(clienteActualizado.getEmails());
+    clienteExistente.setTelefonoCodigoPais(clienteActualizado.getTelefonoCodigoPais());
+    clienteExistente.setTelefonoNumero(clienteActualizado.getTelefonoNumero());
+    clienteExistente.setPermiteCredito(clienteActualizado.getPermiteCredito());
+    clienteExistente.setObservaciones(clienteActualizado.getObservaciones());
+
+    return clienteRepository.save(clienteExistente);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Cliente obtenerPorId(Long id) {
+    return clienteRepository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("Cliente no encontrado: " + id));
+  }
+
+  @Override
+  public void eliminar(Long id) {
+    log.info("Eliminando cliente ID: {}", id);
+    Cliente cliente = obtenerPorId(id);
+    clienteRepository.delete(cliente);
+  }
+
+  @Override
+  public void activarDesactivar(Long id, boolean activo) {
+    log.info("Cambiando estado del cliente ID: {} a {}", id, activo ? "activo" : "inactivo");
+    Cliente cliente = obtenerPorId(id);
+    cliente.setActivo(activo);
+    clienteRepository.save(cliente);
+  }
+
+  @Override
+  public Page<Cliente> buscarPorEmpresaActivos(Long empresaId, Pageable pageable) {
+    return this.clienteRepository.findAllByEmpresaId(empresaId, pageable);
+  }
+
+  @Override
+  public Page<ClientePOSDto> buscarPorEmpresaActivosDTO(Long empresaId, Pageable pageable) {
+    Page<Cliente> clientes = clienteRepository.findAllByEmpresaId(empresaId, pageable);
+
+    return clientes.map(cliente -> {
+      ClientePOSDto dto = new ClientePOSDto();
+      dto.setId(cliente.getId());
+      dto.setTipoIdentificacion(cliente.getTipoIdentificacion());
+      dto.setNumeroIdentificacion(cliente.getNumeroIdentificacion());
+      dto.setRazonSocial(cliente.getRazonSocial());
+      dto.setEmails(cliente.getEmails());
+      dto.setTelefonoNumero(cliente.getTelefonoNumero());
+      dto.setPermiteCredito(cliente.getPermiteCredito());
+      dto.setInscritoHacienda(cliente.getInscritoHacienda());
+      dto.setActivo(cliente.getActivo());
+
+      // Ubicación
+      if (cliente.getUbicacion() != null) {
+        var u = cliente.getUbicacion();
+        var ubicDto = new ClienteUbicacionDTO();
+        ubicDto.setProvincia(u.getProvincia() != null ? u.getProvincia().getId() : null);
+        ubicDto.setCanton(u.getCanton() != null ? u.getCanton().getId() : null);
+        ubicDto.setDistrito(u.getDistrito() != null ? u.getDistrito().getId() : null);
+        ubicDto.setBarrio(u.getBarrio() != null ? u.getBarrio().getId() : null);
+        ubicDto.setOtrasSenas(u.getOtrasSenas());
+        dto.setUbicacion(ubicDto);
+      }
+
+      // Exoneración (si tiene)
+      if (cliente.getExoneraciones() != null && !cliente.getExoneraciones().isEmpty()) {
+        var exo = cliente.getExoneraciones().iterator().next(); // ejemplo: tomamos la 1ª
+        var exoDto = new ExoneracionClienteDto();
+        exoDto.setTipoDocumento(exo.getTipoDocumento() != null ? exo.getTipoDocumento().name() : null);
+        exoDto.setNumeroDocumento(exo.getNumeroDocumento());
+        exoDto.setNombreInstitucion(exo.getNombreInstitucion());
+        exoDto.setFechaEmision(exo.getFechaEmision());
+        exoDto.setFechaVencimiento(exo.getFechaVencimiento());
+        exoDto.setPorcentajeExoneracion(exo.getPorcentajeExoneracion());
+        exoDto.setCategoriaCompra(exo.getCategoriaCompra());
+        exoDto.setMontoMaximo(exo.getMontoMaximo());
+        exoDto.setCodigoAutorizacion(exo.getCodigoAutorizacion());
+        exoDto.setNumeroAutorizacion(exo.getNumeroAutorizacion());
+        exoDto.setPoseeCabys(exo.getPoseeCabys());
+
+        // CABYS autorizados
+        if (exo.getCabysAutorizados() != null && !exo.getCabysAutorizados().isEmpty()) {
+          exoDto.setCodigosCabys(
+              exo.getCabysAutorizados().stream()
+                  .map(link -> link.getCabys().getCodigo())
+                  .toList()
+          );
         }
 
-        String[] emailArray = emails.split(",");
+        dto.setExoneracion(exoDto);
+      }
 
-        if (emailArray.length > MAX_EMAILS) {
-            throw new IllegalArgumentException(
-                "No puede registrar más de " + MAX_EMAILS + " emails"
-            );
-        }
+      return dto;
+    });
+  }
 
-        for (String email : emailArray) {
-            String emailTrimmed = email.trim();
-            if (!EMAIL_PATTERN.matcher(emailTrimmed).matches()) {
-                throw new IllegalArgumentException(
-                    "Email inválido: " + emailTrimmed
-                );
-            }
-        }
+  @Override
+  @Transactional(readOnly = true)
+  public Page<Cliente> buscarPorEmpresa(Long empresaId, String busqueda, Pageable pageable) {
+    return clienteRepository.buscarPorEmpresa(empresaId, busqueda, pageable);
+  }
+
+  @Override
+  public Page<ClientePOSDto> buscarPorEmpresaDto(Long empresaId, String busqueda, Pageable pageable) {
+    Page<Cliente> clientes;
+
+    if (StringUtils.isNotBlank(busqueda)) {
+      clientes = clienteRepository
+          .buscarPorEmpresa(empresaId, "%" + busqueda.trim().toLowerCase() + "%", pageable);
+    } else {
+      clientes = clienteRepository.findAllByEmpresaId(empresaId, pageable);
     }
 
-    @Override
-    public void validarTelefonos(String codigoPais, String numero) {
-        if ((codigoPais == null && numero != null) ||
-            (codigoPais != null && numero == null)) {
-            throw new IllegalArgumentException(
-                "Debe proporcionar tanto el código de país como el número de teléfono"
-            );
+    return clientes.map(cliente -> {
+      ClientePOSDto dto = new ClientePOSDto();
+      dto.setId(cliente.getId());
+      dto.setTipoIdentificacion(cliente.getTipoIdentificacion());
+      dto.setNumeroIdentificacion(cliente.getNumeroIdentificacion());
+      dto.setRazonSocial(cliente.getRazonSocial());
+      dto.setEmails(cliente.getEmails());
+      dto.setTelefonoNumero(cliente.getTelefonoNumero());
+      dto.setPermiteCredito(cliente.getPermiteCredito());
+      dto.setInscritoHacienda(cliente.getInscritoHacienda());
+      dto.setActivo(cliente.getActivo());
+
+      // Ubicación
+      if (cliente.getUbicacion() != null) {
+        var u = cliente.getUbicacion();
+        var ubicDto = new ClienteUbicacionDTO();
+        ubicDto.setProvincia(u.getProvincia() != null ? u.getProvincia().getId() : null);
+        ubicDto.setCanton(u.getCanton() != null ? u.getCanton().getId() : null);
+        ubicDto.setDistrito(u.getDistrito() != null ? u.getDistrito().getId() : null);
+        ubicDto.setBarrio(u.getBarrio() != null ? u.getBarrio().getId() : null);
+        ubicDto.setOtrasSenas(u.getOtrasSenas());
+        dto.setUbicacion(ubicDto);
+      }
+
+      // Exoneración (primera activa)
+      if (cliente.getExoneraciones() != null && !cliente.getExoneraciones().isEmpty()) {
+        var exo = cliente.getExoneraciones().iterator().next();
+        var exoDto = new ExoneracionClienteDto();
+        exoDto.setTipoDocumento(exo.getTipoDocumento() != null ? exo.getTipoDocumento().name() : null);
+        exoDto.setNumeroDocumento(exo.getNumeroDocumento());
+        exoDto.setNombreInstitucion(exo.getNombreInstitucion());
+        exoDto.setFechaEmision(exo.getFechaEmision());
+        exoDto.setFechaVencimiento(exo.getFechaVencimiento());
+        exoDto.setPorcentajeExoneracion(exo.getPorcentajeExoneracion());
+        exoDto.setCategoriaCompra(exo.getCategoriaCompra());
+        exoDto.setMontoMaximo(exo.getMontoMaximo());
+        exoDto.setCodigoAutorizacion(exo.getCodigoAutorizacion());
+        exoDto.setNumeroAutorizacion(exo.getNumeroAutorizacion());
+        exoDto.setPoseeCabys(exo.getPoseeCabys());
+
+        if (exo.getCabysAutorizados() != null && !exo.getCabysAutorizados().isEmpty()) {
+          exoDto.setCodigosCabys(
+              exo.getCabysAutorizados().stream()
+                  .map(link -> link.getCabys().getCodigo())
+                  .toList()
+          );
         }
 
-        if (codigoPais != null) {
-            if (codigoPais.length() < 1 || codigoPais.length() > 3) {
-                throw new IllegalArgumentException(
-                    "El código de país debe tener entre 1 y 3 dígitos"
-                );
-            }
+        dto.setExoneracion(exoDto);
+      }
 
-            if (!codigoPais.matches("\\d+")) {
-                throw new IllegalArgumentException(
-                    "El código de país debe contener solo números"
-                );
-            }
-        }
+      return dto;
+    });
+  }
 
-        if (numero != null) {
-            if (numero.length() < 8 || numero.length() > 20) {
-                throw new IllegalArgumentException(
-                    "El número de teléfono debe tener entre 8 y 20 dígitos"
-                );
-            }
+  @Override
+  @Transactional(readOnly = true)
+  public List<Cliente> buscarPorIdentificacion(Long empresaId, String numeroIdentificacion) {
+    return clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndActivoTrue(
+        empresaId, numeroIdentificacion
+    );
+  }
 
-            if (!numero.matches("\\d+")) {
-                throw new IllegalArgumentException(
-                    "El número de teléfono debe contener solo números"
-                );
-            }
-        }
+  @Override
+  @Transactional(readOnly = true)
+  public Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion,
+      String emails) {
+    return clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndEmails(
+        empresaId, numeroIdentificacion, emails
+    ).orElse(null);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<Cliente> obtenerClientesConExoneracion(Long empresaId) {
+    return clienteRepository.findClientesConExoneracionActiva(empresaId);
+  }
+
+  // Gestión de ubicación
+  @Override
+  public ClienteUbicacion guardarUbicacion(Long clienteId, ClienteUbicacion ubicacion) {
+    log.info("Guardando ubicación para cliente ID: {}", clienteId);
+
+    Cliente cliente = obtenerPorId(clienteId);
+
+    // Verificar si ya tiene ubicación
+    ClienteUbicacion ubicacionExistente = ubicacionRepository.findByClienteId(clienteId)
+        .orElse(null);
+
+    if (ubicacionExistente != null) {
+      // Actualizar existente
+      ubicacionExistente.setProvincia(ubicacion.getProvincia());
+      ubicacionExistente.setCanton(ubicacion.getCanton());
+      ubicacionExistente.setDistrito(ubicacion.getDistrito());
+      ubicacionExistente.setBarrio(ubicacion.getBarrio());
+      ubicacionExistente.setOtrasSenas(ubicacion.getOtrasSenas());
+      return ubicacionRepository.save(ubicacionExistente);
+    } else {
+      // Crear nueva
+      ubicacion.setCliente(cliente);
+      return ubicacionRepository.save(ubicacion);
+    }
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public ClienteUbicacion obtenerUbicacion(Long clienteId) {
+    return ubicacionRepository.findByClienteId(clienteId)
+        .orElse(null);
+  }
+
+  @Override
+  public void eliminarUbicacion(Long clienteId) {
+    log.info("Eliminando ubicación del cliente ID: {}", clienteId);
+
+    ClienteUbicacion ubicacion = ubicacionRepository.findByClienteId(clienteId)
+        .orElseThrow(() -> new IllegalArgumentException(
+            "El cliente no tiene ubicación registrada"
+        ));
+
+    ubicacionRepository.delete(ubicacion);
+  }
+
+  @Override
+  @Transactional
+  public ClienteExoneracion actualizarExoneracion(Long exoneracionId,
+      ClienteExoneracion exoneracion) {
+    return actualizarExoneracion(exoneracionId, exoneracion, new ArrayList<>());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<ClienteExoneracion> obtenerExoneracionesVigentes(Long clienteId) {
+    return exoneracionRepository.findExoneracionesVigentes(clienteId, LocalDate.now());
+  }
+
+  @Override
+  public void desactivarExoneracion(Long exoneracionId) {
+    log.info("Desactivando exoneración ID: {}", exoneracionId);
+
+    ClienteExoneracion exoneracion = exoneracionRepository.findById(exoneracionId)
+        .orElseThrow(() -> new IllegalArgumentException(
+            "Exoneración no encontrada: " + exoneracionId
+        ));
+
+    exoneracion.setActivo(false);
+    exoneracionRepository.save(exoneracion);
+
+    // Verificar si el cliente tiene más exoneraciones activas
+    Cliente cliente = exoneracion.getCliente();
+    List<ClienteExoneracion> exoneracionesActivas =
+        exoneracionRepository.findByClienteIdAndActivoTrue(cliente.getId());
+
+    if (exoneracionesActivas.isEmpty()) {
+      cliente.setTieneExoneracion(false);
+      clienteRepository.save(cliente);
+    }
+  }
+
+  // Validaciones
+  @Override
+  @Transactional(readOnly = true)
+  public boolean existeCliente(Long empresaId, String numeroIdentificacion, String emails) {
+    return clienteRepository.existsByEmpresaIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
+        empresaId, numeroIdentificacion, emails
+    );
+  }
+
+  @Override
+  public void validarEmailsFormato(String emails) {
+    if (emails == null || emails.trim().isEmpty()) {
+      throw new IllegalArgumentException("Debe proporcionar al menos un email");
     }
 
-    // Utilidades
-    @Override
-    @Transactional(readOnly = true)
-    public long contarClientesPorEmpresa(Long empresaId) {
-        return clienteRepository.countByEmpresaIdAndActivoTrue(empresaId);
+    String[] emailArray = emails.split(",");
+
+    if (emailArray.length > MAX_EMAILS) {
+      throw new IllegalArgumentException(
+          "No puede registrar más de " + MAX_EMAILS + " emails"
+      );
     }
 
-    @Override
-    public void procesarExoneracionesVencidas() {
-        log.info("Procesando exoneraciones vencidas");
+    for (String email : emailArray) {
+      String emailTrimmed = email.trim();
+      if (!EMAIL_PATTERN.matcher(emailTrimmed).matches()) {
+        throw new IllegalArgumentException(
+            "Email inválido: " + emailTrimmed
+        );
+      }
+    }
+  }
 
-        int actualizadas = exoneracionRepository.desactivarExoneracionesVencidas(LocalDate.now());
+  @Override
+  public void validarTelefonos(String codigoPais, String numero) {
+    if ((codigoPais == null && numero != null) ||
+        (codigoPais != null && numero == null)) {
+      throw new IllegalArgumentException(
+          "Debe proporcionar tanto el código de país como el número de teléfono"
+      );
+    }
 
-        if (actualizadas > 0) {
-            log.info("Se desactivaron {} exoneraciones vencidas", actualizadas);
+    if (codigoPais != null) {
+      if (codigoPais.length() < 1 || codigoPais.length() > 3) {
+        throw new IllegalArgumentException(
+            "El código de país debe tener entre 1 y 3 dígitos"
+        );
+      }
 
-            // Actualizar flag en clientes afectados
-            List<Cliente> clientesConExoneracion =
-                clienteRepository.findAll().stream()
-                    .filter(c -> c.getTieneExoneracion() &&
-                        exoneracionRepository.findByClienteIdAndActivoTrue(c.getId()).isEmpty())
-                    .toList();
+      if (!codigoPais.matches("\\d+")) {
+        throw new IllegalArgumentException(
+            "El código de país debe contener solo números"
+        );
+      }
+    }
 
-            for (Cliente cliente : clientesConExoneracion) {
-                cliente.setTieneExoneracion(false);
-                clienteRepository.save(cliente);
-            }
+    if (numero != null) {
+      if (numero.length() < 8 || numero.length() > 20) {
+        throw new IllegalArgumentException(
+            "El número de teléfono debe tener entre 8 y 20 dígitos"
+        );
+      }
+
+      if (!numero.matches("\\d+")) {
+        throw new IllegalArgumentException(
+            "El número de teléfono debe contener solo números"
+        );
+      }
+    }
+  }
+
+  // Utilidades
+  @Override
+  @Transactional(readOnly = true)
+  public long contarClientesPorEmpresa(Long empresaId) {
+    return clienteRepository.countByEmpresaIdAndActivoTrue(empresaId);
+  }
+
+  @Override
+  public void procesarExoneracionesVencidas() {
+    log.info("Procesando exoneraciones vencidas");
+
+    int actualizadas = exoneracionRepository.desactivarExoneracionesVencidas(LocalDate.now());
+
+    if (actualizadas > 0) {
+      log.info("Se desactivaron {} exoneraciones vencidas", actualizadas);
+
+      // Actualizar flag en clientes afectados
+      List<Cliente> clientesConExoneracion =
+          clienteRepository.findAll().stream()
+              .filter(c -> c.getTieneExoneracion() &&
+                  exoneracionRepository.findByClienteIdAndActivoTrue(c.getId()).isEmpty())
+              .toList();
+
+      for (Cliente cliente : clientesConExoneracion) {
+        cliente.setTieneExoneracion(false);
+        clienteRepository.save(cliente);
+      }
+    }
+  }
+
+  @Override
+  @Transactional
+  public ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion) {
+    // Llamar al nuevo método con lista vacía
+    return agregarExoneracion(clienteId, exoneracion, new ArrayList<>());
+  }
+
+
+  @Transactional
+  public ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion,
+      List<String> codigosCabys) {
+    log.info("Agregando exoneración a cliente ID: {} con {} códigos CABYS", clienteId,
+        codigosCabys != null ? codigosCabys.size() : 0);
+
+    Cliente cliente = clienteRepository.findById(clienteId)
+        .orElseThrow(() -> new IllegalArgumentException("Cliente no encontrado: " + clienteId));
+
+    // Validar que no exista otra exoneración activa con el mismo número
+    if (exoneracionRepository.existsByNumeroDocumentoAndClienteIdNotAndActivoTrue(
+        exoneracion.getNumeroDocumento(), clienteId)) {
+      throw new IllegalArgumentException(
+          "Ya existe otra exoneración activa con el número de documento: " +
+              exoneracion.getNumeroDocumento()
+      );
+    }
+
+    // Asignar cliente y guardar exoneración
+    exoneracion.setCliente(cliente);
+    exoneracion.setActivo(true);
+    ClienteExoneracion exoneracionGuardada = exoneracionRepository.save(exoneracion);
+
+    // Procesar códigos CABYS si los hay
+    if (Boolean.TRUE.equals(exoneracion.getPoseeCabys()) && codigosCabys != null
+        && !codigosCabys.isEmpty()) {
+      for (String codigoCabys : codigosCabys) {
+        // Buscar o crear el código CABYS
+        CodigoCAByS cabys = codigoCabysRepository.findByCodigo(codigoCabys)
+            .orElseGet(() -> {
+              // Crear nuevo si no existe
+              CodigoCAByS nuevo = new CodigoCAByS();
+              nuevo.setCodigo(codigoCabys);
+              nuevo.setDescripcion("Código importado desde exoneración");
+              nuevo.setActivo(true);
+              return codigoCabysRepository.save(nuevo);
+            });
+
+        // Crear la relación
+        ClienteExoneracionCabys relacion = ClienteExoneracionCabys.builder()
+            .exoneracion(exoneracionGuardada)
+            .cabys(cabys)
+            .build();
+
+        exoneracionCabysRepository.save(relacion);
+      }
+    }
+
+    // Actualizar flag en cliente
+    cliente.setTieneExoneracion(true);
+    clienteRepository.save(cliente);
+
+    log.info("Exoneración agregada exitosamente con ID: {}", exoneracionGuardada.getId());
+    return exoneracionGuardada;
+  }
+
+  @Transactional
+  public ClienteExoneracion actualizarExoneracion(Long exoneracionId,
+      ClienteExoneracion exoneracionActualizada, List<String> codigosCabys) {
+    log.info("Actualizando exoneración ID: {} con {} códigos CABYS", exoneracionId,
+        codigosCabys != null ? codigosCabys.size() : 0);
+
+    ClienteExoneracion exoneracionExistente = exoneracionRepository.findById(exoneracionId)
+        .orElseThrow(
+            () -> new IllegalArgumentException("Exoneración no encontrada: " + exoneracionId));
+
+    // Verificar número documento si cambió
+    if (!exoneracionExistente.getNumeroDocumento()
+        .equals(exoneracionActualizada.getNumeroDocumento())) {
+      if (exoneracionRepository.existsByNumeroDocumentoAndClienteIdNotAndActivoTrue(
+          exoneracionActualizada.getNumeroDocumento(),
+          exoneracionExistente.getCliente().getId())) {
+        throw new IllegalArgumentException(
+            "Ya existe otra exoneración activa con ese número de documento"
+        );
+      }
+    }
+
+    // Actualizar campos básicos
+    exoneracionExistente.setTipoDocumento(exoneracionActualizada.getTipoDocumento());
+    exoneracionExistente.setNumeroDocumento(exoneracionActualizada.getNumeroDocumento());
+    exoneracionExistente.setNombreInstitucion(exoneracionActualizada.getNombreInstitucion());
+    exoneracionExistente.setFechaEmision(exoneracionActualizada.getFechaEmision());
+    exoneracionExistente.setFechaVencimiento(exoneracionActualizada.getFechaVencimiento());
+    exoneracionExistente.setPorcentajeExoneracion(
+        exoneracionActualizada.getPorcentajeExoneracion());
+    exoneracionExistente.setCategoriaCompra(exoneracionActualizada.getCategoriaCompra());
+    exoneracionExistente.setMontoMaximo(exoneracionActualizada.getMontoMaximo());
+    exoneracionExistente.setObservaciones(exoneracionActualizada.getObservaciones());
+    exoneracionExistente.setCodigoAutorizacion(exoneracionActualizada.getCodigoAutorizacion());
+    exoneracionExistente.setNumeroAutorizacion(exoneracionActualizada.getNumeroAutorizacion());
+    exoneracionExistente.setPoseeCabys(exoneracionActualizada.getPoseeCabys());
+
+    // Actualizar códigos CABYS (reemplazar lista completa)
+    if (Boolean.TRUE.equals(exoneracionActualizada.getPoseeCabys())) {
+      // Limpiar relaciones existentes usando el Set
+      exoneracionExistente.getCabysAutorizados().clear();
+      exoneracionRepository.saveAndFlush(exoneracionExistente);
+
+      // Agregar nuevos códigos
+      if (codigosCabys != null && !codigosCabys.isEmpty()) {
+        for (String codigoCabys : codigosCabys) {
+          CodigoCAByS cabys = codigoCabysRepository.findByCodigo(codigoCabys)
+              .orElseGet(() -> {
+                CodigoCAByS nuevo = new CodigoCAByS();
+                nuevo.setCodigo(codigoCabys);
+                nuevo.setDescripcion("Código importado desde exoneración");
+                nuevo.setActivo(true);
+                return codigoCabysRepository.save(nuevo);
+              });
+
+          ClienteExoneracionCabys relacion = ClienteExoneracionCabys.builder()
+              .exoneracion(exoneracionExistente)
+              .cabys(cabys)
+              .build();
+
+          exoneracionExistente.getCabysAutorizados().add(relacion);
         }
+      }
+    } else {
+      // Si no posee CABYS, limpiar cualquier relación existente
+      exoneracionExistente.getCabysAutorizados().clear();
     }
+
+    return exoneracionRepository.save(exoneracionExistente);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public ClienteExoneracion obtenerExoneracionPorId(Long exoneracionId) {
+    return exoneracionRepository.findById(exoneracionId)
+        .orElseThrow(
+            () -> new IllegalArgumentException("Exoneración no encontrada: " + exoneracionId));
+  }
+
+  private void validarMinimo(ClientePOSDto dto) {
+    if (dto == null) {
+      throw new IllegalArgumentException("DTO requerido");
+    }
+    if (dto.getTipoIdentificacion() == null) {
+      throw new IllegalArgumentException("tipoIdentificacion requerido");
+    }
+    if (StringUtils.isBlank(dto.getNumeroIdentificacion())) {
+      throw new IllegalArgumentException("numeroIdentificacion requerido");
+    }
+    if (StringUtils.isBlank(dto.getRazonSocial())) {
+      throw new IllegalArgumentException("razonSocial requerido");
+    }
+  }
+
+  private void validarExoneracionDto(ExoneracionClienteDto exo) {
+    if (StringUtils.isBlank(exo.getCodigoAutorizacion())) {
+      throw new IllegalArgumentException("codigoAutorizacion de exoneración es requerido");
+    }
+
+    if (exo.getPorcentajeExoneracion() == null) {
+      throw new IllegalArgumentException("porcentajeExoneracion es requerido");
+    }
+
+    BigDecimal pct = parsePorcentaje(exo.getPorcentajeExoneracion());
+    if (pct.compareTo(BigDecimal.ZERO) < 0 || pct.compareTo(new BigDecimal("100")) > 0) {
+      throw new IllegalArgumentException("porcentajeExoneracion debe estar entre 0 y 100");
+    }
+
+    LocalDate emision = parseFecha(exo.getFechaEmision().toString(), "fechaEmision");
+    LocalDate venc = parseFechaNullable(exo.getFechaVencimiento().toString());
+    if (venc != null && venc.isBefore(emision)) {
+      throw new IllegalArgumentException("fechaVencimiento no puede ser anterior a fechaEmision");
+    }
+
+    if (Boolean.TRUE.equals(exo.getPoseeCabys()) && (exo.getCodigosCabys() == null
+        || exo.getCodigosCabys().isEmpty())) {
+      throw new IllegalArgumentException("poseeCabys=true requiere lista codigosCabys no vacía");
+    }
+  }
+
+  private String normalizarIdentificacion(String id) {
+    return StringUtils.trimToEmpty(id).replaceAll("-", "");
+  }
+
+  private TipoDocumentoExoneracion mapTipoDocumento(String codigoMh) {
+    if (StringUtils.isBlank(codigoMh)) {
+      // fallback a un tipo por defecto si tu enum lo contempla
+      return TipoDocumentoExoneracion.EXONERACION; // ajusta si tu enum difiere
+    }
+    // Si tu enum tiene códigos MH distintos al nombre, implementa aquí el mapping.
+    // Por ahora: intenta por nombre, si no, por un método 'porCodigo' en el enum si lo tienes.
+    try {
+      return TipoDocumentoExoneracion.valueOf(codigoMh); // ej: "EXONERACION"
+    } catch (IllegalArgumentException ex) {
+      // Si viene "04", "05", etc., implementa un porCodigo(...) en el enum y úsalo aquí:
+      try {
+        return TipoDocumentoExoneracion.fromCodigo(codigoMh);
+      } catch (Exception ignored) {
+        return TipoDocumentoExoneracion.EXONERACION;
+      }
+    }
+  }
+
+  private LocalDate parseFecha(String isoDate, String fieldName) {
+    try {
+      return LocalDate.parse(isoDate);
+    } catch (Exception e) {
+      throw new IllegalArgumentException(
+          "Fecha inválida en " + fieldName + " (esperado ISO yyyy-MM-dd): " + isoDate);
+    }
+  }
+
+  private LocalDate parseFechaNullable(String isoDate) {
+    if (StringUtils.isBlank(isoDate)) {
+      return null;
+    }
+    return parseFecha(isoDate, "fechaVencimiento");
+  }
+
+  private BigDecimal parsePorcentaje(Number n) {
+    if (n == null) {
+      return BigDecimal.ZERO;
+    }
+    return (n instanceof BigDecimal) ? (BigDecimal) n : new BigDecimal(n.toString());
+  }
+
+  private void vincularCabys(ClienteExoneracion exo, String codigoCabys) {
+    CodigoCAByS cabys = codigoCabysRepository.findByCodigo(codigoCabys)
+        .orElseThrow(() -> new IllegalArgumentException("CAByS no encontrado: " + codigoCabys));
+
+    // Evitar duplicados por unique constraint (exoneracion_id, cabys_id)
+    boolean yaExiste = exoneracionCabysRepository.existsByExoneracionIdAndCabys_Codigo(exo.getId(),
+        codigoCabys);
+    if (yaExiste) {
+      return;
+    }
+
+    ClienteExoneracionCabys link = new ClienteExoneracionCabys();
+    link.setExoneracion(exo);
+    link.setCabys(cabys);
+
+    exoneracionCabysRepository.save(link);
+  }
 }

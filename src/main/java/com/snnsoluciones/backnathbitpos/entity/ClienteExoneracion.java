@@ -26,13 +26,13 @@ public class ClienteExoneracion {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_id", nullable = false)
+    @JoinColumn(name = "cliente_id", insertable = false, updatable = false)
     private Cliente cliente;
-    
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_documento", nullable = false, length = 2)
+    @Column(name = "tipo_documento", nullable = false, length = 30) // antes 2
     private TipoDocumentoExoneracion tipoDocumento;
     
     @Column(name = "numero_documento", nullable = false, length = 50)

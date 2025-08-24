@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,4 +33,17 @@ public class ClienteExoneracionDTO {
     private String observaciones;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private String codigoAutorizacion;
+    private Integer numeroAutorizacion;
+    private Boolean poseeCabys;
+    private LocalDateTime verificadoEn;
+    private String payloadJson;
+    private String origen;
+
+    // Lista de códigos CABYS (solo los códigos como strings)
+    private List<String> codigosCabys;
+
+    // Campo calculado útil para el frontend
+    private Integer totalCabys;
 }

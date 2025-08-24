@@ -33,7 +33,7 @@ public class ProductoImpuesto {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "codigo_tarifa_iva")  // ✅ CORREGIDO: @Column, no @JoinColumn
-    private CodigoTarifaIVA tarifaIva = CodigoTarifaIVA.TARIFA_GENERAL_13;
+    private CodigoTarifaIVA codigoTarifaIVA = CodigoTarifaIVA.TARIFA_GENERAL_13;
 
     @Column(nullable = false, precision = 5, scale = 2)
     private BigDecimal porcentaje;
@@ -44,8 +44,8 @@ public class ProductoImpuesto {
 
     @Transient
     public BigDecimal getPorcentajeEfectivo() {
-        if (tipoImpuesto == TipoImpuesto.IVA && tarifaIva != null) {
-            return tarifaIva.getPorcentaje();
+        if (tipoImpuesto == TipoImpuesto.IVA && codigoTarifaIVA != null) {
+            return codigoTarifaIVA.getPorcentaje();
         }
         return porcentaje;
     }

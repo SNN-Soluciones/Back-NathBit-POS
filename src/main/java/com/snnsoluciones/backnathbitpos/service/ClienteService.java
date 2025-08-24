@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service;
 
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
@@ -11,7 +12,7 @@ import java.util.List;
 public interface ClienteService {
     
     // Operaciones CRUD básicas
-    Cliente crear(Cliente cliente);
+    Cliente crear(ClientePOSDto cliente, Long empresaId);
     
     Cliente actualizar(Long id, Cliente cliente);
     
@@ -22,10 +23,12 @@ public interface ClienteService {
     void activarDesactivar(Long id, boolean activo);
 
     Page<Cliente> buscarPorEmpresaActivos(Long empresaId, Pageable pageable);
-    
+    Page<ClientePOSDto> buscarPorEmpresaActivosDTO(Long empresaId, Pageable pageable);
+
     // Búsquedas
     Page<Cliente> buscarPorEmpresa(Long empresaId, String busqueda, Pageable pageable);
-    
+    Page<ClientePOSDto> buscarPorEmpresaDto(Long empresaId, String busqueda, Pageable pageable);
+
     List<Cliente> buscarPorIdentificacion(Long empresaId, String numeroIdentificacion);
     
     Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion, String emails);
@@ -43,7 +46,12 @@ public interface ClienteService {
     ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion);
     
     ClienteExoneracion actualizarExoneracion(Long exoneracionId, ClienteExoneracion exoneracion);
-    
+
+    ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion, List<String> codigosCabys);
+
+    ClienteExoneracion actualizarExoneracion(Long exoneracionId, ClienteExoneracion exoneracion, List<String> codigosCabys);
+
+
     List<ClienteExoneracion> obtenerExoneracionesVigentes(Long clienteId);
     
     void desactivarExoneracion(Long exoneracionId);
@@ -59,4 +67,7 @@ public interface ClienteService {
     long contarClientesPorEmpresa(Long empresaId);
     
     void procesarExoneracionesVencidas();
+
+    ClienteExoneracion obtenerExoneracionPorId(Long exoneracionId);
+
 }

@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.dto.cliente;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import jakarta.validation.constraints.*;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -47,4 +48,25 @@ public class ClienteExoneracionCreateDTO {
     
     @Size(max = 500, message = "Las observaciones no pueden exceder 500 caracteres")
     private String observaciones;
+
+    @NotBlank(message = "El código de autorización es obligatorio")
+    @Size(max = 50, message = "El código de autorización no puede exceder 50 caracteres")
+    private String codigoAutorizacion;
+
+    private Integer numeroAutorizacion;
+
+    @NotNull(message = "Debe indicar si posee códigos CABYS")
+    private Boolean poseeCabys = false;
+
+    // Lista de códigos CABYS como strings
+    private List<String> codigosCabys;
+
+    // Validación custom: si poseeCabys = true, la lista no puede estar vacía
+    @AssertTrue(message = "Si posee CABYS, debe proporcionar al menos un código")
+    private boolean isValidCabys() {
+        if (Boolean.TRUE.equals(poseeCabys)) {
+            return codigosCabys != null && !codigosCabys.isEmpty();
+        }
+        return true;
+    }
 }

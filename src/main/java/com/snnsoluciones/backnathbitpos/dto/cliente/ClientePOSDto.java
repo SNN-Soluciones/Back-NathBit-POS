@@ -21,6 +21,7 @@ public class ClientePOSDto implements Serializable {
     private Boolean inscritoHacienda;
     private Boolean permiteCredito;
 
+    private ClienteUbicacionDTO ubicacion;
     // NUEVO
     private boolean exonerado;
     private ExoneracionClienteDto exoneracion; // null si no aplica

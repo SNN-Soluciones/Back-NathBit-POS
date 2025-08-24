@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,4 +23,6 @@ public interface CodigoCABySRepository extends JpaRepository<CodigoCAByS, Long> 
     
     // Top 100
     List<CodigoCAByS> findTop100ByActivoTrueOrderByCodigoAsc();
+
+    Optional<CodigoCAByS> findByCodigo(String codigo);
 }

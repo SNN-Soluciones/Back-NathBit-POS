@@ -89,10 +89,13 @@ public class Cliente {
     private LocalDateTime updatedAt;
     
     // Relaciones
-    @OneToOne(mappedBy = "cliente", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+// reemplaza el mappedBy
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @JoinColumn(name = "ubicacion_id", referencedColumnName = "id", nullable = true, unique = true)
     private ClienteUbicacion ubicacion;
-    
-    @OneToMany(mappedBy = "cliente", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @JoinColumn(name = "cliente_id", nullable = false) // FK en clientes_exoneraciones
     @Builder.Default
     private Set<ClienteExoneracion> exoneraciones = new HashSet<>();
 

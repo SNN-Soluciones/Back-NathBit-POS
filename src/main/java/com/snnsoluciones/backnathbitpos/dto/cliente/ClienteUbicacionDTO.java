@@ -1,24 +1,16 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ClienteUbicacionDTO {
-    private Long id;
-    private String provinciaId;
-    private String provinciaNombre;
-    private String cantonId;
-    private String cantonNombre;
-    private String distritoId;
-    private String distritoNombre;
-    private Long barrioId;
-    private String barrioNombre;
-    private String otrasSenas;
-    private String direccionCompleta; // Formato: Provincia, Cantón, Distrito, Barrio - Otras señas
+  // Campos simples alineados con tu UI actual
+  private Integer provincia;
+  private Integer canton;
+  private Integer distrito;
+  private Integer barrio;
+  private String otrasSenas;
 }

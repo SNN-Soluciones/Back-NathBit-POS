@@ -285,6 +285,7 @@ public class ClienteServiceImpl implements ClienteService {
       dto.setTelefonoNumero(cliente.getTelefonoNumero());
       dto.setPermiteCredito(cliente.getPermiteCredito());
       dto.setInscritoHacienda(cliente.getInscritoHacienda());
+      dto.setTieneExoneracion(cliente.getTieneExoneracion());
       dto.setActivo(cliente.getActivo());
 
       // Ubicación
@@ -358,6 +359,7 @@ public class ClienteServiceImpl implements ClienteService {
       dto.setTelefonoNumero(cliente.getTelefonoNumero());
       dto.setPermiteCredito(cliente.getPermiteCredito());
       dto.setInscritoHacienda(cliente.getInscritoHacienda());
+      dto.setTieneExoneracion(cliente.getTieneExoneracion());
       dto.setActivo(cliente.getActivo());
 
       // Ubicación

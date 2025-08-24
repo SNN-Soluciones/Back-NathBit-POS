@@ -41,7 +41,7 @@ public class FacturaDetalleImpuesto {
      * 12 - Impuesto específico al cemento
      * 99 - Otros
      */
-    @Column(name = "codigo_impuesto", length = 2, nullable = false)
+    @Column(name = "codigo_impuesto", length = 50, nullable = false)
     private String codigoImpuesto;
     
     @Column(name = "codigo_impuesto_otro", length = 100)
@@ -51,10 +51,10 @@ public class FacturaDetalleImpuesto {
      * Código tarifa IVA según nota 8.1
      * Solo aplica para códigos 01 y 07
      */
-    @Column(name = "codigo_tarifa_iva", length = 2)
+    @Column(name = "codigo_tarifa_iva", length = 50)
     private String codigoTarifaIVA;
     
-    @Column(name = "tarifa", nullable = false, precision = 5, scale = 2)
+    @Column(name = "tarifa", nullable = false, precision = 5, scale = 10)
     private BigDecimal tarifa;
     
     /**
@@ -86,7 +86,7 @@ public class FacturaDetalleImpuesto {
     /**
      * Tipo documento exoneración según nota 10.1
      */
-    @Column(name = "tipo_documento_exoneracion", length = 2)
+    @Column(name = "tipo_documento_exoneracion", length = 50)
     private String tipoDocumentoExoneracion;
     
     @Column(name = "tipo_documento_exoneracion_otro", length = 100)
@@ -104,7 +104,7 @@ public class FacturaDetalleImpuesto {
     /**
      * Institución que emite según nota 23
      */
-    @Column(name = "nombre_institucion", length = 2)
+    @Column(name = "nombre_institucion", length = 100)
     private String nombreInstitucion;
     
     @Column(name = "nombre_institucion_otros", length = 160)

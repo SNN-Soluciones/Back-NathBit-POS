@@ -23,6 +23,5 @@ public class ClientePOSDto implements Serializable {
 
     private ClienteUbicacionDTO ubicacion;
     // NUEVO
-    private boolean exonerado;
     private ExoneracionClienteDto exoneracion; // null si no aplica
 }

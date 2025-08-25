@@ -49,4 +49,13 @@ public interface FacturaRepository extends JpaRepository<Factura, Long> {
    * @return Lista de facturas de esa sesión
    */
   List<Factura> findBySesionCajaId(Long sesionCajaId);
+
+  @Query("SELECT f FROM Factura f " +
+      "LEFT JOIN FETCH f.cliente " +
+      "LEFT JOIN FETCH f.sucursal s " +
+      "LEFT JOIN FETCH s.empresa " +
+      "LEFT JOIN FETCH f.detalles d " +
+      "LEFT JOIN FETCH d.producto " +
+      "WHERE f.id = :id")
+  Optional<Factura> findByIdWithRelaciones(@Param("id") Long id);
 }

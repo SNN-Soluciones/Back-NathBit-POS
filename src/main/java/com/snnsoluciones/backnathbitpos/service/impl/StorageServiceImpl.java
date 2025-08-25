@@ -10,6 +10,7 @@ import com.amazonaws.util.IOUtils;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import lombok.extern.slf4j.Slf4j;
@@ -271,6 +272,17 @@ public class StorageServiceImpl implements StorageService {
         } catch (Exception e) {
             log.error("Error al obtener archivo de S3: {}", e.getMessage());
             throw new RuntimeException("Error al obtener archivo de S3", e);
+        }
+    }
+
+    @Override
+    public String downloadFileAsString(String key) {
+        try {
+            byte[] bytes = obtenerArchivo(key);
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.error("Error descargando archivo como String: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al descargar archivo como String: " + e.getMessage(), e);
         }
     }
 

@@ -50,6 +50,12 @@ public class FacturaJob {
     
     @Column(name = "ultimo_error", columnDefinition = "TEXT")
     private String ultimoError;
+
+    @Column(name = "xml_path")
+    private String xmlPath;
+
+    @Column(name = "xml_path_signed")
+    private String xmlPathSigned;
     
     @Column(name = "proxima_ejecucion", nullable = false)
     private LocalDateTime proximaEjecucion = LocalDateTime.now();

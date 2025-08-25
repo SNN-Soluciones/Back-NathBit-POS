@@ -110,4 +110,6 @@ public interface StorageService {
      * @return contenido del archivo
      */
     byte[] obtenerArchivo(String key);
+
+    String downloadFileAsString(String key);
 }

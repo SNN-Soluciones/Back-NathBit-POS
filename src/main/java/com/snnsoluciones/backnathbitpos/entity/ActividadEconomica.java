@@ -7,8 +7,11 @@ import lombok.Data;
 @Entity
 @Table(name = "actividades_economicas")
 public class ActividadEconomica {
-    
+
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
     @Column(length = 6)
     private String codigo; // Ej: "523110" - 6 dígitos según Hacienda
     

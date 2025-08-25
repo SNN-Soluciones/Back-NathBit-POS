@@ -1,4 +1,4 @@
-package com.snnsoluciones.backnathbitpos.util;
+package com.snnsoluciones.backnathbitpos.exception;
 
 // Excepción custom para 403
 public class HaciendaAuthException extends RuntimeException {

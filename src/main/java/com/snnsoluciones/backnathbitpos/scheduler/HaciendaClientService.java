@@ -1,10 +1,11 @@
-package com.snnsoluciones.backnathbitpos.util;
+package com.snnsoluciones.backnathbitpos.scheduler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.snnsoluciones.backnathbitpos.config.HaciendaAuthService;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaConfigHacienda;
 import com.snnsoluciones.backnathbitpos.enums.mh.AmbienteHacienda;
+import com.snnsoluciones.backnathbitpos.exception.HaciendaAuthException;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.concurrent.TimeUnit;

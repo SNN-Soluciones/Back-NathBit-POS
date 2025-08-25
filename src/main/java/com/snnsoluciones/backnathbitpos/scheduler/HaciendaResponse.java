@@ -1,4 +1,4 @@
-package com.snnsoluciones.backnathbitpos.util;
+package com.snnsoluciones.backnathbitpos.scheduler;
 
 import lombok.Data;
 

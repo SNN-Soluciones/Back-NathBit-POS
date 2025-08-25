@@ -56,21 +56,28 @@ dependencies {
     // ========== Mapeo y Documentación ==========
     // MapStruct para mapeo de DTOs
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
-    implementation "jakarta.validation:jakarta.validation-api:3.0.2"
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
     implementation 'org.modelmapper:modelmapper:3.2.0'
+    implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
 
-// DSS - Digital Signature Service (versión más reciente)
-    implementation 'eu.europa.ec.joinup.sd-dss:dss-xades:5.13'
-    implementation 'eu.europa.ec.joinup.sd-dss:dss-token:5.13'
-    implementation 'eu.europa.ec.joinup.sd-dss:dss-model:5.13'
-    implementation 'eu.europa.ec.joinup.sd-dss:dss-spi:5.13'
-    implementation 'eu.europa.ec.joinup.sd-dss:dss-enumerations:5.13'
-    implementation 'eu.europa.ec.joinup.sd-dss:dss-pades:5.13'
+    // ========== XAdES4j para firmas electrónicas ==========
+    implementation 'com.google.cloud:google-cloud-security-private-ca:2.45.0'
+    implementation 'org.apache.santuario:xmlsec:3.0.3'
 
-    // Bouncy Castle para criptografía
-    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
-    implementation 'org.bouncycastle:bcpkix-jdk15on:1.70'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78' // Actualizado para Java 17
+    implementation 'org.apache.santuario:xmlsec:4.0.2' // Necesario para XAdES4j
+
+    // Starter para aplicaciones reactivas (incluye WebClient)
+    implementation "org.springframework.boot:spring-boot-starter-webflux"
+
+    // Reactor Core (ya viene transitivo con webflux, pero si quieres fijar versión explícita)
+    implementation "io.projectreactor:reactor-core"
+
+    // Opcional: reactor-tools para debug (stack traces más claros en logs)
+    runtimeOnly "io.projectreactor:reactor-tools"
+
+    // Jackson (ya lo tienes si usas spring-boot-starter-web, pero asegúrate de incluirlo)
+    implementation "com.fasterxml.jackson.core:jackson-databind"
 
     // Para generar PDF
     implementation 'com.itextpdf:itext7-core:7.2.5'
@@ -88,13 +95,7 @@ dependencies {
 
     // ========== Utilidades ==========
     implementation 'org.apache.commons:commons-lang3:3.14.0'
-    // MapStruct
-    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
-    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
-
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
-
 
     // ========== Desarrollo ==========
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
@@ -109,11 +110,12 @@ dependencies {
 }
 
 // ========== Configuración del Compilador ==========
-compileJava {
+tasks.withType(JavaCompile) {
     options.annotationProcessorPath = configurations.annotationProcessor
-    options.compilerArgs = [
+    options.compilerArgs += [
             '-Amapstruct.defaultComponentModel=spring',
-            '-Amapstruct.unmappedTargetPolicy=WARN'
+            '-Amapstruct.unmappedTargetPolicy=WARN',
+            '-parameters'
     ]
 }
 
@@ -140,8 +142,4 @@ bootRun {
             '-Dspring.profiles.active=dev',
             '-Dfile.encoding=UTF-8'
     ]
-}
-
-tasks.withType(JavaCompile) {
-    options.compilerArgs += '-parameters'
 }

@@ -112,4 +112,5 @@ public interface StorageService {
     byte[] obtenerArchivo(String key);
 
     String downloadFileAsString(String key);
+    byte[] downloadFileAsBytes(String key);
 }

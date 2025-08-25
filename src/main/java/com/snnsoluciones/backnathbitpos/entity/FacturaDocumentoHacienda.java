@@ -1,172 +1,101 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.AmbienteHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.IndEstadoHacienda;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.ToString;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
-/**
- * Entidad para almacenar XMLs y PDFs del proceso con Hacienda
- * Guarda toda la documentación electrónica generada
- * Parte de la Arquitectura La Jachuda 🚀
- */
-@Data
-@Entity
-@Table(name = "factura_documento_hacienda")
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@ToString(exclude = {"factura", "xmlGenerado", "xmlFirmado", "xmlRespuesta", "pdfGenerado"})
+@Getter @Setter @Builder
+@NoArgsConstructor @AllArgsConstructor
+@Entity @Table(name = "factura_documento_hacienda",
+    indexes = {
+        @Index(name = "ix_hda_clave", columnList = "clave", unique = true),
+        @Index(name = "ix_hda_ind_estado", columnList = "ind_estado"),
+        @Index(name = "ix_hda_proxima_consulta", columnList = "proxima_consulta")
+    })
 public class FacturaDocumentoHacienda {
-    
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
+    @Column(name = "factura_id", nullable = false)
+    private Long facturaId;
+
+    @Column(name = "clave", nullable = false, length = 50)
+    private String clave;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ambiente", nullable = false, length = 20)
+    private AmbienteHacienda ambiente;
+
+    // Estado de la DGT: ACEPTADO / RECHAZADO / EN_PROCESO
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ind_estado", nullable = false, length = 20)
+    private IndEstadoHacienda indEstado;
+
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "factura_id", nullable = false, unique = true)
+    @JoinColumn(name = "clave", referencedColumnName = "clave", insertable = false, updatable = false)
     private Factura factura;
-    
-    /**
-     * XML original generado (sin firmar)
-     */
-    @Lob
-    @Column(name = "xml_generado", columnDefinition = "TEXT")
-    private String xmlGenerado;
-    
-    @Column(name = "fecha_xml_generado")
-    private LocalDateTime fechaXmlGenerado;
-    
-    /**
-     * XML firmado digitalmente
-     */
-    @Lob
-    @Column(name = "xml_firmado", columnDefinition = "TEXT")
-    private String xmlFirmado;
-    
-    @Column(name = "fecha_xml_firmado")
-    private LocalDateTime fechaXmlFirmado;
-    
-    /**
-     * XML de respuesta de Hacienda
-     */
-    @Lob
-    @Column(name = "xml_respuesta", columnDefinition = "TEXT")
-    private String xmlRespuesta;
-    
-    @Column(name = "fecha_respuesta")
-    private LocalDateTime fechaRespuesta;
-    
-    /**
-     * Estado de la respuesta de Hacienda
-     * 1 - Aceptado
-     * 2 - Aceptado con advertencias
-     * 3 - Rechazado
-     */
-    @Column(name = "estado_hacienda", length = 1)
-    private String estadoHacienda;
-    
-    /**
-     * Mensaje de respuesta de Hacienda
-     */
-    @Column(name = "mensaje_hacienda", columnDefinition = "TEXT")
-    private String mensajeHacienda;
-    
-    /**
-     * Detalle de advertencias o errores
-     */
-    @Column(name = "detalle_respuesta", columnDefinition = "TEXT")
-    private String detalleRespuesta;
-    
-    /**
-     * PDF generado (base64)
-     */
-    @Lob
-    @Column(name = "pdf_generado", columnDefinition = "TEXT")
-    private byte[] pdfGenerado;
-    
-    @Column(name = "fecha_pdf_generado")
-    private LocalDateTime fechaPdfGenerado;
-    
-    /**
-     * Indica si se envió el correo al cliente
-     */
-    @Column(name = "correo_enviado", nullable = false)
-    private Boolean correoEnviado = false;
-    
-    @Column(name = "fecha_correo_enviado")
-    private LocalDateTime fechaCorreoEnviado;
-    
-    @Column(name = "correo_destino")
-    private String correoDestino;
-    
-    /**
-     * Número de consulta en Hacienda
-     */
-    @Column(name = "numero_consulta_hacienda")
-    private String numeroConsultaHacienda;
-    
-    /**
-     * URL del documento en Hacienda (si aplica)
-     */
-    @Column(name = "url_documento_hacienda")
-    private String urlDocumentoHacienda;
-    
+
+    // Datos de recepción/trace
+    @Column(name = "recepcion_location", length = 512)
+    private String recepcionLocation;
+
+    @Column(name = "recepcion_ticket", length = 128)
+    private String recepcionTicket; // si aplica
+
+    @Column(name = "http_status_ultimo")
+    private Integer httpStatusUltimo;
+
+    // Artefactos S3 relacionados a Hacienda
+    @Column(name = "s3_key_xml_firmado", length = 512)
+    private String s3KeyXmlFirmado;
+
+    @Column(name = "s3_key_xml_respuesta", length = 512)
+    private String s3KeyXmlRespuesta;
+
+    @Column(name = "s3_key_mensaje_receptor", length = 512)
+    private String s3KeyMensajeReceptor; // si lo guardas
+
+    // Tiempos y reintentos/polling
+    @Column(name = "fecha_envio")
+    private LocalDateTime fechaEnvio;
+
+    @Column(name = "fecha_estado")
+    private LocalDateTime fechaEstado;
+
+    @Column(name = "reintentos_consulta", nullable = false)
+    private int reintentosConsulta;
+
+    @Column(name = "proxima_consulta")
+    private LocalDateTime proximaConsulta;
+
+    // Errores/textos de diagnóstico (no guardar XML aquí)
+    @Column(name = "codigo_error", length = 60)
+    private String codigoError;
+
+    @Column(name = "detalle_error", length = 2000)
+    private String detalleError;
+
     // Auditoría
-    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-    
-    @Column(name = "updated_at")
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-    
-    // Métodos helper
-    
-    /**
-     * Verifica si el documento fue aceptado
-     */
-    public boolean esAceptado() {
-        return "1".equals(estadoHacienda) || "2".equals(estadoHacienda);
+
+    @PrePersist
+    void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+        if (indEstado == null) indEstado = IndEstadoHacienda.EN_PROCESO;
     }
-    
-    /**
-     * Verifica si el documento fue rechazado
-     */
-    public boolean esRechazado() {
-        return "3".equals(estadoHacienda);
-    }
-    
-    /**
-     * Verifica si tiene advertencias
-     */
-    public boolean tieneAdvertencias() {
-        return "2".equals(estadoHacienda);
-    }
-    
-    /**
-     * Actualiza con la respuesta de Hacienda
-     */
-    public void actualizarConRespuesta(String xmlRespuesta, String estado, String mensaje, String detalle) {
-        this.xmlRespuesta = xmlRespuesta;
-        this.fechaRespuesta = LocalDateTime.now();
-        this.estadoHacienda = estado;
-        this.mensajeHacienda = mensaje;
-        this.detalleRespuesta = detalle;
-        this.updatedAt = LocalDateTime.now();
-    }
-    
-    /**
-     * Registra el envío del correo
-     */
-    public void marcarCorreoEnviado(String destinatario) {
-        this.correoEnviado = true;
-        this.fechaCorreoEnviado = LocalDateTime.now();
-        this.correoDestino = destinatario;
-        this.updatedAt = LocalDateTime.now();
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }

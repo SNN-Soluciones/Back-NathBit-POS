@@ -282,8 +282,18 @@ public class StorageServiceImpl implements StorageService {
             return new String(bytes, StandardCharsets.UTF_8);
         } catch (Exception e) {
             log.error("Error descargando archivo como String: {}", e.getMessage(), e);
-            throw new RuntimeException("Error al descargar archivo como String: " + e.getMessage(), e);
+            throw new RuntimeException("Error al descargar archivo como String: " + e.getMessage(),
+                e);
         }
+    }
+
+    /**
+     * Implementación requerida por los workers para convertir el SIGNED a Base64.
+     */
+    @Override
+    public byte[] downloadFileAsBytes(String key) {
+        // Reutiliza la lógica ya existente
+        return obtenerArchivo(key);
     }
 
     /**

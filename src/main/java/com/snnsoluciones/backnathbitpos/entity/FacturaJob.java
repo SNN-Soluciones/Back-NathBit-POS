@@ -2,109 +2,87 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoProcesoJob;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.PasoFacturacion;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.Table;
-import java.time.LocalDateTime;
-import java.util.Objects;
-import lombok.Data;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.proxy.HibernateProxy;
+import jakarta.persistence.*;
+import lombok.*;
 
-@Data
-@Entity
-@Table(name = "factura_jobs", indexes = {
-    @Index(name = "idx_factura_job_clave", columnList = "clave"),
-    @Index(name = "idx_factura_job_estado", columnList = "estado_proceso"),
-    @Index(name = "idx_factura_job_proxima", columnList = "proxima_ejecucion")
-})
+import java.time.LocalDateTime;
+
+@Getter @Setter @Builder
+@NoArgsConstructor @AllArgsConstructor
+@Entity @Table(name = "factura_job",
+    indexes = {
+        @Index(name = "ix_job_estado_paso", columnList = "estado_proceso,paso_actual"),
+        @Index(name = "ix_job_proxima_ejec", columnList = "proxima_ejecucion"),
+        @Index(name = "ix_job_claimed_at", columnList = "claimed_at")
+    })
 public class FacturaJob {
-    
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
-    @Column(length = 50, nullable = false)
-    private String clave;
-    
+
+    // Relación blanda para evitar ciclos pesados en JPA
     @Column(name = "factura_id", nullable = false)
     private Long facturaId;
-    
-    @Column(name = "estado_proceso", length = 20, nullable = false)
+
+    @Column(name = "clave", nullable = false, length = 50, unique = true)
+    private String clave;
+
     @Enumerated(EnumType.STRING)
-    private EstadoProcesoJob estadoProceso = EstadoProcesoJob.PENDIENTE;
-    
-    @Column(name = "paso_actual", length = 30, nullable = false)
+    @Column(name = "paso_actual", nullable = false, length = 40)
+    private PasoFacturacion pasoActual;
+
     @Enumerated(EnumType.STRING)
-    private PasoFacturacion pasoActual = PasoFacturacion.GENERAR_XML;
-    
-    @Column(nullable = false)
-    private Integer intentos = 0;
-    
-    @Column(name = "ultimo_error", columnDefinition = "TEXT")
+    @Column(name = "estado_proceso", nullable = false, length = 40)
+    private EstadoProcesoJob estadoProceso;
+
+    @Column(name = "intentos", nullable = false)
+    private int intentos;
+
+    @Column(name = "max_intentos", nullable = false)
+    private int maxIntentos;
+
+    @Column(name = "proxima_ejecucion", nullable = false)
+    private LocalDateTime proximaEjecucion;
+
+    // Lock/coordinación
+    @Column(name = "claimed_by", length = 100)
+    private String claimedBy;
+
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
+
+    // Auditoría
+    @Column(name = "ultimo_error", length = 2000)
     private String ultimoError;
 
-    @Column(name = "xml_path")
-    private String xmlPath;
-
-    @Column(name = "xml_path_signed")
-    private String xmlPathSigned;
-    
-    @Column(name = "proxima_ejecucion", nullable = false)
-    private LocalDateTime proximaEjecucion = LocalDateTime.now();
-    
-    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-    
-    @UpdateTimestamp
-    @Column(name = "updated_at")
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-    
-    // Helpers
+
+    @PrePersist
+    void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+        if (maxIntentos <= 0) maxIntentos = 5;
+        if (proximaEjecucion == null) proximaEjecucion = now;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    public boolean puedeReintentarse() {
+        return intentos < 5 && estadoProceso.puedeReintentar();
+    }
+
     public void incrementarIntentos() {
         this.intentos++;
         // Backoff exponencial: 1min, 2min, 4min, 8min...
         int minutosEspera = (int) Math.pow(2, intentos - 1);
         this.proximaEjecucion = LocalDateTime.now().plusMinutes(minutosEspera);
-    }
-    
-    public boolean puedeReintentarse() {
-        return intentos < 5 && estadoProceso.puedeReintentar();
-    }
-
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null) {
-            return false;
-        }
-        Class<?> oEffectiveClass = o instanceof HibernateProxy
-            ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass()
-            : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy
-            ? ((HibernateProxy) this).getHibernateLazyInitializer()
-            .getPersistentClass() : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) {
-            return false;
-        }
-        FacturaJob that = (FacturaJob) o;
-        return getId() != null && Objects.equals(getId(), that.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy
-            ? ((HibernateProxy) this).getHibernateLazyInitializer()
-            .getPersistentClass().hashCode() : getClass().hashCode();
     }
 }

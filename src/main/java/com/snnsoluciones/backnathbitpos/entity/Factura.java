@@ -39,8 +39,8 @@ public class Factura {
     private Long id;
 
     // ========== IDENTIFICACIÓN ==========
-    @Column(length = 50, unique = true)
-    private String clave; // Puede ser null para documentos internos
+    @Column(length = 50, unique = true, updatable = false)
+    private String clave;
 
     @Column(length = 20, nullable = false, unique = true)
     private String consecutivo;
@@ -193,7 +193,7 @@ public class Factura {
     @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<FacturaResumenImpuesto> resumenImpuestos = new ArrayList<>();
 
-    @OneToOne(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToOne(mappedBy = "factura", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private FacturaDocumentoHacienda documentoHacienda;
 
     // ========== AUDITORÍA ==========

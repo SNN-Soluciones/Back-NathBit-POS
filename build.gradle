@@ -26,90 +26,105 @@ repositories {
 
 ext {
     // Versiones de las dependencias
-    set('jwtVersion', '0.11.5')
-    set('mapstructVersion', '1.5.5.Final')
-    set('springdocVersion', '2.3.0')
-    set('hypersistenceVersion', '3.7.0')
+    jwtVersion = '0.11.5'
+    mapstructVersion = '1.5.5.Final'
+    springdocVersion = '2.3.0'
+    hypersistenceVersion = '3.7.0'
+    awsSdkVersion = '1.12.470'
+    bouncyCastleVersion = '1.78'
+    xmlsecVersion = '4.0.2'
+    itextVersion = '7.2.5'
+    okHttpVersion = '4.11.0'
+    jasperReportsVersion = '6.21.3'
+    zxingVersion = '3.5.3'
+    jFreeChartVersion = '1.0.13'
+    openPdfVersion = '1.3.30'
+    modelMapperVersion = '3.2.0'
+    commonsLang3Version = '3.14.0'
 }
 
 dependencies {
-    // ========== Spring Boot Starters ==========
+    // ================== Spring Boot Starters ==================
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 
-    // ========== Base de Datos ==========
+    // ================== Database ==================
     runtimeOnly 'org.postgresql:postgresql'
-
-    // Hypersistence para tipos JSON/JSONB en PostgreSQL
     implementation "io.hypersistence:hypersistence-utils-hibernate-63:${hypersistenceVersion}"
-    implementation 'com.amazonaws:aws-java-sdk-s3:1.12.470'
 
-    // ========== Seguridad - JWT ==========
+    // ================== AWS SDK ==================
+    implementation "com.amazonaws:aws-java-sdk-s3:${awsSdkVersion}"
+
+    // ================== Security & JWT ==================
     implementation "io.jsonwebtoken:jjwt-api:${jwtVersion}"
     runtimeOnly "io.jsonwebtoken:jjwt-impl:${jwtVersion}"
     runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jwtVersion}"
 
-    // ========== Mapeo y Documentación ==========
-    // MapStruct para mapeo de DTOs
+    // ================== Mapping & Validation ==================
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
-    implementation 'org.modelmapper:modelmapper:3.2.0'
+    implementation "org.modelmapper:modelmapper:${modelMapperVersion}"
     implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
 
-    // ========== XAdES4j para firmas electrónicas ==========
+    // ================== Digital Signatures (XAdES4j) ==================
     implementation 'com.google.cloud:google-cloud-security-private-ca:2.45.0'
-    implementation 'org.apache.santuario:xmlsec:3.0.3'
+    implementation "org.bouncycastle:bcprov-jdk18on:${bouncyCastleVersion}"
+    implementation "org.apache.santuario:xmlsec:${xmlsecVersion}"
 
-    implementation 'org.bouncycastle:bcprov-jdk18on:1.78' // Actualizado para Java 17
-    implementation 'org.apache.santuario:xmlsec:4.0.2' // Necesario para XAdES4j
+    // ================== Reactive & HTTP Client ==================
+    implementation 'io.projectreactor:reactor-core'
+    runtimeOnly 'io.projectreactor:reactor-tools'
+    implementation "com.squareup.okhttp3:okhttp:${okHttpVersion}"
 
-    // Starter para aplicaciones reactivas (incluye WebClient)
-    implementation "org.springframework.boot:spring-boot-starter-webflux"
+    // ================== JSON Processing ==================
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
-    // Reactor Core (ya viene transitivo con webflux, pero si quieres fijar versión explícita)
-    implementation "io.projectreactor:reactor-core"
+    // ================== PDF Generation ==================
+    implementation "com.itextpdf:itext7-core:${itextVersion}"
 
-    // Opcional: reactor-tools para debug (stack traces más claros en logs)
-    runtimeOnly "io.projectreactor:reactor-tools"
+    // ================== Reporting (JasperReports) ==================
+    implementation("net.sf.jasperreports:jasperreports:${jasperReportsVersion}") {
+        exclude group: 'com.lowagie', module: 'itext'
+    }
+    implementation "net.sf.jasperreports:jasperreports-fonts:${jasperReportsVersion}"
+    implementation "com.github.librepdf:openpdf:${openPdfVersion}"
 
-    // Jackson (ya lo tienes si usas spring-boot-starter-web, pero asegúrate de incluirlo)
-    implementation "com.fasterxml.jackson.core:jackson-databind"
+    // ================== QR Code & Charts ==================
+    implementation "com.google.zxing:core:${zxingVersion}"
+    implementation "com.google.zxing:javase:${zxingVersion}"
+    implementation "jfree:jfreechart:${jFreeChartVersion}"
 
-    // Para generar PDF
-    implementation 'com.itextpdf:itext7-core:7.2.5'
-
-    // Cliente HTTP mejorado para Hacienda
-    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
-
-    // OpenAPI/Swagger para documentación
+    // ================== Documentation ==================
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
-    // ========== Lombok ==========
+    // ================== Lombok ==================
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 
-    // ========== Utilidades ==========
-    implementation 'org.apache.commons:commons-lang3:3.14.0'
-    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    // ================== Utilities ==================
+    implementation "org.apache.commons:commons-lang3:${commonsLang3Version}"
 
-    // ========== Desarrollo ==========
+    // ================== Development ==================
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
-    // ========== WAR Deployment ==========
+    // ================== WAR Deployment ==================
     providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
 
-    // ========== Testing ==========
+    // ================== Testing ==================
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-// ========== Configuración del Compilador ==========
+// ================== Compiler Configuration ==================
 tasks.withType(JavaCompile) {
     options.annotationProcessorPath = configurations.annotationProcessor
     options.compilerArgs += [
@@ -119,12 +134,12 @@ tasks.withType(JavaCompile) {
     ]
 }
 
-// ========== Configuración de Tareas ==========
+// ================== Test Configuration ==================
 tasks.named('test') {
     useJUnitPlatform()
 }
 
-// ========== Configuración de Empaquetado ==========
+// ================== Packaging Configuration ==================
 war {
     enabled = true
     archiveBaseName = 'nathbit-pos'
@@ -136,7 +151,7 @@ jar {
     archiveBaseName = 'nathbit-pos'
 }
 
-// ========== Configuración de Ejecución ==========
+// ================== Run Configuration ==================
 bootRun {
     jvmArgs = [
             '-Dspring.profiles.active=dev',

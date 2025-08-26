@@ -13,6 +13,12 @@ spring:
         format_sql: true
     show-sql: false
 
+  mail:
+    host: smtp.gmail.com
+    port: 465
+    username: fe@samyx.digital
+    password: hgctqnepsmaulkkz
+
 app:
   encryption:
     master-key: ${ENCRYPTION_MASTER_KEY:TuLlaveMaestraSeguraDe32Caracteres!!}

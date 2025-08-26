@@ -23,21 +23,17 @@ import com.snnsoluciones.backnathbitpos.service.FacturaAsyncProcessor;
 import com.snnsoluciones.backnathbitpos.service.FacturaJobService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import com.snnsoluciones.backnathbitpos.util.FacturaFirmaService;
+import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.format.TextStyle;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,6 +55,7 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
   private final StorageService storageService;
   private final FacturaXMLGeneratorService xmlGenerator;
   private final FacturaFirmaService firmaService;
+  private final S3PathBuilder s3PathBuilder;
 
   @Value("${factura.processor.enabled:true}")
   private boolean processorEnabled;
@@ -155,26 +152,16 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
     log.info("[MainProcessor][{}] XML generado: {} bytes", job.getClave(), xmlContent.length());
 
     // 2) Save to S3
-    LocalDateTime ahora = LocalDateTime.now();
-    String year = String.valueOf(ahora.getYear());
-    String month = String.format("%02d", ahora.getMonthValue());
-    String day = String.format("%02d", ahora.getDayOfMonth());
 
-    String unsignedKey = "NathBit-POS/FACTURAS/" + year + "/" + month + "/" + day + "/" + job.getClave() + "-sin-firmar.xml";
-    storageService.uploadFile(
-        new ByteArrayInputStream(xmlContent.getBytes(StandardCharsets.UTF_8)),
-        unsignedKey,
-        "application/xml",
-        xmlContent.getBytes().length
-    );
-    log.info("[MainProcessor][{}] XML sin firmar guardado en S3: {}", job.getClave(), unsignedKey);
+    String s3Key = s3PathBuilder.buildXmlPath(factura, S3PathBuilder.TipoArchivoS3.SIN_FIRMA);
+    log.info("[MainProcessor][{}] XML sin firmar guardado en S3: {}", job.getClave(), s3Key);
 
     // 3) Guardar registro documento
     FacturaDocumento doc = new FacturaDocumento();
     doc.setFacturaId(factura.getId());
     doc.setClave(factura.getClave());
     doc.setTipoArchivo(TipoArchivoFactura.XML_UNSIGNED);
-    doc.setS3Key(unsignedKey);
+    doc.setS3Key(s3Key);
     doc.setTamanio(xmlContent.getBytes().length);
     doc.setCreatedAt(LocalDateTime.now());
     documentoRepository.save(doc);
@@ -211,18 +198,8 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
     log.info("[MainProcessor][{}] XML firmado: {} bytes", job.getClave(), signedBytes.length);
 
     // 3) Guardar firmado en S3
-    LocalDateTime ahora = LocalDateTime.now();
-    String year = String.valueOf(ahora.getYear());
-    String month = String.format("%02d", ahora.getMonthValue());
-    String day = String.format("%02d", ahora.getDayOfMonth());
+    String signedKey = s3PathBuilder.buildXmlPath(factura, S3PathBuilder.TipoArchivoS3.FIRMADO);
 
-    String signedKey = "NathBit-POS/FACTURAS/" + year + "/" + month + "/" + day + "/" + job.getClave() + "-firmado.xml";
-    storageService.uploadFile(
-        new ByteArrayInputStream(signedBytes),
-        signedKey,
-        "application/xml",
-        signedBytes.length
-    );
     log.info("[MainProcessor][{}] XML firmado guardado en S3: {}", job.getClave(), signedKey);
 
     // 4) Guardar registro documento firmado
@@ -435,13 +412,8 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
     try {
       byte[] xmlBytes = Base64.getDecoder().decode(xmlBase64);
 
-      LocalDateTime ahora = LocalDateTime.now();
-      String year = String.valueOf(ahora.getYear());
-      String month = String.format("%02d", ahora.getMonthValue());
-      String day = String.format("%02d", ahora.getDayOfMonth());
+      String s3Key = s3PathBuilder.buildXmlPath(factura, S3PathBuilder.TipoArchivoS3.RESPUESTA);
 
-      String s3Key = "NathBit-POS/RESPUESTAS/" + year + "/" + month + "/" + day + "/"
-          + job.getClave() + "-respuesta-mh.xml";
 
       storageService.uploadFile(
           new ByteArrayInputStream(xmlBytes),

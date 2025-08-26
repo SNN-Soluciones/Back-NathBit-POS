@@ -65,7 +65,7 @@ public interface FacturaJobRepository extends JpaRepository<FacturaJob, Long> {
     @Query("""
    SELECT j 
    FROM FacturaJob j
-   WHERE j.estadoProceso IN ('PENDIENTE','REINTENTANDO')
+   WHERE j.estadoProceso IN ('PENDIENTE','REINTENTANDO', 'PROCESANDO')
      AND j.intentos < 5
      AND j.pasoActual IN :pasos
    ORDER BY j.proximaEjecucion ASC
@@ -73,12 +73,12 @@ public interface FacturaJobRepository extends JpaRepository<FacturaJob, Long> {
     List<FacturaJob> findJobsPendientesPorPasos(@Param("pasos") Collection<PasoFacturacion> pasos);
 
     @Query("""
-    SELECT j FROM FacturaJob j 
+    SELECT j FROM FacturaJob j\s
     WHERE j.facturaId IN (
-        SELECT f.id FROM Factura f 
+        SELECT f.id FROM Factura f\s
         WHERE f.estado NOT IN :estadosExcluidos
     )
-    AND j.estadoProceso IN ('PENDIENTE', 'REINTENTANDO')
+    AND j.estadoProceso IN ('PENDIENTE', 'PROCESANDO', 'REINTENTANDO')
     AND (j.proximaEjecucion IS NULL OR j.proximaEjecucion <= CURRENT_TIMESTAMP)
     ORDER BY j.proximaEjecucion ASC
 """)
@@ -86,5 +86,4 @@ public interface FacturaJobRepository extends JpaRepository<FacturaJob, Long> {
         @Param("estadosExcluidos") List<EstadoFactura> estadosExcluidos,
         Pageable pageable
     );
-
 }

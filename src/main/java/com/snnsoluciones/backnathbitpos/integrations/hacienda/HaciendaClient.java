@@ -1,14 +1,15 @@
 package com.snnsoluciones.backnathbitpos.integrations.hacienda;
 
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.*;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
@@ -17,95 +18,125 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class HaciendaClient {
 
-    private final WebClient webClient; // define un bean WebClient (ver config)
+  private final WebClient webClient; // define un bean WebClient (ver config)
 
-    private static final String TOKEN_URL_PROD = "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token";
-    private static final String TOKEN_URL_STAG = "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut-stag/protocol/openid-connect/token";
+  private static final String TOKEN_URL_PROD = "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token";
+  private static final String TOKEN_URL_STAG = "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut-stag/protocol/openid-connect/token";
 
-    private static final String BASE_PROD = "https://api.comprobanteselectronicos.go.cr/recepcion/v1";
-    private static final String BASE_STAG = "https://api.comprobanteselectronicos.go.cr/recepcion-sandbox/v1";
+  private static final String BASE_PROD = "https://api.comprobanteselectronicos.go.cr/recepcion/v1";
+  private static final String BASE_STAG = "https://api.comprobanteselectronicos.go.cr/recepcion-sandbox/v1";
 
-    // ======================
-    // TOKEN
-    // ======================
-    public HaciendaTokenResponse getToken(HaciendaAuthParams params) {
-        String tokenUrl = params.isSandbox() ? TOKEN_URL_STAG : TOKEN_URL_PROD;
+  @Autowired
+  private RestTemplate haciendaRestTemplate;
 
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type", "password");
-        form.add("client_id", params.getClientId()); // api-stag | api-prod
-        form.add("username", params.getUsername());
-        form.add("password", params.getPassword());
+  // ======================
+  // TOKEN
+  // ======================
+  public HaciendaTokenResponse getToken(HaciendaAuthParams params) {
+    String tokenUrl = params.isSandbox()
+        ? "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut-stag/protocol/openid-connect/token"
+        : "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token";
 
-        return webClient.post()
-                .uri(tokenUrl)
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(BodyInserters.fromFormData(form))
-                .retrieve()
-                .bodyToMono(HaciendaTokenResponse.class)
-                .block();
+    log.info("[Hacienda] Obteniendo token para empresa {} (sandbox={}) user={}",
+        params.getEmpresaId(), params.isSandbox(), params.getUsername());
+
+    return webClient.post()
+        .uri(tokenUrl)
+        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+        .body(BodyInserters
+            .fromFormData("grant_type", "password")
+            .with("client_id", params.getClientId())            // api-stag | api-prod
+            .with("username", params.getUsername())
+            .with("password", params.getPassword())             // caracteres especiales ok
+            .with("scope", "openid"))                           // <- importante
+        .accept(MediaType.APPLICATION_JSON)
+        .retrieve()
+        .onStatus(
+            HttpStatusCode::isError,
+            resp -> resp.bodyToMono(String.class).flatMap(body -> {
+              log.error("[Hacienda] Error {} obteniendo token. Body: {}", resp.statusCode(), body);
+              return Mono.error(new RuntimeException("Token error: " + resp.statusCode()));
+            })
+        )
+        .bodyToMono(HaciendaTokenResponse.class)
+        .block();
+  }
+
+  // ======================
+  // POST /recepcion
+  // ======================
+  public String postRecepcion(String bearerToken, boolean sandbox, RecepcionRequest body) {
+    final String base = sandbox
+        ? "https://api.comprobanteselectronicos.go.cr/recepcion-sandbox/v1"
+        : "https://api.comprobanteselectronicos.go.cr/recepcion/v1";
+    final String url = base + "/recepcion";
+
+    // IMPORTANTÍSIMO: token CRUDO (sin el prefijo 'Bearer ')
+    final String rawToken = (bearerToken == null)
+        ? ""
+        : bearerToken.replaceFirst("(?i)^\\s*Bearer\\s+", "").trim();
+
+    // Headers
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+    headers.setBearerAuth(rawToken); // => Authorization: Bearer <token>
+
+    // En tu payload, asegúrate que 'fecha' tenga offset -06:00 (ISO_OFFSET_DATE_TIME)
+    // Ej: "2025-08-25T20:15:12-06:00"
+    HttpEntity<RecepcionRequest> entity = new HttpEntity<>(body, headers);
+
+    try {
+      ResponseEntity<Void> resp = haciendaRestTemplate.postForEntity(url, entity, Void.class);
+      // Suele venir 201/202 y header Location
+      String location = resp.getHeaders().getFirst(HttpHeaders.LOCATION);
+      if (location == null || location.isBlank()) {
+        location = base + "/recepcion/" + body.getClave();
+      }
+      return location;
+    } catch (HttpClientErrorException e) {
+      // Log útil para ver exactamente qué respondió MH
+      e.getResponseBodyAsString();
+      String bodyErr = e.getResponseBodyAsString();
+      throw new IllegalStateException("Error en /recepcion: status=" + e.getStatusCode()
+          + " body=" + bodyErr, e);
     }
+  }
 
-    // ======================
-    // POST /recepcion
-    // ======================
-    public String postRecepcion(String bearerToken, boolean sandbox, RecepcionRequest body) {
-        String base = sandbox ? BASE_STAG : BASE_PROD;
-        String url = base + "/recepcion";
 
-        ClientResponse resp = webClient.post()
-                .uri(url)
-                .header(HttpHeaders.AUTHORIZATION, "bearer " + bearerToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .exchange()
-                .block();
+  // ======================
+  // GET /recepcion/{clave}
+  // ======================
+  public ConsultaEstadoResponse getEstado(String bearerToken, boolean sandbox, String clave) {
+    final String url = (sandbox
+        ? "https://api.comprobanteselectronicos.go.cr/recepcion-sandbox/v1/recepcion/"
+        : "https://api.comprobanteselectronicos.go.cr/recepcion/v1/recepcion/") + clave;
 
-        if (resp == null) throw new IllegalStateException("No response from Hacienda /recepcion");
+    final String rawToken = (bearerToken == null)
+        ? ""
+        : bearerToken.replaceFirst("(?i)^\\s*Bearer\\s+", "").trim();
 
-        if (resp.statusCode().is2xxSuccessful() || resp.statusCode() == HttpStatus.CREATED) {
-            // Hacienda suele devolver 201 y Location con la URL de consulta
-            String location = resp.headers().asHttpHeaders().getFirst(HttpHeaders.LOCATION);
-            log.info("[Hacienda] /recepcion OK (status={} location={})", resp.statusCode(), location);
-            return location;
-        }
+    HttpHeaders headers = new HttpHeaders();
+    headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+    headers.setBearerAuth(rawToken);
 
-        String xCause = resp.headers().asHttpHeaders().getFirst("X-Error-Cause");
-        String bodyErr = resp.bodyToMono(String.class).blockOptional().orElse("");
-        log.warn("[Hacienda] /recepcion FAIL status={} cause={} body={}", resp.statusCode(), xCause, bodyErr);
+    try {
+      ResponseEntity<ConsultaEstadoResponse> resp = haciendaRestTemplate.exchange(
+          url, HttpMethod.GET, new HttpEntity<Void>(headers), ConsultaEstadoResponse.class);
 
-        if (resp.statusCode() == HttpStatus.BAD_REQUEST && xCause != null && xCause.toLowerCase().contains("recibido")) {
-            // Ya recibido: tratamos como OK idempotente
-            return base + "/recepcion/" + body.getClave();
-        }
-        if (resp.statusCode() == HttpStatus.UNAUTHORIZED) {
-            throw new UnauthorizedException("401 en /recepcion: token inválido o expirado");
-        }
-        throw new IllegalStateException("Error en /recepcion: status=" + resp.statusCode() + " cause=" + xCause);
+      return resp.getBody();
+    } catch (HttpClientErrorException e) {
+      e.getResponseBodyAsString();
+      String bodyErr = e.getResponseBodyAsString();
+      throw new IllegalStateException("Error en GET estado: status=" + e.getStatusCode()
+          + " body=" + bodyErr, e);
     }
+  }
 
-    // ======================
-    // GET /recepcion/{clave}
-    // ======================
-    public ConsultaEstadoResponse getEstado(String bearerToken, boolean sandbox, String clave) {
-        String base = sandbox ? BASE_STAG : BASE_PROD;
-        String url = base + "/recepcion/" + clave;
+  public static class UnauthorizedException extends RuntimeException {
 
-        return webClient.get()
-                .uri(url)
-                .header(HttpHeaders.AUTHORIZATION, "bearer " + bearerToken)
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .bodyToMono(ConsultaEstadoResponse.class)
-                .onErrorResume(ex -> {
-                    log.error("[Hacienda] Error consultando estado {}: {}", clave, ex.getMessage());
-                    return Mono.error(ex);
-                })
-                .block();
+    public UnauthorizedException(String m) {
+      super(m);
     }
-
-    public static class UnauthorizedException extends RuntimeException {
-        public UnauthorizedException(String m) { super(m); }
-    }
+  }
 }

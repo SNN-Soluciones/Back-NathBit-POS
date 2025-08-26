@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.entity.FacturaJob;
+import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.PasoFacturacion;
 
 import java.time.LocalDateTime;
@@ -42,4 +43,6 @@ public interface FacturaJobService {
     void reprogramarPorClave(String clave, LocalDateTime proximaEjecucion);
     void finalizarPorClave(String clave, String mensaje);
     void avanzarPasoPorClave(String clave, PasoFacturacion paso);
+
+    List<FacturaJob> obtenerJobsPorEstadosExcluidos(List<EstadoFactura> estadosExcluidos, int limite);
 }

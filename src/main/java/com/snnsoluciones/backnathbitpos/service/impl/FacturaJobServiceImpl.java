@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.entity.FacturaJob;
+import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoProcesoJob;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.PasoFacturacion;
 import com.snnsoluciones.backnathbitpos.repository.FacturaJobRepository;
@@ -9,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.service.FacturaJobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -269,6 +271,14 @@ public class FacturaJobServiceImpl implements FacturaJobService {
                 jobRepository.save(job);
             }
         });
+    }
+
+    @Override
+    public List<FacturaJob> obtenerJobsPorEstadosExcluidos(List<EstadoFactura> estadosExcluidos, int limite) {
+        return jobRepository.findJobsExcluyendoEstados(
+            estadosExcluidos,
+            PageRequest.of(0, limite, Sort.by("proximaEjecucion").ascending())
+        );
     }
 
     // -------------------- Helper --------------------

@@ -41,7 +41,7 @@ public class FacturaJob {
     @Column(name = "max_intentos", nullable = false)
     private int maxIntentos;
 
-    @Column(name = "proxima_ejecucion", nullable = false)
+    @Column(name = "proxima_ejecucion")
     private LocalDateTime proximaEjecucion;
 
     // Lock/coordinación

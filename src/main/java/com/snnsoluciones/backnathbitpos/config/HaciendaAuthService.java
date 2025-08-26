@@ -58,6 +58,11 @@ public class HaciendaAuthService {
         if (cached != null && !cached.isExpired()) {
             return cached.getAccessToken();
         }
+
+        log.info("Obteniendo token OAuth para empresa ID: {}", empresaId);
+        log.info("Ambiente: {}", config.getAmbiente());
+        log.info("Usuario: {}", config.getUsuarioHacienda());
+        log.info("Clave: {}", config.getClaveHacienda());
         
         // Obtener nuevo token
         try {

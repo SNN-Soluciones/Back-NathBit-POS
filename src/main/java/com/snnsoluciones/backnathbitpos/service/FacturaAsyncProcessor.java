@@ -20,7 +20,7 @@ public interface FacturaAsyncProcessor {
      * 
      * @param job Job a procesar
      */
-    void procesarFactura(FacturaJob job);
+    void procesarFactura(FacturaJob job) throws IOException;
     
     /**
      * Genera el XML de la factura

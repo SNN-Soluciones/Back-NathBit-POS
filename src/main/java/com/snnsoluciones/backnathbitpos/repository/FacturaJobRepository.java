@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.entity.FacturaJob;
+import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoProcesoJob;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.PasoFacturacion;
 import jakarta.persistence.LockModeType;
@@ -70,4 +71,20 @@ public interface FacturaJobRepository extends JpaRepository<FacturaJob, Long> {
    ORDER BY j.proximaEjecucion ASC
    """)
     List<FacturaJob> findJobsPendientesPorPasos(@Param("pasos") Collection<PasoFacturacion> pasos);
+
+    @Query("""
+    SELECT j FROM FacturaJob j 
+    WHERE j.facturaId IN (
+        SELECT f.id FROM Factura f 
+        WHERE f.estado NOT IN :estadosExcluidos
+    )
+    AND j.estadoProceso IN ('PENDIENTE', 'REINTENTANDO')
+    AND (j.proximaEjecucion IS NULL OR j.proximaEjecucion <= CURRENT_TIMESTAMP)
+    ORDER BY j.proximaEjecucion ASC
+""")
+    List<FacturaJob> findJobsExcluyendoEstados(
+        @Param("estadosExcluidos") List<EstadoFactura> estadosExcluidos,
+        Pageable pageable
+    );
+
 }

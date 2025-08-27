@@ -801,7 +801,7 @@ public class ClienteServiceImpl implements ClienteService {
   private TipoDocumentoExoneracion mapTipoDocumento(String codigoMh) {
     if (StringUtils.isBlank(codigoMh)) {
       // fallback a un tipo por defecto si tu enum lo contempla
-      return TipoDocumentoExoneracion.EXONERACION; // ajusta si tu enum difiere
+      return TipoDocumentoExoneracion.COMPRAS_AUTORIZADAS_DGT; // ajusta si tu enum difiere
     }
     // Si tu enum tiene códigos MH distintos al nombre, implementa aquí el mapping.
     // Por ahora: intenta por nombre, si no, por un método 'porCodigo' en el enum si lo tienes.
@@ -812,7 +812,7 @@ public class ClienteServiceImpl implements ClienteService {
       try {
         return TipoDocumentoExoneracion.fromCodigo(codigoMh);
       } catch (Exception ignored) {
-        return TipoDocumentoExoneracion.EXONERACION;
+        return TipoDocumentoExoneracion.EXENCIONES_DGH_AUT_LOCAL_GENERICA;
       }
     }
   }

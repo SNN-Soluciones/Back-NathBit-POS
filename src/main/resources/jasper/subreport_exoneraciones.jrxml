@@ -7,12 +7,12 @@
   columnWidth="572" leftMargin="0" rightMargin="0"
   topMargin="0" bottomMargin="0">
 
-  <field name="tipo" class="java.lang.String"/>
-  <field name="numero_documento" class="java.lang.String"/>
-  <field name="institucion" class="java.lang.String"/>
-  <field name="fecha_emision" class="java.lang.String"/>
-  <field name="monto_exonerado" class="java.lang.String"/>
-  <field name="porcentaje" class="java.lang.String"/>
+  <field name="tipo"/>
+  <field name="numero_documento"/>
+  <field name="institucion"/>
+  <field name="fecha_emision"/>
+  <field name="monto_exonerado"/>
+  <field name="porcentaje"/>
 
   <title>
     <band height="25">

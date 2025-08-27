@@ -337,7 +337,7 @@ public class FacturaXMLGeneratorService {
             BigDecimal montoExoneracion = montoExonCalc.min(montoImpuestoBruto);
 
             // TipoDocumentoEX1 = 04 (FRANQUICIA) según tu enum
-            String tipoEx1 = TipoDocumentoExoneracion.FRANQUICIA.getCodigo();
+            String tipoEx1 = imp.getTipoDocumentoExoneracion();
             String fechaEX = imp.getFechaEmisionExoneracion(); // ideal: RFC3339 "YYYY-MM-DDThh:mm:ss-06:00"
 
             agregarExoneracionEnImpuesto(

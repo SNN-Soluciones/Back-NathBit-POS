@@ -227,95 +227,48 @@
 				</graphicElement>
 			</rectangle>
 			<staticText>
-				<reportElement x="4" y="-62" width="100" height="15" forecolor="#1E3A8A" uuid="4b87c47f-0fa1-49ee-a2f8-1bddae0ba5fa">
-				</reportElement>
+				<reportElement x="4" y="-62" width="100" height="15" forecolor="#1E3A8A" uuid="4b87c47f-0fa1-49ee-a2f8-1bddae0ba5fa"/>
 				<textElement verticalAlignment="Middle">
 					<font size="10" isBold="true"/>
 				</textElement>
 				<text><![CDATA[RECEPTOR:]]></text>
 			</staticText>
 			<rectangle>
-				<reportElement x="-1" y="-45" width="572" height="64" forecolor="#E5E7EB" uuid="c2e19795-18f2-4b4f-affe-f3e3cb6a16f1">
-				</reportElement>
+				<reportElement x="-1" y="-45" width="572" height="64" forecolor="#E5E7EB" uuid="c2e19795-18f2-4b4f-affe-f3e3cb6a16f1"/>
 				<graphicElement>
 					<pen lineWidth="1.0"/>
 				</graphicElement>
 			</rectangle>
-			<staticText>
-				<reportElement x="0" y="-40" width="52" height="15" uuid="b87cbbc0-abcc-4aa1-80e5-5f7ce0ccb0a3">
-				</reportElement>
-				<textElement>
-					<font size="9" isBold="true"/>
-				</textElement>
-				<text><![CDATA[Nombre:]]></text>
-			</staticText>
 			<textField textAdjust="StretchHeight">
-				<reportElement x="59" y="-40" width="290" height="15" uuid="5b599b61-f5ef-4f6f-bad8-8ccbfe98d989">
-				</reportElement>
+				<reportElement x="5" y="-40" width="344" height="15" uuid="5b599b61-f5ef-4f6f-bad8-8ccbfe98d989"/>
 				<textElement>
 					<font size="9"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{receptor_nombre}]]></textFieldExpression>
 			</textField>
-			<staticText>
-				<reportElement x="359" y="-40" width="80" height="15" uuid="c0c48654-6fb8-4dc2-b5b8-00a0f4db2f44">
-				</reportElement>
-				<textElement>
-					<font size="9" isBold="true"/>
-				</textElement>
-				<text><![CDATA[Identificación:]]></text>
-			</staticText>
 			<textField>
-				<reportElement x="439" y="-40" width="125" height="15" uuid="2f6e936a-7fb3-498e-a0c8-d8c5d2f43c13">
-				</reportElement>
+				<reportElement x="360" y="-40" width="204" height="15" uuid="2f6e936a-7fb3-498e-a0c8-d8c5d2f43c13"/>
 				<textElement>
 					<font size="9"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{receptor_identificacion}]]></textFieldExpression>
 			</textField>
-			<staticText>
-				<reportElement x="2" y="-20" width="50" height="15" uuid="7e2c3b9f-9b83-4f3e-9a07-aa1c96eb5dda">
-				</reportElement>
-				<textElement>
-					<font size="9" isBold="true"/>
-				</textElement>
-				<text><![CDATA[Correo:]]></text>
-			</staticText>
 			<textField>
-				<reportElement x="59" y="-20" width="200" height="15" uuid="f2dcd87a-3343-4055-a6d5-5efcd4b51c31">
-				</reportElement>
+				<reportElement x="5" y="-20" width="254" height="15" uuid="f2dcd87a-3343-4055-a6d5-5efcd4b51c31"/>
 				<textElement>
 					<font size="9"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{receptor_correo}]]></textFieldExpression>
 			</textField>
-			<staticText>
-				<reportElement x="360" y="-20" width="60" height="15" uuid="a69f56fe-2326-4290-b892-0f5c57df9ac1">
-				</reportElement>
-				<textElement>
-					<font size="9" isBold="true"/>
-				</textElement>
-				<text><![CDATA[Teléfono:]]></text>
-			</staticText>
 			<textField>
-				<reportElement x="437" y="-20" width="100" height="15" uuid="a8b2ad1a-bec5-40c6-bcf7-d43bfaa08cf3">
-				</reportElement>
+				<reportElement x="360" y="-20" width="177" height="15" uuid="a8b2ad1a-bec5-40c6-bcf7-d43bfaa08cf3"/>
 				<textElement>
 					<font size="9"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{receptor_telefono}]]></textFieldExpression>
 			</textField>
-			<staticText>
-				<reportElement x="0" y="0" width="52" height="15" uuid="edd8f3cf-f69a-4d15-852e-bfcba829b82f">
-				</reportElement>
-				<textElement>
-					<font size="9" isBold="true"/>
-				</textElement>
-				<text><![CDATA[Dirección:]]></text>
-			</staticText>
 			<textField textAdjust="StretchHeight">
-				<reportElement x="59" y="0" width="502" height="19" uuid="42eaaca1-ccd1-4cdb-bb7d-dc5e3c396bb2">
-				</reportElement>
+				<reportElement x="5" y="0" width="556" height="19" uuid="42eaaca1-ccd1-4cdb-bb7d-dc5e3c396bb2"/>
 				<textElement>
 					<font size="9"/>
 				</textElement>

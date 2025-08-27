@@ -65,7 +65,8 @@ public class FacturaPdfService {
             // 2. Generar PDF con plantilla ticket
             String templatePath = "factura_electronica_80mm";
             return pdfGeneratorService.generarPdf(templatePath, parametros,
-                new ArrayList<>() );
+                (List<?>) parametros.get("detalles")
+            );
 
         } catch (Exception e) {
             log.error("Error generando PDF ticket para factura {}: {}", clave, e.getMessage());

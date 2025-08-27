@@ -11,6 +11,7 @@ import com.snnsoluciones.backnathbitpos.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,6 +82,10 @@ public class FacturaPdfMapperService {
     cargarLogoEmpresa(params, empresaService.buscarPorId(factura.getSucursal().getEmpresa().getId()));
 
     agregarSubreports(params);
+
+    if (esTicket) {
+      agregarParametrosTicket(params, factura);
+    }
 
     return params;
   }
@@ -348,11 +353,15 @@ public class FacturaPdfMapperService {
       }
     }
 
-    // Convertir el mapa a lista
     exoneraciones.addAll(exoneracionesAgrupadas.values());
 
     params.put("exoneraciones", exoneraciones);
     params.put("tiene_exoneraciones", !exoneraciones.isEmpty());
+
+    if (!exoneraciones.isEmpty()) {
+      params.put("datasource_exoneraciones", new JRBeanCollectionDataSource(exoneraciones));
+      log.debug("Datasource de exoneraciones creado con {} elementos", exoneraciones.size());
+    }
   }
 
   private void mapearOtrosCargos(Map<String, Object> params, Factura factura) {
@@ -689,19 +698,142 @@ public class FacturaPdfMapperService {
 
   private void agregarSubreports(Map<String, Object> params) {
     try {
-      String subreportName = "subreport_exoneraciones";
-      // Obtener el subreport compilado del cache
-      JasperReport subreportExoneraciones = pdfGeneratorService.getCompiledReport("subreport_exoneraciones");
-
-      if (subreportExoneraciones != null) {
-        params.put("subreport_exoneraciones", subreportExoneraciones);
-        log.debug("Subreport de exoneraciones agregado correctamente");
+      JasperReport exoneraciones80mm = pdfGeneratorService.getCompiledReport("exoneraciones_80mm");
+      if (exoneraciones80mm != null) {
+        params.put("exoneraciones_80mm", exoneraciones80mm);
+        log.debug("Subreport de exoneraciones 80mm agregado correctamente");
       } else {
-        log.warn("No se encontró el subreport de exoneraciones compilado");
+        log.warn("No se encontró el subreport exoneraciones_80mm compilado");
       }
 
     } catch (Exception e) {
       log.error("Error agregando subreports: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Agrega los datasources para los subreportes
+   */
+  private void agregarDataSourcesSubreportes(Map<String, Object> parametros, Factura factura) {
+    // DataSource de detalles (siempre debe existir)
+    List<Map<String, String>> detallesList = factura.getDetalles().stream()
+        .sorted(Comparator.comparing(FacturaDetalle::getNumeroLinea))
+        .map(detalle -> {
+          Map<String, String> item = new HashMap<>();
+          item.put("numeroLinea", detalle.getNumeroLinea().toString());
+          item.put("codigo", detalle.getProducto().getCodigoInterno());
+          item.put("descripcion", detalle.getDetalle() != null ?
+              detalle.getDetalle() : detalle.getProducto().getNombre());
+          item.put("unidadMedida", detalle.getUnidadMedida());
+          item.put("cantidad", DECIMAL_FORMAT.format(detalle.getCantidad()));
+          item.put("precioUnitario", DECIMAL_FORMAT.format(detalle.getPrecioUnitario()));
+          item.put("montoTotal", DECIMAL_FORMAT.format(detalle.getMontoTotal()));
+          item.put("montoDescuento", DECIMAL_FORMAT.format(detalle.getMontoDescuento()));
+          item.put("subtotal", DECIMAL_FORMAT.format(detalle.getSubtotal()));
+          item.put("montoImpuesto", DECIMAL_FORMAT.format(detalle.getMontoImpuesto()));
+          item.put("montoTotalLinea", DECIMAL_FORMAT.format(detalle.getMontoTotalLinea()));
+          return item;
+        })
+        .collect(Collectors.toList());
+
+    parametros.put("datasource_detalles", new JRBeanCollectionDataSource(detallesList));
+
+    // DataSource de otros cargos (si existen)
+    if (factura.getOtrosCargos() != null && !factura.getOtrosCargos().isEmpty()) {
+      List<Map<String, String>> otrosCargosList = factura.getOtrosCargos().stream()
+          .map(cargo -> {
+            Map<String, String> item = new HashMap<>();
+            item.put("tipoDocumento", cargo.getTipoDocumentoOC());
+            item.put("numeroIdentidadTercero", cargo.getTerceroNumeroIdentificacion());
+            item.put("nombreTercero", cargo.getTerceroNombre());
+            item.put("detalle", cargo.getNombreCargo());
+            item.put("porcentaje", cargo.getPorcentaje() != null ?
+                cargo.getPorcentaje().toString() : "");
+            item.put("montoCargo", DECIMAL_FORMAT.format(cargo.getMontoCargo()));
+            return item;
+          })
+          .collect(Collectors.toList());
+
+      parametros.put("datasource_otros_cargos",
+          new JRBeanCollectionDataSource(otrosCargosList));
+    }
+
+    // DataSource de exoneraciones
+    mapearExoneraciones(parametros, factura);
+  }
+
+  /**
+   * Agrega desglose de pagos para facturas de contado
+   */
+  private void agregarDesglosePagos(Map<String, Object> parametros, Factura factura) {
+    BigDecimal efectivo = BigDecimal.ZERO;
+    BigDecimal tarjeta = BigDecimal.ZERO;
+    BigDecimal cheque = BigDecimal.ZERO;
+    BigDecimal transferencia = BigDecimal.ZERO;
+
+    // Sumar por tipo de medio de pago
+    for (FacturaMedioPago medioPago : factura.getMediosPago()) {
+      switch (medioPago.getMedioPago()) {
+        case EFECTIVO:
+          efectivo = efectivo.add(medioPago.getMonto());
+          break;
+        case TARJETA:
+          tarjeta = tarjeta.add(medioPago.getMonto());
+          break;
+        case CHEQUE:
+          cheque = cheque.add(medioPago.getMonto());
+          break;
+        case TRANSFERENCIA:
+          transferencia = transferencia.add(medioPago.getMonto());
+          break;
+      }
+    }
+
+    parametros.put("efectivo", DECIMAL_FORMAT.format(efectivo));
+    parametros.put("tarjeta", DECIMAL_FORMAT.format(tarjeta));
+    parametros.put("cheque", DECIMAL_FORMAT.format(cheque));
+    parametros.put("transferencia", DECIMAL_FORMAT.format(transferencia));
+
+    // Calcular vuelto
+    BigDecimal totalPagado = efectivo.add(tarjeta).add(cheque).add(transferencia);
+    BigDecimal vuelto = totalPagado.subtract(factura.getTotalComprobante());
+    parametros.put("su_vuelto", DECIMAL_FORMAT.format(vuelto.max(BigDecimal.ZERO)));
+  }
+
+  /**
+   * Agrega los parámetros específicos para formato ticket 80mm
+   */
+  private void agregarParametrosTicket(Map<String, Object> parametros, Factura factura) {
+    // Agregar número interno
+    parametros.put("numero_interno", factura.getId().toString());
+
+    // Cliente contado
+    parametros.put("cliente_contado", "");
+
+    // Plazo crédito (días)
+    if (factura.getPlazoCredito() != null) {
+      parametros.put("plazo_credito", factura.getPlazoCredito() + " días");
+    }
+
+    // Vendedor
+    Usuario vendedor = factura.getCajero();
+    if (vendedor != null) {
+      parametros.put("vendedor", vendedor.getNombre() + " " + vendedor.getApellidos());
+    }
+
+    // Pagos desglosados (para contado)
+    if (factura.getCondicionVenta() == CondicionVenta.CONTADO) {
+      agregarDesglosePagos(parametros, factura);
+    }
+
+    // Subreportes compilados
+    parametros.put("subreport_detalles",
+        pdfGeneratorService.getCompiledReport("detalle_factura_80mm"));
+    parametros.put("subreport_otros_cargos",
+        pdfGeneratorService.getCompiledReport("otros_cargos_80mm"));
+    parametros.put("exoneraciones_80mm",  // CAMBIAR de "subreport_exoneraciones" a "exoneraciones_80mm"
+        pdfGeneratorService.getCompiledReport("exoneraciones_80mm")); // CAMBIAR el nombre aquí también
+
+    agregarDataSourcesSubreportes(parametros, factura);
   }
 }

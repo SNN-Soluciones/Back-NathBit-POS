@@ -22,10 +22,12 @@ public class PdfGeneratorService {
     public void precompilarReportes() {
         log.info("========= PRECOMPILANDO REPORTES JASPER =========");
 
-        // Lista de reportes a precompilar
+        // Lista actualizada de reportes a precompilar
         String[] reportes = {
             "factura_electronica",
             "factura_electronica_80mm",
+            "detalle_factura_80mm",           // NUEVO
+            "otros_cargos_80mm",              // NUEVO
             "subreport_exoneraciones",
             "subreport_exoneraciones_80mm"
         };

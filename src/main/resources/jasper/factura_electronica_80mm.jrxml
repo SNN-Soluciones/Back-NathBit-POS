@@ -231,7 +231,7 @@
       <!-- RECEPTOR - Solo se muestra si NO es Tiquete Electrónico -->
       <line>
         <reportElement x="0" y="0" width="206" height="1" uuid="1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d">
-          <printWhenExpression><![CDATA[!$P{tipoDocumento}.equals("Tiquete Electrónico") && !$P{tipoDocumento}.equals("TIQUETE ELECTRÓNICO")]]></printWhenExpression>
+
         </reportElement>
         <graphicElement>
           <pen lineWidth="1.0" lineStyle="Dotted"/>
@@ -240,7 +240,7 @@
 
       <staticText>
         <reportElement x="0" y="3" width="206" height="12" uuid="2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e">
-          <printWhenExpression><![CDATA[!$P{tipoDocumento}.equals("Tiquete Electrónico") && !$P{tipoDocumento}.equals("TIQUETE ELECTRÓNICO")]]></printWhenExpression>
+
         </reportElement>
         <textElement textAlignment="Center">
           <font size="8" isBold="true"/>
@@ -250,7 +250,7 @@
 
       <textField>
         <reportElement x="0" y="16" width="206" height="10" uuid="3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f">
-          <printWhenExpression><![CDATA[!$P{tipoDocumento}.equals("Tiquete Electrónico") && !$P{tipoDocumento}.equals("TIQUETE ELECTRÓNICO")]]></printWhenExpression>
+
         </reportElement>
         <textElement textAlignment="Center">
           <font size="8"/>
@@ -260,7 +260,7 @@
 
       <textField>
         <reportElement x="0" y="27" width="206" height="10" uuid="4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a">
-          <printWhenExpression><![CDATA[!$P{tipoDocumento}.equals("Tiquete Electrónico") && !$P{tipoDocumento}.equals("TIQUETE ELECTRÓNICO") && $P{clienteIdentificacion} != null && !$P{clienteIdentificacion}.isEmpty()]]></printWhenExpression>
+          <printWhenExpression><![CDATA[&& $P{clienteIdentificacion} != null && !$P{clienteIdentificacion}.isEmpty()]]></printWhenExpression>
         </reportElement>
         <textElement textAlignment="Center">
           <font size="7"/>
@@ -270,7 +270,7 @@
 
       <line>
         <reportElement x="0" y="40" width="206" height="1" uuid="5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b">
-          <printWhenExpression><![CDATA[!$P{tipoDocumento}.equals("Tiquete Electrónico") && !$P{tipoDocumento}.equals("TIQUETE ELECTRÓNICO")]]></printWhenExpression>
+
         </reportElement>
         <graphicElement>
           <pen lineWidth="1.0" lineStyle="Dotted"/>

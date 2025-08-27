@@ -19,20 +19,19 @@ public class PdfGeneratorService {
 
     public byte[] generarPdf(String plantilla, Map<String, Object> parametros, List<?> datos) {
         try {
-            // Obtener reporte (lo compila si no existe)
             JasperReport jasperReport = obtenerReporteCompilado(plantilla);
 
-            // Crear datasource con los datos
-            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(datos);
+            // Si no hay datos (o no se necesitan), usa un datasource vacío.
+            JRDataSource dataSource = (datos == null || datos.isEmpty())
+                ? new JREmptyDataSource()                // 1 registro “vacío” por defecto
+                : new JRBeanCollectionDataSource(datos); // para listas reales
 
-            // Llenar el reporte
             JasperPrint jasperPrint = JasperFillManager.fillReport(
                 jasperReport,
                 parametros,
                 dataSource
             );
 
-            // Exportar a PDF
             return JasperExportManager.exportReportToPdf(jasperPrint);
 
         } catch (Exception e) {

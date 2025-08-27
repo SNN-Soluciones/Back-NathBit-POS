@@ -14,84 +14,86 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class DocumentoPdfController {
 
-    private final FacturaPdfService facturaPdfService;
+  private final FacturaPdfService facturaPdfService;
 
-    /**
-     * Genera y descarga PDF por clave numérica
-     */
-    @GetMapping("/descargar/{claveNumerica}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
-    public ResponseEntity<byte[]> descargarPdf(@PathVariable String claveNumerica) {
-        try {
-            byte[] pdfBytes = facturaPdfService.generarFacturaPorClave(claveNumerica);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", 
-                String.format("factura_%s.pdf", claveNumerica));
-            headers.setCacheControl("no-cache");
-            
-            return ResponseEntity.ok()
-                .headers(headers)
-                .body(pdfBytes);
-                
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+  /**
+   * Genera y descarga PDF por clave numérica
+   */
+  @GetMapping("/descargar/{claveNumerica}/{formato}")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  public ResponseEntity<byte[]> descargarPdf(@PathVariable String claveNumerica,
+      @PathVariable String formato) {
+    try {
+      byte[] pdfBytes = facturaPdfService.generarFactura(claveNumerica, formato);
+
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_PDF);
+      headers.setContentDispositionFormData("attachment",
+          String.format("factura_%s.pdf", claveNumerica));
+      headers.setCacheControl("no-cache");
+
+      return ResponseEntity.ok()
+          .headers(headers)
+          .body(pdfBytes);
+
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().build();
     }
+  }
 
-    /**
-     * Vista previa del PDF en el navegador
-     */
-    @GetMapping("/ver/{claveNumerica}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
-    public ResponseEntity<byte[]> verPdf(@PathVariable String claveNumerica) {
-        try {
-            byte[] pdfBytes = facturaPdfService.generarFacturaPorClave(claveNumerica);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("inline", 
-                String.format("factura_%s.pdf", claveNumerica));
-            
-            return ResponseEntity.ok()
-                .headers(headers)
-                .body(pdfBytes);
-                
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+  /**
+   * Vista previa del PDF en el navegador
+   */
+  @GetMapping("/ver/{claveNumerica}/{formato}")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  public ResponseEntity<byte[]> verPdf(@PathVariable String claveNumerica,
+      @PathVariable String formato) {
+    try {
+      byte[] pdfBytes = facturaPdfService.generarFactura(claveNumerica, formato);
+
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_PDF);
+      headers.setContentDispositionFormData("inline",
+          String.format("factura_%s.pdf", claveNumerica));
+
+      return ResponseEntity.ok()
+          .headers(headers)
+          .body(pdfBytes);
+
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().build();
     }
+  }
 
-    /**
-     * Enviar PDF por email
-     */
-    @PostMapping("/enviar-email/{claveNumerica}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
-    public ResponseEntity<ApiResponse> enviarPorEmail(
-            @PathVariable String claveNumerica,
-            @RequestParam String emailDestino,
-            @RequestParam(required = false) String mensaje) {
-        try {
-            byte[] pdfBytes = facturaPdfService.generarFacturaPorClave(claveNumerica);
-            
+  /**
+   * Enviar PDF por email
+   */
+  @PostMapping("/enviar-email/{claveNumerica}")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  public ResponseEntity<ApiResponse> enviarPorEmail(
+      @PathVariable String claveNumerica,
+      @RequestParam String emailDestino,
+      @RequestParam(required = false) String mensaje) {
+    try {
+      byte[] pdfBytes = facturaPdfService.generarFacturaCarta(claveNumerica);
+
 //            emailService.enviarFactura(
 //                emailDestino,
 //                claveNumerica,
 //                pdfBytes,
 //                mensaje
 //            );
-            
-            return ResponseEntity.ok(ApiResponse.builder()
-                .success(true)
-                .message("Factura enviada exitosamente a: " + emailDestino)
-                .build());
-                
-        } catch (Exception e) {
-            return ResponseEntity.ok(ApiResponse.builder()
-                .success(false)
-                .message("Error enviando factura: " + e.getMessage())
-                .build());
-        }
+
+      return ResponseEntity.ok(ApiResponse.builder()
+          .success(true)
+          .message("Factura enviada exitosamente a: " + emailDestino)
+          .build());
+
+    } catch (Exception e) {
+      return ResponseEntity.ok(ApiResponse.builder()
+          .success(false)
+          .message("Error enviando factura: " + e.getMessage())
+          .build());
     }
+  }
 }

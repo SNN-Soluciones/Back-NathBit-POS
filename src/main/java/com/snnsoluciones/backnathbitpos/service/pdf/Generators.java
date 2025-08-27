@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class Generators {
 
-  private byte[] generarCodigoQRDetallado(Factura factura) {
+  public byte[] generarCodigoQRDetallado(Factura factura) {
     try {
       // Formato alternativo con más información
       StringBuilder qrContent = new StringBuilder();

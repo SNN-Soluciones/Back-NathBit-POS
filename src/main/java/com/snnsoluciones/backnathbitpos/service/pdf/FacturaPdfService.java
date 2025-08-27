@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service.pdf;
 
 import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,8 +36,12 @@ public class FacturaPdfService {
 
             // 2. Generar PDF con plantilla carta
             String templatePath = "factura_electronica";
-            return pdfGeneratorService.generarPdf(templatePath, parametros,
-                new ArrayList<>() );
+            return pdfGeneratorService.generarPdf(
+                templatePath,
+                parametros,
+                (List<?>) parametros.get("detalles")
+            );
+
 
         } catch (Exception e) {
             log.error("Error generando PDF carta para factura {}: {}", clave, e.getMessage());
@@ -58,7 +63,7 @@ public class FacturaPdfService {
             Map<String, Object> parametros = mapperService.mapearFacturaAParametros(clave, true);
 
             // 2. Generar PDF con plantilla ticket
-            String templatePath = "jasper/factura_electronica_80mm.jrxml";
+            String templatePath = "factura_electronica_80mm";
             return pdfGeneratorService.generarPdf(templatePath, parametros,
                 new ArrayList<>() );
 

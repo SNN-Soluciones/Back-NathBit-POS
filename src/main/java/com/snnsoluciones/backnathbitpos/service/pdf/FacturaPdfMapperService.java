@@ -2,9 +2,9 @@ package com.snnsoluciones.backnathbitpos.service.pdf;
 
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.mh.CondicionVenta;
+import com.snnsoluciones.backnathbitpos.enums.mh.MedioPago;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
-import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
@@ -13,13 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -81,7 +76,7 @@ public class FacturaPdfMapperService {
     mapearInformacionAdicional(params, factura);
 
     // Logo de la empresa (desde S3)
-    cargarLogoEmpresa(params, factura);
+    cargarLogoEmpresa(params, empresaService.buscarPorId(factura.getSucursal().getEmpresa().getId()));
 
     return params;
   }
@@ -128,7 +123,7 @@ public class FacturaPdfMapperService {
       params.put("receptor_direccion", Objects.nonNull(direccion) ? direccion : "");
     } else {
       // Cliente genérico
-      params.put("receptor_nombre", "CLIENTE CONTADO");
+      params.put("receptor_nombre", "");
       params.put("receptor_identificacion", "");
       params.put("receptor_correo", "");
       params.put("receptor_telefono", "");
@@ -147,7 +142,7 @@ public class FacturaPdfMapperService {
 
     // Fecha y hora
     String fechaEmision = factura.getFechaEmision();
-    params.put("fecha_emision", fechaEmision);
+    params.put("fecha_emision", fechaEmision.substring(0, 10));
 
     // Condiciones comerciales
     params.put("condicion_venta", traducirCondicionVenta(factura.getCondicionVenta()));
@@ -187,32 +182,26 @@ public class FacturaPdfMapperService {
     List<FacturaMedioPago> mediosPago = factura.getMediosPago();
 
     if (mediosPago == null || mediosPago.isEmpty()) {
-      params.put("medio_pago", "EFECTIVO");
+      params.put("medio_pago", "Efectivo");
       return;
     }
 
-    // Si hay un solo medio de pago
-    if (mediosPago.size() == 1) {
-      params.put("medio_pago",
-          traducirMedioPago(mediosPago.get(0).getMedioPago().getDescripcion()));
-    } else {
-      // Si hay múltiples medios de pago, concatenar
-      String mediosConcatenados = mediosPago.stream()
-          .map(mp -> traducirMedioPago(mp.getMedioPago().getDescripcion()))
-          .distinct()
-          .collect(Collectors.joining(" / "));
-      params.put("medio_pago", mediosConcatenados);
+    // Etiqueta compacta (si hay varios, concatenados)
+    String mediosConcatenados = mediosPago.stream()
+        .map(this::labelMedioPago)   // <-- usa enum
+        .distinct()
+        .collect(Collectors.joining(" / "));
+    params.put("medio_pago", mediosConcatenados);
 
-      // También crear una lista para el reporte si necesitas detallar cada medio
-      List<Map<String, Object>> detallesMediosPago = new ArrayList<>();
-      for (FacturaMedioPago mp : mediosPago) {
-        Map<String, Object> detalleMedio = new HashMap<>();
-        detalleMedio.put("tipo", traducirMedioPago(mp.getMedioPago().getDescripcion()));
-        detalleMedio.put("monto", formatearMoneda(mp.getMonto()));
-        detallesMediosPago.add(detalleMedio);
-      }
-      params.put("detalle_medios_pago", detallesMediosPago);
+    // (Opcional) detalle por medio con monto
+    List<Map<String, Object>> detallesMediosPago = new ArrayList<>();
+    for (FacturaMedioPago mp : mediosPago) {
+      Map<String, Object> row = new HashMap<>();
+      row.put("tipo",  labelMedioPago(mp));
+      row.put("monto", formatearMoneda(mp.getMonto()));
+      detallesMediosPago.add(row);
     }
+    params.put("detalle_medios_pago", detallesMediosPago);
   }
 
   private void mapearDetalles(Map<String, Object> params, Factura factura, boolean esTicket) {
@@ -338,8 +327,7 @@ public class FacturaPdfMapperService {
             exon.put("institucion", impuesto.getNombreInstitucion() != null ?
                 impuesto.getNombreInstitucion() : "");
             exon.put("fecha_emision", impuesto.getFechaEmisionExoneracion() != null ?
-                LocalDateTime.parse(impuesto.getFechaEmisionExoneracion()).format(DATE_FORMATTER)
-                : "");
+                impuesto.getFechaEmisionExoneracion() : "");
             exon.put("monto_exonerado_raw", impuesto.getMontoExoneracion());
             exon.put("monto_exonerado", formatearMoneda(impuesto.getMontoExoneracion()));
 
@@ -426,9 +414,8 @@ public class FacturaPdfMapperService {
     params.put("sucursal", factura.getSucursal().getNombre());
   }
 
-  private void cargarLogoEmpresa(Map<String, Object> params, Factura factura) {
+  private void cargarLogoEmpresa(Map<String, Object> params, Empresa empresa) {
     try {
-      Empresa empresa = factura.getSucursal().getEmpresa();
       if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().isEmpty()) {
         // CORRECCIÓN: Usar downloadFileAsBytes que retorna byte[]
         byte[] logoBytes = storageService.downloadFileAsBytes(empresa.getLogoUrl());
@@ -644,5 +631,55 @@ public class FacturaPdfMapperService {
       case "99" -> "Otros";
       default -> tipo;
     };
+  }
+
+  // --- Helpers de mapeo ---
+
+  private String labelMedioPago(FacturaMedioPago mp) {
+    if (mp == null || mp.getMedioPago() == null) return "Efectivo";
+
+    MedioPago medio = mp.getMedioPago(); // ¡Usa el enum, no la descripción!
+    switch (medio) {
+      case EFECTIVO:             return "Efectivo";
+      case TARJETA:              return "Tarjeta";
+      case CHEQUE:               return "Cheque";
+      case TRANSFERENCIA:        return "Transferencia / Depósito";
+      case RECAUDADO_TERCEROS:   return "Recaudado por terceros";
+      case SINPE_MOVIL:          return "SINPE Móvil";
+      case PLATAFORMA_DIGITAL:   return "Plataforma Digital";
+      case OTROS:
+      default:                   return "Otros";
+    }
+  }
+
+  /** Por si algún día te llega algo “legacy” como texto: nombre, código o descripción */
+  private MedioPago normalizarMedioPago(Object raw) {
+    if (raw == null) return null;
+    if (raw instanceof MedioPago) return (MedioPago) raw;
+
+    String s = raw.toString().trim();
+
+    // ¿Viene como código "06", "02"...?
+    if (s.matches("\\d{2}")) {
+      try { return MedioPago.fromCodigo(s); } catch (Exception ignored) {}
+    }
+
+    // ¿Viene como nombre del enum?
+    String enumLike = s.toUpperCase().replace(' ', '_');
+    try { return MedioPago.valueOf(enumLike); } catch (Exception ignored) {}
+
+    // ¿Viene como descripción “humana”? Normalizamos acentos y variantes comunes:
+    String desc = s.toUpperCase()
+        .replace("Á","A").replace("É","E").replace("Í","I").replace("Ó","O").replace("Ú","U");
+
+    if (desc.contains("SINPE"))             return MedioPago.SINPE_MOVIL;
+    if (desc.contains("PLATAFORMA DIGITAL"))return MedioPago.PLATAFORMA_DIGITAL;
+    if (desc.contains("EFECT"))             return MedioPago.EFECTIVO;
+    if (desc.contains("TARJ"))              return MedioPago.TARJETA;
+    if (desc.contains("CHEQ"))              return MedioPago.CHEQUE;
+    if (desc.contains("TRANS") || desc.contains("DEPOS")) return MedioPago.TRANSFERENCIA;
+    if (desc.contains("TERCER"))            return MedioPago.RECAUDADO_TERCEROS;
+
+    return MedioPago.OTROS;
   }
 }

@@ -5,6 +5,7 @@ import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.annotation.PostConstruct;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.List;
@@ -17,37 +18,31 @@ public class PdfGeneratorService {
     // Cache para guardar reportes compilados
     private final Map<String, JasperReport> reportCache = new ConcurrentHashMap<>();
 
-    public byte[] generarPdf(String plantilla, Map<String, Object> parametros, List<?> datos) {
-        try {
-            JasperReport jasperReport = obtenerReporteCompilado(plantilla);
+    @PostConstruct
+    public void precompilarReportes() {
+        log.info("========= PRECOMPILANDO REPORTES JASPER =========");
 
-            // Si no hay datos (o no se necesitan), usa un datasource vacío.
-            JRDataSource dataSource = (datos == null || datos.isEmpty())
-                ? new JREmptyDataSource()                // 1 registro “vacío” por defecto
-                : new JRBeanCollectionDataSource(datos); // para listas reales
+        // Lista de reportes a precompilar
+        String[] reportes = {
+            "factura_electronica",
+            "factura_electronica_80mm",
+            "subreport_exoneraciones"
+        };
 
-            JasperPrint jasperPrint = JasperFillManager.fillReport(
-                jasperReport,
-                parametros,
-                dataSource
-            );
-
-            return JasperExportManager.exportReportToPdf(jasperPrint);
-
-        } catch (Exception e) {
-            log.error("Error generando PDF: {}", e.getMessage(), e);
-            throw new RuntimeException("Error al generar PDF", e);
+        for (String reporte : reportes) {
+            try {
+                compilarYCachear(reporte);
+                log.info("✅ {} - Compilado exitosamente", reporte);
+            } catch (Exception e) {
+                log.error("❌ {} - Error al compilar: {}", reporte, e.getMessage());
+            }
         }
+
+        log.info("========= COMPILACIÓN COMPLETADA =========");
+        log.info("📊 Reportes en cache: {}", reportCache.size());
     }
 
-    private JasperReport obtenerReporteCompilado(String nombreReporte) throws JRException {
-        // Si ya está en cache, devolverlo
-        if (reportCache.containsKey(nombreReporte)) {
-            log.debug("Usando reporte desde cache: {}", nombreReporte);
-            return reportCache.get(nombreReporte);
-        }
-
-        // Si no, compilarlo
+    private void compilarYCachear(String nombreReporte) throws JRException {
         String rutaJrxml = "/jasper/" + nombreReporte + ".jrxml";
         InputStream jrxmlStream = getClass().getResourceAsStream(rutaJrxml);
 
@@ -55,19 +50,48 @@ public class PdfGeneratorService {
             throw new JRException("No se encontró el archivo: " + rutaJrxml);
         }
 
-        log.info("Compilando reporte por primera vez: {}", nombreReporte);
         JasperReport jasperReport = JasperCompileManager.compileReport(jrxmlStream);
-
-        // Guardarlo en cache para próximas veces
         reportCache.put(nombreReporte, jasperReport);
-        log.info("Reporte compilado y guardado en cache: {}", nombreReporte);
-
-        return jasperReport;
     }
 
-    // Método opcional para limpiar cache si necesitas
-    public void limpiarCache() {
-        reportCache.clear();
-        log.info("Cache de reportes limpiado");
+    public byte[] generarPdf(String plantilla, Map<String, Object> parametros, List<?> datos) {
+        try {
+            // Remover extensión si viene con ella
+            String nombreReporte = plantilla.replace(".jrxml", "").replace("/jasper/", "");
+
+            // Obtener reporte del cache
+            JasperReport jasperReport = reportCache.get(nombreReporte);
+
+            if (jasperReport == null) {
+                log.warn("Reporte {} no encontrado en cache, compilando ahora...", nombreReporte);
+                compilarYCachear(nombreReporte);
+                jasperReport = reportCache.get(nombreReporte);
+            }
+
+            // Crear datasource con los datos
+            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(datos);
+            // Llenar el reporte
+            JasperPrint jasperPrint = JasperFillManager.fillReport(
+                jasperReport,
+                parametros,
+                dataSource
+            );
+
+            // Exportar a PDF
+            return JasperExportManager.exportReportToPdf(jasperPrint);
+
+        } catch (Exception e) {
+            log.error("Error generando PDF: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al generar PDF: " + e.getMessage(), e);
+        }
+    }
+
+    // Método para verificar el estado del cache
+    public void estadoCache() {
+        log.info("=== ESTADO DEL CACHE DE REPORTES ===");
+        reportCache.forEach((nombre, reporte) -> {
+            log.info("📄 {} - Compilado", nombre);
+        });
+        log.info("Total: {} reportes en cache", reportCache.size());
     }
 }

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with Jaspersoft Studio version 6.21.3.final using JasperReports Library version 6.21.3-4a3078d20785ebe464f18037d738d12fc98c13cf  -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="detalle_factura" pageWidth="555" pageHeight="792" columnWidth="555" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" uuid="09a92c7b-ea6a-46ef-b550-d7dd8f170c42">
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+	<field name="numeroLinea"/>
+	<field name="codigo"/>
+	<field name="descripcion"/>
+	<field name="unidadMedida"/>
+	<field name="cantidad"/>
+	<field name="precioUnitario"/>
+	<field name="montoTotal"/>
+	<field name="montoDescuento"/>
+	<field name="subtotal"/>
+	<field name="montoImpuesto"/>
+	<field name="montoTotalLinea"/>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<columnHeader>
+		<band height="35" splitType="Stretch">
+			<rectangle>
+				<reportElement x="0" y="0" width="555" height="30" forecolor="#1E3A8A" backcolor="#EFF6FF" uuid="c1234567-8901-2345-6789-012345c45611"/>
+				<graphicElement>
+					<pen lineWidth="0.0"/>
+				</graphicElement>
+			</rectangle>
+			<staticText>
+				<reportElement x="5" y="8" width="30" height="15" forecolor="#1E3A8A" uuid="d2345678-9012-3456-7890-123456d56722"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[#]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="40" y="8" width="60" height="15" forecolor="#1E3A8A" uuid="e3456789-0123-4567-8901-234567e67833"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[CÓDIGO]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="105" y="8" width="170" height="15" forecolor="#1E3A8A" uuid="f4567890-1234-5678-9012-345678f78944"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[DESCRIPCIÓN]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="280" y="8" width="40" height="15" forecolor="#1E3A8A" uuid="a5678901-2345-6789-0123-456789a89055"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[CANT.]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="325" y="8" width="70" height="15" forecolor="#1E3A8A" uuid="b6789012-3456-7890-1234-567890b90166"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[PRECIO]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="400" y="8" width="70" height="15" forecolor="#1E3A8A" uuid="c7890123-4567-8901-2345-678901c01277"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[SUBTOTAL]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="475" y="8" width="75" height="15" forecolor="#1E3A8A" uuid="d8901234-5678-9012-3456-789012d12388"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[TOTAL]]></text>
+			</staticText>
+			<line>
+				<reportElement x="0" y="30" width="555" height="1" forecolor="#E5E7EB" uuid="e9012345-6789-0123-4567-890123e23499"/>
+				<graphicElement>
+					<pen lineWidth="1.0"/>
+				</graphicElement>
+			</line>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="25" splitType="Stretch">
+			<rectangle>
+				<reportElement x="0" y="0" width="555" height="22" forecolor="#FFFFFF" backcolor="#F9FAFB" uuid="f0123456-7890-1234-5678-901234f34500">
+					<printWhenExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineWidth="0.0"/>
+				</graphicElement>
+			</rectangle>
+			<textField>
+				<reportElement x="5" y="3" width="30" height="16" forecolor="#6B7280" uuid="a1234567-8901-2345-6789-012345a45611"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{numeroLinea}]]></textFieldExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement x="40" y="3" width="60" height="16" forecolor="#374151" uuid="b2345678-9012-3456-7890-123456b56722"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{codigo}]]></textFieldExpression>
+			</textField>
+			<textField textAdjust="StretchHeight">
+				<reportElement x="105" y="3" width="170" height="16" forecolor="#111827" uuid="c3456789-0123-4567-8901-234567c67833"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{descripcion}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="280" y="3" width="40" height="16" forecolor="#374151" uuid="d4567890-1234-5678-9012-345678d78944"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.00">
+				<reportElement x="325" y="3" width="70" height="16" forecolor="#374151" uuid="e5678901-2345-6789-0123-456789e89055"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{precioUnitario}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.00">
+				<reportElement x="400" y="3" width="70" height="16" forecolor="#374151" uuid="f6789012-3456-7890-1234-567890f90166"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{subtotal}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.00">
+				<reportElement x="475" y="3" width="75" height="16" forecolor="#111827" uuid="a7890123-4567-8901-2345-678901a01277"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{montoTotalLinea}]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement positionType="Float" x="0" y="22" width="555" height="1" forecolor="#F3F4F6" uuid="b8901234-5678-9012-3456-789012b12388"/>
+				<graphicElement>
+					<pen lineWidth="0.5"/>
+				</graphicElement>
+			</line>
+		</band>
+	</detail>
+	<columnFooter>
+		<band height="5">
+			<line>
+				<reportElement x="0" y="2" width="555" height="1" forecolor="#E5E7EB" uuid="c9012345-6789-0123-4567-890123c23499"/>
+				<graphicElement>
+					<pen lineWidth="1.0"/>
+				</graphicElement>
+			</line>
+		</band>
+	</columnFooter>
+</jasperReport>

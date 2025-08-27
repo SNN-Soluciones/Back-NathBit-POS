@@ -8,6 +8,7 @@ import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jasperreports.engine.JasperReport;
@@ -84,10 +85,12 @@ public class FacturaPdfMapperService {
     cargarLogoEmpresa(params,
         empresaService.buscarPorId(factura.getSucursal().getEmpresa().getId()));
 
-    agregarSubreports(params);
-
+    // Configurar parámetros específicos según formato
     if (esTicket) {
       agregarParametrosTicket(params, factura);
+    } else {
+      // Agregar parámetros para formato carta
+      agregarParametrosCarta(params, factura);
     }
 
     return params;
@@ -755,12 +758,13 @@ public class FacturaPdfMapperService {
    * Agrega los datasources para los subreportes
    */
   private void agregarDataSourcesSubreportes(Map<String, Object> parametros, Factura factura) {
+    AtomicInteger numeroLinea = new AtomicInteger(1);
     // DataSource de detalles (siempre debe existir)
     List<Map<String, String>> detallesList = factura.getDetalles().stream()
         .sorted(Comparator.comparing(FacturaDetalle::getNumeroLinea))
         .map(detalle -> {
           Map<String, String> item = new HashMap<>();
-          item.put("numeroLinea", detalle.getNumeroLinea().toString());
+          item.put("numeroLinea", String.valueOf(numeroLinea.get()));
           item.put("codigo", detalle.getProducto().getCodigoInterno());
           item.put("descripcion", detalle.getDetalle() != null ?
               detalle.getDetalle() : detalle.getProducto().getNombre());
@@ -772,6 +776,7 @@ public class FacturaPdfMapperService {
           item.put("subtotal", DECIMAL_FORMAT.format(detalle.getSubtotal()));
           item.put("montoImpuesto", DECIMAL_FORMAT.format(detalle.getMontoImpuesto()));
           item.put("montoTotalLinea", DECIMAL_FORMAT.format(detalle.getMontoTotalLinea()));
+          numeroLinea.getAndIncrement();
           return item;
         })
         .collect(Collectors.toList());
@@ -885,6 +890,49 @@ public class FacturaPdfMapperService {
         pdfGeneratorService.getCompiledReport(
             "exoneraciones_80mm")); // CAMBIAR el nombre aquí también
 
+    agregarDataSourcesSubreportes(parametros, factura);
+  }
+
+  private void agregarParametrosCarta(Map<String, Object> parametros, Factura factura) {
+    // Agregar número interno
+    parametros.put("numero_interno", factura.getId().toString());
+
+    // Agregar nombre comercial si existe
+    Empresa empresa = factura.getSucursal().getEmpresa();
+    if (empresa.getNombreComercial() != null && !empresa.getNombreComercial().isEmpty()) {
+      parametros.put("emisor_nombre_comercial", empresa.getNombreComercial());
+    }
+
+    // Plazo crédito (días)
+    if (factura.getPlazoCredito() != null) {
+      parametros.put("plazo_credito", factura.getPlazoCredito() + " días");
+    }
+
+    // Atendido por
+    Usuario cajero = factura.getCajero();
+    if (cajero != null) {
+      parametros.put("atendido_por", cajero.getNombre() + " " + cajero.getApellidos());
+    }
+
+    // QR Data (para mostrar debajo del código QR)
+    if (parametros.containsKey("clave")) {
+      parametros.put("qr_data", parametros.get("clave").toString());
+    }
+
+    // Flag de exoneraciones
+    boolean tieneExoneraciones = factura.getDetalles().stream()
+        .anyMatch(detalle -> detalle.getImpuestos().get(0).getTieneExoneracion() != null);
+    parametros.put("tiene_exoneraciones", tieneExoneraciones);
+
+    // IMPORTANTE: Subreportes compilados para formato CARTA
+    parametros.put("subreport_detalles",
+        pdfGeneratorService.getCompiledReport("detalle_factura"));  // SIN _80mm
+    parametros.put("subreport_otros_cargos",
+        pdfGeneratorService.getCompiledReport("otros_cargos"));    // SIN _80mm
+    parametros.put("subreport_exoneraciones",
+        pdfGeneratorService.getCompiledReport("subreport_exoneraciones")); // SIN _80mm
+
+    // Agregar los data sources (igual que ticket)
     agregarDataSourcesSubreportes(parametros, factura);
   }
 }

@@ -1,5 +1,8 @@
 package com.snnsoluciones.backnathbitpos.service.pdf;
 
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
+import com.snnsoluciones.backnathbitpos.entity.Factura;
+import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import net.sf.jasperreports.engine.*;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import org.springframework.stereotype.Service;
@@ -25,10 +28,13 @@ public class PdfGeneratorService {
         // Lista actualizada de reportes a precompilar
         String[] reportes = {
             "factura_electronica",
-            "factura_electronica_80mm",
-            "detalle_factura_80mm",           // NUEVO
-            "otros_cargos_80mm",              // NUEVO
+            "detalle_factura",
+            "otros_cargos",
             "subreport_exoneraciones",
+
+            "factura_electronica_80mm",
+            "detalle_factura_80mm",
+            "otros_cargos_80mm",
             "exoneraciones_80mm"
         };
 

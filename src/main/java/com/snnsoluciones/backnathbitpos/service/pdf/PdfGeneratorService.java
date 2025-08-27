@@ -42,6 +42,7 @@ public class PdfGeneratorService {
         log.info("📊 Reportes en cache: {}", reportCache.size());
     }
 
+
     private void compilarYCachear(String nombreReporte) throws JRException {
         String rutaJrxml = "/jasper/" + nombreReporte + ".jrxml";
         InputStream jrxmlStream = getClass().getResourceAsStream(rutaJrxml);
@@ -68,9 +69,15 @@ public class PdfGeneratorService {
                 jasperReport = reportCache.get(nombreReporte);
             }
 
-            // Crear datasource con los datos
-            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(datos);
-            // Llenar el reporte
+            // Crear datasource
+            JRDataSource dataSource;
+            if (datos != null && !datos.isEmpty()) {
+                dataSource = new JRBeanCollectionDataSource(datos);
+            } else {
+                dataSource = new JREmptyDataSource();
+            }
+
+            // Llenar reporte
             JasperPrint jasperPrint = JasperFillManager.fillReport(
                 jasperReport,
                 parametros,
@@ -81,9 +88,29 @@ public class PdfGeneratorService {
             return JasperExportManager.exportReportToPdf(jasperPrint);
 
         } catch (Exception e) {
-            log.error("Error generando PDF: {}", e.getMessage(), e);
+            log.error("Error generando PDF: {}", e.getMessage());
             throw new RuntimeException("Error al generar PDF: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * @param nombreReporte Nombre del reporte sin extensión
+     * @return JasperReport compilado o null si no existe
+     */
+    public JasperReport getCompiledReport(String nombreReporte) {
+        JasperReport report = reportCache.get(nombreReporte);
+
+        if (report == null) {
+            log.warn("Reporte {} no encontrado en cache, intentando compilar...", nombreReporte);
+            try {
+                compilarYCachear(nombreReporte);
+                report = reportCache.get(nombreReporte);
+            } catch (Exception e) {
+                log.error("Error compilando reporte {}: {}", nombreReporte, e.getMessage());
+            }
+        }
+
+        return report;
     }
 
     // Método para verificar el estado del cache

@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jasperreports.engine.JasperReport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class FacturaPdfMapperService {
 
   private final FacturaRepository facturaRepository;
+  private final PdfGeneratorService pdfGeneratorService;
   private final StorageService storageService;
   private final EmpresaService empresaService;
   private final Generators generators;
@@ -77,6 +79,8 @@ public class FacturaPdfMapperService {
 
     // Logo de la empresa (desde S3)
     cargarLogoEmpresa(params, empresaService.buscarPorId(factura.getSucursal().getEmpresa().getId()));
+
+    agregarSubreports(params);
 
     return params;
   }
@@ -681,5 +685,22 @@ public class FacturaPdfMapperService {
     if (desc.contains("TERCER"))            return MedioPago.RECAUDADO_TERCEROS;
 
     return MedioPago.OTROS;
+  }
+
+  private void agregarSubreports(Map<String, Object> params) {
+    try {
+      // Obtener el subreport compilado del cache
+      JasperReport subreportExoneraciones = pdfGeneratorService.getCompiledReport("subreport_exoneraciones");
+
+      if (subreportExoneraciones != null) {
+        params.put("subreport_exoneraciones", subreportExoneraciones);
+        log.debug("Subreport de exoneraciones agregado correctamente");
+      } else {
+        log.warn("No se encontró el subreport de exoneraciones compilado");
+      }
+
+    } catch (Exception e) {
+      log.error("Error agregando subreports: {}", e.getMessage());
+    }
   }
 }

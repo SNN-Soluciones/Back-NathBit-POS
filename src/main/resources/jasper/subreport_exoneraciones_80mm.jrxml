@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports
+              http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+  name="subreport_exoneraciones_80mm"
+  pageWidth="206"
+  pageHeight="60"
+  columnWidth="206"
+  leftMargin="0"
+  rightMargin="0"
+  topMargin="0"
+  bottomMargin="0">
+
+  <property name="com.jaspersoft.studio.unit.pageWidth" value="mm"/>
+  <property name="com.jaspersoft.studio.unit.width" value="mm"/>
+
+  <field name="tipo" class="java.lang.String"/>
+  <field name="numero_documento" class="java.lang.String"/>
+  <field name="institucion" class="java.lang.String"/>
+  <field name="fecha_emision" class="java.lang.String"/>
+  <field name="monto_exonerado" class="java.lang.String"/>
+  <field name="porcentaje" class="java.lang.String"/>
+
+  <title>
+    <band height="15">
+      <line>
+        <reportElement x="0" y="0" width="206" height="1"/>
+        <graphicElement>
+          <pen lineWidth="1.0" lineStyle="Dotted"/>
+        </graphicElement>
+      </line>
+
+      <staticText>
+        <reportElement x="0" y="3" width="206" height="12"/>
+        <textElement textAlignment="Center" verticalAlignment="Middle">
+          <font size="8" isBold="true"/>
+        </textElement>
+        <text><![CDATA[INFORMACIÓN DE EXONERACIÓN]]></text>
+      </staticText>
+    </band>
+  </title>
+
+  <detail>
+    <band height="40">
+      <staticText>
+        <reportElement x="0" y="2" width="30" height="10"/>
+        <textElement>
+          <font size="7" isBold="true"/>
+        </textElement>
+        <text><![CDATA[Tipo:]]></text>
+      </staticText>
+
+      <textField>
+        <reportElement x="30" y="2" width="176" height="10"/>
+        <textElement>
+          <font size="7"/>
+        </textElement>
+        <textFieldExpression><![CDATA[$F{tipo}]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement x="0" y="13" width="30" height="10"/>
+        <textElement>
+          <font size="7" isBold="true"/>
+        </textElement>
+        <text><![CDATA[Doc:]]></text>
+      </staticText>
+
+      <textField>
+        <reportElement x="30" y="13" width="100" height="10"/>
+        <textElement>
+          <font size="7"/>
+        </textElement>
+        <textFieldExpression><![CDATA[$F{numero_documento}]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement x="130" y="13" width="30" height="10"/>
+        <textElement>
+          <font size="7" isBold="true"/>
+        </textElement>
+        <text><![CDATA[Monto:]]></text>
+      </staticText>
+
+      <textField>
+        <reportElement x="160" y="13" width="46" height="10"/>
+        <textElement textAlignment="Right">
+          <font size="7"/>
+        </textElement>
+        <textFieldExpression><![CDATA[$F{monto_exonerado}]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement x="0" y="24" width="35" height="10"/>
+        <textElement>
+          <font size="7" isBold="true"/>
+        </textElement>
+        <text><![CDATA[Institución:]]></text>
+      </staticText>
+
+      <textField>
+        <reportElement x="35" y="24" width="171" height="10"/>
+        <textElement>
+          <font size="7"/>
+        </textElement>
+        <textFieldExpression><![CDATA[$F{institucion}]]></textFieldExpression>
+      </textField>
+
+      <line>
+        <reportElement x="0" y="37" width="206" height="1"/>
+        <graphicElement>
+          <pen lineWidth="1.0" lineStyle="Dotted"/>
+        </graphicElement>
+      </line>
+    </band>
+  </detail>
+</jasperReport>

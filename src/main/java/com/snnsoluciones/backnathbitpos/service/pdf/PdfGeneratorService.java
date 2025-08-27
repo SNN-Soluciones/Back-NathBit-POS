@@ -26,7 +26,8 @@ public class PdfGeneratorService {
         String[] reportes = {
             "factura_electronica",
             "factura_electronica_80mm",
-            "subreport_exoneraciones"
+            "subreport_exoneraciones",
+            "subreport_exoneraciones_80mm"
         };
 
         for (String reporte : reportes) {

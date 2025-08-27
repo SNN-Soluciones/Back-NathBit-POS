@@ -689,6 +689,7 @@ public class FacturaPdfMapperService {
 
   private void agregarSubreports(Map<String, Object> params) {
     try {
+      String subreportName = "subreport_exoneraciones";
       // Obtener el subreport compilado del cache
       JasperReport subreportExoneraciones = pdfGeneratorService.getCompiledReport("subreport_exoneraciones");
 

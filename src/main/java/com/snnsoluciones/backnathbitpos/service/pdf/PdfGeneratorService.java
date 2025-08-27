@@ -29,7 +29,7 @@ public class PdfGeneratorService {
             "detalle_factura_80mm",           // NUEVO
             "otros_cargos_80mm",              // NUEVO
             "subreport_exoneraciones",
-            "subreport_exoneraciones_80mm"
+            "exoneraciones_80mm"
         };
 
         for (String reporte : reportes) {

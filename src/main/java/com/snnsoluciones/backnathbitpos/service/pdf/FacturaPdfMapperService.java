@@ -61,7 +61,9 @@ public class FacturaPdfMapperService {
     mapearDatosDocumento(params, factura);
 
     // Mapear líneas de detalle
-    mapearDetalles(params, factura, esTicket);
+    if (!esTicket) {
+      mapearDetalles(params, factura, false);
+    }
 
     // Mapear totales
     mapearTotales(params, factura);
@@ -79,7 +81,8 @@ public class FacturaPdfMapperService {
     mapearInformacionAdicional(params, factura);
 
     // Logo de la empresa (desde S3)
-    cargarLogoEmpresa(params, empresaService.buscarPorId(factura.getSucursal().getEmpresa().getId()));
+    cargarLogoEmpresa(params,
+        empresaService.buscarPorId(factura.getSucursal().getEmpresa().getId()));
 
     agregarSubreports(params);
 
@@ -123,13 +126,14 @@ public class FacturaPdfMapperService {
 
     if (cliente != null) {
       String direccion = construirDireccionCompletaCliente(factura.getCliente().getUbicacion());
-      params.put("receptor_nombre", "Cliente: " + cliente.getRazonSocial());
-      params.put("receptor_identificacion", "ID: " + formatearIdentificacion(
-          cliente.getTipoIdentificacion(), cliente.getNumeroIdentificacion()));
-      params.put("receptor_correo",  cliente.getEmails() != null ? "Correo: " + cliente.getEmails() : "");
+      params.put("receptor_nombre", cliente.getRazonSocial());  // SIN "Cliente: "
+      params.put("receptor_identificacion", cliente.getNumeroIdentificacion()); // SIN "ID: "
+      params.put("receptor_correo",
+          cliente.getEmails() != null ? cliente.getEmails() : ""); // SIN "Correo: "
       params.put("receptor_telefono",
-          cliente.getTelefonoNumero() != null ? "Teléfono: " +cliente.getTelefonoNumero() : "");
-      params.put("receptor_direccion", Objects.nonNull(direccion) ? "Dirección: " + direccion : "");
+          cliente.getTelefonoNumero() != null ? cliente.getTelefonoNumero()
+              : ""); // SIN "Teléfono: "
+      params.put("receptor_direccion", direccion != null ? direccion : ""); // SIN "Dirección: "
     } else {
       // Cliente genérico
       params.put("receptor_nombre", "");
@@ -206,7 +210,7 @@ public class FacturaPdfMapperService {
     List<Map<String, Object>> detallesMediosPago = new ArrayList<>();
     for (FacturaMedioPago mp : mediosPago) {
       Map<String, Object> row = new HashMap<>();
-      row.put("tipo",  labelMedioPago(mp));
+      row.put("tipo", labelMedioPago(mp));
       row.put("monto", formatearMoneda(mp.getMonto()));
       detallesMediosPago.add(row);
     }
@@ -649,49 +653,85 @@ public class FacturaPdfMapperService {
   // --- Helpers de mapeo ---
 
   private String labelMedioPago(FacturaMedioPago mp) {
-    if (mp == null || mp.getMedioPago() == null) return "Efectivo";
+    if (mp == null || mp.getMedioPago() == null) {
+      return "Efectivo";
+    }
 
     MedioPago medio = mp.getMedioPago(); // ¡Usa el enum, no la descripción!
     switch (medio) {
-      case EFECTIVO:             return "Efectivo";
-      case TARJETA:              return "Tarjeta";
-      case CHEQUE:               return "Cheque";
-      case TRANSFERENCIA:        return "Transferencia / Depósito";
-      case RECAUDADO_TERCEROS:   return "Recaudado por terceros";
-      case SINPE_MOVIL:          return "SINPE Móvil";
-      case PLATAFORMA_DIGITAL:   return "Plataforma Digital";
+      case EFECTIVO:
+        return "Efectivo";
+      case TARJETA:
+        return "Tarjeta";
+      case CHEQUE:
+        return "Cheque";
+      case TRANSFERENCIA:
+        return "Transferencia / Depósito";
+      case RECAUDADO_TERCEROS:
+        return "Recaudado por terceros";
+      case SINPE_MOVIL:
+        return "SINPE Móvil";
+      case PLATAFORMA_DIGITAL:
+        return "Plataforma Digital";
       case OTROS:
-      default:                   return "Otros";
+      default:
+        return "Otros";
     }
   }
 
-  /** Por si algún día te llega algo “legacy” como texto: nombre, código o descripción */
+  /**
+   * Por si algún día te llega algo “legacy” como texto: nombre, código o descripción
+   */
   private MedioPago normalizarMedioPago(Object raw) {
-    if (raw == null) return null;
-    if (raw instanceof MedioPago) return (MedioPago) raw;
+    if (raw == null) {
+      return null;
+    }
+    if (raw instanceof MedioPago) {
+      return (MedioPago) raw;
+    }
 
     String s = raw.toString().trim();
 
     // ¿Viene como código "06", "02"...?
     if (s.matches("\\d{2}")) {
-      try { return MedioPago.fromCodigo(s); } catch (Exception ignored) {}
+      try {
+        return MedioPago.fromCodigo(s);
+      } catch (Exception ignored) {
+      }
     }
 
     // ¿Viene como nombre del enum?
     String enumLike = s.toUpperCase().replace(' ', '_');
-    try { return MedioPago.valueOf(enumLike); } catch (Exception ignored) {}
+    try {
+      return MedioPago.valueOf(enumLike);
+    } catch (Exception ignored) {
+    }
 
     // ¿Viene como descripción “humana”? Normalizamos acentos y variantes comunes:
     String desc = s.toUpperCase()
-        .replace("Á","A").replace("É","E").replace("Í","I").replace("Ó","O").replace("Ú","U");
+        .replace("Á", "A").replace("É", "E").replace("Í", "I").replace("Ó", "O").replace("Ú", "U");
 
-    if (desc.contains("SINPE"))             return MedioPago.SINPE_MOVIL;
-    if (desc.contains("PLATAFORMA DIGITAL"))return MedioPago.PLATAFORMA_DIGITAL;
-    if (desc.contains("EFECT"))             return MedioPago.EFECTIVO;
-    if (desc.contains("TARJ"))              return MedioPago.TARJETA;
-    if (desc.contains("CHEQ"))              return MedioPago.CHEQUE;
-    if (desc.contains("TRANS") || desc.contains("DEPOS")) return MedioPago.TRANSFERENCIA;
-    if (desc.contains("TERCER"))            return MedioPago.RECAUDADO_TERCEROS;
+    if (desc.contains("SINPE")) {
+      return MedioPago.SINPE_MOVIL;
+    }
+    if (desc.contains("PLATAFORMA DIGITAL")) {
+      return MedioPago.PLATAFORMA_DIGITAL;
+    }
+    if (desc.contains("EFECT")) {
+      return MedioPago.EFECTIVO;
+    }
+    if (desc.contains("TARJ")) {
+      return MedioPago.TARJETA;
+    }
+    if (desc.contains("CHEQ")) {
+      return MedioPago.CHEQUE;
+    }
+    if (desc.contains("TRANS") || desc.contains("DEPOS")) {
+      return MedioPago.TRANSFERENCIA;
+    }
+    if (desc.contains("TERCER")) {
+      return MedioPago.RECAUDADO_TERCEROS;
+    }
 
     return MedioPago.OTROS;
   }
@@ -795,9 +835,18 @@ public class FacturaPdfMapperService {
     parametros.put("transferencia", DECIMAL_FORMAT.format(transferencia));
 
     // Calcular vuelto
-    BigDecimal totalPagado = efectivo.add(tarjeta).add(cheque).add(transferencia);
-    BigDecimal vuelto = totalPagado.subtract(factura.getTotalComprobante());
-    parametros.put("su_vuelto", DECIMAL_FORMAT.format(vuelto.max(BigDecimal.ZERO)));
+    BigDecimal vuelto = BigDecimal.ZERO;
+    if (efectivo.compareTo(BigDecimal.ZERO) > 0) {
+      // Solo el efectivo genera vuelto, no la suma de todos los pagos
+      BigDecimal totalFactura = factura.getTotalComprobante();
+      BigDecimal otrosPagos = tarjeta.add(cheque).add(transferencia);
+      BigDecimal faltanteDespuesOtrosPagos = totalFactura.subtract(otrosPagos);
+
+      if (efectivo.compareTo(faltanteDespuesOtrosPagos) > 0) {
+        vuelto = efectivo.subtract(faltanteDespuesOtrosPagos);
+      }
+    }
+    parametros.put("su_vuelto", DECIMAL_FORMAT.format(vuelto));
   }
 
   /**
@@ -831,8 +880,10 @@ public class FacturaPdfMapperService {
         pdfGeneratorService.getCompiledReport("detalle_factura_80mm"));
     parametros.put("subreport_otros_cargos",
         pdfGeneratorService.getCompiledReport("otros_cargos_80mm"));
-    parametros.put("exoneraciones_80mm",  // CAMBIAR de "subreport_exoneraciones" a "exoneraciones_80mm"
-        pdfGeneratorService.getCompiledReport("exoneraciones_80mm")); // CAMBIAR el nombre aquí también
+    parametros.put("exoneraciones_80mm",
+        // CAMBIAR de "subreport_exoneraciones" a "exoneraciones_80mm"
+        pdfGeneratorService.getCompiledReport(
+            "exoneraciones_80mm")); // CAMBIAR el nombre aquí también
 
     agregarDataSourcesSubreportes(parametros, factura);
   }

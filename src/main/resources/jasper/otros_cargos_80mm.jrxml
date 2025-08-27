@@ -61,7 +61,7 @@
         <textElement textAlignment="Right">
           <font fontName="DejaVu Sans" size="8"/>
         </textElement>
-        <textFieldExpression><![CDATA[Double.valueOf($F{montoCargo})]]></textFieldExpression>
+        <textFieldExpression><![CDATA[$F{montoCargo}]]></textFieldExpression>
       </textField>
     </band>
   </detail>

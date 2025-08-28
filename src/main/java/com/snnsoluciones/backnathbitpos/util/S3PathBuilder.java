@@ -27,7 +27,12 @@ public class S3PathBuilder {
    * @return Ruta completa en S3
    */
   public String buildXmlPath(Factura factura, TipoArchivoFactura tipoArchivo) {
-    String empresaNombre = normalizeEmpresaName(factura);
+    String empresaNombre = factura.getSucursal().getEmpresa().getNombreComercial();
+    if (empresaNombre == null || empresaNombre.trim().isEmpty()) {
+      empresaNombre = factura.getSucursal().getEmpresa().getNombreRazonSocial();
+    }
+
+    String empresaNormalizada = normalizeCompanyName(empresaNombre);
     String tipoFactura = normalizeTipoDocumento(factura.getTipoDocumento());
 
     LocalDateTime ahora = LocalDateTime.now();
@@ -41,7 +46,7 @@ public class S3PathBuilder {
 
     return String.format("%s/%s/%s/%s/%s/%s",
         S3_PATH_PREFIX,
-        empresaNombre,
+        empresaNormalizada,
         tipoFactura,
         year,
         month,
@@ -53,7 +58,12 @@ public class S3PathBuilder {
    * Genera la ruta para un PDF
    */
   public String buildPdfPath(Factura factura) {
-    String empresaNombre = normalizeEmpresaName(factura);
+    String empresaNombre = factura.getSucursal().getEmpresa().getNombreComercial();
+    if (empresaNombre == null || empresaNombre.trim().isEmpty()) {
+      empresaNombre = factura.getSucursal().getEmpresa().getNombreRazonSocial();
+    }
+
+    String empresaNormalizada = normalizeCompanyName(empresaNombre);
     String tipoFactura = normalizeTipoDocumento(factura.getTipoDocumento());
 
     LocalDateTime ahora = LocalDateTime.now();
@@ -64,7 +74,7 @@ public class S3PathBuilder {
 
     return String.format("%s/%s/%s/%s/%s/PDF/%s",
         S3_PATH_PREFIX,
-        empresaNombre,
+        empresaNormalizada,
         tipoFactura,
         year,
         month,
@@ -73,28 +83,9 @@ public class S3PathBuilder {
   }
 
   /**
-   * Normaliza el nombre de la empresa para usar en rutas - Convierte a mayúsculas - Reemplaza
-   * espacios por guiones - Elimina caracteres especiales
-   */
-  private String normalizeEmpresaName(Factura factura) {
-    String nombre = factura.getSucursal().getEmpresa().getNombreComercial();
-
-    // Si no hay nombre comercial, usar razón social
-    if (nombre == null || nombre.trim().isEmpty()) {
-      nombre = factura.getSucursal().getEmpresa().getNombreRazonSocial();
-    }
-
-    return nombre
-        .toUpperCase()
-        .replaceAll("[^A-Z0-9\\s]", "") // Eliminar caracteres especiales
-        .trim()
-        .replaceAll("\\s+", "_"); // Espacios a guiones
-  }
-
-  /**
    * Normaliza el tipo de documento
    */
-  private String normalizeTipoDocumento(TipoDocumento tipo) {
+  public String normalizeTipoDocumento(TipoDocumento tipo) {
     return switch (tipo) {
       case FACTURA_ELECTRONICA -> "FACTURA-ELECTRONICA";
       case TIQUETE_ELECTRONICO -> "TIQUETE-ELECTRONICO";
@@ -149,6 +140,7 @@ public class S3PathBuilder {
         .toUpperCase()
         .replaceAll("[^A-Z0-9\\s]", "") // Eliminar caracteres especiales
         .trim()
-        .replaceAll("\\s+", "_"); // CAMBIO: Espacios a guiones bajos en vez de guiones
+        .replaceAll("\\s+", "_"); // Espacios a guiones bajos
   }
+
 }

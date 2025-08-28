@@ -14,8 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 public interface EmpresaService {
 
-    // Métodos existentes
-    Empresa crear(Empresa empresa);
     Empresa actualizar(Long id, Empresa empresa);
     Empresa buscarPorId(Long id);
     List<Empresa> listarTodas();

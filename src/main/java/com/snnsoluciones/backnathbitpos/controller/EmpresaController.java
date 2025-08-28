@@ -6,7 +6,6 @@ import com.snnsoluciones.backnathbitpos.dto.common.PageResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaRequest;
 import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
-import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;

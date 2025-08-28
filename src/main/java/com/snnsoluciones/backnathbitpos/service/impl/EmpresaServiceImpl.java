@@ -3,17 +3,16 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 import com.snnsoluciones.backnathbitpos.dto.empresa.CertificadoResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.UrlCertificadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
-import com.snnsoluciones.backnathbitpos.entity.EmpresaActividad;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaConfigHacienda;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
-import com.snnsoluciones.backnathbitpos.repository.EmpresaActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaConfigHaciendaRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.service.CertificadoService;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
+import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -28,7 +27,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -41,12 +39,9 @@ public class EmpresaServiceImpl implements EmpresaService {
     private final EmpresaConfigHaciendaRepository configHaciendaRepository;
     private final UsuarioServiceImpl usuarioService;
     private final UsuarioEmpresaService usuarioEmpresaRepository;
-
-    @Autowired
-    private CertificadoService certificadoService;
-
-    @Autowired
-    private StorageService storageService;
+    private final S3PathBuilder s3PathBuilder;
+    private final CertificadoService certificadoService;
+    private final StorageService storageService;
 
     @Value("${app.certificados.presigned-url-duration-minutes:15}")
     private Integer presignedUrlDurationMinutes;
@@ -62,11 +57,6 @@ public class EmpresaServiceImpl implements EmpresaService {
 
     @Value("${storage.spaces.bucket}")
     private String bucketName;
-
-    @Override
-    public Empresa crear(Empresa empresa) {
-        return empresaRepository.save(empresa);
-    }
 
     @Override
     public Empresa actualizar(Long id, Empresa empresa) {
@@ -247,28 +237,43 @@ public class EmpresaServiceImpl implements EmpresaService {
     @Override
     @Transactional
     public String subirLogo(Long empresaId, MultipartFile logo) {
-        Empresa empresa = buscarPorId(empresaId);
-        if (empresa == null) {
-            throw  new ResourceNotFoundException("Empresa no encontrada");
-        }
-
         try {
+            // Validaciones
+            Empresa empresa = buscarPorId(empresaId);
+            if (empresa == null) {
+                throw new ResourceNotFoundException("Empresa no encontrada");
+            }
+
+            if (logo.isEmpty()) {
+                throw new IllegalArgumentException("Archivo de logo vacío");
+            }
+
+            String contentType = logo.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw new IllegalArgumentException("El archivo debe ser una imagen");
+            }
+
+            // Tamaño máximo 5MB
+            if (logo.getSize() > 5 * 1024 * 1024) {
+                throw new IllegalArgumentException("El logo no puede superar 5MB");
+            }
+
             // Eliminar logo anterior si existe
             if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().contains("defaults")) {
-                // Extraer key del URL anterior
-                String oldKey = extraerKeyDeUrl(empresa.getLogoUrl());
-                if (oldKey != null) {
-                    storageService.eliminarArchivo(oldKey);
+                String keyAnterior = extraerKeyDeUrl(empresa.getLogoUrl());
+                if (keyAnterior != null) {
+                    storageService.eliminarArchivo(keyAnterior);
                 }
             }
 
-            // Construir nueva ruta
-            String nombreComercialSanitizado = certificadoService.sanitizarNombreComercial(
-                empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombreRazonSocial()
-            );
+            // Obtener extensión
             String extension = obtenerExtension(logo.getOriginalFilename());
-            String key = String.format("%s/%s/logo/logo.%s",
-                baseFolder, nombreComercialSanitizado, extension);
+
+            // Usar S3PathBuilder para generar la ruta
+            String nombreEmpresa = empresa.getNombreComercial() != null ?
+                empresa.getNombreComercial() : empresa.getNombreRazonSocial();
+
+            String key = s3PathBuilder.buildLogoPath(nombreEmpresa, extension);
 
             // Subir a S3 (público)
             String logoUrl = storageService.subirArchivo(

@@ -101,9 +101,8 @@ public class S3PathBuilder {
    * Genera la ruta para el certificado digital de la empresa
    * Formato: NathBit-POS/EMPRESA-NOMBRE/ARCHIVOS/certificado.p12
    */
-  public String buildCertificadoPath(String nombreEmpresa) {
+  public String buildCertificadoPath(String nombreEmpresa, String filename) {
     String empresaNormalizada = normalizeCompanyName(nombreEmpresa);
-    String filename = "Certificado".concat(".p12");
     return String.format("%s/%s/ARCHIVOS/%s", S3_PATH_PREFIX, empresaNormalizada, filename);
   }
 

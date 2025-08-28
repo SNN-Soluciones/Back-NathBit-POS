@@ -12,6 +12,8 @@ import com.snnsoluciones.backnathbitpos.repository.EmpresaActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.service.*;
 import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
 
     log.info("=== INICIANDO CREACIÓN COMPLETA DE EMPRESA ===");
     log.info("Empresa: {} - {}", request.getNombreRazonSocial(), request.getIdentificacion());
+    LocalDate fechaActual = null;
 
     try {
       // 1. Validaciones previas
@@ -86,6 +89,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
         if (fechaVencimiento == null) {
           throw new RuntimeException("No se pudo extraer la fecha de vencimiento del certificado");
         }
+        fechaActual = fechaVencimiento;
 
         if (fechaVencimiento.isBefore(LocalDate.now())) {
           throw new RuntimeException("El certificado está vencido");
@@ -104,7 +108,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
 
         // Si todo está bien, proceder a subir
         log.info("   - Subiendo certificado encriptado...");
-        certificadoUrl = subirCertificado(certificado, nombreBase, pin);
+        certificadoUrl = subirCertificado(certificado, nombreBase);
         log.info("   ✅ Certificado subido correctamente");
       } else {
         log.info("3. Empresa NO requiere Hacienda, omitiendo certificado");
@@ -128,7 +132,8 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
       // 6. Si requiere Hacienda, crear configuración y actividades
       if (request.getRequiereHacienda() && request.getConfigHacienda() != null) {
         log.info("6. Creando configuración de Hacienda...");
-        crearConfiguracionHacienda(empresa, request.getConfigHacienda(), certificadoUrl);
+        crearConfiguracionHacienda(empresa, request.getConfigHacienda(), certificadoUrl,
+            fechaActual);
         log.info("   ✅ Configuración de Hacienda creada");
 
         log.info("7. Creando actividades económicas...");
@@ -266,63 +271,26 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     return s3Key;
   }
 
-
-  private String subirCertificado(MultipartFile certificado, String nombreComercial, String pin) {
+  private String subirCertificado(MultipartFile certificado, String nombreBase) {
     try {
-      // Validar que es un archivo P12
-      String filename = certificado.getOriginalFilename();
+      // Leer bytes del certificado
+      byte[] certificadoBytes = certificado.getBytes();
 
-      if (filename == null || (!filename.toLowerCase().endsWith(".p12") && !filename.toLowerCase()
-          .endsWith(".pfx"))) {
-        throw new RuntimeException("El certificado debe ser un archivo .p12 o .pfx");
-      }
+      // Generar nombre único
+      String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+      String nombreArchivo = String.format("%s_cert_%s", nombreBase, timestamp);
+      String s3Key = s3PathBuilder.buildCertificadoPath(nombreBase, nombreArchivo);
 
-      // Validar tamaño (10MB máximo para certificados)
-      if (certificado.getSize() > 10 * 1024 * 1024) {
-        throw new RuntimeException("El certificado no puede superar 10MB");
-      }
-
-      // Validar el certificado con el PIN usando el método existente
-      log.info("Validando certificado con PIN...");
-      boolean esValido = certificadoService.validarCertificado(certificado, pin);
-
-      if (!esValido) {
-        throw new RuntimeException("Certificado inválido o PIN incorrecto");
-      }
-
-      // Extraer fecha de vencimiento para validación adicional
-      LocalDate fechaVencimiento = certificadoService.extraerFechaVencimiento(certificado, pin);
-      if (fechaVencimiento != null) {
-        log.info("Certificado válido hasta: {}", fechaVencimiento);
-
-        if (fechaVencimiento.isBefore(LocalDate.now())) {
-          throw new RuntimeException("El certificado está vencido");
-        }
-
-        if (fechaVencimiento.isBefore(LocalDate.now().plusDays(30))) {
-          log.warn("⚠️ ADVERTENCIA: El certificado vence pronto: {}", fechaVencimiento);
-        }
-      }
-
-      // USAR S3PathBuilder para generar la ruta correcta
-      String s3Key = s3PathBuilder.buildCertificadoPath(nombreComercial);
-
-      log.info("Subiendo certificado con key: {}", s3Key);
-
-      // Subir a S3 (privado - SIN ENCRIPTAR)
-      String certificadoUrl = storageService.subirArchivo(
-          certificado,
-          s3Key,
+      // Subir archivo encriptado
+      return storageService.subirArchivo(
+          certificadoBytes,
+          s3Key + ".p12",
           "application/x-pkcs12",
-          true  // privado = true
+          true  // Privado
       );
 
-      log.info("Certificado subido exitosamente: {}", certificadoUrl);
-      return certificadoUrl;
-
     } catch (Exception e) {
-      log.error("Error procesando certificado: {}", e.getMessage());
-      throw new RuntimeException("Error al procesar el certificado: " + e.getMessage());
+      throw new RuntimeException("Error al procesar el certificado: " + e.getMessage(), e);
     }
   }
 
@@ -370,7 +338,8 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
   }
 
   private void crearConfiguracionHacienda(Empresa empresa,
-      CrearEmpresaCompletaRequest.ConfigHaciendaData configData, String certificadoUrl) {
+      CrearEmpresaCompletaRequest.ConfigHaciendaData configData, String certificadoUrl,
+      LocalDate fechaVencimiento) {
 
     ConfigHaciendaRequest configRequest = new ConfigHaciendaRequest();
     configRequest.setEmpresaId(empresa.getId());
@@ -381,6 +350,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     configRequest.setPinCertificado(configData.getPinCertificado());
     configRequest.setNotaFactura(configData.getNotaFactura());
     configRequest.setNotaValidezProforma(configData.getNotaValidezProforma());
+    configRequest.setFechaVencimientoCertificado(fechaVencimiento);
     configRequest.setDetalleFactura1(configData.getDetalleFactura1());
     configRequest.setDetalleFactura2(configData.getDetalleFactura2());
 

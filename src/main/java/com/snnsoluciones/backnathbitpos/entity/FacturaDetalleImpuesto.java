@@ -53,10 +53,9 @@ public class FacturaDetalleImpuesto {
      */
     @Column(name = "codigo_tarifa_iva", length = 50)
     private String codigoTarifaIVA;
-    
-    @Column(name = "tarifa", nullable = false, precision = 5, scale = 10)
+
+    @Column(name = "tarifa", nullable = false, precision = 5, scale = 2)
     private BigDecimal tarifa;
-    
     /**
      * Factor para cálculo especial (bienes usados)
      */

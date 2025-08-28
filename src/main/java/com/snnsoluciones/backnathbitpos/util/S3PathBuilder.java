@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.util;
 
 import com.snnsoluciones.backnathbitpos.entity.Factura;
+import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import java.time.LocalDateTime;
 import java.time.format.TextStyle;
@@ -25,7 +26,7 @@ public class S3PathBuilder {
    * @param tipoArchivo Tipo de archivo (sin-firma, firmado, respuesta)
    * @return Ruta completa en S3
    */
-  public String buildXmlPath(Factura factura, TipoArchivoS3 tipoArchivo) {
+  public String buildXmlPath(Factura factura, TipoArchivoFactura tipoArchivo) {
     String empresaNombre = normalizeEmpresaName(factura);
     String tipoFactura = normalizeTipoDocumento(factura.getTipoDocumento());
 
@@ -35,7 +36,7 @@ public class S3PathBuilder {
 
     String filename = String.format("%s-%s.xml",
         factura.getClave(),
-        tipoArchivo.getSuffix()
+        tipoArchivo.name()
     );
 
     return String.format("%s/%s/%s/%s/%s/%s",
@@ -149,24 +150,5 @@ public class S3PathBuilder {
         .replaceAll("[^A-Z0-9\\s]", "") // Eliminar caracteres especiales
         .trim()
         .replaceAll("\\s+", "_"); // CAMBIO: Espacios a guiones bajos en vez de guiones
-  }
-
-  /**
-   * Enum para tipos de archivo
-   */
-  public enum TipoArchivoS3 {
-    SIN_FIRMA("sin-firma"),
-    FIRMADO("firmado"),
-    RESPUESTA("respuesta");
-
-    private final String suffix;
-
-    TipoArchivoS3(String suffix) {
-      this.suffix = suffix;
-    }
-
-    public String getSuffix() {
-      return suffix;
-    }
   }
 }

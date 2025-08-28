@@ -157,7 +157,13 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
 
     // 2) Save to S3
 
-    String s3Key = s3PathBuilder.buildXmlPath(factura, S3PathBuilder.TipoArchivoS3.SIN_FIRMA);
+    String s3Key = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_UNSIGNED);
+    storageService.uploadFile(
+        new ByteArrayInputStream(xmlContent.getBytes(StandardCharsets.UTF_8)),
+        s3Key,
+        "application/xml",
+        xmlContent.getBytes().length
+    );
     log.info("[MainProcessor][{}] XML sin firmar guardado en S3: {}", job.getClave(), s3Key);
 
     // 3) Guardar registro documento
@@ -202,7 +208,7 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
     log.info("[MainProcessor][{}] XML firmado: {} bytes", job.getClave(), signedBytes.length);
 
     // 3) Guardar firmado en S3
-    String signedKey = s3PathBuilder.buildXmlPath(factura, S3PathBuilder.TipoArchivoS3.FIRMADO);
+    String signedKey = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_SIGNED);
 
     log.info("[MainProcessor][{}] XML firmado guardado en S3: {}", job.getClave(), signedKey);
 
@@ -416,7 +422,7 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
     try {
       byte[] xmlBytes = Base64.getDecoder().decode(xmlBase64);
 
-      String s3Key = s3PathBuilder.buildXmlPath(factura, S3PathBuilder.TipoArchivoS3.RESPUESTA);
+      String s3Key = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_RESPUESTA);
 
 
       storageService.uploadFile(

@@ -1,6 +1,5 @@
 package com.snnsoluciones.backnathbitpos.scheduler;
 
-import com.snnsoluciones.backnathbitpos.service.impl.FacturaElectronicaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,7 +14,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FacturaElectronicaJob {
 
-    private final FacturaElectronicaService facturaElectronicaService;
 
     /**
      * Procesa facturas pendientes cada 60 segundos
@@ -27,12 +25,6 @@ public class FacturaElectronicaJob {
     public void procesarFacturasPendientes() {
         log.debug("Iniciando job de procesamiento de facturas electrónicas...");
 
-        try {
-            facturaElectronicaService.procesarFacturasPendientes();
-        } catch (Exception e) {
-            log.error("Error en job de facturas electrónicas: {}", e.getMessage(), e);
-            // El job no debe fallar, continúa en el siguiente ciclo
-        }
     }
 
     /**
@@ -42,18 +34,6 @@ public class FacturaElectronicaJob {
     @Scheduled(cron = "0 0 2 * * *")
     public void limpiezaDiaria() {
         log.info("Ejecutando limpieza diaria de bitácora...");
-
-        try {
-            // Detectar y resetear procesos stuck (más de 1 hora procesando)
-            facturaElectronicaService.resetearProcesosColgados();
-
-            // Limpiar registros antiguos (más de 90 días)
-            int eliminados = facturaElectronicaService.limpiarRegistrosAntiguos(90);
-            log.info("Registros antiguos eliminados: {}", eliminados);
-
-        } catch (Exception e) {
-            log.error("Error en limpieza diaria: {}", e.getMessage());
-        }
     }
 
     /**
@@ -62,15 +42,6 @@ public class FacturaElectronicaJob {
      */
     @Scheduled(fixedRate = 300000)
     public void monitorearSalud() {
-        try {
-            String estadoSalud = facturaElectronicaService.verificarSaludSistema();
-
-            if (!"OK".equals(estadoSalud)) {
-                log.warn("⚠️ ALERTA SISTEMA FACTURACIÓN: Estado = {}", estadoSalud);
-                // Aquí podrías enviar notificación a soporte
-            }
-        } catch (Exception e) {
-            log.error("Error verificando salud: {}", e.getMessage());
-        }
+        log.info("Ejecutando monitoreo de salud del sistema...");
     }
 }

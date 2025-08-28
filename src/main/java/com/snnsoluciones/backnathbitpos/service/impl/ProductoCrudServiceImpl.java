@@ -5,12 +5,14 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.service.CategoriaProductoService;
 import com.snnsoluciones.backnathbitpos.service.ProductoCrudService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImagenService;
 import com.snnsoluciones.backnathbitpos.service.ProductoValidacionService;
 import com.snnsoluciones.backnathbitpos.service.ProductoCategoriaService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImpuestoService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
+import java.util.HashSet;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,10 +33,11 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
   private final EmpresaRepository empresaRepository;
   private final EmpresaCABySRepository empresaCABySRepository;
   private final ProductoValidacionService validacionService;
-  private final ProductoCategoriaService categoriaService;
+  private final CategoriaProductoService categoriaService;
   private final ProductoImpuestoService impuestoService;
   private final ProductoImagenService productoImagenService;
   private final StorageService storageService;
+  private final ProductoCategoriaService productoCategoriaService;
   private final ModelMapper modelMapper;
 
   @Override
@@ -85,19 +88,20 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       producto.setEmpresaCabys(cabys);
     }
 
-
     if (imagen != null && !imagen.isEmpty()) {
       try {
         String urlImagen = productoImagenService.subirImagen(
             empresaId,
-            empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombreRazonSocial(),
+            empresa.getNombreComercial() != null ? empresa.getNombreComercial()
+                : empresa.getNombreRazonSocial(),
             producto.getCodigoInterno(),
             imagen
         );
 
         // Construir la key para S3
         String nombreComercialLimpio = limpiarNombreParaRuta(
-            empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombreRazonSocial()
+            empresa.getNombreComercial() != null ? empresa.getNombreComercial()
+                : empresa.getNombreRazonSocial()
         );
         String extension = obtenerExtension(imagen.getOriginalFilename());
         String imagenKey = String.format("NathBit-POS/%s/productos/%s%s",
@@ -116,14 +120,23 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     log.info("Producto creado con ID: {}", producto.getId());
 
     // Asignar categorías si vienen
-    if (dto.getCategoriaProductoDtos() != null && !dto.getCategoriaProductoDtos().isEmpty()) {
-      Set<Long> categoriaIds = dto.getCategoriaProductoDtos().stream()
-          .map(CategoriaProductoDto::getId)
-          .filter(Objects::nonNull)
-          .collect(Collectors.toSet());
+    if (dto.getCategoriaIds() != null && !dto.getCategoriaIds().isEmpty()) {
+      for (Long categoriaId : dto.getCategoriaIds()) {
+        CategoriaProducto categoria = categoriaService.buscarPorId(categoriaId)
+            .orElseThrow(
+                () -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
 
-      if (!categoriaIds.isEmpty()) {
-        categoriaService.asignarCategorias(producto.getId(), categoriaIds);
+        // Validar que pertenezca a la misma empresa
+        if (!categoria.getEmpresa().getId().equals(empresa.getId())) {
+          throw new BusinessException(
+              "La categoría " + categoriaId + " no pertenece a la misma empresa");
+        }
+
+        if (!categoria.getActivo()) {
+          throw new BusinessException("La categoría " + categoria.getNombre() + " está inactiva");
+        }
+
+        productoCategoriaService.agregarCategoria(producto.getId(), categoria.getId());
       }
     }
 
@@ -141,7 +154,8 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
 
   @Override
   @Transactional
-  public ProductoDto actualizar(Long empresaId, Long productoId, ProductoUpdateDto dto, MultipartFile imagen) {
+  public ProductoDto actualizar(Long empresaId, Long productoId, ProductoUpdateDto dto,
+      MultipartFile imagen) {
     log.debug("Actualizando producto: {} de empresa: {}", productoId, empresaId);
 
     // Validar que existe y pertenece a la empresa
@@ -191,7 +205,6 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       producto.setEmpresaCabys(cabys);
     }
 
-
     if (imagen != null && !imagen.isEmpty()) {
       try {
         // Si había imagen anterior, eliminarla
@@ -207,7 +220,8 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
         String urlImagen = productoImagenService.subirImagen(
             empresaId,
             producto.getEmpresa().getNombreComercial() != null ?
-                producto.getEmpresa().getNombreComercial() : producto.getEmpresa().getNombreRazonSocial(),
+                producto.getEmpresa().getNombreComercial()
+                : producto.getEmpresa().getNombreRazonSocial(),
             producto.getCodigoInterno(),
             imagen
         );
@@ -215,7 +229,8 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
         // Construir la key
         String nombreComercialLimpio = limpiarNombreParaRuta(
             producto.getEmpresa().getNombreComercial() != null ?
-                producto.getEmpresa().getNombreComercial() : producto.getEmpresa().getNombreRazonSocial()
+                producto.getEmpresa().getNombreComercial()
+                : producto.getEmpresa().getNombreRazonSocial()
         );
         String extension = obtenerExtension(imagen.getOriginalFilename());
         String imagenKey = String.format("NathBit-POS/%s/productos/%s%s",
@@ -229,7 +244,6 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
         throw new RuntimeException("Error al actualizar imagen: " + e.getMessage());
       }
     }
-
 
     producto = productoRepository.save(producto);
     log.info("Producto actualizado ID: {}", producto.getId());

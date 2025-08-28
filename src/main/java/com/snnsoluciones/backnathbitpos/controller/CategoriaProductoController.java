@@ -55,7 +55,7 @@ public class CategoriaProductoController {
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
     public ResponseEntity<ApiResponse<CategoriaProductoResponse>> obtenerPorId(@PathVariable Long id) {
         
-        CategoriaProducto categoria = categoriaService.buscarPorId(id);
+        CategoriaProducto categoria = categoriaService.buscarPorId(id).orElse(null);
         if (categoria == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error("Categoría no encontrada"));
@@ -120,7 +120,7 @@ public class CategoriaProductoController {
         log.info("Actualizando categoría ID: {}", id);
         
         try {
-            CategoriaProducto categoriaExistente = categoriaService.buscarPorId(id);
+            CategoriaProducto categoriaExistente = categoriaService.buscarPorId(id).orElse(null);
             if (categoriaExistente == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Categoría no encontrada"));
@@ -166,7 +166,7 @@ public class CategoriaProductoController {
         log.info("Cambiando estado de categoría ID: {}", id);
         
         try {
-            CategoriaProducto categoria = categoriaService.buscarPorId(id);
+            CategoriaProducto categoria = categoriaService.buscarPorId(id).orElse(null);
             if (categoria == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Categoría no encontrada"));
@@ -203,7 +203,7 @@ public class CategoriaProductoController {
         log.info("Eliminando categoría ID: {}", id);
         
         try {
-            CategoriaProducto categoria = categoriaService.buscarPorId(id);
+            CategoriaProducto categoria = categoriaService.buscarPorId(id).orElse(null);
             if (categoria == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Categoría no encontrada"));

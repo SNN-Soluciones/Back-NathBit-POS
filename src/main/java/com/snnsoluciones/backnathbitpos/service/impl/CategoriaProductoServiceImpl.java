@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 import com.snnsoluciones.backnathbitpos.entity.CategoriaProducto;
 import com.snnsoluciones.backnathbitpos.repository.CategoriaProductoRepository;
 import com.snnsoluciones.backnathbitpos.service.CategoriaProductoService;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,8 +21,8 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
     
     @Override
     @Transactional(readOnly = true)
-    public CategoriaProducto buscarPorId(Long id) {
-        return categoriaRepository.findById(id).orElse(null);
+    public Optional<CategoriaProducto> buscarPorId(Long id) {
+        return categoriaRepository.findById(id);
     }
     
     @Override

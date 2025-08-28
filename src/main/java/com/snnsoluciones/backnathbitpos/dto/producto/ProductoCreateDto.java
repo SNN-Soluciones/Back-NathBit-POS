@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import jakarta.validation.constraints.DecimalMin;
@@ -38,6 +39,9 @@ public class ProductoCreateDto {
     private Long empresaCabysId;
 
     private Set<CategoriaProductoDto> categoriaProductoDtos;
+
+    @JsonProperty("categoriaIds")
+    private List<Long> categoriaIds;
 
     @NotNull(message = "Unidad de medida es requerida")
     private UnidadMedida unidadMedida;  // ENUM directamente

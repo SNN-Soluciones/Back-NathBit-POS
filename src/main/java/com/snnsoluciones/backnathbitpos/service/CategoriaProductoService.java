@@ -2,10 +2,11 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.entity.CategoriaProducto;
 import java.util.List;
+import java.util.Optional;
 
 public interface CategoriaProductoService {
     
-    CategoriaProducto buscarPorId(Long id);
+    Optional<CategoriaProducto> buscarPorId(Long id);
     
     List<CategoriaProducto> listarPorEmpresa(Long empresaId, String busqueda);
     

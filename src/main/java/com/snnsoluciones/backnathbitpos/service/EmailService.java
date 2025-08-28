@@ -253,6 +253,41 @@ public class EmailService {
     }
 
     /**
+     * Envía email de confirmación de empresa creada
+     * @param empresa La empresa recién creada
+     * @param emailDestino Email del administrador
+     * @return true si se envió correctamente
+     */
+    public boolean enviarConfirmacionEmpresaCreada(Empresa empresa, String emailDestino) {
+        log.info("Enviando confirmación de empresa creada: {} a {}",
+            empresa.getNombreComercial(), emailDestino);
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            // Configurar mensaje
+            helper.setFrom(emailFrom);
+            helper.setTo(emailDestino);
+            helper.setSubject("🎉 ¡Bienvenido a NathBit POS! - Empresa creada exitosamente");
+
+            // Generar HTML
+            String htmlContent = generarHtmlBienvenida(empresa);
+            helper.setText(htmlContent, true);
+
+            // Enviar
+            mailSender.send(message);
+
+            log.info("Email de bienvenida enviado exitosamente a {}", emailDestino);
+            return true;
+
+        } catch (Exception e) {
+            log.error("Error enviando email de bienvenida: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
      * Determina el tipo de error para decidir si reintentar
      */
     private String determinarTipoError(Exception e) {
@@ -372,5 +407,160 @@ public class EmailService {
             log.error("Error reconstruyendo EmailFacturaDto: {}", e.getMessage(), e);
             throw new RuntimeException("No se pudo reconstruir el DTO para reintento", e);
         }
+    }
+
+    /**
+     * Genera el HTML para el email de bienvenida
+     */
+    private String generarHtmlBienvenida(Empresa empresa) {
+        StringBuilder html = new StringBuilder();
+
+        html.append("<!DOCTYPE html>");
+        html.append("<html>");
+        html.append("<head>");
+        html.append("<meta charset='UTF-8'>");
+        html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+        html.append("<style>");
+        html.append("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; ");
+        html.append("  margin: 0; padding: 0; background-color: #f5f5f5; color: #333; }");
+        html.append(".container { max-width: 600px; margin: 0 auto; background-color: white; }");
+        html.append(".header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); ");
+        html.append("  padding: 40px 30px; text-align: center; color: white; }");
+        html.append(".header h1 { margin: 0; font-size: 28px; font-weight: 300; }");
+        html.append(".emoji { font-size: 48px; margin-bottom: 20px; }");
+        html.append(".content { padding: 40px 30px; }");
+        html.append(".info-card { background: #f8f9fa; padding: 25px; border-radius: 12px; ");
+        html.append("  margin: 25px 0; border-left: 4px solid #667eea; }");
+        html.append(".info-row { margin: 10px 0; display: flex; justify-content: space-between; }");
+        html.append(".info-label { color: #666; font-weight: 500; }");
+        html.append(".info-value { color: #333; font-weight: 600; text-align: right; }");
+        html.append(".features { margin: 30px 0; }");
+        html.append(".feature { padding: 15px 0; border-bottom: 1px solid #eee; }");
+        html.append(".feature:last-child { border-bottom: none; }");
+        html.append(".feature-icon { color: #667eea; margin-right: 10px; }");
+        html.append(".cta { text-align: center; margin: 40px 0; }");
+        html.append(".btn { display: inline-block; padding: 15px 40px; ");
+        html.append("  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); ");
+        html.append("  color: white; text-decoration: none; border-radius: 30px; ");
+        html.append("  font-weight: 600; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3); }");
+        html.append(".footer { background: #f8f9fa; padding: 30px; text-align: center; ");
+        html.append("  font-size: 14px; color: #666; }");
+        html.append("</style>");
+        html.append("</head>");
+        html.append("<body>");
+
+        // Container
+        html.append("<div class='container'>");
+
+        // Header
+        html.append("<div class='header'>");
+        html.append("<div class='emoji'>🎉</div>");
+        html.append("<h1>¡Bienvenido a NathBit POS!</h1>");
+        html.append("<p style='margin-top: 10px; opacity: 0.9;'>Su empresa ha sido creada exitosamente</p>");
+        html.append("</div>");
+
+        // Content
+        html.append("<div class='content'>");
+
+        // Greeting
+        html.append("<h2 style='color: #333; margin-bottom: 20px;'>Hola, ").append(empresa.getNombreComercial()).append(" 👋</h2>");
+        html.append("<p style='line-height: 1.6; color: #555;'>");
+        html.append("Nos complace informarle que su empresa ha sido registrada exitosamente en NathBit POS. ");
+        html.append("Ya puede comenzar a utilizar todas las funcionalidades de nuestro sistema.</p>");
+
+        // Info Card
+        html.append("<div class='info-card'>");
+        html.append("<h3 style='margin-top: 0; color: #333;'>📋 Información de la Empresa</h3>");
+
+        html.append("<div class='info-row'>");
+        html.append("<span class='info-label'>Razón Social:</span>");
+        html.append("<span class='info-value'>").append(empresa.getNombreRazonSocial()).append("</span>");
+        html.append("</div>");
+
+        html.append("<div class='info-row'>");
+        html.append("<span class='info-label'>Nombre Comercial:</span>");
+        html.append("<span class='info-value'>").append(empresa.getNombreComercial()).append("</span>");
+        html.append("</div>");
+
+        html.append("<div class='info-row'>");
+        html.append("<span class='info-label'>Identificación:</span>");
+        html.append("<span class='info-value'>").append(empresa.getIdentificacion()).append("</span>");
+        html.append("</div>");
+
+        html.append("<div class='info-row'>");
+        html.append("<span class='info-label'>Email:</span>");
+        html.append("<span class='info-value'>").append(empresa.getEmail()).append("</span>");
+        html.append("</div>");
+
+        html.append("<div class='info-row'>");
+        html.append("<span class='info-label'>Teléfono:</span>");
+        html.append("<span class='info-value'>").append(empresa.getTelefono()).append("</span>");
+        html.append("</div>");
+
+        if (empresa.getRequiereHacienda()) {
+            html.append("<div class='info-row'>");
+            html.append("<span class='info-label'>Facturación Electrónica:</span>");
+            html.append("<span class='info-value' style='color: #28a745;'>✅ Habilitada</span>");
+            html.append("</div>");
+        }
+        html.append("</div>");
+
+        // Features
+        html.append("<div class='features'>");
+        html.append("<h3 style='color: #333;'>🚀 Próximos Pasos</h3>");
+
+        html.append("<div class='feature'>");
+        html.append("<span class='feature-icon'>✓</span>");
+        html.append("<strong>Crear Sucursales:</strong> Configure las sucursales de su empresa");
+        html.append("</div>");
+
+        html.append("<div class='feature'>");
+        html.append("<span class='feature-icon'>✓</span>");
+        html.append("<strong>Agregar Productos:</strong> Ingrese su catálogo de productos y servicios");
+        html.append("</div>");
+
+        html.append("<div class='feature'>");
+        html.append("<span class='feature-icon'>✓</span>");
+        html.append("<strong>Configurar Usuarios:</strong> Cree cuentas para sus colaboradores");
+        html.append("</div>");
+
+        if (empresa.getRequiereHacienda()) {
+            html.append("<div class='feature'>");
+            html.append("<span class='feature-icon'>✓</span>");
+            html.append("<strong>Probar Facturación:</strong> Realice una factura de prueba");
+            html.append("</div>");
+        }
+        html.append("</div>");
+
+        // CTA
+        html.append("<div class='cta'>");
+        html.append("<a href='#' class='btn'>Ingresar al Sistema</a>");
+        html.append("</div>");
+
+        // Support info
+        html.append("<div style='background: #e8f4fd; padding: 20px; border-radius: 8px; margin-top: 30px;'>");
+        html.append("<h4 style='margin-top: 0; color: #0066cc;'>💡 ¿Necesita ayuda?</h4>");
+        html.append("<p style='margin: 5px 0;'>Estamos aquí para apoyarlo:</p>");
+        html.append("<p style='margin: 5px 0;'>📧 Email: soporte@nathbit.com</p>");
+        html.append("<p style='margin: 5px 0;'>📞 WhatsApp: +506 8888-8888</p>");
+        html.append("<p style='margin: 5px 0;'>📚 <a href='#' style='color: #0066cc;'>Centro de Ayuda</a></p>");
+        html.append("</div>");
+
+        html.append("</div>"); // content
+
+        // Footer
+        html.append("<div class='footer'>");
+        html.append("<p style='margin: 0 0 10px 0;'><strong>NathBit POS</strong></p>");
+        html.append("<p style='margin: 0 0 10px 0;'>Sistema de Punto de Venta en la Nube</p>");
+        html.append("<p style='margin: 0; font-size: 12px; color: #999;'>");
+        html.append("Este es un correo automático, por favor no responder.<br>");
+        html.append("© 2025 NathBit Solutions. Todos los derechos reservados.</p>");
+        html.append("</div>");
+
+        html.append("</div>"); // container
+        html.append("</body>");
+        html.append("</html>");
+
+        return html.toString();
     }
 }

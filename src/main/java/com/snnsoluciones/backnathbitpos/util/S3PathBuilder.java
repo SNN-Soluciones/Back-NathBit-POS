@@ -87,7 +87,7 @@ public class S3PathBuilder {
         .toUpperCase()
         .replaceAll("[^A-Z0-9\\s]", "") // Eliminar caracteres especiales
         .trim()
-        .replaceAll("\\s+", "-"); // Espacios a guiones
+        .replaceAll("\\s+", "_"); // Espacios a guiones
   }
 
   /**
@@ -106,30 +106,34 @@ public class S3PathBuilder {
   }
 
   /**
-   * Genera la ruta para el certificado digital de la empresa Formato:
-   * EMPRESA-NOMBRE/ARCHIVOS/certificado.p12
+   * Genera la ruta para el certificado digital de la empresa
+   * Formato: NathBit-POS/EMPRESA-NOMBRE/ARCHIVOS/certificado.p12
    */
   public String buildCertificadoPath(String nombreEmpresa) {
     String empresaNormalizada = normalizeCompanyName(nombreEmpresa);
-    return String.format("/"+S3_PATH_PREFIX+"/%s/ARCHIVOS/certificado.p12", empresaNormalizada);
+    String filename = "Certificado".concat(".p12");
+    return String.format("%s/%s/ARCHIVOS/%s", S3_PATH_PREFIX, empresaNormalizada, filename);
   }
 
   /**
-   * Genera la ruta para el logo de la empresa Formato: EMPRESA-NOMBRE/ARCHIVOS/logo.{extension}
+   * Genera la ruta para el logo de la empresa
+   * Formato: NathBit-POS/EMPRESA-NOMBRE/ARCHIVOS/logo.{extension}
    */
   public String buildLogoPath(String nombreEmpresa, String extension) {
     String empresaNormalizada = normalizeCompanyName(nombreEmpresa);
-    // Asegurar que la extensión no tenga punto inicial
     String ext = extension.startsWith(".") ? extension.substring(1) : extension;
-    return String.format("%s/ARCHIVOS/logo.%s", empresaNormalizada, ext.toLowerCase());
+    String filename = String.format("logo.%s", ext);
+    return String.format("%s/%s/ARCHIVOS/%s", S3_PATH_PREFIX, empresaNormalizada, filename);
   }
 
+
   /**
-   * Genera la ruta para otros archivos de la empresa Formato: EMPRESA-NOMBRE/ARCHIVOS/{filename}
+   * Genera la ruta para otros archivos de la empresa
+   * Formato: NathBit-POS/EMPRESA-NOMBRE/ARCHIVOS/{filename}
    */
   public String buildArchivoPath(String nombreEmpresa, String filename) {
     String empresaNormalizada = normalizeCompanyName(nombreEmpresa);
-    return String.format("%s/ARCHIVOS/%s", empresaNormalizada, filename);
+    return String.format("%s/%s/ARCHIVOS/%s", S3_PATH_PREFIX, empresaNormalizada, filename);
   }
 
   /**
@@ -144,7 +148,7 @@ public class S3PathBuilder {
         .toUpperCase()
         .replaceAll("[^A-Z0-9\\s]", "") // Eliminar caracteres especiales
         .trim()
-        .replaceAll("\\s+", "-"); // Espacios a guiones
+        .replaceAll("\\s+", "_"); // CAMBIO: Espacios a guiones bajos en vez de guiones
   }
 
   /**

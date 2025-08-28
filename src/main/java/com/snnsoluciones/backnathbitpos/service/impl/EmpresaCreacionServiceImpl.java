@@ -6,12 +6,12 @@ import com.snnsoluciones.backnathbitpos.dto.confighacienda.ConfigHaciendaRequest
 import com.snnsoluciones.backnathbitpos.dto.empresa.CrearEmpresaCompletaRequest;
 import com.snnsoluciones.backnathbitpos.dto.empresa.CrearEmpresaCompletaResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.mappers.EmpresaConfigHaciendaMapper;
 import com.snnsoluciones.backnathbitpos.repository.ActividadEconomicaRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.service.*;
 import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,8 +21,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.security.cert.X509Certificate;
 import java.text.Normalizer;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,14 +29,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
 
+  private final EmpresaConfigHaciendaMapper empresaConfigHaciendaMapper;
+
   private final EmpresaRepository empresaRepository;
-  private final EmpresaService empresaService;
   private final ConfigHaciendaService configHaciendaService;
   private final StorageService storageService;
   private final CertificadoService certificadoService;
   private final ActividadEconomicaRepository actividadEconomicaRepository;
   private final EmpresaActividadRepository empresaActividadRepository;
   private final UbicacionService ubicacionService;
+  private final EmailService emailService;
   private final S3PathBuilder s3PathBuilder;
 
   @Override
@@ -58,7 +58,8 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
 
       // 2. Preparar nombre base para archivos
       String nombreBase = prepararNombreBase(
-          request.getNombreComercial() != null ? request.getNombreComercial() : request.getNombreRazonSocial()
+          request.getNombreComercial() != null ? request.getNombreComercial()
+              : request.getNombreRazonSocial()
       );
       log.info("2. Nombre base para archivos: {}", nombreBase);
 
@@ -136,18 +137,45 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
             request.getConfigHacienda().getActividades().size());
       }
 
-      // 7. Construir respuesta exitosa
+      try {
+        log.info("8. Enviando email de bienvenida...");
+
+        // Determinar email destino (puede ser el email principal o el de notificación)
+        String emailDestino = empresa.getEmailNotificacion() != null ?
+            empresa.getEmailNotificacion() : empresa.getEmail();
+
+        boolean emailEnviado = emailService.enviarConfirmacionEmpresaCreada(
+            empresa,
+            emailDestino
+        );
+
+        if (emailEnviado) {
+          log.info("   ✅ Email de bienvenida enviado a: {}", emailDestino);
+        } else {
+          log.warn(
+              "   ⚠️ No se pudo enviar el email de bienvenida, pero la empresa fue creada correctamente");
+        }
+      } catch (Exception e) {
+        // No fallar la creación por error de email
+        log.error("Error enviando email de bienvenida, pero continuando: {}", e.getMessage());
+      }
+
+// 9. Construir respuesta
+      log.info("=== EMPRESA CREADA EXITOSAMENTE ===");
+
       CrearEmpresaCompletaResponse response = CrearEmpresaCompletaResponse.builder()
           .empresaId(empresa.getId())
-          .nombreRazonSocial(empresa.getNombreRazonSocial())
+          .mensaje("Empresa creada exitosamente")
           .nombreComercial(empresa.getNombreComercial())
           .identificacion(empresa.getIdentificacion())
-          .logoUrl(empresa.getLogoUrl())
           .requiereHacienda(empresa.getRequiereHacienda())
-          .mensaje("Empresa creada exitosamente")
           .build();
 
-      log.info("=== EMPRESA CREADA EXITOSAMENTE ===");
+// Si se creó config de Hacienda, agregar info
+      if (empresa.getRequiereHacienda() && empresa.getConfigHacienda() != null) {
+        response.setConfigHacienda(empresaConfigHaciendaMapper.toDto(empresa.getConfigHacienda()));
+      }
+
       return response;
 
     } catch (RuntimeException e) {
@@ -233,7 +261,9 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     log.info("Subiendo logo con key: {}", s3Key);
 
     // Subir a S3 (público)
-    return storageService.subirArchivo(logo, s3Key, contentType, false);
+    storageService.subirArchivo(logo, s3Key, contentType, false);
+
+    return s3Key;
   }
 
 
@@ -242,7 +272,8 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
       // Validar que es un archivo P12
       String filename = certificado.getOriginalFilename();
 
-      if (filename == null || (!filename.toLowerCase().endsWith(".p12") && !filename.toLowerCase().endsWith(".pfx"))) {
+      if (filename == null || (!filename.toLowerCase().endsWith(".p12") && !filename.toLowerCase()
+          .endsWith(".pfx"))) {
         throw new RuntimeException("El certificado debe ser un archivo .p12 o .pfx");
       }
 
@@ -319,7 +350,8 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
       empresa.setCanton(ubicacionService.buscarCantonPorId(request.getCantonId()).orElse(null));
     }
     if (request.getDistritoId() != null) {
-      empresa.setDistrito(ubicacionService.buscarDistritoPorId(request.getDistritoId()).orElse(null));
+      empresa.setDistrito(
+          ubicacionService.buscarDistritoPorId(request.getDistritoId()).orElse(null));
     }
     if (request.getBarrioId() != null) {
       empresa.setBarrio(ubicacionService.buscarBarrioPorId(request.getBarrioId()).orElse(null));

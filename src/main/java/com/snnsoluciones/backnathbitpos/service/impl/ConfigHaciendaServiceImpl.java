@@ -11,7 +11,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Base64;
 import java.util.Optional;
 
 @Service
@@ -48,28 +47,13 @@ public class ConfigHaciendaServiceImpl implements ConfigHaciendaService {
         // Actualizar campos básicos
         config.setAmbiente(request.getAmbiente());
         config.setTipoAutenticacion(request.getTipoAutenticacion());
-        config.setUsuarioHacienda(request.getUsuarioHacienda());
 
         // Solo actualizar clave si no es el placeholder
-        if (request.getClaveHacienda() != null && !request.getClaveHacienda().equals("********")) {
-            config.setClaveHacienda(passwordEncoder.encode(request.getClaveHacienda()));
-        }
-
-        // Si viene URL del certificado, guardarlo
-        if (request.getUrlCertificadoKey() != null && !request.getUrlCertificadoKey().isEmpty()) {
-            config.setUrlCertificadoKey(request.getUrlCertificadoKey());
-            config.setCertificadoEncriptado(true);
-
-            // Si viene fecha de vencimiento del certificado
-            if (request.getFechaVencimientoCertificado() != null) {
-                config.setFechaVencimientoCertificado(request.getFechaVencimientoCertificado());
-            }
-        }
-
-        // PIN del certificado (si se proporciona)
-        if (request.getPinCertificado() != null && !request.getPinCertificado().isEmpty()) {
-            config.setPinCertificado(passwordEncoder.encode(request.getPinCertificado()));
-        }
+        config.setPinCertificado(request.getPinCertificado());
+        config.setUsuarioHacienda(request.getUsuarioHacienda());
+        config.setClaveHacienda(request.getClaveHacienda());
+        config.setFechaVencimientoCertificado(request.getFechaVencimientoCertificado());
+        config.setUrlCertificadoKey(request.getUrlCertificadoKey());
 
         // Mensajes personalizados
         config.setNotaFactura(request.getNotaFactura());

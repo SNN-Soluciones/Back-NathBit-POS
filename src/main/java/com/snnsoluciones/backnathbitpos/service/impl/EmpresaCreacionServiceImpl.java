@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.repository.ActividadEconomicaRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.service.*;
+import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
   private final ActividadEconomicaRepository actividadEconomicaRepository;
   private final EmpresaActividadRepository empresaActividadRepository;
   private final UbicacionService ubicacionService;
+  private final S3PathBuilder s3PathBuilder;
 
   @Override
   @Transactional
@@ -101,7 +103,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
 
         // Si todo está bien, proceder a subir
         log.info("   - Subiendo certificado encriptado...");
-        certificadoUrl = subirCertificadoEncriptado(certificado, nombreBase);
+        certificadoUrl = subirCertificado(certificado, nombreBase, pin);
         log.info("   ✅ Certificado subido correctamente");
       } else {
         log.info("3. Empresa NO requiere Hacienda, omitiendo certificado");
@@ -206,7 +208,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     return normalizado;
   }
 
-  private String subirLogo(MultipartFile logo, String nombreBase) {
+  private String subirLogo(MultipartFile logo, String nombreComercial) {
     // Validar tipo de archivo
     String contentType = logo.getContentType();
     if (contentType == null || !contentType.startsWith("image/")) {
@@ -218,36 +220,78 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
       throw new RuntimeException("El logo no puede superar 5MB");
     }
 
-    String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-    String nombreArchivo = String.format("%s_logo_%s", nombreBase, timestamp);
-    String carpeta = "NathBit-POS/logos";
+    // Obtener extensión del archivo
+    String filename = logo.getOriginalFilename();
+    String extension = "jpg"; // default
+    if (filename != null && filename.lastIndexOf('.') > 0) {
+      extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+    }
 
-    return storageService.subirArchivo(logo, carpeta, nombreArchivo, false); // Logo público
+    // USAR S3PathBuilder para generar la ruta correcta
+    String s3Key = s3PathBuilder.buildLogoPath(nombreComercial, extension);
+
+    log.info("Subiendo logo con key: {}", s3Key);
+
+    // Subir a S3 (público)
+    return storageService.subirArchivo(logo, s3Key, contentType, false);
   }
 
-  private String subirCertificadoEncriptado(MultipartFile certificado, String nombreBase) {
+
+  private String subirCertificado(MultipartFile certificado, String nombreComercial, String pin) {
     try {
-      // Leer bytes del certificado
-      byte[] certificadoBytes = certificado.getBytes();
+      // Validar que es un archivo P12
+      String filename = certificado.getOriginalFilename();
 
-      // Encriptar
-      byte[] certificadoEncriptado = certificadoService.encriptar(certificadoBytes);
+      if (filename == null || (!filename.toLowerCase().endsWith(".p12") && !filename.toLowerCase().endsWith(".pfx"))) {
+        throw new RuntimeException("El certificado debe ser un archivo .p12 o .pfx");
+      }
 
-      // Generar nombre único
-      String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-      String nombreArchivo = String.format("%s_cert_%s", nombreBase, timestamp);
-      String carpeta = "NathBit-POS/certificados";
+      // Validar tamaño (10MB máximo para certificados)
+      if (certificado.getSize() > 10 * 1024 * 1024) {
+        throw new RuntimeException("El certificado no puede superar 10MB");
+      }
 
-      // Subir archivo encriptado
-      return storageService.subirArchivo(
-          certificadoEncriptado,
-          carpeta + "/" + nombreArchivo + ".p12",
+      // Validar el certificado con el PIN usando el método existente
+      log.info("Validando certificado con PIN...");
+      boolean esValido = certificadoService.validarCertificado(certificado, pin);
+
+      if (!esValido) {
+        throw new RuntimeException("Certificado inválido o PIN incorrecto");
+      }
+
+      // Extraer fecha de vencimiento para validación adicional
+      LocalDate fechaVencimiento = certificadoService.extraerFechaVencimiento(certificado, pin);
+      if (fechaVencimiento != null) {
+        log.info("Certificado válido hasta: {}", fechaVencimiento);
+
+        if (fechaVencimiento.isBefore(LocalDate.now())) {
+          throw new RuntimeException("El certificado está vencido");
+        }
+
+        if (fechaVencimiento.isBefore(LocalDate.now().plusDays(30))) {
+          log.warn("⚠️ ADVERTENCIA: El certificado vence pronto: {}", fechaVencimiento);
+        }
+      }
+
+      // USAR S3PathBuilder para generar la ruta correcta
+      String s3Key = s3PathBuilder.buildCertificadoPath(nombreComercial);
+
+      log.info("Subiendo certificado con key: {}", s3Key);
+
+      // Subir a S3 (privado - SIN ENCRIPTAR)
+      String certificadoUrl = storageService.subirArchivo(
+          certificado,
+          s3Key,
           "application/x-pkcs12",
-          true  // Privado
+          true  // privado = true
       );
 
+      log.info("Certificado subido exitosamente: {}", certificadoUrl);
+      return certificadoUrl;
+
     } catch (Exception e) {
-      throw new RuntimeException("Error al procesar el certificado: " + e.getMessage(), e);
+      log.error("Error procesando certificado: {}", e.getMessage());
+      throw new RuntimeException("Error al procesar el certificado: " + e.getMessage());
     }
   }
 

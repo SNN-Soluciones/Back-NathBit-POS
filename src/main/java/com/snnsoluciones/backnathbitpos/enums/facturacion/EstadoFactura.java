@@ -11,7 +11,8 @@ public enum EstadoFactura {
     ACEPTADA("Aceptada por Hacienda"),
     RECHAZADA("Rechazada por Hacienda"),
     ANULADA("Anulada por el usuario"),
-    ERROR("Error en el procesamiento");
+    ERROR("Error en el procesamiento"),
+    NOTIFICADA("Notificada al cliente"); // <-- NUEVO ESTADO
 
     private final String descripcion;
 

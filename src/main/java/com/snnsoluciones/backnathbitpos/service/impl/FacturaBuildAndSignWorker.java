@@ -1,14 +1,18 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.email.EmailFacturaDto;
+import com.snnsoluciones.backnathbitpos.entity.EmailAuditLog;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.entity.FacturaDocumento;
 import com.snnsoluciones.backnathbitpos.entity.FacturaDocumentoHacienda;
 import com.snnsoluciones.backnathbitpos.entity.FacturaJob;
+import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.PasoFacturacion;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.AmbienteHacienda;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.HaciendaClient;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.TokenService;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.ConsultaEstadoResponse;
@@ -19,9 +23,11 @@ import com.snnsoluciones.backnathbitpos.repository.FacturaDocumentoHaciendaRepos
 import com.snnsoluciones.backnathbitpos.repository.FacturaDocumentoRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.scheduler.FacturaXMLGeneratorService;
+import com.snnsoluciones.backnathbitpos.service.EmailService;
 import com.snnsoluciones.backnathbitpos.service.FacturaAsyncProcessor;
 import com.snnsoluciones.backnathbitpos.service.FacturaJobService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
+import com.snnsoluciones.backnathbitpos.service.pdf.FacturaPdfService;
 import com.snnsoluciones.backnathbitpos.util.FacturaFirmaService;
 import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
 import java.io.ByteArrayInputStream;
@@ -34,6 +40,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,6 +63,8 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
   private final FacturaXMLGeneratorService xmlGenerator;
   private final FacturaFirmaService firmaService;
   private final S3PathBuilder s3PathBuilder;
+  private final EmailService emailService;
+  private final FacturaPdfService pdfService;
 
   @Value("${factura.processor.enabled:true}")
   private boolean processorEnabled;
@@ -65,13 +74,6 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
 
   @Value("${app.ambiente-hacienda:SANDBOX}")
   private String ambienteHda;
-
-  // zona horaria de Costa Rica
-  private static final ZoneId ZONE_CR = ZoneId.of("America/Costa_Rica");
-
-  // formatter que genera 2025-08-25T14:35:00-0600 (nota: Z sin los :)
-  private static final DateTimeFormatter ISO_OFFSET_NO_COLON =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
 
   // ============================
   // PROCESADOR PRINCIPAL - TODOS LOS PASOS
@@ -131,6 +133,8 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
       case FIRMAR_DOCUMENTO -> ejecutarFirmarXml(job, factura);
       case ENVIAR_HACIENDA -> ejecutarEnviarHacienda(job, factura);
       case PROCESAR_RESPUESTA -> ejecutarProcesarRespuesta(job, factura);
+      case GENERAR_PDF -> ejecutarGenerarPDF(job, factura);
+      case ENVIAR_EMAIL -> ejecutarEnviarEmail(job, factura);  // <-- AGREGAR ESTA LÍNEA
       default -> log.warn("[MainProcessor] Paso no manejado: {}", job.getPasoActual());
     }
   }
@@ -437,6 +441,140 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
     }
   }
 
+  /**
+   * PASO 5: GENERAR PDF
+   * Genera el PDF de la factura y lo guarda en S3
+   */
+  private void ejecutarGenerarPDF(FacturaJob job, Factura factura) {
+    log.info("[MainProcessor][{}] GENERAR_PDF - Validando generación", job.getClave());
+
+    try {
+      // Solo validar que se puede generar el PDF
+      byte[] pdfBytes = pdfService.generarFacturaCarta(factura.getClave());
+      log.info("[MainProcessor][{}] PDF generado exitosamente: {} bytes", job.getClave(), pdfBytes.length);
+
+      // No guardar en S3, solo avanzar al siguiente paso
+      jobService.avanzarPaso(job.getId(), PasoFacturacion.ENVIAR_EMAIL);
+      log.info("[MainProcessor][{}] Paso cambiado a ENVIAR_EMAIL", job.getClave());
+
+    } catch (Exception e) {
+      log.error("[MainProcessor][{}] Error validando generación de PDF: {}", job.getClave(), e.getMessage(), e);
+      throw new RuntimeException("Error generando PDF: " + e.getMessage(), e);
+    }
+  }
+
+  private void ejecutarEnviarEmail(FacturaJob job, Factura factura) {
+    log.info("[MainProcessor][{}] ENVIAR_EMAIL", job.getClave());
+
+    try {
+      // 1. Validar si necesita envío de email
+      if (!requiereEmail(factura)) {
+        log.info("[MainProcessor][{}] No requiere email (tipo: {}), completando job",
+            job.getClave(), factura.getTipoDocumento());
+        jobService.marcarCompletado(job.getId());
+        return;
+      }
+
+      // 2. Validar que el cliente tenga email
+      String emailDestino = obtenerEmailCliente(factura);
+      if (emailDestino == null || emailDestino.trim().isEmpty()) {
+        log.error("[MainProcessor][{}] Cliente sin email configurado", job.getClave());
+        throw new IllegalStateException("Cliente sin email configurado para factura electrónica");
+      }
+
+      // 3. Obtener los archivos desde S3
+      log.info("[MainProcessor][{}] Descargando archivos desde S3", job.getClave());
+
+      // PDF
+      byte[] pdfBytes = null;
+      try {
+        // Primero intentar obtener el PDF ya generado
+        Optional<FacturaDocumento> pdfDoc = documentoRepository.findOneByClaveAndTipoArchivo(
+            factura.getClave(), TipoArchivoFactura.PDF_FACTURA);
+
+        if (pdfDoc.isPresent()) {
+          pdfBytes = storageService.downloadFileAsBytes(pdfDoc.get().getS3Key());
+        } else {
+          // Si no existe, generarlo
+          log.info("[MainProcessor][{}] PDF no encontrado, generando...", job.getClave());
+          pdfBytes = pdfService.generarFacturaCarta(factura.getClave());
+        }
+      } catch (Exception e) {
+        log.error("[MainProcessor][{}] Error obteniendo PDF: {}", job.getClave(), e.getMessage());
+        // Continuar sin PDF si falla
+      }
+
+      // XML Firmado
+      byte[] xmlFirmadoBytes = null;
+      Optional<FacturaDocumento> xmlDoc = documentoRepository.findOneByClaveAndTipoArchivo(
+          factura.getClave(), TipoArchivoFactura.XML_SIGNED);
+      if (xmlDoc.isPresent()) {
+        xmlFirmadoBytes = storageService.downloadFileAsBytes(xmlDoc.get().getS3Key());
+      }
+
+      // Respuesta Hacienda
+      byte[] respuestaBytes = null;
+      Optional<FacturaDocumento> respDoc = documentoRepository.findOneByClaveAndTipoArchivo(
+          factura.getClave(), TipoArchivoFactura.PDF_FACTURA);
+      if (respDoc.isPresent()) {
+        respuestaBytes = storageService.downloadFileAsBytes(respDoc.get().getS3Key());
+      }
+
+      // 4. Construir DTO para el email
+      Empresa empresa = factura.getSucursal().getEmpresa();
+      String logoUrl = obtenerLogoUrl(empresa);
+
+      EmailFacturaDto emailDto = EmailFacturaDto.builder()
+          .facturaId(factura.getId())
+          .clave(factura.getClave())
+          .consecutivo(factura.getConsecutivo())
+          .emailDestino(emailDestino)
+          .tipoDocumento(factura.getTipoDocumento().getDescripcion())
+          .nombreComercial(empresa.getNombreComercial())
+          .razonSocial(empresa.getNombreRazonSocial())
+          .cedulaJuridica(empresa.getIdentificacion())
+          .fechaEmision(factura.getFechaEmision())
+          .logoUrl(logoUrl)
+          .pdfBytes(pdfBytes)
+          .xmlFirmadoBytes(xmlFirmadoBytes)
+          .respuestaHaciendaBytes(respuestaBytes)
+          .build();
+
+      // 5. Enviar email
+      log.info("[MainProcessor][{}] Enviando email a: {}", job.getClave(), emailDestino);
+      EmailAuditLog resultado = emailService.enviarFacturaElectronica(emailDto);
+
+      // 6. Evaluar resultado
+      if (resultado.getEstado() == EstadoEmail.ENVIADO) {
+        // Éxito - marcar job como completado
+        log.info("[MainProcessor][{}] Email enviado exitosamente", job.getClave());
+        jobService.marcarCompletado(job.getId());
+
+        // Actualizar estado de factura si es necesario
+        if (factura.getEstado() == EstadoFactura.NOTIFICADA) {
+          factura.setEstado(EstadoFactura.NOTIFICADA);
+          facturaRepository.save(factura);
+        }
+
+      } else if (resultado.getEstado() == EstadoEmail.FALLO_PERMANENTE) {
+        // Error permanente - no reintentar
+        log.error("[MainProcessor][{}] Error permanente enviando email: {}",
+            job.getClave(), resultado.getErrorMensaje());
+        jobService.marcarError(job.getId(), "Email fallo permanente: " + resultado.getErrorMensaje());
+
+      } else {
+        // Error transitorio - aplicar backoff
+        log.warn("[MainProcessor][{}] Error transitorio enviando email, reintentando más tarde", job.getClave());
+        job.incrementarIntentos();
+        jobService.actualizarProximaEjecucion(job.getId(), job.getProximaEjecucion());
+      }
+
+    } catch (Exception e) {
+      log.error("[MainProcessor][{}] Error en paso ENVIAR_EMAIL: {}", job.getClave(), e.getMessage(), e);
+      jobService.marcarError(job.getId(), "Error enviando email: " + e.getMessage());
+    }
+  }
+
   // ====== Métodos de la interfaz que este worker ya no usa ======
   @Override
   public String generarXML(Long facturaId) {
@@ -462,4 +600,52 @@ public class FacturaBuildAndSignWorker implements FacturaAsyncProcessor {
   public void enviarEmail(Long facturaId, String pdfPath, String xmlPath) {
     throw new UnsupportedOperationException("Se maneja en otro scheduler");
   }
+
+  /**
+   * Determina si la factura requiere envío por email
+   */
+  private boolean requiereEmail(Factura factura) {
+    // Solo facturas electrónicas requieren email obligatorio
+    // Tiquetes electrónicos es opcional
+    return factura.getTipoDocumento() == TipoDocumento.FACTURA_ELECTRONICA ||
+        factura.getTipoDocumento() == TipoDocumento.NOTA_CREDITO ||
+        factura.getTipoDocumento() == TipoDocumento.NOTA_DEBITO;
+  }
+
+  /**
+   * Obtiene el email del cliente, puede estar en formato CSV
+   */
+  private String obtenerEmailCliente(Factura factura) {
+    if (factura.getCliente() == null) {
+      return null;
+    }
+
+    String emails = factura.getCliente().getEmails();
+    if (emails == null || emails.trim().isEmpty()) {
+      return null;
+    }
+
+    // Si hay múltiples emails separados por coma, tomar el primero
+    if (emails.contains(",")) {
+      return emails.split(",")[0].trim();
+    }
+
+    return emails.trim();
+  }
+
+  /**
+   * Obtiene la URL del logo de la empresa para el email
+   */
+  private String obtenerLogoUrl(Empresa empresa) {
+    try {
+      if (empresa.getLogoUrl() != null) {
+        // Generar URL presignada para el logo
+        return storageService.generateSignedUrl(empresa.getLogoUrl(), 60); // 1 hora
+      }
+    } catch (Exception e) {
+      log.warn("Error obteniendo URL del logo para empresa {}: {}", empresa.getId(), e.getMessage());
+    }
+    return null; // El email funcionará sin logo
+  }
+
 }

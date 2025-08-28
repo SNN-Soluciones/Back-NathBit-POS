@@ -5,7 +5,6 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
 import com.snnsoluciones.backnathbitpos.repository.*;
-import com.snnsoluciones.backnathbitpos.service.FacturaJobService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import io.hypersistence.utils.common.StringUtils;
@@ -43,7 +42,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final TerminalService terminalService;
   private final SesionCajaRepository sesionCajaRepository;
   private final UsuarioRepository usuarioRepository;
-  private final FacturaJobService facturaJobService;
+  private final FacturaBitacoraRepository bitacoraRepository;
 
   @Override
   @Transactional
@@ -152,8 +151,25 @@ public class FacturaServiceImpl implements FacturaService {
 
     // 11. Si es electrónica, crear job para procesamiento asíncrono
     if (factura.esElectronica() && factura.getClave() != null) {
-      facturaJobService.crearJob(facturaGuardada.getId(), facturaGuardada.getClave());
-      log.info("Job creado para procesar factura: {}", facturaGuardada.getClave());
+      try {
+        // Crear entrada en bitácora
+        FacturaBitacora bitacora = FacturaBitacora.builder()
+            .facturaId(facturaGuardada.getId())
+            .clave(facturaGuardada.getClave())
+            .estado(EstadoBitacora.PENDIENTE)
+            .intentos(0)
+            .build();
+
+        bitacoraRepository.save(bitacora);
+
+        log.info("Bitácora creada para procesar factura electrónica: {} - ID Bitácora: {}",
+            facturaGuardada.getClave(), bitacora.getId());
+
+      } catch (Exception e) {
+        // No fallar la creación de factura por error en bitácora
+        log.error("Error creando bitácora para factura {}: {}",
+            facturaGuardada.getClave(), e.getMessage());
+      }
     }
 
     return facturaGuardada;
@@ -689,14 +705,6 @@ public class FacturaServiceImpl implements FacturaService {
 
     if (!factura.getEstado().puedeReprocesarse()) {
       throw new RuntimeException("La factura no puede ser reenviada en estado: " + factura.getEstado());
-    }
-
-    // Crear nuevo job para reintento
-    if (factura.getClave() != null) {
-      facturaJobService.crearJob(factura.getId(), factura.getClave());
-      factura.setEstado(EstadoFactura.PROCESANDO);
-      facturaRepository.save(factura);
-      log.info("Factura {} marcada para reenvío", factura.getClave());
     }
   }
 

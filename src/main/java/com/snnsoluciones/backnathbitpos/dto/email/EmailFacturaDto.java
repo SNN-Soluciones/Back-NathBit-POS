@@ -33,6 +33,7 @@ public class EmailFacturaDto {
     private String cedulaJuridica;
     private String fechaEmision;
     private String logoUrl;
+    private String asunto;
     
     // Archivos adjuntos
     private byte[] pdfBytes;

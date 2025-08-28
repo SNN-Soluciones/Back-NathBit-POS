@@ -193,9 +193,6 @@ public class Factura {
     @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<FacturaResumenImpuesto> resumenImpuestos = new ArrayList<>();
 
-    @OneToOne(mappedBy = "factura", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    private FacturaDocumentoHacienda documentoHacienda;
-
     // ========== AUDITORÍA ==========
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

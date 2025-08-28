@@ -4,11 +4,9 @@ import com.snnsoluciones.backnathbitpos.dto.email.EmailFacturaDto;
 import com.snnsoluciones.backnathbitpos.entity.EmailAuditLog;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
-import com.snnsoluciones.backnathbitpos.entity.FacturaDocumento;
 import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
 import com.snnsoluciones.backnathbitpos.repository.EmailAuditLogRepository;
-import com.snnsoluciones.backnathbitpos.repository.FacturaDocumentoRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.service.pdf.FacturaPdfService;
 import jakarta.mail.MessagingException;
@@ -37,7 +35,6 @@ public class EmailService {
     private final FacturaRepository facturaRepository;
     private final StorageService storageService;
     private final FacturaPdfService facturaPdfService;
-    private final FacturaDocumentoRepository documentoRepository;
 
     @Value("${spring.mail.username}")
     private String emailFrom;
@@ -353,12 +350,7 @@ public class EmailService {
             // Obtener XML firmado de S3
             byte[] xmlFirmadoBytes = null;
             try {
-                xmlFirmadoBytes = storageService.downloadFileAsBytes(
-                    documentoRepository.findOneByClaveAndTipoArchivo(
-                        factura.getClave(),
-                        TipoArchivoFactura.XML_SIGNED
-                    ).map(FacturaDocumento::getS3Key).orElse(null)
-                );
+                //TODO OBtener xml firmado
             } catch (Exception e) {
                 log.warn("No se pudo obtener XML firmado para reintento: {}", e.getMessage());
             }
@@ -366,12 +358,7 @@ public class EmailService {
             // Obtener respuesta Hacienda de S3
             byte[] respuestaBytes = null;
             try {
-                respuestaBytes = storageService.downloadFileAsBytes(
-                    documentoRepository.findOneByClaveAndTipoArchivo(
-                        factura.getClave(),
-                        TipoArchivoFactura.XML_RESPUESTA
-                    ).map(FacturaDocumento::getS3Key).orElse(null)
-                );
+                //TODO OBtener la respues de hacienda
             } catch (Exception e) {
                 log.warn("No se pudo obtener respuesta Hacienda para reintento: {}", e.getMessage());
             }

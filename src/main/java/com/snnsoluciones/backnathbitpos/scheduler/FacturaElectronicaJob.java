@@ -19,8 +19,8 @@ import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.service.EmailService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import com.snnsoluciones.backnathbitpos.service.pdf.FacturaPdfService;
+import com.snnsoluciones.backnathbitpos.sign.SignerService;
 import com.snnsoluciones.backnathbitpos.util.ByteArrayMultipartFile;
-import com.snnsoluciones.backnathbitpos.util.FacturaFirmaService;
 import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
 import jakarta.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
@@ -31,9 +31,7 @@ import java.util.Base64;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.http.HttpHeaders;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -50,7 +48,7 @@ public class FacturaElectronicaJob {
   private final FacturaBitacoraRepository bitacoraRepository;
   private final FacturaRepository facturaRepository;
   private final FacturaXMLGeneratorService xmlGeneratorService;
-  private final FacturaFirmaService firmaService;
+  private final SignerService signerService;
   private final HaciendaClient haciendaService;
   private final FacturaPdfService pdfService;
   private final EmailService emailService;
@@ -98,10 +96,12 @@ public class FacturaElectronicaJob {
   }
 
   /**
-   * Flow completo de una factura: XML -> Firmar -> Enviar -> Consultar -> Guardar respuesta -> PDF -> Email
+   * Flow completo de una factura: XML -> Firmar -> Enviar -> Consultar -> Guardar respuesta -> PDF
+   * -> Email
    */
   private void procesarFacturaFlow(FacturaBitacora bitacora) throws Exception {
-    log.info("➡️ Procesando factura {} (intento #{})", bitacora.getClave(), bitacora.getIntentos() + 1);
+    log.info("➡️ Procesando factura {} (intento #{})", bitacora.getClave(),
+        bitacora.getIntentos() + 1);
 
     // 1) Marcar intento
     bitacora.setIntentos(bitacora.getIntentos() + 1);
@@ -109,7 +109,8 @@ public class FacturaElectronicaJob {
     bitacoraRepository.save(bitacora);
 
     Factura factura = facturaRepository.findById(bitacora.getFacturaId())
-        .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + bitacora.getFacturaId()));
+        .orElseThrow(
+            () -> new RuntimeException("Factura no encontrada: " + bitacora.getFacturaId()));
     final Empresa empresa = factura.getSucursal().getEmpresa();
     final String empresaNombre = empresa.getNombreRazonSocial();
 
@@ -119,17 +120,27 @@ public class FacturaElectronicaJob {
     String xmlPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_UNSIGNED,
         empresa.getNombreComercial());
     storageService.uploadFile(
-        createMultipartFile(xml.getBytes(StandardCharsets.UTF_8), "factura_" + factura.getClave() + ".xml", "text/xml"),
+        createMultipartFile(xml.getBytes(StandardCharsets.UTF_8),
+            "factura_" + factura.getClave() + ".xml", "text/xml"),
         xmlPath
     );
     bitacora.setXmlPath(xmlPath);
     bitacoraRepository.save(bitacora);
 
-    // 3) Firmar XML
+  // [2/6] Firmando XML...
     log.info("[2/6] Firmando XML...");
-    byte[] xmlFirmado = firmaService.firmarXML(xmlPath, empresa.getId());
-    String xmlFirmadoPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_SIGNED,
-        empresa.getNombreComercial());
+    byte[] xmlUnsigned = storageService.downloadFileAsBytes(xmlPath);
+
+// Usar el signer DI (inyectado)
+    byte[] xmlFirmado = signerService.signXmlForEmpresa(
+        xmlUnsigned,
+        empresa.getId(),
+        factura.getTipoDocumento()
+    );
+
+    String xmlFirmadoPath = s3PathBuilder.buildXmlPath(
+        factura, TipoArchivoFactura.XML_SIGNED, empresa.getNombreComercial()
+    );
     storageService.uploadFile(
         createMultipartFile(xmlFirmado, "factura_" + factura.getClave() + "_firmado.xml", "text/xml"),
         xmlFirmadoPath
@@ -144,7 +155,8 @@ public class FacturaElectronicaJob {
             .empresaId(empresa.getId())
             .username(empresa.getConfigHacienda().getUsuarioHacienda())
             .password(empresa.getConfigHacienda().getClaveHacienda())
-            .clientId(empresa.getConfigHacienda().getAmbiente() == AmbienteHacienda.PRODUCCION ? "api-prod" : "api-test")
+            .clientId(empresa.getConfigHacienda().getAmbiente() == AmbienteHacienda.PRODUCCION
+                ? "api-prod" : "api-test")
             .sandbox(empresa.getConfigHacienda().getAmbiente() != AmbienteHacienda.PRODUCCION)
             .build()
     );
@@ -190,7 +202,8 @@ public class FacturaElectronicaJob {
       if ("ACEPTADO".equalsIgnoreCase(estado.getIndEstado())) {
         factura.setEstado(EstadoFactura.ACEPTADA);
         bitacora.setHaciendaMensaje("Aceptada por MH");
-      } else if ("RECHAZADO".equalsIgnoreCase(estado.getIndEstado()) || "ERROR".equalsIgnoreCase(estado.getIndEstado())) {
+      } else if ("RECHAZADO".equalsIgnoreCase(estado.getIndEstado()) || "ERROR".equalsIgnoreCase(
+          estado.getIndEstado())) {
         factura.setEstado(EstadoFactura.RECHAZADA);
         bitacora.setHaciendaMensaje(estado.getDetalleMensaje() != null
             ? estado.getDetalleMensaje()
@@ -322,7 +335,8 @@ public class FacturaElectronicaJob {
 
         byte[] respuestaHaciendaBytes = null;
         if (bitacora.getXmlRespuestaPath() != null) {
-          respuestaHaciendaBytes = storageService.downloadFileAsBytes(bitacora.getXmlRespuestaPath());
+          respuestaHaciendaBytes = storageService.downloadFileAsBytes(
+              bitacora.getXmlRespuestaPath());
         }
 
         // 2) Armar el DTO que espera el EmailService
@@ -339,7 +353,8 @@ public class FacturaElectronicaJob {
             .nombreComercial(factura.getSucursal().getEmpresa().getNombreComercial())
             .razonSocial(factura.getSucursal().getEmpresa().getNombreRazonSocial())
             .cedulaJuridica(factura.getSucursal().getEmpresa().getIdentificacion())
-            .fechaEmision(factura.getFechaEmision().toString()) // si necesitas formato, dale formato
+            .fechaEmision(
+                factura.getFechaEmision().toString()) // si necesitas formato, dale formato
             .logoUrl(factura.getSucursal().getEmpresa().getLogoUrl())
             // Adjuntos (bytes)
             .pdfBytes(pdfBytes)

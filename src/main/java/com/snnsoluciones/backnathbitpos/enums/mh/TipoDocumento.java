@@ -15,7 +15,8 @@ public enum TipoDocumento {
     TIQUETE_INTERNO("TI", "Tiquete Interno", false),
     FACTURA_INTERNA("FI", "Factura Interna", false),
     PROFORMA("PF", "Proforma", false),
-    ORDEN_PEDIDO("OP", "Orden de Pedido", false);
+    ORDEN_PEDIDO("OP", "Orden de Pedido", false),
+    MENSAJE_RECEPTOR("MR", "Mensaje de Receptor", false);
 
     private final String codigo;
     private final String descripcion;

@@ -42,3 +42,8 @@ storage:
     region: nyc3
     bucket: snn-soluciones
     base-folder: NathBit-POS
+
+firma:
+  policy:
+    url: "https://cdn.comprobanteselectronicos.go.cr/xml-schemas/Resolución_General_sobre_disposiciones_técnicas_comprobantes_electrónicos_para_efectos_tributarios.pdf"
+    # fallbackDigestBase64: ""  # opcional: solo si querés fijarlo; si lo dejás vacío, se calcula online y se cachea

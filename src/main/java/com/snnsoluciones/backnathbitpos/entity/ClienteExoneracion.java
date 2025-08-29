@@ -32,10 +32,10 @@ public class ClienteExoneracion {
     private Cliente cliente;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_documento", nullable = false, length = 30) // antes 2
+    @Column(name = "tipo_documento", nullable = false, length = 50) // antes 2
     private TipoDocumentoExoneracion tipoDocumento;
     
-    @Column(name = "numero_documento", nullable = false, length = 50)
+    @Column(name = "numero_documento", nullable = false, length = 100)
     private String numeroDocumento;
     
     @Column(name = "nombre_institucion", nullable = false, length = 100)
@@ -51,7 +51,7 @@ public class ClienteExoneracion {
     private BigDecimal porcentajeExoneracion; // 0.00 a 100.00
     
     @Column(name = "categoria_compra", length = 100)
-    private String categoriaCompra; // Ej: "Productos básicos", "Todo", etc.
+    private String categoriaCompra;
     
     @Column(name = "monto_maximo", precision = 15, scale = 2)
     private BigDecimal montoMaximo; // Límite de exoneración si aplica

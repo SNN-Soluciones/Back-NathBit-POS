@@ -354,12 +354,14 @@ public class EmailService {
 
   /**
    * Envía notificación de error de factura electrónica
-     * @param factura La factura que falló
-     * @param mensajeError El mensaje de error de Hacienda
-     * @param xmlRespuesta El XML de respuesta de Hacienda
-     * @return true si se envió correctamente
-     */
-  public boolean enviarErrorFacturaElectronica(Factura factura, String mensajeError, byte[] xmlRespuesta) {
+   *
+   * @param factura      La factura que falló
+   * @param mensajeError El mensaje de error de Hacienda
+   * @param xmlRespuesta El XML de respuesta de Hacienda
+   * @return true si se envió correctamente
+   */
+  public boolean enviarErrorFacturaElectronica(Factura factura, String mensajeError,
+      byte[] xmlRespuesta) {
     log.info("Enviando notificación de error para factura: {} - Error: {}",
         factura.getClave(), mensajeError);
 
@@ -420,6 +422,7 @@ public class EmailService {
 
   /**
    * Envía notificación de error de factura con auditoría completa
+   *
    * @param dto DTO con datos del error
    * @return true si se envió correctamente
    */
@@ -496,7 +499,8 @@ public class EmailService {
       // Obtener XML firmado de S3
       byte[] xmlFirmadoBytes = null;
       try {
-        String xmlFirmadoPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_SIGNED);
+        String xmlFirmadoPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_SIGNED,
+            empresa.getNombreRazonSocial());
         xmlFirmadoBytes = storageService.downloadFileAsBytes(xmlFirmadoPath);
       } catch (Exception e) {
         log.warn("No se pudo obtener XML firmado para reintento: {}", e.getMessage());
@@ -505,7 +509,8 @@ public class EmailService {
       // Obtener respuesta Hacienda de S3
       byte[] respuestaBytes = null;
       try {
-        String respuestaPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_RESPUESTA);
+        String respuestaPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_RESPUESTA,
+            empresa.getNombreRazonSocial());
         respuestaBytes = storageService.downloadFileAsBytes(respuestaPath);
       } catch (Exception e) {
         log.warn("No se pudo obtener respuesta Hacienda para reintento: {}", e.getMessage());
@@ -721,7 +726,8 @@ public class EmailService {
     html.append("<meta charset='UTF-8'>");
     html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
     html.append("<style>");
-    html.append("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; ");
+    html.append(
+        "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; ");
     html.append("  margin: 0; padding: 0; background-color: #f5f5f5; color: #333; }");
     html.append(".container { max-width: 600px; margin: 0 auto; background-color: white; }");
     html.append(".header { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); ");
@@ -754,16 +760,20 @@ public class EmailService {
     // Content
     html.append("<div class='content'>");
     html.append("<p>Estimado usuario,</p>");
-    html.append("<p>Le informamos que la siguiente factura electrónica ha sido <strong>RECHAZADA</strong> por el Ministerio de Hacienda:</p>");
+    html.append(
+        "<p>Le informamos que la siguiente factura electrónica ha sido <strong>RECHAZADA</strong> por el Ministerio de Hacienda:</p>");
 
     // Información de la factura
     html.append("<table class='info-table'>");
-    html.append("<tr><td>Número de Factura:</td><td>").append(factura.getConsecutivo()).append("</td></tr>");
+    html.append("<tr><td>Número de Factura:</td><td>").append(factura.getConsecutivo())
+        .append("</td></tr>");
     html.append("<tr><td>Clave Numérica:</td><td style='font-family: monospace; font-size: 12px;'>")
         .append(factura.getClave()).append("</td></tr>");
     html.append("<tr><td>Fecha y Hora:</td><td>").append(fechaHora).append("</td></tr>");
-    html.append("<tr><td>Cliente:</td><td>").append(factura.getCliente().getRazonSocial()).append("</td></tr>");
-    html.append("<tr><td>Monto Total:</td><td>₡").append(String.format("%,.2f", factura.getTotalComprobante()))
+    html.append("<tr><td>Cliente:</td><td>").append(factura.getCliente().getRazonSocial())
+        .append("</td></tr>");
+    html.append("<tr><td>Monto Total:</td><td>₡")
+        .append(String.format("%,.2f", factura.getTotalComprobante()))
         .append("</td></tr>");
     html.append("</table>");
 
@@ -792,7 +802,8 @@ public class EmailService {
     html.append("<li>XML de respuesta del Ministerio de Hacienda con el detalle del error</li>");
     html.append("</ul>");
 
-    html.append("<p>Es importante corregir y reenviar esta factura lo antes posible para cumplir con los requisitos tributarios.</p>");
+    html.append(
+        "<p>Es importante corregir y reenviar esta factura lo antes posible para cumplir con los requisitos tributarios.</p>");
 
     html.append("<p>Saludos cordiales,<br>");
     html.append("<strong>Sistema NathBit POS</strong></p>");
@@ -800,9 +811,12 @@ public class EmailService {
 
     // Footer
     html.append("<div class='footer'>");
-    html.append("<p>").append(factura.getSucursal().getEmpresa().getNombreRazonSocial()).append("<br>");
-    html.append("Cédula: ").append(factura.getSucursal().getEmpresa().getIdentificacion()).append("<br>");
-    html.append("Este es un correo automático de notificación de errores del sistema de facturación electrónica.</p>");
+    html.append("<p>").append(factura.getSucursal().getEmpresa().getNombreRazonSocial())
+        .append("<br>");
+    html.append("Cédula: ").append(factura.getSucursal().getEmpresa().getIdentificacion())
+        .append("<br>");
+    html.append(
+        "Este es un correo automático de notificación de errores del sistema de facturación electrónica.</p>");
     html.append("</div>");
 
     html.append("</div>");
@@ -815,7 +829,8 @@ public class EmailService {
   /**
    * Adjunta archivos al email de error
    */
-  private void adjuntarArchivosError(MimeMessageHelper helper, EmailErrorFacturaDto dto, EmailAuditLog auditLog)
+  private void adjuntarArchivosError(MimeMessageHelper helper, EmailErrorFacturaDto dto,
+      EmailAuditLog auditLog)
       throws MessagingException {
 
     // PDF si existe
@@ -863,8 +878,10 @@ public class EmailService {
     html.append("<meta charset='UTF-8'>");
     html.append("<style>");
     // Estilos modernos y responsivos
-    html.append("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; ");
-    html.append("  margin: 0; padding: 0; background-color: #f5f5f5; color: #333; line-height: 1.6; }");
+    html.append(
+        "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; ");
+    html.append(
+        "  margin: 0; padding: 0; background-color: #f5f5f5; color: #333; line-height: 1.6; }");
     html.append(".container { max-width: 600px; margin: 20px auto; background-color: white; ");
     html.append("  border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }");
     html.append(".header { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); ");
@@ -881,8 +898,10 @@ public class EmailService {
     html.append(".info-label { font-weight: 600; color: #6c757d; margin-bottom: 5px; }");
     html.append(".info-value { color: #212529; }");
     html.append(".clave { font-family: 'Courier New', monospace; font-size: 11px; ");
-    html.append("  word-break: break-all; background: #e9ecef; padding: 5px; border-radius: 3px; }");
-    html.append(".steps { background: #e8f5e9; padding: 20px; border-radius: 6px; margin: 20px 0; }");
+    html.append(
+        "  word-break: break-all; background: #e9ecef; padding: 5px; border-radius: 3px; }");
+    html.append(
+        ".steps { background: #e8f5e9; padding: 20px; border-radius: 6px; margin: 20px 0; }");
     html.append(".steps h3 { color: #2e7d32; margin-top: 0; }");
     html.append(".steps ol { margin: 10px 0; padding-left: 20px; }");
     html.append(".steps li { margin: 8px 0; }");

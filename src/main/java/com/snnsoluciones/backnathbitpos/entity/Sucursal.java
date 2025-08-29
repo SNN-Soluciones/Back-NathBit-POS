@@ -49,7 +49,7 @@ public class Sucursal {
     @Column(nullable = false)
     private Boolean activa = true;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
 

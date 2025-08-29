@@ -64,7 +64,7 @@ public class Factura {
     private SituacionDocumento situacion = SituacionDocumento.NORMAL;
 
     // ========== REFERENCIAS ==========
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "sucursal_id", nullable = false)
     private Sucursal sucursal;
 
@@ -76,7 +76,7 @@ public class Factura {
     @JoinColumn(name = "sesion_caja_id", nullable = false)
     private SesionCaja sesionCaja;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "cliente_id")
     private Cliente cliente;
 

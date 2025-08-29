@@ -111,6 +111,7 @@ dependencies {
 
     // ================== Utilities ==================
     implementation "org.apache.commons:commons-lang3:${commonsLang3Version}"
+    implementation("org.apache.httpcomponents.core5:httpcore5:5.3.4")
 
     // ================== Development ==================
     developmentOnly 'org.springframework.boot:spring-boot-devtools'

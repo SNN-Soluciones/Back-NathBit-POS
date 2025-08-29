@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.util;
 
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
@@ -26,8 +27,7 @@ public class S3PathBuilder {
    * @param tipoArchivo Tipo de archivo (sin-firma, firmado, respuesta)
    * @return Ruta completa en S3
    */
-  public String buildXmlPath(Factura factura, TipoArchivoFactura tipoArchivo) {
-    String empresaNombre = factura.getSucursal().getEmpresa().getNombreComercial();
+  public String buildXmlPath(Factura factura, TipoArchivoFactura tipoArchivo, String empresaNombre) {
     if (empresaNombre == null || empresaNombre.trim().isEmpty()) {
       empresaNombre = factura.getSucursal().getEmpresa().getNombreRazonSocial();
     }

@@ -1,0 +1,60 @@
+name: nathbit-pos
+region: nyc
+services:
+  - name: backend
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: tu-usuario/nathbit-pos
+
+    # Variables de entorno
+    envs:
+      - key: DB_URL
+        value: "jdbc:postgresql://nathbit-postgrase-do-user-24567891-0.m.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+      - key: DB_USERNAME
+        value: "doadmin"
+      - key: DB_PASSWORD
+        value: "AVNS_ZoNv494E_KxqR4AXU7c"
+        type: SECRET
+      - key: SPRING_PROFILES_ACTIVE
+        value: "prod"
+      - key: JWT_SECRET
+        value: "TuClaveSecretaSeguraDeProduccionDe64CaracteresMinimo1234567890AB"
+        type: SECRET
+      - key: ENCRYPTION_MASTER_KEY
+        value: "ClaveDeEncriptacionSeguraParaProduccion32Chars!!"
+        type: SECRET
+      - key: JPA_DDL_AUTO
+        value: "validate"
+      - key: JPA_SHOW_SQL
+        value: "false"
+
+    # Configuración de recursos
+    instance_count: 1
+    instance_size_slug: basic-xxs  # $4/mes
+
+    # Puerto HTTP
+    http_port: 8080
+
+    # Health check
+    health_check:
+      http_path: /actuator/health
+      initial_delay_seconds: 40
+      period_seconds: 30
+      timeout_seconds: 3
+      success_threshold: 1
+      failure_threshold: 3
+
+    # Rutas
+    routes:
+      - path: /
+
+# Base de datos (si la creas desde aquí)
+# databases:
+#   - name: nathbit-db
+#     engine: PG
+#     version: "15"
+#     size: db-s-dev-database
+#     num_nodes: 1

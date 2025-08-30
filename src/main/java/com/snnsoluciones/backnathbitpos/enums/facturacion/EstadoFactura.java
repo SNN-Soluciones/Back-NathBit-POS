@@ -12,7 +12,8 @@ public enum EstadoFactura {
     RECHAZADA("Rechazada por Hacienda"),
     ANULADA("Anulada por el usuario"),
     ERROR("Error en el procesamiento"),
-    NOTIFICADA("Notificada al cliente"); // <-- NUEVO ESTADO
+    NOTIFICADA("Notificada al cliente"),
+    CANCELADA("Cancelada por el usuario"); // <-- NUEVO ESTADO
 
     private final String descripcion;
 

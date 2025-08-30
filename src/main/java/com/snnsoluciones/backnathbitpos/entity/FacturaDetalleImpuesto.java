@@ -104,7 +104,7 @@ public class FacturaDetalleImpuesto {
      * Institución que emite según nota 23
      */
 
-    @Column(name = "codigo_institucion", nullable = false, length = 2)
+    @Column(name = "codigo_institucion", length = 2)
     private String codigoInstitucion;
 
     @Column(name = "nombre_institucion", length = 100)

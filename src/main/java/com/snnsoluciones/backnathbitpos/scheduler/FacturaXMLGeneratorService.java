@@ -7,6 +7,10 @@ import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaConfigHaciendaRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -361,6 +365,13 @@ public class FacturaXMLGeneratorService {
               codigoExoneracion = "01";
             }
 
+            String fechaEmisionExoneracion = imp.getFechaEmisionExoneracion();
+            LocalDate localDate = LocalDate.parse(fechaEmisionExoneracion, DateTimeFormatter.ISO_LOCAL_DATE);
+            ZonedDateTime zonedDateTime = localDate.atStartOfDay(ZoneId.of("-06:00"));
+
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX");
+            String fechaFormateada = zonedDateTime.format(formatter);
+
             agregarExoneracionEnImpuesto(
                 doc, impuestoElement,
                 tipoDocumentoExoneracion.getCodigo(),
@@ -368,7 +379,7 @@ public class FacturaXMLGeneratorService {
                 imp.getNumeroDocumentoExoneracion(),
                 codigoExoneracion,
                 imp.getNombreInstitucionOtros(),
-                imp.getFechaEmisionExoneracion(),
+                fechaFormateada,
                 fmtPorcentaje(tarifaExon),
                 fmtMonto(montoExoneracion),
                 imp.getArticuloExoneracion(),
@@ -432,25 +443,68 @@ public class FacturaXMLGeneratorService {
       totalMercanciasExcentos = factura.getTotalMercanciasExentas();
     }
 
+    BigDecimal totalServExonerado = BigDecimal.ZERO;
+    if (factura.getTotalServiciosExonerados() != null) {
+      totalServExonerado = factura.getTotalServiciosExonerados();
+    }
+
+    BigDecimal totalMercExonerada = BigDecimal.ZERO;
+    if (factura.getTotalMercanciasExoneradas() != null) {
+      totalMercExonerada = factura.getTotalMercanciasExoneradas();
+    }
+
+    BigDecimal totalServNoSujeto = BigDecimal.ZERO;
+    if (factura.getTotalServiciosNoSujetos() != null) {
+      totalServNoSujeto = factura.getTotalServiciosNoSujetos();
+    }
+
+    BigDecimal totalMercNoSujeta = BigDecimal.ZERO;
+    if (factura.getTotalMercanciasNoSujetas() != null) {
+      totalMercNoSujeta = factura.getTotalMercanciasNoSujetas();
+    }
+
+    BigDecimal totalNoSujeto = totalServNoSujeto.add(totalMercNoSujeta);
+
     agregarElemento(doc, resumen, "TotalServGravados",
         fmtMonto(factura.getTotalServiciosGravados()));
     agregarElemento(doc, resumen, "TotalServExentos",
         fmtMonto(totalServiciosExcentos));
+    agregarElemento(doc, resumen, "TotalServExonerado",
+        fmtMonto(totalServExonerado));
+    agregarElemento(doc, resumen, "TotalServNoSujeto",
+        fmtMonto(totalServNoSujeto));
+
     agregarElemento(doc, resumen, "TotalMercanciasGravadas",
         fmtMonto(factura.getTotalMercanciasGravadas()));
     agregarElemento(doc, resumen, "TotalMercanciasExentas",
         fmtMonto(totalMercanciasExcentos));
-    agregarElemento(doc, resumen, "TotalGravado", fmtMonto(factura.getTotalGravado()));
-    agregarElemento(doc, resumen, "TotalExento", fmtMonto(factura.getTotalExento()));
-    agregarElemento(doc, resumen, "TotalExonerado", fmtMonto(factura.getTotalExonerado()));
-    agregarElemento(doc, resumen, "TotalVenta", fmtMonto(factura.getTotalVenta()));
-    agregarElemento(doc, resumen, "TotalDescuentos", fmtMonto(factura.getTotalDescuentos()));
-    agregarElemento(doc, resumen, "TotalVentaNeta", fmtMonto(factura.getTotalVentaNeta()));
+
+    agregarElemento(doc, resumen, "TotalMercExonerada",
+        fmtMonto(totalMercExonerada));
+    agregarElemento(doc, resumen, "TotalMercNoSujeta",
+        fmtMonto(totalMercNoSujeta));
+    agregarElemento(doc, resumen, "TotalGravado",
+        fmtMonto(factura.getTotalGravado()));
+    agregarElemento(doc, resumen, "TotalExento",
+        fmtMonto(factura.getTotalExento()));
+    agregarElemento(doc, resumen, "TotalExonerado",
+        fmtMonto(factura.getTotalExonerado()));
+    agregarElemento(doc, resumen, "TotalNoSujeto",
+        fmtMonto(totalNoSujeto));
+    agregarElemento(doc, resumen, "TotalVenta",
+        fmtMonto(factura.getTotalVenta()));
+    agregarElemento(doc, resumen, "TotalDescuentos",
+        fmtMonto(factura.getTotalDescuentos()));
+    agregarElemento(doc, resumen, "TotalVentaNeta",
+        fmtMonto(factura.getTotalVentaNeta()));
 
     agregarDesgloseImpuestos(doc, resumen, factura.getResumenImpuestos());
 
-    agregarElemento(doc, resumen, "TotalImpuesto", fmtMonto(factura.getTotalImpuesto()));
+    agregarElemento(doc, resumen, "TotalImpuesto",
+        fmtMonto(factura.getTotalImpuesto()));
 
+// Los siguientes elementos podrían no ser necesarios en todos los casos,
+// pero se incluyen para mantener compatibilidad con el esquema.
     agregarElemento(doc, resumen, "TotalImpAsumEmisorFabrica", "0");
     agregarElemento(doc, resumen, "TotalIVADevuelto", "0");
 
@@ -512,10 +566,7 @@ public class FacturaXMLGeneratorService {
 //      if (r.getTotalBaseImponible() != null) {
 //        agregarElemento(doc, des, "TotalBaseImponible", fmtMonto(r.getTotalBaseImponible()));
 //      }
-      agregarElemento(doc, des, "TotalMontoImpuesto", fmtMonto(r.getTotalMontoImpuesto()));
-      agregarElemento(doc, des, "TotalMontoExoneracion",
-          fmtMonto(r.getTotalMontoExoneracion() == null ? BigDecimal.ZERO
-              : r.getTotalMontoExoneracion()));
+      agregarElemento(doc, des, "TotalMontoImpuesto", fmtMonto(r.getTotalImpuestoNeto()));
 //      agregarElemento(doc, des, "TotalImpuestoNeto", fmtMonto(r.getTotalImpuestoNeto()));
 //      agregarElemento(doc, des, "CantidadLineas", String.valueOf(r.getCantidadLineas()));
     }

@@ -38,7 +38,7 @@ public class ClienteExoneracion {
     @Column(name = "numero_documento", nullable = false, length = 100)
     private String numeroDocumento;
 
-    @Column(name = "codigo_institucion", nullable = false, length = 2)
+    @Column(name = "codigo_institucion", length = 2)
     private String codigoInstitucion;
     
     @Column(name = "nombre_institucion", nullable = false, length = 100)

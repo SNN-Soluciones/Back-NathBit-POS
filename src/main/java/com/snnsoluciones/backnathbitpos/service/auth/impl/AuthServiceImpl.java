@@ -33,7 +33,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse login(LoginRequest request) {
 
-        String loginIdentifier = request.getEmail(); // Por ahora sigue usando el campo email del request
+        String loginIdentifier = request.getEmail();
         Usuario usuario;
 
         // Si contiene @ es email, sino es username
@@ -45,9 +45,9 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         }
 
-        // Autenticar
+        // Autenticar usando el email REAL del usuario encontrado
         Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            new UsernamePasswordAuthenticationToken(usuario.getEmail(), request.getPassword())
         );
         
         SecurityContextHolder.getContext().setAuthentication(authentication);

@@ -40,7 +40,7 @@ public class FacturaDetalle {
     @JoinColumn(name = "producto_id", nullable = false)
     private Producto producto;
 
-    @Column(name = "unidad_medida", length = 15, nullable = false)
+    @Column(name = "unidad_medida", length = 30, nullable = false)
     private String unidadMedida = "Unid";
 
     // Campos para facturación electrónica

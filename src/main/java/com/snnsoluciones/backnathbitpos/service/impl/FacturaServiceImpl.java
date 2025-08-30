@@ -537,6 +537,7 @@ public class FacturaServiceImpl implements FacturaService {
             impuesto.setNombreInstitucion(exo.getInstitucionOtorgante());
             impuesto.setFechaEmisionExoneracion(exo.getFechaEmisionExoneracion().toString());
             impuesto.setTarifaExonerada(exo.getPorcentajeExonerado());
+            impuesto.setCodigoInstitucion(exo.getCodigoInstitucion());
           }
 
           detalle.agregarImpuesto(impuesto);
@@ -725,7 +726,7 @@ public class FacturaServiceImpl implements FacturaService {
    * - versionCatalogos presente
    */
   private void validarEstructuraV44(CrearFacturaRequest request) {
-    final Pattern P_UNIDAD = Pattern.compile("^[0-9A-Z._-]{1,8}$");
+    final Pattern P_UNIDAD = Pattern.compile("^[0-9A-Z._-]{1,30}$");
     final Pattern P_CABYS  = Pattern.compile("^[0-9]{13}$");
     final Set<String> MEDIOS_VALIDOS = Set.of("01","02","03","04","05","06","07","99");
     final BigDecimal TOLERANCIA = new BigDecimal("0.01");

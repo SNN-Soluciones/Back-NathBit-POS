@@ -78,6 +78,9 @@ public class FacturaXMLGeneratorService {
 
       agregarElemento(doc, root, "Clave", factura.getClave());
 
+      agregarElemento(doc, root, "ProveedorSistemas",
+          ProveedorSistema.SNN_SOLUCIONES.getIdentificacion());
+
       String codigoActividad = factura.getSucursal().getEmpresa()
           .getActividades().stream()
           .filter(EmpresaActividad::getEsPrincipal)
@@ -85,16 +88,14 @@ public class FacturaXMLGeneratorService {
           .map(ea -> ea.getActividad().getCodigo())
           .orElseThrow(
               () -> new RuntimeException("No hay actividad económica principal configurada"));
-      agregarElemento(doc, root, "CodigoActividad", codigoActividad);
+
+      agregarElemento(doc, root, "CodigoActividadEmisor", codigoActividad);
 
       agregarElemento(doc, root, "NumeroConsecutivo", factura.getConsecutivo());
       agregarElemento(doc, root, "FechaEmision", factura.getFechaEmision().toString());
 
       // Emisor
       agregarEmisor(doc, root, factura);
-
-      // Proveedor de sistemas (4.4)
-      agregarProveedorSistema(doc, root);
 
       // Receptor (si corresponde)
       if (factura.getCliente() != null
@@ -218,8 +219,7 @@ public class FacturaXMLGeneratorService {
       added++;
     }
     if (empresa.getBarrio() != null) {
-      agregarElemento(doc, ubicacion, "Barrio",
-          String.format("%02d", empresa.getBarrio().getCodigo()));
+      agregarElemento(doc, ubicacion, "Barrio", empresa.getBarrio().getBarrio());
     }
     if (empresa.getOtrasSenas() != null && !empresa.getOtrasSenas().isBlank()) {
       agregarElemento(doc, ubicacion, "OtrasSenas", empresa.getOtrasSenas());
@@ -293,64 +293,84 @@ public class FacturaXMLGeneratorService {
       detalleServicio.appendChild(lineaDetalle);
 
       agregarElemento(doc, lineaDetalle, "NumeroLinea", String.valueOf(numeroLinea++));
-      Element codigo = doc.createElement("Codigo");
-      lineaDetalle.appendChild(codigo);
-      agregarElemento(doc, codigo, "Tipo", "04");
-      agregarElemento(doc, codigo, "Codigo", detalle.getProducto().getCodigoInterno());
+      if (detalle.getCodigoCabys() != null) {
+        agregarElemento(doc, lineaDetalle, "CodigoCABYS", detalle.getCodigoCabys());
+      }
+
+      if (detalle.getProducto() != null && detalle.getProducto().getCodigoInterno() != null) {
+        Element codCom = doc.createElement("CodigoComercial");
+        lineaDetalle.appendChild(codCom);
+        agregarElemento(doc, codCom, "Tipo", "04");
+        agregarElemento(doc, codCom, "Codigo", detalle.getProducto().getCodigoInterno());
+      }
 
       agregarElemento(doc, lineaDetalle, "Cantidad", fmtCantidad(detalle.getCantidad()));
-      agregarElemento(doc, lineaDetalle, "UnidadMedida",
-          detalle.getProducto().getUnidadMedida().getCodigo());
-      agregarElemento(doc, lineaDetalle, "Detalle", detalle.getProducto().getNombre());
+      if (detalle.getProducto() != null && detalle.getProducto().getUnidadMedida() != null) {
+        agregarElemento(doc, lineaDetalle, "UnidadMedida",
+            detalle.getProducto().getUnidadMedida().getCodigo());
+      }
+      agregarElemento(doc, lineaDetalle, "Detalle",
+          detalle.getProducto() != null ? detalle.getProducto().getNombre() : null);
       agregarElemento(doc, lineaDetalle, "PrecioUnitario", fmtMonto(detalle.getPrecioUnitario()));
       agregarElemento(doc, lineaDetalle, "MontoTotal", fmtMonto(detalle.getMontoTotal()));
       agregarElemento(doc, lineaDetalle, "SubTotal", fmtMonto(detalle.getSubtotal()));
 
-      if (!detalle.getImpuestos().isEmpty()) {
-        for (FacturaDetalleImpuesto imp : detalle.getImpuestos()) {
+      // ===== NODOS PREVIOS A <Impuesto> (v4.4) =====
+      BigDecimal baseImponible =
+          detalle.getSubtotal() != null ? detalle.getSubtotal() : BigDecimal.ZERO;
+
+      // Siempre emite BaseImponible
+      agregarElemento(doc, lineaDetalle, "BaseImponible", fmtMonto(baseImponible));
+
+      // ==============================================
+
+      List<FacturaDetalleImpuesto> impuestos =
+          detalle.getImpuestos() != null ? detalle.getImpuestos() : List.of();
+      BigDecimal montoImpuestoBrutoLinea = BigDecimal.ZERO;
+      BigDecimal montoExoneradoLinea = BigDecimal.ZERO;
+
+      if (!impuestos.isEmpty()) {
+        for (FacturaDetalleImpuesto imp : impuestos) {
           Element impuestoElement = doc.createElement("Impuesto");
           lineaDetalle.appendChild(impuestoElement);
 
           agregarElemento(doc, impuestoElement, "Codigo", imp.getCodigoImpuesto());
           agregarElemento(doc, impuestoElement, "CodigoTarifaIVA", imp.getCodigoTarifaIVA());
 
-          // Tarifa SIEMPRE en porcentaje (13.00, 2.00, 0.50...)
           BigDecimal tarifaPct = asPercent(imp.getTarifa());
           agregarElemento(doc, impuestoElement, "Tarifa", fmtPorcentaje(tarifaPct));
 
-          agregarElemento(doc, impuestoElement, "Monto", fmtMonto(imp.getMontoImpuesto()));
+          BigDecimal montoImp =
+              imp.getMontoImpuesto() != null ? imp.getMontoImpuesto() : BigDecimal.ZERO;
+          agregarElemento(doc, impuestoElement, "Monto", fmtMonto(montoImp));
+          montoImpuestoBrutoLinea = montoImpuestoBrutoLinea.add(montoImp);
 
           if (Boolean.TRUE.equals(imp.getTieneExoneracion())) {
-            // TarifaExonerada = puntos de tarifa (ej.: 13, 9, 0.5)
             BigDecimal tarifaExon =
                 imp.getTarifaExonerada() != null ? imp.getTarifaExonerada() : BigDecimal.ZERO;
-
-            // Base imponible (usa tu campo si lo tienes; aquí SubTotal)
-            BigDecimal base = detalle.getSubtotal();
-
-            // Monto exonerado = base * (TarifaExonerada/100), limitado al impuesto bruto
-            BigDecimal montoExonCalc = base.multiply(tarifaExon)
+            BigDecimal montoExonCalc = baseImponible.multiply(tarifaExon)
                 .divide(new BigDecimal("100"), 5, RoundingMode.HALF_UP);
+            BigDecimal montoExoneracion = montoExonCalc.min(montoImp);
+            montoExoneradoLinea = montoExoneradoLinea.add(montoExoneracion);
 
-            BigDecimal montoImpuestoBruto =
-                imp.getMontoImpuesto() != null ? imp.getMontoImpuesto() : BigDecimal.ZERO;
-            BigDecimal montoExoneracion = montoExonCalc.min(montoImpuestoBruto);
+            TipoDocumentoExoneracion tipoDocumentoExoneracion = TipoDocumentoExoneracion.valueOf(
+                imp.getTipoDocumentoExoneracion());
 
-            // TipoDocumentoEX1 = 04 (FRANQUICIA) según tu enum
-            String tipoEx1 = imp.getTipoDocumentoExoneracion();
-            String fechaEX = imp.getFechaEmisionExoneracion(); // ideal: RFC3339 "YYYY-MM-DDThh:mm:ss-06:00"
+            String codigoExoneracion = imp.getCodigoInstitucion();
+            if (codigoExoneracion == null) {
+              codigoExoneracion = "01";
+            }
 
             agregarExoneracionEnImpuesto(
-                doc,
-                impuestoElement,
-                tipoEx1,                                 // TipoDocumentoEX1 (código)
-                imp.getTipoDocumentoExoneracionOTRO(),   // si usas 99
+                doc, impuestoElement,
+                tipoDocumentoExoneracion.getCodigo(),
+                imp.getTipoDocumentoExoneracionOTRO(),
                 imp.getNumeroDocumentoExoneracion(),
-                imp.getNombreInstitucion(),
+                codigoExoneracion,
                 imp.getNombreInstitucionOtros(),
-                fechaEX,
-                fmtPorcentaje(tarifaExon),               // TarifaExonerada (2 dec)
-                fmtMonto(montoExoneracion),              // MontoExoneracion (5 dec)
+                imp.getFechaEmisionExoneracion(),
+                fmtPorcentaje(tarifaExon),
+                fmtMonto(montoExoneracion),
                 imp.getArticuloExoneracion(),
                 imp.getIncisoExoneracion()
             );
@@ -358,7 +378,15 @@ public class FacturaXMLGeneratorService {
         }
       }
 
-      agregarElemento(doc, lineaDetalle, "MontoTotalLinea", fmtMonto(detalle.getMontoTotalLinea()));
+      BigDecimal impuestoNeto = montoImpuestoBrutoLinea.subtract(montoExoneradoLinea);
+      if (impuestoNeto.signum() < 0) {
+        impuestoNeto = BigDecimal.ZERO;
+      }
+      agregarElemento(doc, lineaDetalle, "ImpuestoAsumidoEmisorFabrica", "0");
+      agregarElemento(doc, lineaDetalle, "ImpuestoNeto", fmtMonto(impuestoNeto));
+
+      BigDecimal montoTotalLinea = baseImponible.add(impuestoNeto);
+      agregarElemento(doc, lineaDetalle, "MontoTotalLinea", fmtMonto(montoTotalLinea));
     }
   }
 
@@ -366,6 +394,8 @@ public class FacturaXMLGeneratorService {
     for (OtroCargo cargo : factura.getOtrosCargos()) {
       Element otros = doc.createElement("OtrosCargos");
       root.appendChild(otros);
+
+      agregarElemento(doc, otros, "TipoDocumentoOC", cargo.getTipoDocumentoOC());
 
       // Si tienes el código de catálogo de otros cargos, inclúyelo:
       if (cargo.getTipoDocumentoOTROS() != null) {
@@ -390,22 +420,41 @@ public class FacturaXMLGeneratorService {
     Element moneda = doc.createElement("CodigoTipoMoneda");
     resumen.appendChild(moneda);
     agregarElemento(doc, moneda, "CodigoMoneda", factura.getMoneda().getCodigo());
-    agregarElemento(doc, moneda, "TipoCambio", "1");
+    agregarElemento(doc, moneda, "TipoCambio", fmtMonto(factura.getTipoCambio()));
+
+    BigDecimal totalServiciosExcentos = BigDecimal.ZERO;
+    if (factura.getTotalServiciosExentos() != null) {
+      totalServiciosExcentos = factura.getTotalServiciosExentos();
+    }
+
+    BigDecimal totalMercanciasExcentos = BigDecimal.ZERO;
+    if (factura.getTotalMercanciasExentas() != null) {
+      totalMercanciasExcentos = factura.getTotalMercanciasExentas();
+    }
 
     agregarElemento(doc, resumen, "TotalServGravados",
         fmtMonto(factura.getTotalServiciosGravados()));
-    agregarElemento(doc, resumen, "TotalServExentos", fmtMonto(factura.getTotalServiciosExentos()));
+    agregarElemento(doc, resumen, "TotalServExentos",
+        fmtMonto(totalServiciosExcentos));
     agregarElemento(doc, resumen, "TotalMercanciasGravadas",
         fmtMonto(factura.getTotalMercanciasGravadas()));
     agregarElemento(doc, resumen, "TotalMercanciasExentas",
-        fmtMonto(factura.getTotalMercanciasExentas()));
+        fmtMonto(totalMercanciasExcentos));
     agregarElemento(doc, resumen, "TotalGravado", fmtMonto(factura.getTotalGravado()));
     agregarElemento(doc, resumen, "TotalExento", fmtMonto(factura.getTotalExento()));
     agregarElemento(doc, resumen, "TotalExonerado", fmtMonto(factura.getTotalExonerado()));
     agregarElemento(doc, resumen, "TotalVenta", fmtMonto(factura.getTotalVenta()));
     agregarElemento(doc, resumen, "TotalDescuentos", fmtMonto(factura.getTotalDescuentos()));
     agregarElemento(doc, resumen, "TotalVentaNeta", fmtMonto(factura.getTotalVentaNeta()));
+
+    agregarDesgloseImpuestos(doc, resumen, factura.getResumenImpuestos());
+
     agregarElemento(doc, resumen, "TotalImpuesto", fmtMonto(factura.getTotalImpuesto()));
+
+    agregarElemento(doc, resumen, "TotalImpAsumEmisorFabrica", "0");
+    agregarElemento(doc, resumen, "TotalIVADevuelto", "0");
+
+    // Desglose por impuesto (tu entidad)
 
     if (!factura.getOtrosCargos().isEmpty()) {
       BigDecimal totalOtros = factura.getOtrosCargos().stream()
@@ -414,20 +463,16 @@ public class FacturaXMLGeneratorService {
       agregarElemento(doc, resumen, "TotalOtrosCargos", fmtMonto(totalOtros));
     }
 
-    // Desglose por impuesto (tu entidad)
-    agregarDesgloseImpuestos(doc, resumen, factura.getResumenImpuestos());
-
-    agregarElemento(doc, resumen, "TotalComprobante", fmtMonto(factura.getTotalComprobante()));
-
     // Medios de pago en Resumen (4.4)
     for (FacturaMedioPago mp : factura.getMediosPago()) {
       Element medio = doc.createElement("MedioPago");
       resumen.appendChild(medio);
       agregarElemento(doc, medio, "TipoMedioPago", mp.getMedioPago().getCodigo());
-      if (factura.getMediosPago().size() > 1 && mp.getMonto() != null) {
-        agregarElemento(doc, medio, "TotalMedioPago", fmtMonto(mp.getMonto()));
-      }
+      agregarElemento(doc, medio, "TotalMedioPago", fmtMonto(mp.getMonto()));
     }
+
+    agregarElemento(doc, resumen, "TotalComprobante", fmtMonto(factura.getTotalComprobante()));
+
   }
 
   private void agregarElemento(Document doc, Element parent, String name, String value) {
@@ -464,15 +509,15 @@ public class FacturaXMLGeneratorService {
         agregarElemento(doc, des, "CodigoTarifaIVA", r.getCodigoTarifaIVA());
       }
 
-      if (r.getTotalBaseImponible() != null) {
-        agregarElemento(doc, des, "TotalBaseImponible", fmtMonto(r.getTotalBaseImponible()));
-      }
+//      if (r.getTotalBaseImponible() != null) {
+//        agregarElemento(doc, des, "TotalBaseImponible", fmtMonto(r.getTotalBaseImponible()));
+//      }
       agregarElemento(doc, des, "TotalMontoImpuesto", fmtMonto(r.getTotalMontoImpuesto()));
       agregarElemento(doc, des, "TotalMontoExoneracion",
           fmtMonto(r.getTotalMontoExoneracion() == null ? BigDecimal.ZERO
               : r.getTotalMontoExoneracion()));
-      agregarElemento(doc, des, "TotalImpuestoNeto", fmtMonto(r.getTotalImpuestoNeto()));
-      agregarElemento(doc, des, "CantidadLineas", String.valueOf(r.getCantidadLineas()));
+//      agregarElemento(doc, des, "TotalImpuestoNeto", fmtMonto(r.getTotalImpuestoNeto()));
+//      agregarElemento(doc, des, "CantidadLineas", String.valueOf(r.getCantidadLineas()));
     }
   }
 

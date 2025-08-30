@@ -27,6 +27,9 @@ public class ExoneracionRequest {
     @DecimalMin("0.00") @DecimalMax("100.00")
     private BigDecimal porcentajeExonerado;
 
+    @NotNull(message = "Código Institución exonerado es requerido")
+    private String codigoInstitucion;
+
     // Condicionales según tipoDocumentoEX
     private String articulo;
     private String inciso;

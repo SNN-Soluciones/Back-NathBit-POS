@@ -315,6 +315,7 @@ public class ClienteServiceImpl implements ClienteService {
         exoDto.setCodigoAutorizacion(exo.getCodigoAutorizacion());
         exoDto.setNumeroAutorizacion(exo.getNumeroAutorizacion());
         exoDto.setPoseeCabys(exo.getPoseeCabys());
+        exoDto.setCodigoInstitucion(exo.getCodigoInstitucion());
 
         // CABYS autorizados
         if (exo.getCabysAutorizados() != null && !exo.getCabysAutorizados().isEmpty()) {

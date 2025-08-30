@@ -21,6 +21,7 @@ public class ExoneracionClienteDto implements Serializable {
   private String tipoDocumento;             // Código MH: "04", "05", etc.
   private String numeroDocumento;           // Número de exoneración (si aplica)
   private String nombreInstitucion;         // Quien otorga
+  private String codigoInstitucion;
 
   // Vigencia
   private LocalDate fechaEmision;

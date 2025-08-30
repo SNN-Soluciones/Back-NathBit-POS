@@ -62,6 +62,9 @@ public class Usuario {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(unique = true, length = 50)
+    private String username;
+
     @Column(name = "requiere_cambio_password")
     private Boolean requiereCambioPassword = false;
 

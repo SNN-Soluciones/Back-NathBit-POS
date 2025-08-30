@@ -19,4 +19,7 @@ public interface UsuarioService {
     void eliminar(Long id);
     
     boolean existeEmail(String email);
+
+    Optional<Usuario> buscarPorUsername(String username);
+
 }

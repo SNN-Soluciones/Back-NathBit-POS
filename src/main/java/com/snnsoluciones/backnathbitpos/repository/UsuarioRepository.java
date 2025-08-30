@@ -18,6 +18,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     
     boolean existsByEmail(String email);
 
+    Optional<Usuario> findByUsernameIgnoreCase(String username);
+
     // Buscar por empresa
     @Query("SELECT DISTINCT u FROM Usuario u " +
         "JOIN u.usuarioEmpresas ue " +

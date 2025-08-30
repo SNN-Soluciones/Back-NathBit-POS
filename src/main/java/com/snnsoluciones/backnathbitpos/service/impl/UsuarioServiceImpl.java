@@ -72,4 +72,9 @@ public class UsuarioServiceImpl implements UsuarioService {
     public boolean existeEmail(String email) {
         return usuarioRepository.existsByEmail(email);
     }
+
+    @Override
+    public Optional<Usuario> buscarPorUsername(String username) {
+        return usuarioRepository.findByUsernameIgnoreCase(username);
+    }
 }

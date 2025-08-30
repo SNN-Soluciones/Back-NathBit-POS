@@ -60,11 +60,9 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
       validarDatosEmpresa(request);
 
       // 2. Preparar nombre base para archivos
-      String nombreBase = prepararNombreBase(
-          request.getNombreComercial() != null ? request.getNombreComercial()
-              : request.getNombreRazonSocial()
-      );
-      log.info("2. Nombre base para archivos: {}", nombreBase);
+      String nombreEmpresa = request.getNombreComercial() != null ?
+          request.getNombreComercial() : request.getNombreRazonSocial();
+      log.info("2. Nombre de empresa para archivos: {}", nombreEmpresa);
 
       // 3. Validar certificado ANTES de crear cualquier cosa
       String certificadoUrl = null;
@@ -108,7 +106,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
 
         // Si todo está bien, proceder a subir
         log.info("   - Subiendo certificado encriptado...");
-        certificadoUrl = subirCertificado(certificado, nombreBase);
+        certificadoUrl = subirCertificado(certificado, nombreEmpresa);
         log.info("   ✅ Certificado subido correctamente");
       } else {
         log.info("3. Empresa NO requiere Hacienda, omitiendo certificado");
@@ -118,7 +116,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
       String logoUrl = null;
       if (logo != null && !logo.isEmpty()) {
         log.info("4. Subiendo logo de la empresa...");
-        logoUrl = subirLogo(logo, nombreBase);
+        logoUrl = subirLogo(logo, nombreEmpresa);
         log.info("   ✅ Logo subido correctamente");
       } else {
         log.info("4. No se proporcionó logo");
@@ -224,23 +222,6 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     }
   }
 
-  private String prepararNombreBase(String nombreComercial) {
-    // Normalizar el nombre: quitar acentos, espacios por _, minúsculas
-    String normalizado = Normalizer.normalize(nombreComercial, Normalizer.Form.NFD)
-        .replaceAll("[^\\p{ASCII}]", "") // Quitar caracteres no ASCII
-        .replaceAll("[^a-zA-Z0-9\\s]", "") // Quitar caracteres especiales
-        .trim()
-        .replaceAll("\\s+", "_") // Espacios por _
-        .toLowerCase();
-
-    // Limitar longitud
-    if (normalizado.length() > 50) {
-      normalizado = normalizado.substring(0, 50);
-    }
-
-    return normalizado;
-  }
-
   private String subirLogo(MultipartFile logo, String nombreComercial) {
     // Validar tipo de archivo
     String contentType = logo.getContentType();
@@ -266,25 +247,27 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
     log.info("Subiendo logo con key: {}", s3Key);
 
     // Subir a S3 (público)
-    storageService.subirArchivo(logo, s3Key, contentType, false);
-
-    return s3Key;
+    return storageService.subirArchivo(logo, s3Key, contentType, false);
   }
 
-  private String subirCertificado(MultipartFile certificado, String nombreBase) {
+  private String subirCertificado(MultipartFile certificado, String nombreComercial) {
     try {
       // Leer bytes del certificado
       byte[] certificadoBytes = certificado.getBytes();
 
-      // Generar nombre único
+      // Generar nombre único con timestamp
       String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-      String nombreArchivo = String.format("%s_cert_%s", nombreBase, timestamp);
-      String s3Key = s3PathBuilder.buildCertificadoPath(nombreBase, nombreArchivo);
+      String nombreArchivo = String.format("certificado_%s.p12", timestamp);
+
+      // USAR S3PathBuilder para generar la ruta correcta
+      String s3Key = s3PathBuilder.buildCertificadoPath(nombreComercial, nombreArchivo);
+
+      log.info("Subiendo certificado con key: {}", s3Key);
 
       // Subir archivo encriptado
       return storageService.subirArchivo(
           certificadoBytes,
-          s3Key + ".p12",
+          s3Key,
           "application/x-pkcs12",
           true  // Privado
       );

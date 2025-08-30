@@ -19,7 +19,6 @@ public class CrearUsuarioCompletoRequest {
 
     // Datos básicos del usuario
     @NotBlank(message = "El email es obligatorio")
-    @Email(message = "Email inválido")
     private String email;
 
     @NotBlank(message = "El nombre es obligatorio")

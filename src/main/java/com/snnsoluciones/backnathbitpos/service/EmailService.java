@@ -488,6 +488,10 @@ public class EmailService {
       // Obtener empresa
       Empresa empresa = factura.getSucursal().getEmpresa();
 
+      String nombreEmpresa = empresa.getNombreComercial() != null && !empresa.getNombreComercial().trim().isEmpty()
+          ? empresa.getNombreComercial()
+          : empresa.getNombreRazonSocial();
+
       // Generar PDF on-demand
       byte[] pdfBytes = null;
       try {
@@ -499,8 +503,7 @@ public class EmailService {
       // Obtener XML firmado de S3
       byte[] xmlFirmadoBytes = null;
       try {
-        String xmlFirmadoPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_SIGNED,
-            empresa.getNombreRazonSocial());
+        String xmlFirmadoPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_SIGNED, nombreEmpresa);
         xmlFirmadoBytes = storageService.downloadFileAsBytes(xmlFirmadoPath);
       } catch (Exception e) {
         log.warn("No se pudo obtener XML firmado para reintento: {}", e.getMessage());
@@ -509,8 +512,7 @@ public class EmailService {
       // Obtener respuesta Hacienda de S3
       byte[] respuestaBytes = null;
       try {
-        String respuestaPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_RESPUESTA,
-            empresa.getNombreRazonSocial());
+        String respuestaPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_RESPUESTA, nombreEmpresa);
         respuestaBytes = storageService.downloadFileAsBytes(respuestaPath);
       } catch (Exception e) {
         log.warn("No se pudo obtener respuesta Hacienda para reintento: {}", e.getMessage());
@@ -519,8 +521,12 @@ public class EmailService {
       // URL del logo
       String logoUrl = null;
       try {
-        if (empresa.getLogoUrl() != null) {
-          logoUrl = storageService.generateSignedUrl(empresa.getLogoUrl(), 60);
+        if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().isEmpty()) {
+          // CAMBIO 4: Extraer key si es necesario antes de generar URL firmada
+          String logoKey = extraerKeyDeUrl(empresa.getLogoUrl());
+          if (logoKey != null) {
+            logoUrl = storageService.generateSignedUrl(logoKey, 60);
+          }
         }
       } catch (Exception e) {
         log.warn("No se pudo obtener URL del logo: {}", e.getMessage());
@@ -547,6 +553,37 @@ public class EmailService {
       log.error("Error reconstruyendo EmailFacturaDto: {}", e.getMessage(), e);
       throw new RuntimeException("No se pudo reconstruir el DTO para reintento", e);
     }
+  }
+
+  /**
+   * Método auxiliar para extraer la key S3 de una URL completa
+   * Similar al que existe en EmpresaServiceImpl
+   */
+  private String extraerKeyDeUrl(String url) {
+    if (url == null || url.isEmpty()) {
+      return null;
+    }
+    // Si ya es una key (no empieza con http), devolverla tal cual
+    if (!url.startsWith("http")) {
+      return url;
+    }
+
+    // Buscar el patrón NathBit-POS/ que marca el inicio de la key
+    int startIndex = url.indexOf("NathBit-POS/");
+    if (startIndex != -1) {
+      return url.substring(startIndex);
+    }
+
+    // Plan B: buscar después del bucket name
+    String bucketPattern = "/snn-soluciones/";
+    startIndex = url.indexOf(bucketPattern);
+    if (startIndex != -1) {
+      return url.substring(startIndex + bucketPattern.length());
+    }
+
+    // Si no se puede extraer, devolver null
+    log.warn("No se pudo extraer key S3 de URL: {}", url);
+    return null;
   }
 
   /**

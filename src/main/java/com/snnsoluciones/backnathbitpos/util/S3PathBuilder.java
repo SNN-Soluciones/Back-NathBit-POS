@@ -11,8 +11,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Generador de rutas estandarizadas para almacenamiento en S3
- * <p>
- * Formato: EMPRESA-NOMBRE-COMERCIAL/TIPO-FACTURA/2025/AGOSTO/{clave}-tipo.xml
+ *
+ * IMPORTANTE: Este es el ÚNICO lugar donde se debe normalizar nombres de empresa
+ * para garantizar consistencia en toda la aplicación.
  */
 @Component
 public class S3PathBuilder {
@@ -22,14 +23,13 @@ public class S3PathBuilder {
 
   /**
    * Genera la ruta completa para un archivo XML en S3
-   *
-   * @param factura     La factura
-   * @param tipoArchivo Tipo de archivo (sin-firma, firmado, respuesta)
-   * @return Ruta completa en S3
    */
   public String buildXmlPath(Factura factura, TipoArchivoFactura tipoArchivo, String empresaNombre) {
     if (empresaNombre == null || empresaNombre.trim().isEmpty()) {
-      empresaNombre = factura.getSucursal().getEmpresa().getNombreRazonSocial();
+      empresaNombre = factura.getSucursal().getEmpresa().getNombreComercial();
+      if (empresaNombre == null || empresaNombre.trim().isEmpty()) {
+        empresaNombre = factura.getSucursal().getEmpresa().getNombreRazonSocial();
+      }
     }
 
     String empresaNormalizada = normalizeCompanyName(empresaNombre);
@@ -44,7 +44,7 @@ public class S3PathBuilder {
         tipoArchivo.name()
     );
 
-    return String.format("%s/%s/%s/%s/%s/%s",
+    return String.format("%s/empresas/%s/facturas/%s/%s/%s/%s",
         S3_PATH_PREFIX,
         empresaNormalizada,
         tipoFactura,
@@ -58,11 +58,7 @@ public class S3PathBuilder {
    * Genera la ruta para un PDF
    */
   public String buildPdfPath(Factura factura) {
-    String empresaNombre = factura.getSucursal().getEmpresa().getNombreComercial();
-    if (empresaNombre == null || empresaNombre.trim().isEmpty()) {
-      empresaNombre = factura.getSucursal().getEmpresa().getNombreRazonSocial();
-    }
-
+    String empresaNombre = obtenerNombreEmpresa(factura.getSucursal().getEmpresa());
     String empresaNormalizada = normalizeCompanyName(empresaNombre);
     String tipoFactura = normalizeTipoDocumento(factura.getTipoDocumento());
 
@@ -72,7 +68,7 @@ public class S3PathBuilder {
 
     String filename = String.format("%s.pdf", factura.getClave());
 
-    return String.format("%s/%s/%s/%s/%s/PDF/%s",
+    return String.format("%s/empresas/%s/facturas/%s/%s/%s/PDF/%s",
         S3_PATH_PREFIX,
         empresaNormalizada,
         tipoFactura,
@@ -87,59 +83,104 @@ public class S3PathBuilder {
    */
   public String normalizeTipoDocumento(TipoDocumento tipo) {
     return switch (tipo) {
-      case FACTURA_ELECTRONICA -> "FACTURA-ELECTRONICA";
-      case TIQUETE_ELECTRONICO -> "TIQUETE-ELECTRONICO";
-      case NOTA_CREDITO -> "NOTA-CREDITO";
-      case NOTA_DEBITO -> "NOTA-DEBITO";
-      case FACTURA_COMPRA -> "FACTURA-COMPRA";
-      case FACTURA_EXPORTACION -> "FACTURA-EXPORTACION";
-      default -> tipo.name().replace("_", "-");
+      case FACTURA_ELECTRONICA -> "factura-electronica";
+      case TIQUETE_ELECTRONICO -> "tiquete-electronico";
+      case NOTA_CREDITO -> "nota-credito";
+      case NOTA_DEBITO -> "nota-debito";
+      case FACTURA_COMPRA -> "factura-compra";
+      case FACTURA_EXPORTACION -> "factura-exportacion";
+      default -> tipo.name().toLowerCase().replace("_", "-");
     };
   }
 
   /**
    * Genera la ruta para el certificado digital de la empresa
-   * Formato: NathBit-POS/EMPRESA-NOMBRE/ARCHIVOS/certificado.p12
+   * Formato: NathBit-POS/empresas/{empresa}/certificados/{filename}
    */
   public String buildCertificadoPath(String nombreEmpresa, String filename) {
     String empresaNormalizada = normalizeCompanyName(nombreEmpresa);
-    return String.format("%s/%s/ARCHIVOS/%s", S3_PATH_PREFIX, empresaNormalizada, filename);
+    return String.format("%s/empresas/%s/certificados/%s",
+        S3_PATH_PREFIX,
+        empresaNormalizada,
+        filename);
   }
 
   /**
    * Genera la ruta para el logo de la empresa
-   * Formato: NathBit-POS/EMPRESA-NOMBRE/ARCHIVOS/logo.{extension}
+   * Formato: NathBit-POS/empresas/{empresa}/logos/logo.{extension}
    */
   public String buildLogoPath(String nombreEmpresa, String extension) {
     String empresaNormalizada = normalizeCompanyName(nombreEmpresa);
     String ext = extension.startsWith(".") ? extension.substring(1) : extension;
-    String filename = String.format("logo.%s", ext);
-    return String.format("%s/%s/ARCHIVOS/%s", S3_PATH_PREFIX, empresaNormalizada, filename);
+    String filename = String.format("logo.%s", ext.toLowerCase());
+    return String.format("%s/empresas/%s/logos/%s",
+        S3_PATH_PREFIX,
+        empresaNormalizada,
+        filename);
   }
-
 
   /**
    * Genera la ruta para otros archivos de la empresa
-   * Formato: NathBit-POS/EMPRESA-NOMBRE/ARCHIVOS/{filename}
+   * Formato: NathBit-POS/empresas/{empresa}/archivos/{filename}
    */
   public String buildArchivoPath(String nombreEmpresa, String filename) {
     String empresaNormalizada = normalizeCompanyName(nombreEmpresa);
-    return String.format("%s/%s/ARCHIVOS/%s", S3_PATH_PREFIX, empresaNormalizada, filename);
+    return String.format("%s/empresas/%s/archivos/%s",
+        S3_PATH_PREFIX,
+        empresaNormalizada,
+        filename);
   }
 
   /**
-   * Normaliza el nombre de empresa (método auxiliar para uso directo)
+   * MÉTODO CENTRALIZADO DE NORMALIZACIÓN
+   * Este es el ÚNICO método que debe usarse en toda la aplicación
+   * para normalizar nombres de empresa.
+   *
+   * Reglas:
+   * 1. Convertir a minúsculas (más estándar en S3)
+   * 2. Eliminar acentos y caracteres especiales
+   * 3. Reemplazar espacios por guiones bajos
+   * 4. Eliminar caracteres no ASCII
+   * 5. Limitar longitud a 50 caracteres
    */
   public String normalizeCompanyName(String nombre) {
     if (nombre == null || nombre.trim().isEmpty()) {
       throw new IllegalArgumentException("El nombre de la empresa no puede estar vacío");
     }
 
-    return nombre
-        .toUpperCase()
-        .replaceAll("[^A-Z0-9\\s]", "") // Eliminar caracteres especiales
+    String normalizado = nombre
+        .toLowerCase()                          // Minúsculas para consistencia
+        .replaceAll("[áàäâ]", "a")             // Reemplazar acentos
+        .replaceAll("[éèëê]", "e")
+        .replaceAll("[íìïî]", "i")
+        .replaceAll("[óòöô]", "o")
+        .replaceAll("[úùüû]", "u")
+        .replaceAll("ñ", "n")
+        .replaceAll("[^a-z0-9\\s]", "")        // Solo letras, números y espacios
         .trim()
-        .replaceAll("\\s+", "_"); // Espacios a guiones bajos
+        .replaceAll("\\s+", "_");              // Espacios por guiones bajos
+
+    // Limitar longitud
+    if (normalizado.length() > 50) {
+      normalizado = normalizado.substring(0, 50);
+    }
+
+    // Validar que no quede vacío después de la normalización
+    if (normalizado.isEmpty()) {
+      throw new IllegalArgumentException("El nombre normalizado no puede quedar vacío");
+    }
+
+    return normalizado;
   }
 
+  /**
+   * Método auxiliar para obtener el nombre de la empresa
+   * Prioriza nombre comercial sobre razón social
+   */
+  private String obtenerNombreEmpresa(Empresa empresa) {
+    if (empresa.getNombreComercial() != null && !empresa.getNombreComercial().trim().isEmpty()) {
+      return empresa.getNombreComercial();
+    }
+    return empresa.getNombreRazonSocial();
+  }
 }

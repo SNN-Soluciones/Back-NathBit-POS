@@ -61,6 +61,10 @@ public class UsuarioCreacionService {
                 throw new RuntimeException("Ya existe un usuario con el email: " + request.getEmail());
             }
 
+            if(usuarioRepository.findByUsernameIgnoreCase(request.getEmail()).isPresent()) {
+                throw new RuntimeException("Ya existe un usuario con el username: " + request.getEmail());
+            }
+
             // 6. Crear el usuario
             log.info("6. Creando usuario...");
             String passwordTemporal = generarPasswordTemporal(request.getPassword());

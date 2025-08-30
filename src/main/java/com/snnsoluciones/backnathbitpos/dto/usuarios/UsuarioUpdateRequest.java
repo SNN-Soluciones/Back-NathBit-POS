@@ -7,7 +7,6 @@ import lombok.Data;
 @Data
 public class UsuarioUpdateRequest {
     
-    @Email(message = "Email inválido")
     private String email;
     
     private String password; // Opcional para update

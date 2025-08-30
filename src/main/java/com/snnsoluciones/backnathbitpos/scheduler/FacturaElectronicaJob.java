@@ -112,7 +112,7 @@ public class FacturaElectronicaJob {
         .orElseThrow(
             () -> new RuntimeException("Factura no encontrada: " + bitacora.getFacturaId()));
     final Empresa empresa = factura.getSucursal().getEmpresa();
-    final String empresaNombre = empresa.getNombreRazonSocial();
+    final String empresaNombre = empresa.getNombreComercial();
 
     // 2) Generar XML
     log.info("[1/6] Generando XML...");

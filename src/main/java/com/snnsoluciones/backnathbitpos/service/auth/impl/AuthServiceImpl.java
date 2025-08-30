@@ -32,16 +32,25 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse login(LoginRequest request) {
+
+        String loginIdentifier = request.getEmail(); // Por ahora sigue usando el campo email del request
+        Usuario usuario;
+
+        // Si contiene @ es email, sino es username
+        if (loginIdentifier.contains("@")) {
+            usuario = usuarioService.buscarPorEmail(loginIdentifier)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        } else {
+            usuario = usuarioService.buscarPorUsername(loginIdentifier)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        }
+
         // Autenticar
         Authentication authentication = authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
         
         SecurityContextHolder.getContext().setAuthentication(authentication);
-        
-        // Obtener usuario
-        Usuario usuario = usuarioService.buscarPorEmail(request.getEmail())
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         
         // Generar token básico
         String token = tokenProvider.generateToken(

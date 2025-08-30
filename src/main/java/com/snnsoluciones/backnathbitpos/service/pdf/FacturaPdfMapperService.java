@@ -437,10 +437,32 @@ public class FacturaPdfMapperService {
   private void cargarLogoEmpresa(Map<String, Object> params, Empresa empresa) {
     try {
       if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().isEmpty()) {
-        // CORRECCIÓN: Usar downloadFileAsBytes que retorna byte[]
-        byte[] logoBytes = storageService.downloadFileAsBytes(empresa.getLogoUrl());
+        String logoKey = empresa.getLogoUrl();
+
+        // Si es una URL completa, extraer solo la key
+        if (logoKey.startsWith("http")) {
+          // Buscar el patrón después del bucket name
+          int startIndex = logoKey.indexOf("NathBit-POS/");
+          if (startIndex != -1) {
+            logoKey = logoKey.substring(startIndex);
+          } else {
+            // Intentar extraer después del bucket
+            String bucketPattern = "/snn-soluciones/";
+            startIndex = logoKey.indexOf(bucketPattern);
+            if (startIndex != -1) {
+              logoKey = logoKey.substring(startIndex + bucketPattern.length());
+            }
+          }
+        }
+
+        log.debug("Descargando logo con key: {}", logoKey);
+
+        // Descargar usando la key limpia
+        byte[] logoBytes = storageService.downloadFileAsBytes(logoKey);
         params.put("logo_empresa", logoBytes);
         params.put("tiene_logo", true);
+
+        log.debug("Logo cargado exitosamente, tamaño: {} bytes", logoBytes.length);
       } else {
         params.put("tiene_logo", false);
       }

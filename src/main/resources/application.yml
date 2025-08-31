@@ -1,81 +1,49 @@
 spring:
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/nathbitpos}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:password}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      connection-timeout: 20000
-      maximum-pool-size: 5
+    url: jdbc:postgresql://localhost:5432/nathbitpos
+    username: ${DB_USER:snnsoluciones}
+    password: ${DB_PASSWORD:@39NSNm90@1}
 
   jpa:
     hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:update}
+      ddl-auto: none
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-    show-sql: ${JPA_SHOW_SQL:false}
+    show-sql: false
 
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:fe@samyx.digital}
-    password: ${MAIL_PASSWORD:hgctqnepsmaulkkz}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-          ssl:
-            enable: true
+    host: smtp.gmail.com
+    port: 465
+    username: fe@samyx.digital
+    password: hgctqnepsmaulkkz
 
 app:
   encryption:
     master-key: ${ENCRYPTION_MASTER_KEY:TuLlaveMaestraSeguraDe32Caracteres!!}
   certificados:
-    presigned-url-duration-minutes: ${CERT_URL_DURATION:15}
+    presigned-url-duration-minutes: 15
   logos:
-    default-logo-path: ${DEFAULT_LOGO_PATH:defaults/logo-default.png}
+    default-logo-path: "defaults/logo-default.png"
+
   jwt:
-    secret: ${JWT_SECRET:oY4vU2yN1tR9kQ8wL6bC0pA3fZ7eH5sM8xG4jV1uK9dT2lQ6wP0nB3rF8cJ6mZ4q}
-    expiration-in-ms: ${JWT_EXPIRATION:86400000}
+    secret: ${JWT_SECRET:oY4vU2yN1tR9kQ8wL6bC0pA3fZ7eH5sM8xG4jV1uK9dT2lQ6wP0nB3rF8cJ6mZ4q
+    expiration-in-ms: 86400000 # 24 horas
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: 8080
 
 storage:
   spaces:
-    access-key: ${DO_SPACES_ACCESS_KEY:DO00C3NT8QYQ9R7HHJRW}
-    secret-key: ${DO_SPACES_SECRET_KEY:HyOasERhBvz4pLciZTf0W8utirzlvYPR41bteNSeYLA}
-    endpoint: ${DO_SPACES_ENDPOINT:https://nyc3.digitaloceanspaces.com}
-    region: ${DO_SPACES_REGION:nyc3}
-    bucket: ${DO_SPACES_BUCKET:snn-soluciones}
-    base-folder: ${DO_SPACES_BASE_FOLDER:NathBit-POS}
+    access-key: DO00C3NT8QYQ9R7HHJRW
+    secret-key: HyOasERhBvz4pLciZTf0W8utirzlvYPR41bteNSeYLA
+    endpoint: https://nyc3.digitaloceanspaces.com
+    region: nyc3
+    bucket: snn-soluciones
+    base-folder: NathBit-POS
 
 firma:
   policy:
-    url: ${FIRMA_POLICY_URL:https://cdn.comprobanteselectronicos.go.cr/xml-schemas/Resolución_General_sobre_disposiciones_técnicas_comprobantes_electrónicos_para_efectos_tributarios.pdf}
-
-# Configuración para producción
----
-spring:
-  config:
-    activate:
-      on-profile: prod
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: false
-
-# Configuración para desarrollo
----
-spring:
-  config:
-    activate:
-      on-profile: dev
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
+    url: "https://cdn.comprobanteselectronicos.go.cr/xml-schemas/Resolución_General_sobre_disposiciones_técnicas_comprobantes_electrónicos_para_efectos_tributarios.pdf"
+    # fallbackDigestBase64: ""  # opcional: solo si querés fijarlo; si lo dejás vacío, se calcula online y se cachea

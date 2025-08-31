@@ -63,6 +63,7 @@ public class SecurityConfig {
                 // Endpoints públicos
                 .requestMatchers(
                     "/api/auth/login",
+                    "/nathbit/api/auth/login",
                     "/api/auth/refresh",
                     "/api/test/**",
                     "/swagger-ui/**",
@@ -100,7 +101,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.asList(
             "http://localhost:4200",      // Angular desarrollo
             "http://localhost:4201",      // Angular testing
-            "http://localhost:8080"       // Por si pruebas desde otro puerto
+            "http://localhost:8080",
+            "http://45.32.164.243:4200"// Por si pruebas desde otro puerto
         ));
 
         // Métodos HTTP permitidos

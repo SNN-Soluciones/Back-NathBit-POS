@@ -94,6 +94,11 @@ public class Cliente {
     @JoinColumn(name = "ubicacion_id", referencedColumnName = "id", nullable = true, unique = true)
     private ClienteUbicacion ubicacion;
 
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JoinColumn(name = "cliente_id", nullable = false)
+    @Builder.Default
+    private Set<ClienteActividad> actividades = new HashSet<>();
+
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @JoinColumn(name = "cliente_id", nullable = false) // FK en clientes_exoneraciones
     @Builder.Default

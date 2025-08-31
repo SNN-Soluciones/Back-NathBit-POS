@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.cliente.ActividadEconomicaDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
@@ -8,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ExoneracionClienteDto;
 import com.snnsoluciones.backnathbitpos.entity.Barrio;
 import com.snnsoluciones.backnathbitpos.entity.Canton;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
+import com.snnsoluciones.backnathbitpos.entity.ClienteActividad;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracionCabys;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
@@ -98,6 +100,20 @@ public class ClienteServiceImpl implements ClienteService {
     cliente.setPermiteCredito(Boolean.TRUE.equals(dto.getPermiteCredito()));
     cliente.setInscritoHacienda(Boolean.TRUE.equals(dto.getInscritoHacienda()));
     cliente.setActivo(Boolean.TRUE.equals(dto.getActivo()));
+
+    if (dto.getActividades() != null && !dto.getActividades().isEmpty()) {
+      for (ActividadEconomicaDto actividadDto : dto.getActividades()) {
+        if (actividadDto.getCodigo() != null && actividadDto.getDescripcion() != null) {
+          ClienteActividad actividad = ClienteActividad.builder()
+              .cliente(cliente)
+              .codigoActividad(actividadDto.getCodigo())
+              .descripcion(actividadDto.getDescripcion())
+              .build();
+
+          cliente.getActividades().add(actividad);
+        }
+      }
+    }
 
     // =========================
 // 3) Ubicación (Cliente es dueño)

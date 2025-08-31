@@ -2,6 +2,7 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
+import java.util.List;
 import lombok.*;
 import java.io.Serializable;
 
@@ -22,6 +23,8 @@ public class ClientePOSDto implements Serializable {
     private Boolean permiteCredito;
 
     private ClienteUbicacionDTO ubicacion;
-    // NUEVO
     private ExoneracionClienteDto exoneracion; // null si no aplica
+
+    // NUEVO: Lista de actividades económicas del cliente
+    private List<ActividadEconomicaDto> actividades;
 }

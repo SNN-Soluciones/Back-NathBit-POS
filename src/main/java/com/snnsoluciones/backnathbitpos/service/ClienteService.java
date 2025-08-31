@@ -14,7 +14,7 @@ public interface ClienteService {
     // Operaciones CRUD básicas
     Cliente crear(ClientePOSDto cliente, Long empresaId);
     
-    Cliente actualizar(Long id, Cliente cliente);
+    Cliente actualizar(Long id, ClientePOSDto cliente);
     
     Cliente obtenerPorId(Long id);
     
@@ -70,4 +70,9 @@ public interface ClienteService {
 
     ClienteExoneracion obtenerExoneracionPorId(Long exoneracionId);
 
+    Cliente agregarEmail(Long clienteId, String email);
+    Cliente quitarEmail(Long clienteId, String email);
+    List<String> obtenerEmails(Long clienteId);
+    String obtenerEmailSugerido(Long clienteId);
+    void registrarUsoEmail(Long clienteId, String email);
 }

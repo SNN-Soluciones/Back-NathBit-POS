@@ -55,9 +55,10 @@ public class Cliente {
 
     @Column(name = "fecha_verificacion_hacienda")
     private LocalDateTime fechaVerificacionHacienda;
-    
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String emails; // Separados por coma, máximo 4
+
+    @OneToMany(mappedBy = "cliente", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<ClienteEmail> clienteEmails = new HashSet<>();
     
     @Column(name = "telefono_codigo_pais", length = 3)
     private String telefonoCodigoPais;

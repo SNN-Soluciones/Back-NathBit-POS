@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.cliente.ActividadEconomicaDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteEmailDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
@@ -10,6 +11,7 @@ import com.snnsoluciones.backnathbitpos.entity.Barrio;
 import com.snnsoluciones.backnathbitpos.entity.Canton;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteActividad;
+import com.snnsoluciones.backnathbitpos.entity.ClienteEmail;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracionCabys;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
@@ -32,6 +34,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -93,8 +96,7 @@ public class ClienteServiceImpl implements ClienteService {
     cliente.setEmpresa(empresa);
     cliente.setTipoIdentificacion(tipo);
     cliente.setNumeroIdentificacion(numeroId);
-    cliente.setRazonSocial(StringUtils.trimToEmpty(dto.getRazonSocial()));
-    cliente.setEmails(StringUtils.trimToEmpty(dto.getEmails()));          // primer email o CSV
+    cliente.setRazonSocial(StringUtils.trimToEmpty(dto.getRazonSocial()));     // primer email o CSV
     cliente.setTelefonoCodigoPais("506");                                  // CR por defecto
     cliente.setTelefonoNumero(StringUtils.trimToEmpty(dto.getTelefonoNumero()));
     cliente.setPermiteCredito(Boolean.TRUE.equals(dto.getPermiteCredito()));
@@ -113,6 +115,26 @@ public class ClienteServiceImpl implements ClienteService {
           cliente.getActividades().add(actividad);
         }
       }
+    }
+
+    // Agregar emails antes de guardar
+    if (dto.getClienteEmails() != null && !dto.getClienteEmails().isEmpty()) {
+      for (ClienteEmailDTO emailDto : dto.getClienteEmails()) {
+        if (emailDto.getEmail() != null) {
+          validarEmailsFormato(emailDto.getEmail());
+          ClienteEmail clienteEmail = ClienteEmail.builder()
+              .cliente(cliente)
+              .email(emailDto.getEmail().trim().toLowerCase())
+              .esPrincipal(emailDto.getEsPrincipal() != null ? emailDto.getEsPrincipal() : false)
+              .build();
+          cliente.getClienteEmails().add(clienteEmail);
+        }
+      }
+    }
+
+// Validar que tenga al menos un email
+    if (cliente.getClienteEmails().isEmpty()) {
+      throw new IllegalArgumentException("El cliente debe tener al menos un email");
     }
 
     // =========================
@@ -220,30 +242,44 @@ public class ClienteServiceImpl implements ClienteService {
   }
 
   @Override
-  public Cliente actualizar(Long id, Cliente clienteActualizado) {
+  public Cliente actualizar(Long id, ClientePOSDto clienteActualizado) {
     log.info("Actualizando cliente ID: {}", id);
 
     Cliente clienteExistente = obtenerPorId(id);
 
-    // Validaciones
-    validarEmailsFormato(clienteActualizado.getEmails());
-    if (clienteActualizado.getTelefonoNumero() != null ||
-        clienteActualizado.getTelefonoCodigoPais() != null) {
-      validarTelefonos(clienteActualizado.getTelefonoCodigoPais(),
-          clienteActualizado.getTelefonoNumero());
+    if (clienteExistente == null) {
+      throw new IllegalArgumentException("Cliente no encontrado");
     }
 
-    // Verificar unicidad si cambió identificación o emails
-    if (!clienteExistente.getNumeroIdentificacion()
-        .equals(clienteActualizado.getNumeroIdentificacion()) ||
-        !clienteExistente.getEmails().equals(clienteActualizado.getEmails())) {
+    // Actualizar campos básicos del DTO
+    if (clienteActualizado.getRazonSocial() != null) {
+      clienteExistente.setRazonSocial(clienteActualizado.getRazonSocial());
+    }
+    if (clienteActualizado.getTelefonoNumero() != null) {
+      clienteExistente.setTelefonoNumero(clienteActualizado.getTelefonoNumero());
+    }
 
-      if (existeCliente(clienteExistente.getEmpresa().getId(),
-          clienteActualizado.getNumeroIdentificacion(),
-          clienteActualizado.getEmails())) {
-        throw new IllegalArgumentException(
-            "Ya existe otro cliente con esa identificación y emails"
-        );
+    // Validaciones
+    if (clienteActualizado.getClienteEmails() != null) {
+      // Limpiar emails existentes
+      clienteExistente.getClienteEmails().clear();
+
+      // Agregar nuevos
+      for (ClienteEmailDTO emailDto : clienteActualizado.getClienteEmails()) {
+        if (emailDto.getEmail() != null) {
+          validarEmailsFormato(emailDto.getEmail());
+          ClienteEmail clienteEmail = ClienteEmail.builder()
+              .cliente(clienteExistente)
+              .email(emailDto.getEmail().trim().toLowerCase())
+              .esPrincipal(emailDto.getEsPrincipal() != null ? emailDto.getEsPrincipal() : false)
+              .build();
+          clienteExistente.getClienteEmails().add(clienteEmail);
+        }
+      }
+
+      // Validar que no quede sin emails
+      if (clienteExistente.getClienteEmails().isEmpty()) {
+        throw new IllegalArgumentException("El cliente debe tener al menos un email");
       }
     }
 
@@ -251,11 +287,8 @@ public class ClienteServiceImpl implements ClienteService {
     clienteExistente.setTipoIdentificacion(clienteActualizado.getTipoIdentificacion());
     clienteExistente.setNumeroIdentificacion(clienteActualizado.getNumeroIdentificacion());
     clienteExistente.setRazonSocial(clienteActualizado.getRazonSocial());
-    clienteExistente.setEmails(clienteActualizado.getEmails());
-    clienteExistente.setTelefonoCodigoPais(clienteActualizado.getTelefonoCodigoPais());
     clienteExistente.setTelefonoNumero(clienteActualizado.getTelefonoNumero());
     clienteExistente.setPermiteCredito(clienteActualizado.getPermiteCredito());
-    clienteExistente.setObservaciones(clienteActualizado.getObservaciones());
 
     return clienteRepository.save(clienteExistente);
   }
@@ -297,7 +330,6 @@ public class ClienteServiceImpl implements ClienteService {
       dto.setTipoIdentificacion(cliente.getTipoIdentificacion());
       dto.setNumeroIdentificacion(cliente.getNumeroIdentificacion());
       dto.setRazonSocial(cliente.getRazonSocial());
-      dto.setEmails(cliente.getEmails());
       dto.setTelefonoNumero(cliente.getTelefonoNumero());
       dto.setPermiteCredito(cliente.getPermiteCredito());
       dto.setInscritoHacienda(cliente.getInscritoHacienda());
@@ -320,7 +352,8 @@ public class ClienteServiceImpl implements ClienteService {
       if (cliente.getExoneraciones() != null && !cliente.getExoneraciones().isEmpty()) {
         var exo = cliente.getExoneraciones().iterator().next(); // ejemplo: tomamos la 1ª
         var exoDto = new ExoneracionClienteDto();
-        exoDto.setTipoDocumento(exo.getTipoDocumento() != null ? exo.getTipoDocumento().name() : null);
+        exoDto.setTipoDocumento(
+            exo.getTipoDocumento() != null ? exo.getTipoDocumento().name() : null);
         exoDto.setNumeroDocumento(exo.getNumeroDocumento());
         exoDto.setNombreInstitucion(exo.getNombreInstitucion());
         exoDto.setFechaEmision(exo.getFechaEmision());
@@ -356,7 +389,8 @@ public class ClienteServiceImpl implements ClienteService {
   }
 
   @Override
-  public Page<ClientePOSDto> buscarPorEmpresaDto(Long empresaId, String busqueda, Pageable pageable) {
+  public Page<ClientePOSDto> buscarPorEmpresaDto(Long empresaId, String busqueda,
+      Pageable pageable) {
     Page<Cliente> clientes;
 
     if (StringUtils.isNotBlank(busqueda)) {
@@ -372,7 +406,6 @@ public class ClienteServiceImpl implements ClienteService {
       dto.setTipoIdentificacion(cliente.getTipoIdentificacion());
       dto.setNumeroIdentificacion(cliente.getNumeroIdentificacion());
       dto.setRazonSocial(cliente.getRazonSocial());
-      dto.setEmails(cliente.getEmails());
       dto.setTelefonoNumero(cliente.getTelefonoNumero());
       dto.setPermiteCredito(cliente.getPermiteCredito());
       dto.setInscritoHacienda(cliente.getInscritoHacienda());
@@ -395,7 +428,8 @@ public class ClienteServiceImpl implements ClienteService {
       if (cliente.getExoneraciones() != null && !cliente.getExoneraciones().isEmpty()) {
         var exo = cliente.getExoneraciones().iterator().next();
         var exoDto = new ExoneracionClienteDto();
-        exoDto.setTipoDocumento(exo.getTipoDocumento() != null ? exo.getTipoDocumento().name() : null);
+        exoDto.setTipoDocumento(
+            exo.getTipoDocumento() != null ? exo.getTipoDocumento().name() : null);
         exoDto.setNumeroDocumento(exo.getNumeroDocumento());
         exoDto.setNombreInstitucion(exo.getNombreInstitucion());
         exoDto.setFechaEmision(exo.getFechaEmision());
@@ -873,5 +907,137 @@ public class ClienteServiceImpl implements ClienteService {
     link.setCabys(cabys);
 
     exoneracionCabysRepository.save(link);
+  }
+
+  @Override
+  @Transactional
+  public Cliente agregarEmail(Long clienteId, String email) {
+    Cliente cliente = obtenerPorId(clienteId);
+
+    if (cliente == null) {
+      throw new IllegalArgumentException("Cliente no encontrado");
+    }
+
+    // Validar formato de email
+    if (!EMAIL_PATTERN.matcher(email).matches()) {
+      throw new IllegalArgumentException("Formato de email inválido");
+    }
+
+    // Normalizar email
+    email = email.toLowerCase().trim();
+
+    // Verificar si ya existe para este cliente
+    String finalEmail = email;
+    boolean yaExiste = cliente.getClienteEmails().stream()
+        .anyMatch(ce -> ce.getEmail().equalsIgnoreCase(finalEmail));
+
+    if (yaExiste) {
+      throw new IllegalArgumentException("Este email ya está registrado para este cliente");
+    }
+
+    // Crear nuevo ClienteEmail
+    ClienteEmail clienteEmail = ClienteEmail.builder()
+        .cliente(cliente)
+        .email(email)
+        .build();
+
+    cliente.getClienteEmails().add(clienteEmail);
+
+    return clienteRepository.save(cliente);
+  }
+
+  @Override
+  @Transactional
+  public Cliente quitarEmail(Long clienteId, String email) {
+    Cliente cliente = obtenerPorId(clienteId);
+
+    if (cliente == null) {
+      throw new IllegalArgumentException("Cliente no encontrado");
+    }
+
+    // No permitir quitar si solo tiene un email
+    if (cliente.getClienteEmails().size() <= 1) {
+      throw new IllegalArgumentException("El cliente debe tener al menos un email");
+    }
+
+    email = email.toLowerCase().trim();
+
+    String finalEmail = email;
+    boolean removido = cliente.getClienteEmails().removeIf(
+        ce -> ce.getEmail().equalsIgnoreCase(finalEmail)
+    );
+
+    if (!removido) {
+      throw new IllegalArgumentException("Email no encontrado");
+    }
+
+    return clienteRepository.save(cliente);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<String> obtenerEmails(Long clienteId) {
+    Cliente cliente = obtenerPorId(clienteId);
+
+    if (cliente == null) {
+      throw new IllegalArgumentException("Cliente no encontrado");
+    }
+
+    return cliente.getClienteEmails().stream()
+        .sorted((e1, e2) -> {
+          // Ordenar por frecuencia de uso
+          int compareVeces = e2.getVecesUsado().compareTo(e1.getVecesUsado());
+          if (compareVeces != 0) {
+            return compareVeces;
+          }
+
+          // Si tienen mismo uso, ordenar por más reciente
+          if (e1.getUltimoUso() != null && e2.getUltimoUso() != null) {
+            return e2.getUltimoUso().compareTo(e1.getUltimoUso());
+          } else if (e1.getUltimoUso() != null) {
+            return -1;
+          } else if (e2.getUltimoUso() != null) {
+            return 1;
+          }
+
+          // Por último, orden alfabético
+          return e1.getEmail().compareTo(e2.getEmail());
+        })
+        .map(ClienteEmail::getEmail)
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public String obtenerEmailSugerido(Long clienteId) {
+    List<String> emails = obtenerEmails(clienteId);
+
+    if (emails.isEmpty()) {
+      return null;
+    }
+
+    return emails.get(0); // El primero es el más usado/reciente
+  }
+
+  // Método helper para registrar uso de email (para cuando se facture)
+  @Override
+  @Transactional
+  public void registrarUsoEmail(Long clienteId, String email) {
+    Cliente cliente = obtenerPorId(clienteId);
+
+    if (cliente == null) {
+      throw new IllegalArgumentException("Cliente no encontrado");
+    }
+
+    email = email.toLowerCase().trim();
+
+    String finalEmail = email;
+    cliente.getClienteEmails().stream()
+        .filter(ce -> ce.getEmail().equalsIgnoreCase(finalEmail))
+        .findFirst()
+        .ifPresent(ce -> {
+          ce.registrarUso();
+          clienteRepository.save(cliente);
+        });
   }
 }

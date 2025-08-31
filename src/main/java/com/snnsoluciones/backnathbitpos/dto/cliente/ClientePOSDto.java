@@ -2,7 +2,9 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.*;
 import java.io.Serializable;
 
@@ -15,7 +17,8 @@ public class ClientePOSDto implements Serializable {
     private TipoIdentificacion tipoIdentificacion;
     private String numeroIdentificacion;
     private String razonSocial;
-    private String emails; // Solo el primer email para el listado
+    @Builder.Default
+    private Set<ClienteEmailDTO> clienteEmails = new HashSet<>();
     private String telefonoNumero;
     private Boolean tieneExoneracion;
     private Boolean activo;

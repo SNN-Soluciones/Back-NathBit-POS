@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.dto.cliente;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.validation.constraints.*;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,9 +25,9 @@ public class ClienteCreateDTO {
     @NotBlank(message = "La razón social es obligatoria")
     @Size(min = 3, max = 100, message = "La razón social debe tener entre 3 y 100 caracteres")
     private String razonSocial;
-    
-    @NotBlank(message = "Debe proporcionar al menos un email")
-    private String emails; // Separados por coma
+
+    @Builder.Default
+    private Set<ClienteEmailDTO> clienteEmails = new HashSet<>();
     
     @Size(min = 1, max = 3, message = "El código de país debe tener entre 1 y 3 dígitos")
     @Pattern(regexp = "^\\d*$", message = "El código de país debe contener solo números")

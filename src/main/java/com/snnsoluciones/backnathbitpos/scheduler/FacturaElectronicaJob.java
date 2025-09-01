@@ -324,8 +324,8 @@ public class FacturaElectronicaJob {
     try {
       // Solo enviar si el cliente tiene email
       if (factura.getCliente() != null &&
-          factura.getCliente().getEmails() != null &&
-          !factura.getCliente().getEmails().isEmpty()) {
+          factura.getEmailReceptor() != null &&
+          !factura.getEmailReceptor().isEmpty()) {
 
         // 1) Descargar bytes de XML firmado y respuesta desde tu storage (S3, etc.)
         byte[] xmlFirmadoBytes = null;
@@ -340,7 +340,7 @@ public class FacturaElectronicaJob {
         }
 
         // 2) Armar el DTO que espera el EmailService
-        String emailDestino = factura.getCliente().getEmails(); // o une varios si aplica
+        String emailDestino = factura.getEmailReceptor(); // o une varios si aplica
         EmailFacturaDto dto = EmailFacturaDto.builder()
             // Identificadores
             .facturaId(factura.getId())

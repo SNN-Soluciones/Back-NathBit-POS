@@ -132,7 +132,7 @@ public class FacturaPdfMapperService {
       params.put("receptor_nombre", cliente.getRazonSocial());  // SIN "Cliente: "
       params.put("receptor_identificacion", cliente.getNumeroIdentificacion()); // SIN "ID: "
       params.put("receptor_correo",
-          cliente.getEmails() != null ? cliente.getEmails() : ""); // SIN "Correo: "
+          factura.getEmailReceptor() != null ? factura.getEmailReceptor() : ""); // SIN "Correo: "
       params.put("receptor_telefono",
           cliente.getTelefonoNumero() != null ? cliente.getTelefonoNumero()
               : ""); // SIN "Teléfono: "

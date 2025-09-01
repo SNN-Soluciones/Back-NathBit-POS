@@ -28,6 +28,8 @@ public class CrearFacturaRequest {
     
     @NotNull(message = "Terminal es requerida")
     private Long terminalId;
+
+    private String emailReceptor;
     
     @NotNull(message = "Sesión de caja es requerida")
     private Long sesionCajaId;

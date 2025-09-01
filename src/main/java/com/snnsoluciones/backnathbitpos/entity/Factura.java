@@ -48,6 +48,9 @@ public class Factura {
     @Column(name = "codigo_seguridad", length = 8)
     private String codigoSeguridad;
 
+    @Column(name = "email_receptor", length = 100)
+    private String emailReceptor;
+
     @Column(name = "tipo_documento", nullable = false)
     @Enumerated(EnumType.STRING)
     private TipoDocumento tipoDocumento;

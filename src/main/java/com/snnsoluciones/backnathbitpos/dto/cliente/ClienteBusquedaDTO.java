@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,5 +27,6 @@ public class ClienteBusquedaDTO {
         private String telefonoCompleto;
         private Boolean tieneExoneracion;
         private String ubicacionResumen; // "San José, Central" o similar
+        private Set<ClienteEmailDTO> clienteEmails;
     }
 }

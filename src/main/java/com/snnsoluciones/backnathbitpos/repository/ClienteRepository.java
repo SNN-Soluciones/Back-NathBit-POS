@@ -22,21 +22,28 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     );
 
     // Buscar por sucursal, número y emails específicos
-    Optional<Cliente> findByEmpresaIdAndNumeroIdentificacionAndEmails(
-        Long sucursalId,
-        String numeroIdentificacion,
-        String emails
+    @Query("SELECT DISTINCT c FROM Cliente c " +
+        "LEFT JOIN c.clienteEmails ce " +
+        "WHERE c.empresa.id = :empresaId " +
+        "AND (:numeroIdentificacion IS NULL OR c.numeroIdentificacion = :numeroIdentificacion) " +
+        "AND (:email IS NULL OR ce.email = :email)")
+    List<Cliente> findByEmpresaIdAndNumeroIdentificacionAndEmails(
+        @Param("empresaId") Long empresaId,
+        @Param("numeroIdentificacion") String numeroIdentificacion,
+        @Param("email") String email
     );
 
     Page<Cliente> findAllByEmpresaId(Long empresaId, Pageable pageable);
 
     // Búsqueda con filtros
-    @Query("SELECT c FROM Cliente c WHERE c.empresa.id = :empresaId " +
+    @Query("SELECT DISTINCT c FROM Cliente c " +
+        "LEFT JOIN c.clienteEmails ce " +
+        "WHERE c.empresa.id = :empresaId " +
         "AND c.activo = true " +
         "AND (:busqueda IS NULL OR :busqueda = '' OR " +
         "     LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR " +
         "     c.numeroIdentificacion LIKE CONCAT('%', :busqueda, '%') OR " +
-        "     LOWER(c.emails) LIKE LOWER(CONCAT('%', :busqueda, '%')))")
+        "     LOWER(ce.email) LIKE LOWER(CONCAT('%', :busqueda, '%')))")
     Page<Cliente> buscarPorEmpresa(
         @Param("empresaId") Long empresaId,
         @Param("busqueda") String busqueda,

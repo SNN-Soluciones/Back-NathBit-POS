@@ -3,12 +3,14 @@ package com.snnsoluciones.backnathbitpos.mappers;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteBusquedaDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteDTO;
+import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteEmailDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUpdateDTO;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
+import com.snnsoluciones.backnathbitpos.entity.ClienteEmail;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
 import java.time.LocalDate;
@@ -28,7 +30,7 @@ public interface ClienteMapper {
     // Mapeos principales Cliente
     @Mapping(target = "empresaId", source = "empresa.id")
     @Mapping(target = "empresaNombre", source = "empresa.nombreRazonSocial")
-    @Mapping(target = "emails", source = "emails", qualifiedByName = "stringToList")
+    @Mapping(target = "clienteEmails", source = "clienteEmails")
     @Mapping(target = "telefonoCompleto", expression = "java(formatearTelefono(cliente))")
     @Mapping(target = "exoneracionesActivas", expression = "java(contarExoneracionesActivas(cliente))")
     @Mapping(target = "tieneExoneracionVigente", expression = "java(tieneExoneracionVigente(cliente))")
@@ -44,6 +46,13 @@ public interface ClienteMapper {
     @Mapping(target = "inscritoHacienda", source = "inscritoHacienda")
     Cliente toEntity(ClienteCreateDTO dto);
 
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "email", source = "email")
+    @Mapping(target = "esPrincipal", source = "esPrincipal")
+    @Mapping(target = "ultimoUso", source = "ultimoUso")
+    @Mapping(target = "vecesUsado", source = "vecesUsado")
+    ClienteEmailDTO toEmailDTO(ClienteEmail clienteEmail);
+
     @Mapping(target = "empresa", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
@@ -55,7 +64,7 @@ public interface ClienteMapper {
     Cliente toEntity(ClienteUpdateDTO dto);
 
     // Mapeo para búsquedas
-    @Mapping(target = "emails", source = "emails", qualifiedByName = "stringToList")
+    @Mapping(target = "clienteEmails", source = "clienteEmails")
     @Mapping(target = "telefonoCompleto", expression = "java(formatearTelefono(cliente))")
     @Mapping(target = "ubicacionResumen", expression = "java(obtenerUbicacionResumen(cliente))")
     ClienteBusquedaDTO.ClienteOpcionDTO toOpcionDTO(Cliente cliente);

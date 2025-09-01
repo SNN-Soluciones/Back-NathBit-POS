@@ -32,7 +32,9 @@ import com.snnsoluciones.backnathbitpos.service.UbicacionService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -336,6 +338,38 @@ public class ClienteServiceImpl implements ClienteService {
       dto.setTieneExoneracion(cliente.getTieneExoneracion());
       dto.setActivo(cliente.getActivo());
 
+      // NUEVO: Mapear emails
+      if (cliente.getClienteEmails() != null && !cliente.getClienteEmails().isEmpty()) {
+        Set<ClienteEmailDTO> emailDtos = cliente.getClienteEmails().stream()
+            .map(email -> {
+              ClienteEmailDTO emailDto = new ClienteEmailDTO();
+              emailDto.setId(email.getId());
+              emailDto.setEmail(email.getEmail());
+              emailDto.setEsPrincipal(email.getEsPrincipal());
+              emailDto.setUltimoUso(email.getUltimoUso());
+              emailDto.setVecesUsado(email.getVecesUsado());
+              return emailDto;
+            })
+            .sorted((e1, e2) -> {
+              // Ordenar por frecuencia de uso (más usado primero)
+              int compareVeces = e2.getVecesUsado().compareTo(e1.getVecesUsado());
+              if (compareVeces != 0) return compareVeces;
+
+              // Si tienen el mismo uso, ordenar por último uso
+              if (e1.getUltimoUso() != null && e2.getUltimoUso() != null) {
+                return e2.getUltimoUso().compareTo(e1.getUltimoUso());
+              }
+
+              return 0;
+            })
+            .collect(Collectors.toCollection(LinkedHashSet::new)); // Mantener orden
+
+        dto.setClienteEmails(emailDtos);
+      } else {
+        // Si no hay emails, crear set vacío
+        dto.setClienteEmails(new HashSet<>());
+      }
+
       // Ubicación
       if (cliente.getUbicacion() != null) {
         var u = cliente.getUbicacion();
@@ -412,6 +446,36 @@ public class ClienteServiceImpl implements ClienteService {
       dto.setTieneExoneracion(cliente.getTieneExoneracion());
       dto.setActivo(cliente.getActivo());
 
+      if (cliente.getClienteEmails() != null && !cliente.getClienteEmails().isEmpty()) {
+        Set<ClienteEmailDTO> emailDtos = cliente.getClienteEmails().stream()
+            .map(email -> {
+              ClienteEmailDTO emailDto = new ClienteEmailDTO();
+              emailDto.setId(email.getId());
+              emailDto.setEmail(email.getEmail());
+              emailDto.setEsPrincipal(email.getEsPrincipal());
+              emailDto.setUltimoUso(email.getUltimoUso());
+              emailDto.setVecesUsado(email.getVecesUsado());
+              return emailDto;
+            })
+            .sorted((e1, e2) -> {
+              // Ordenar por frecuencia de uso
+              int compareVeces = e2.getVecesUsado().compareTo(e1.getVecesUsado());
+              if (compareVeces != 0) return compareVeces;
+
+              // Si tienen el mismo uso, ordenar por último uso
+              if (e1.getUltimoUso() != null && e2.getUltimoUso() != null) {
+                return e2.getUltimoUso().compareTo(e1.getUltimoUso());
+              }
+
+              return 0;
+            })
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        dto.setClienteEmails(emailDtos);
+      } else {
+        dto.setClienteEmails(new HashSet<>());
+      }
+
       // Ubicación
       if (cliente.getUbicacion() != null) {
         var u = cliente.getUbicacion();
@@ -466,11 +530,20 @@ public class ClienteServiceImpl implements ClienteService {
 
   @Override
   @Transactional(readOnly = true)
-  public Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion,
-      String emails) {
-    return clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndEmails(
-        empresaId, numeroIdentificacion, emails
-    ).orElse(null);
+  public Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion, String emails) {
+    // Si emails viene como CSV, tomar el primero
+    String email = null;
+    if (emails != null && !emails.trim().isEmpty()) {
+      email = emails.split(",")[0].trim().toLowerCase();
+    }
+
+    List<Cliente> clientes = clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndEmails(
+        empresaId,
+        numeroIdentificacion,
+        email
+    );
+
+    return clientes.isEmpty() ? null : clientes.get(0);
   }
 
   @Override

@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.cliente;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,4 +36,5 @@ public class ClienteDTO {
     // Resumen de exoneraciones
     private Integer exoneracionesActivas;
     private Boolean tieneExoneracionVigente;
+    private Set<ClienteEmailDTO> clienteEmails;
 }

@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import io.hypersistence.utils.common.StringUtils;
@@ -43,6 +44,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final SesionCajaRepository sesionCajaRepository;
   private final UsuarioRepository usuarioRepository;
   private final FacturaBitacoraRepository bitacoraRepository;
+  private final ClienteService clienteService;
 
   @Override
   @Transactional
@@ -86,6 +88,17 @@ public class FacturaServiceImpl implements FacturaService {
     } else {
       // Si moneda es CRC, es 1.00000; si es USD y no vino, decide tu regla (puede ser obligatorio)
       tc = BigDecimal.ONE; // o lanza excepción si USD debe traer TC real
+    }
+
+    if (request.getEmailReceptor() != null && !request.getEmailReceptor().isBlank()) {
+      factura.setEmailReceptor(request.getEmailReceptor());
+    } else if (request.getClienteId() != null) {
+      // Si no se especificó email, usar el principal del cliente
+      Cliente cliente = clienteService.obtenerPorId(request.getClienteId());
+      if (cliente != null) {
+        String emailPrincipal = clienteService.obtenerEmailSugerido(cliente.getId());
+        factura.setEmailReceptor(emailPrincipal);
+      }
     }
 
     factura.setTipoCambio(tc);

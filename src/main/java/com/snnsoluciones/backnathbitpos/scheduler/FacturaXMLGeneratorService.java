@@ -249,15 +249,21 @@ public class FacturaXMLGeneratorService {
   }
 
   private void agregarReceptor(Document doc, Element root, Factura factura) {
-    if (factura.getTipoDocumento() == TipoDocumento.TIQUETE_ELECTRONICO
-        && factura.getCliente() == null) {
-      return;
-    }
     Cliente cliente = factura.getCliente();
-    if (cliente == null) {
+
+    // Si NO es tiquete electrónico y NO hay cliente, es un error
+    if (factura.getTipoDocumento() != TipoDocumento.TIQUETE_ELECTRONICO && cliente == null) {
+      throw new IllegalStateException(
+          "El receptor es obligatorio para " + factura.getTipoDocumento().getDescripcion()
+      );
+    }
+
+    // Si es tiquete electrónico y no hay cliente, es válido (retornar sin agregar receptor)
+    if (factura.getTipoDocumento() == TipoDocumento.TIQUETE_ELECTRONICO && cliente == null) {
       return;
     }
 
+    // Si llegamos aquí, tenemos cliente y debemos agregar el receptor
     Element receptor = doc.createElement("Receptor");
     root.appendChild(receptor);
 
@@ -272,8 +278,9 @@ public class FacturaXMLGeneratorService {
       agregarElemento(doc, identificacion, "Numero", cliente.getNumeroIdentificacion());
     }
 
-    if (cliente.getEmails() != null && !cliente.getEmails().isBlank()) {
-      agregarElemento(doc, receptor, "CorreoElectronico", cliente.getEmails());
+    // Usar el email guardado en la factura
+    if (factura.getEmailReceptor() != null && !factura.getEmailReceptor().isBlank()) {
+      agregarElemento(doc, receptor, "CorreoElectronico", factura.getEmailReceptor());
     }
   }
 

@@ -17,7 +17,6 @@ public class ClientePOSDto implements Serializable {
     private TipoIdentificacion tipoIdentificacion;
     private String numeroIdentificacion;
     private String razonSocial;
-    @Builder.Default
     private Set<ClienteEmailDTO> clienteEmails = new HashSet<>();
     private String telefonoNumero;
     private Boolean tieneExoneracion;
@@ -29,5 +28,5 @@ public class ClientePOSDto implements Serializable {
     private ExoneracionClienteDto exoneracion; // null si no aplica
 
     // NUEVO: Lista de actividades económicas del cliente
-    private List<ActividadEconomicaDto> actividades;
+    private Set<ActividadEconomicaDto> actividades;
 }

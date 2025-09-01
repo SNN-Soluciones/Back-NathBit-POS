@@ -59,8 +59,6 @@ public interface ClienteService {
     // Validaciones
     boolean existeCliente(Long empresaId, String numeroIdentificacion, String emails);
     
-    void validarEmailsFormato(String emails);
-    
     void validarTelefonos(String codigoPais, String numero);
     
     // Utilidades

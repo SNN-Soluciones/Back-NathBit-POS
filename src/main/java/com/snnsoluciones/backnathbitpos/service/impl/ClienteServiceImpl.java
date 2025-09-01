@@ -123,7 +123,6 @@ public class ClienteServiceImpl implements ClienteService {
     if (dto.getClienteEmails() != null && !dto.getClienteEmails().isEmpty()) {
       for (ClienteEmailDTO emailDto : dto.getClienteEmails()) {
         if (emailDto.getEmail() != null) {
-          validarEmailsFormato(emailDto.getEmail());
           ClienteEmail clienteEmail = ClienteEmail.builder()
               .cliente(cliente)
               .email(emailDto.getEmail().trim().toLowerCase())
@@ -132,11 +131,6 @@ public class ClienteServiceImpl implements ClienteService {
           cliente.getClienteEmails().add(clienteEmail);
         }
       }
-    }
-
-// Validar que tenga al menos un email
-    if (cliente.getClienteEmails().isEmpty()) {
-      throw new IllegalArgumentException("El cliente debe tener al menos un email");
     }
 
     // =========================
@@ -269,7 +263,6 @@ public class ClienteServiceImpl implements ClienteService {
       // Agregar nuevos
       for (ClienteEmailDTO emailDto : clienteActualizado.getClienteEmails()) {
         if (emailDto.getEmail() != null) {
-          validarEmailsFormato(emailDto.getEmail());
           ClienteEmail clienteEmail = ClienteEmail.builder()
               .cliente(clienteExistente)
               .email(emailDto.getEmail().trim().toLowerCase())
@@ -640,30 +633,6 @@ public class ClienteServiceImpl implements ClienteService {
     return clienteRepository.existsByEmpresaIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
         empresaId, numeroIdentificacion, emails
     );
-  }
-
-  @Override
-  public void validarEmailsFormato(String emails) {
-    if (emails == null || emails.trim().isEmpty()) {
-      throw new IllegalArgumentException("Debe proporcionar al menos un email");
-    }
-
-    String[] emailArray = emails.split(",");
-
-    if (emailArray.length > MAX_EMAILS) {
-      throw new IllegalArgumentException(
-          "No puede registrar más de " + MAX_EMAILS + " emails"
-      );
-    }
-
-    for (String email : emailArray) {
-      String emailTrimmed = email.trim();
-      if (!EMAIL_PATTERN.matcher(emailTrimmed).matches()) {
-        throw new IllegalArgumentException(
-            "Email inválido: " + emailTrimmed
-        );
-      }
-    }
   }
 
   @Override

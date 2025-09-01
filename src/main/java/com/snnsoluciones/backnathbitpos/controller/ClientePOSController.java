@@ -8,7 +8,10 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ExoneracionClienteDto;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
+import com.snnsoluciones.backnathbitpos.entity.ClienteActividad;
+import com.snnsoluciones.backnathbitpos.entity.ClienteEmail;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
+import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracionCabys;
 import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaCAByS;
 import com.snnsoluciones.backnathbitpos.mappers.ClienteMapper;
@@ -19,7 +22,11 @@ import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.ProductoCrudService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -245,10 +252,9 @@ public class ClientePOSController {
 
   @Operation(summary = "Obtener un cliente en específico por id")
   @GetMapping
-  public ResponseEntity<ApiResponse<ClientePOSDto>> obtenerPorId(@RequestParam Long clienteId) {
+  public ResponseEntity<ApiResponse<ClientePOSDto>> obtenerPorId(@RequestParam Long clienteId){
     Cliente cliente = clienteService.obtenerPorId(clienteId);
 
-    // Mapeo manual completo
     ClientePOSDto clienteDto = ClientePOSDto.builder()
         .id(cliente.getId())
         .tipoIdentificacion(cliente.getTipoIdentificacion())
@@ -263,47 +269,76 @@ public class ClientePOSController {
 
     // Mapear emails
     if (cliente.getClienteEmails() != null) {
-      clienteDto.setClienteEmails(
-          cliente.getClienteEmails().stream()
-              .map(e -> modelMapper.map(e, ClienteEmailDTO.class))
-              .collect(Collectors.toSet())
-      );
+      Set<ClienteEmailDTO> emails = new HashSet<>();
+      for (ClienteEmail email : cliente.getClienteEmails()) {
+        ClienteEmailDTO emailDto = new ClienteEmailDTO();
+        emailDto.setId(email.getId());
+        emailDto.setEmail(email.getEmail());
+        emailDto.setEsPrincipal(email.getEsPrincipal());
+        emailDto.setVecesUsado(email.getVecesUsado());
+        emailDto.setUltimoUso(email.getUltimoUso());
+        emails.add(emailDto);
+      }
+      clienteDto.setClienteEmails(emails);
     }
 
-    // Mapear ubicación
+    // Mapear ubicación CORRECTAMENTE
     if (cliente.getUbicacion() != null) {
-      clienteDto.setUbicacion(modelMapper.map(cliente.getUbicacion(), ClienteUbicacionDTO.class));
+      ClienteUbicacionDTO ubicDto = new ClienteUbicacionDTO();
+
+      // Mapear IDs, no objetos completos
+      if (cliente.getUbicacion().getProvincia() != null) {
+        ubicDto.setProvincia(cliente.getUbicacion().getProvincia().getId());
+      }
+      if (cliente.getUbicacion().getCanton() != null) {
+        ubicDto.setCanton(cliente.getUbicacion().getCanton().getId());
+      }
+      if (cliente.getUbicacion().getDistrito() != null) {
+        ubicDto.setDistrito(cliente.getUbicacion().getDistrito().getId());
+      }
+      if (cliente.getUbicacion().getBarrio() != null) {
+        ubicDto.setBarrio(cliente.getUbicacion().getBarrio().getId());
+      }
+      ubicDto.setOtrasSenas(cliente.getUbicacion().getOtrasSenas());
+
+      clienteDto.setUbicacion(ubicDto);
     }
 
     // Mapear actividades
     if (cliente.getActividades() != null) {
-      clienteDto.setActividades(
-          cliente.getActividades().stream()
-              .map(ca -> {
-                ActividadEconomicaDto actDto = new ActividadEconomicaDto();
-                actDto.setCodigo(ca.getCodigoActividad());
-                actDto.setDescripcion(ca.getDescripcion());
-                return actDto;
-              })
-              .collect(Collectors.toSet())
-      );
+      Set<ActividadEconomicaDto> actividades = new HashSet<>();
+      for (ClienteActividad ca : cliente.getActividades()) {
+        ActividadEconomicaDto actDto = new ActividadEconomicaDto();
+        actDto.setCodigo(ca.getCodigoActividad());
+        actDto.setDescripcion(ca.getDescripcion());
+        actividades.add(actDto);
+      }
+      clienteDto.setActividades(actividades);
     }
 
-    // Mapear exoneración activa (solo la primera vigente)
+    // Mapear exoneración vigente
     cliente.getExoneraciones().stream()
-        .filter(ClienteExoneracion::getActivo)
-        .filter(ClienteExoneracion::estaVigente)
+        .filter(e -> Boolean.TRUE.equals(e.getActivo()))
+        .filter(e -> e.getFechaVencimiento() == null || e.getFechaVencimiento().isAfter(LocalDate.now()))
         .findFirst()
         .ifPresent(exo -> {
-          ExoneracionClienteDto exoDto = modelMapper.map(exo, ExoneracionClienteDto.class);
+          ExoneracionClienteDto exoDto = new ExoneracionClienteDto();
+          exoDto.setTipoDocumento(exo.getTipoDocumento().name());
+          exoDto.setNumeroDocumento(exo.getNumeroDocumento());
+          exoDto.setNombreInstitucion(exo.getNombreInstitucion());
+          exoDto.setFechaEmision(exo.getFechaEmision());
+          exoDto.setFechaVencimiento(exo.getFechaVencimiento());
+          exoDto.setPorcentajeExoneracion(exo.getPorcentajeExoneracion());
+          exoDto.setCodigoAutorizacion(exo.getCodigoAutorizacion());
+          exoDto.setNumeroAutorizacion(exo.getNumeroAutorizacion());
+          exoDto.setPoseeCabys(exo.getPoseeCabys());
 
-          // Mapear códigos CABYS
           if (exo.getCabysAutorizados() != null) {
-            exoDto.setCodigosCabys(
-                exo.getCabysAutorizados().stream()
-                    .map(ec -> ec.getCabys().getCodigo())
-                    .collect(Collectors.toList())
-            );
+            List<String> cabys = new ArrayList<>();
+            for (ClienteExoneracionCabys ec : exo.getCabysAutorizados()) {
+              cabys.add(ec.getCabys().getCodigo());
+            }
+            exoDto.setCodigosCabys(cabys);
           }
 
           clienteDto.setExoneracion(exoDto);

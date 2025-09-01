@@ -38,6 +38,8 @@ public class DetalleFacturaRequest {
     
     @NotNull
     private Boolean aplicaImpuestoServicio;
+
+    private String observacionProducto;
     
     // Montos calculados por el frontend
     @NotNull

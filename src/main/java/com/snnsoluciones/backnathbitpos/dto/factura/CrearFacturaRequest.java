@@ -30,6 +30,8 @@ public class CrearFacturaRequest {
     private Long terminalId;
 
     private String emailReceptor;
+
+    private String actividadReceptor;
     
     @NotNull(message = "Sesión de caja es requerida")
     private Long sesionCajaId;

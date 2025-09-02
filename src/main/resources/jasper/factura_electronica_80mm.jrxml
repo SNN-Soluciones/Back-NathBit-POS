@@ -27,6 +27,7 @@
 	<parameter name="receptor_telefono" class="java.lang.String"/>
 	<parameter name="receptor_correo" class="java.lang.String"/>
 	<parameter name="receptor_direccion" class="java.lang.String"/>
+	<parameter name="receptor_actividad_economica" class="java.lang.String"/>
 	<parameter name="cliente_contado" class="java.lang.String"/>
 	<parameter name="condicion_venta" class="java.lang.String"/>
 	<parameter name="medio_pago" class="java.lang.String"/>
@@ -114,7 +115,7 @@
 		</band>
 	</title>
 	<pageHeader>
-		<band height="208">
+		<band height="228">
 			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
 				<reportElement x="-9" y="0" width="176" height="12" uuid="5e9fd1fa-c9f5-49ac-84da-cefde0c5e6c4"/>
 				<textElement textAlignment="Left" verticalAlignment="Middle">
@@ -298,16 +299,16 @@
 				<text><![CDATA[Correo:]]></text>
 			</staticText>
 			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
-				<reportElement x="51" y="173" width="116" height="12" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="8571deba-9006-40e3-a1c6-03fdcd8e985d">
+				<reportElement x="51" y="173" width="116" height="18" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="8571deba-9006-40e3-a1c6-03fdcd8e985d">
 					<printWhenExpression><![CDATA[$P{receptor_correo} != null && !$P{receptor_correo}.trim().isEmpty()]]></printWhenExpression>
 				</reportElement>
 				<textElement verticalAlignment="Middle">
-					<font fontName="DejaVu Sans" size="9"/>
+					<font fontName="DejaVu Sans" size="8"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{receptor_correo}.toUpperCase()]]></textFieldExpression>
 			</textField>
 			<staticText>
-				<reportElement x="-9" y="185" width="60" height="12" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="2e6d226f-4920-4f4b-a6b1-508d97b469b6">
+				<reportElement x="-9" y="204" width="60" height="12" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="2e6d226f-4920-4f4b-a6b1-508d97b469b6">
 					<printWhenExpression><![CDATA[$P{receptor_direccion} != null && !$P{receptor_direccion}.trim().isEmpty()]]></printWhenExpression>
 				</reportElement>
 				<textElement verticalAlignment="Middle">
@@ -316,7 +317,7 @@
 				<text><![CDATA[Dirección:]]></text>
 			</staticText>
 			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
-				<reportElement x="51" y="185" width="116" height="22" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="4ad2dbca-ccd9-4bcc-b8da-e65b85b68e01">
+				<reportElement x="51" y="203" width="116" height="22" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="4ad2dbca-ccd9-4bcc-b8da-e65b85b68e01">
 					<printWhenExpression><![CDATA[$P{receptor_direccion} != null && !$P{receptor_direccion}.trim().isEmpty()]]></printWhenExpression>
 				</reportElement>
 				<textElement verticalAlignment="Middle">
@@ -325,11 +326,29 @@
 				<textFieldExpression><![CDATA[$P{receptor_direccion}.toUpperCase()]]></textFieldExpression>
 			</textField>
 			<line>
-				<reportElement x="-8" y="207" width="176" height="1" uuid="85183dd7-31ce-4f0f-b7aa-bc11058e315c"/>
+				<reportElement x="-7" y="227" width="176" height="1" uuid="85183dd7-31ce-4f0f-b7aa-bc11058e315c"/>
 				<graphicElement>
 					<pen lineStyle="Dotted"/>
 				</graphicElement>
 			</line>
+			<staticText>
+				<reportElement x="-9" y="191" width="60" height="12" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="7396ff4b-f1f2-4dd2-a500-1689158c8d30">
+					<printWhenExpression><![CDATA[$P{receptor_direccion} != null && !$P{receptor_direccion}.trim().isEmpty()]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Actividad]]></text>
+			</staticText>
+			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
+				<reportElement x="51" y="191" width="116" height="12" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="4990bcb4-fbb9-4b91-954a-5b39141d2bdb">
+					<printWhenExpression><![CDATA[$P{receptor_correo} != null && !$P{receptor_correo}.trim().isEmpty()]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{receptor_actividad_economica}]]></textFieldExpression>
+			</textField>
 		</band>
 	</pageHeader>
 	<detail>

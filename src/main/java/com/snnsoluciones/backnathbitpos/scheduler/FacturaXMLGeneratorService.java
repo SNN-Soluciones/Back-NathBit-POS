@@ -324,8 +324,15 @@ public class FacturaXMLGeneratorService {
         agregarElemento(doc, lineaDetalle, "UnidadMedida",
             detalle.getProducto().getUnidadMedida().getCodigo());
       }
-      agregarElemento(doc, lineaDetalle, "Detalle",
-          detalle.getProducto() != null ? detalle.getProducto().getNombre() : null);
+
+      String descripcionCompleta =
+          detalle.getProducto() != null ? detalle.getProducto().getNombre() : "";
+      if (detalle.getDescripcionPersonalizada() != null && !detalle.getDescripcionPersonalizada()
+          .trim().isEmpty()) {
+        descripcionCompleta = descripcionCompleta + " - " + detalle.getDescripcionPersonalizada();
+      }
+
+      agregarElemento(doc, lineaDetalle, "Detalle", descripcionCompleta);
       agregarElemento(doc, lineaDetalle, "PrecioUnitario", fmtMonto(detalle.getPrecioUnitario()));
       agregarElemento(doc, lineaDetalle, "MontoTotal", fmtMonto(detalle.getMontoTotal()));
       agregarElemento(doc, lineaDetalle, "SubTotal", fmtMonto(detalle.getSubtotal()));
@@ -406,9 +413,10 @@ public class FacturaXMLGeneratorService {
       if (impuestoNeto.signum() < 0) {
         impuestoNeto = BigDecimal.ZERO;
       }
-      if (!factura.getCliente().getTieneExoneracion()) {
+      if (factura.getCliente() == null || !factura.getCliente().getTieneExoneracion()) {
         agregarElemento(doc, lineaDetalle, "ImpuestoAsumidoEmisorFabrica", "0");
       }
+
       agregarElemento(doc, lineaDetalle, "ImpuestoNeto", fmtMonto(impuestoNeto));
 
       BigDecimal montoTotalLinea = baseImponible.add(impuestoNeto);
@@ -518,9 +526,10 @@ public class FacturaXMLGeneratorService {
     agregarElemento(doc, resumen, "TotalImpuesto",
         fmtMonto(factura.getTotalImpuesto()));
 
-    if(!factura.getCliente().getTieneExoneracion()) {
+    if (factura.getCliente() == null || !factura.getCliente().getTieneExoneracion()) {
       agregarElemento(doc, resumen, "TotalImpAsumEmisorFabrica", "0");
     }
+
     agregarElemento(doc, resumen, "TotalIVADevuelto", "0");
 
     // Desglose por impuesto (tu entidad)

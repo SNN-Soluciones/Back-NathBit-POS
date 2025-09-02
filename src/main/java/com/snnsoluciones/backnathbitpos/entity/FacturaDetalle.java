@@ -50,6 +50,9 @@ public class FacturaDetalle {
     @Column(name = "detalle", length = 200)
     private String detalle;
 
+    @Column(name = "descripcion_personalizada", length = 150)
+    private String descripcionPersonalizada;
+
     @Column(name = "es_servicio", nullable = false)
     private Boolean esServicio = Boolean.FALSE;
 

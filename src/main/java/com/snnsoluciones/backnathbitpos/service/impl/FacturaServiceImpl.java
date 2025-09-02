@@ -507,8 +507,11 @@ public class FacturaServiceImpl implements FacturaService {
       detalle.setPrecioUnitario(detalleReq.getPrecioUnitario());
       detalle.setCodigoCabys(detalleReq.getCodigoCabys() != null ?
           detalleReq.getCodigoCabys() : producto.getEmpresaCabys().getCodigoCabys().getCodigo());
-      detalle.setDetalle(detalleReq.getDescripcionPersonalizada() != null ?
-          detalleReq.getDescripcionPersonalizada() : producto.getNombre());
+      detalle.setDetalle(producto.getNombre());
+
+      if (detalleReq.getDescripcionPersonalizada() != null && !detalleReq.getDescripcionPersonalizada().trim().isEmpty()) {
+        detalle.setDescripcionPersonalizada(detalleReq.getDescripcionPersonalizada().trim());
+      }
 
       // Asignar flags
       detalle.setEsServicio(detalleReq.getEsServicio());

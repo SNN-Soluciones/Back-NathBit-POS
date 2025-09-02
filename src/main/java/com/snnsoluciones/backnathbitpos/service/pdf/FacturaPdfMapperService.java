@@ -228,17 +228,18 @@ public class FacturaPdfMapperService {
 
       // Datos básicos
       item.put("codigo", detalle.getProducto().getCodigoInterno());
-      String descripcionPdf = detalle.getDetalle();
+
+      String descripcionCompleta = detalle.getDetalle();
       if (detalle.getDescripcionPersonalizada() != null && !detalle.getDescripcionPersonalizada().trim().isEmpty()) {
-        // Para ticket, la descripción personalizada va en la misma línea
         if (esTicket) {
-          descripcionPdf = truncarTexto(descripcionPdf + " - " + detalle.getDescripcionPersonalizada(), 30);
+          descripcionCompleta = descripcionCompleta + " - " + detalle.getDescripcionPersonalizada();
+          descripcionCompleta = truncarTexto(descripcionCompleta, 50); // Aumentar el límite
         } else {
-          // Para carta, agregamos un salto de línea para mejor legibilidad
-          descripcionPdf = descripcionPdf + "\n" + detalle.getDescripcionPersonalizada();
+          descripcionCompleta = descripcionCompleta + "\n" + detalle.getDescripcionPersonalizada();
         }
       }
-      item.put("descripcion", descripcionPdf);
+      item.put("descripcion", descripcionCompleta);
+
       item.put("cantidad", formatearCantidad(detalle.getCantidad()));
       item.put("unidad", detalle.getUnidadMedida());
       item.put("precio_unitario", formatearMoneda(detalle.getPrecioUnitario()));

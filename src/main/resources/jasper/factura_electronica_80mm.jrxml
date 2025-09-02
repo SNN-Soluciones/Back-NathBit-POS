@@ -89,7 +89,7 @@
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="9"/>
 				</textElement>
-				<textFieldExpression><![CDATA[$P{emisor_correo}.toUpperCase()]]></textFieldExpression>
+				<textFieldExpression><![CDATA[$P{emisor_correo}]]></textFieldExpression>
 			</textField>
 			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
 				<reportElement x="-8" y="115" width="176" height="15" uuid="d4e77705-63d6-4fb4-b472-48fe621fa709"/>
@@ -667,7 +667,7 @@
 			</textField>
 			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
 				<reportElement positionType="Float" x="-8" y="330" width="176" height="15" uuid="4022b4a8-b0cb-47aa-9d8d-2127f3addfac"/>
-				<textElement verticalAlignment="Middle">
+				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="9"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{observaciones}]]></textFieldExpression>

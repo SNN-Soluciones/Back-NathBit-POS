@@ -116,6 +116,12 @@ public class Factura {
     @Column(name = "observaciones", length = 500)
     private String observaciones;
 
+    @Column(name = "actividad_receptor", length = 6)
+    private String actividadReceptor;
+
+    @Column(name = "vuelto", precision = 18, scale = 5)
+    private BigDecimal vuelto = BigDecimal.ZERO;
+
     // ========== DESCUENTO GLOBAL ==========
     @Column(name = "descuento_global_porcentaje", precision = 5, scale = 2)
     private BigDecimal descuentoGlobalPorcentaje = BigDecimal.ZERO;

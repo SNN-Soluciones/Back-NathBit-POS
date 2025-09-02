@@ -41,6 +41,9 @@ public class CrearFacturaRequest {
     
     // Cliente (opcional para TE)
     private Long clienteId;
+
+    @DecimalMin(value = "0.00", message = "El vuelto no puede ser negativo")
+    private BigDecimal vuelto;
     
     // Datos comerciales
     @NotBlank(message = "Condición de venta es requerida")

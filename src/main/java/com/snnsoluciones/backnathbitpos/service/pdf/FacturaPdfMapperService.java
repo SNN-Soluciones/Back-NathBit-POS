@@ -300,7 +300,7 @@ public class FacturaPdfMapperService {
 
       // Calcular vuelto si es efectivo
       if ("01".equals(primerPago.getMedioPago())) { // 01 = Efectivo
-        BigDecimal vuelto = primerPago.getMonto().subtract(factura.getTotalComprobante());
+        BigDecimal vuelto = factura.getVuelto();
         params.put("vuelto", formatearMoneda(vuelto.max(BigDecimal.ZERO)));
       } else {
         params.put("vuelto", "0.00");

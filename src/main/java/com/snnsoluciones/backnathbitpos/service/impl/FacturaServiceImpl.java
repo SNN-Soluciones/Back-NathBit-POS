@@ -74,6 +74,14 @@ public class FacturaServiceImpl implements FacturaService {
     factura.setMoneda(request.getMoneda());
     factura.setTipoCambio(request.getTipoCambio());
     factura.setObservaciones(request.getObservaciones());
+    if (request.getActividadReceptor() != null) {
+      factura.setActividadReceptor(request.getActividadReceptor());
+    }
+
+    // Vuelto
+    if (request.getVuelto() != null) {
+      factura.setVuelto(request.getVuelto());
+    }
 
     // Cliente (opcional para TE)
     if (request.getClienteId() != null) {

@@ -95,6 +95,10 @@ public class FacturaXMLGeneratorService {
 
       agregarElemento(doc, root, "CodigoActividadEmisor", codigoActividad);
 
+      if (factura.getActividadReceptor() != null && !factura.getActividadReceptor().isBlank()) {
+        agregarElemento(doc, root, "CodigoActividadReceptor", factura.getActividadReceptor());
+      }
+
       agregarElemento(doc, root, "NumeroConsecutivo", factura.getConsecutivo());
       agregarElemento(doc, root, "FechaEmision", factura.getFechaEmision().toString());
 
@@ -373,10 +377,12 @@ public class FacturaXMLGeneratorService {
             }
 
             String fechaEmisionExoneracion = imp.getFechaEmisionExoneracion();
-            LocalDate localDate = LocalDate.parse(fechaEmisionExoneracion, DateTimeFormatter.ISO_LOCAL_DATE);
+            LocalDate localDate = LocalDate.parse(fechaEmisionExoneracion,
+                DateTimeFormatter.ISO_LOCAL_DATE);
             ZonedDateTime zonedDateTime = localDate.atStartOfDay(ZoneId.of("-06:00"));
 
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX");
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(
+                "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX");
             String fechaFormateada = zonedDateTime.format(formatter);
 
             agregarExoneracionEnImpuesto(
@@ -400,7 +406,9 @@ public class FacturaXMLGeneratorService {
       if (impuestoNeto.signum() < 0) {
         impuestoNeto = BigDecimal.ZERO;
       }
-      agregarElemento(doc, lineaDetalle, "ImpuestoAsumidoEmisorFabrica", "0");
+      if (!factura.getCliente().getTieneExoneracion()) {
+        agregarElemento(doc, lineaDetalle, "ImpuestoAsumidoEmisorFabrica", "0");
+      }
       agregarElemento(doc, lineaDetalle, "ImpuestoNeto", fmtMonto(impuestoNeto));
 
       BigDecimal montoTotalLinea = baseImponible.add(impuestoNeto);
@@ -510,9 +518,9 @@ public class FacturaXMLGeneratorService {
     agregarElemento(doc, resumen, "TotalImpuesto",
         fmtMonto(factura.getTotalImpuesto()));
 
-// Los siguientes elementos podrían no ser necesarios en todos los casos,
-// pero se incluyen para mantener compatibilidad con el esquema.
-    agregarElemento(doc, resumen, "TotalImpAsumEmisorFabrica", "0");
+    if(!factura.getCliente().getTieneExoneracion()) {
+      agregarElemento(doc, resumen, "TotalImpAsumEmisorFabrica", "0");
+    }
     agregarElemento(doc, resumen, "TotalIVADevuelto", "0");
 
     // Desglose por impuesto (tu entidad)

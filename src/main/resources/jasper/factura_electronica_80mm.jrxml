@@ -333,16 +333,16 @@
 			</line>
 			<staticText>
 				<reportElement x="-9" y="191" width="60" height="12" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="7396ff4b-f1f2-4dd2-a500-1689158c8d30">
-					<printWhenExpression><![CDATA[$P{receptor_direccion} != null && !$P{receptor_direccion}.trim().isEmpty()]]></printWhenExpression>
+					<printWhenExpression><![CDATA[$P{receptor_actividad_economica} != null && !$P{receptor_actividad_economica}.trim().isEmpty()]]></printWhenExpression>
 				</reportElement>
 				<textElement verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="9" isBold="true"/>
 				</textElement>
-				<text><![CDATA[Actividad]]></text>
+				<text><![CDATA[Actividad:]]></text>
 			</staticText>
 			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
 				<reportElement x="51" y="191" width="116" height="12" isRemoveLineWhenBlank="true" isPrintInFirstWholeBand="true" uuid="4990bcb4-fbb9-4b91-954a-5b39141d2bdb">
-					<printWhenExpression><![CDATA[$P{receptor_correo} != null && !$P{receptor_correo}.trim().isEmpty()]]></printWhenExpression>
+					<printWhenExpression><![CDATA[$P{receptor_actividad_economica} != null && !$P{receptor_actividad_economica}.trim().isEmpty()]]></printWhenExpression>
 				</reportElement>
 				<textElement verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="9"/>

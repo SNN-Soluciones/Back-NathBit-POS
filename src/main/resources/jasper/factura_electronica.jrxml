@@ -281,16 +281,16 @@
 			</textField>
 			<staticText>
 				<reportElement x="370" y="200" width="50" height="12" forecolor="#374151" uuid="5b1d0daf-701f-49d1-908c-c27e4469b1aa">
-					<printWhenExpression><![CDATA[$P{receptor_telefono} != null && !$P{receptor_telefono}.trim().isEmpty()]]></printWhenExpression>
+					<printWhenExpression><![CDATA[$P{receptor_actividad_economica} != null && !$P{receptor_actividad_economica}.trim().isEmpty()]]></printWhenExpression>
 				</reportElement>
 				<textElement>
 					<font fontName="DejaVu Sans" size="9"/>
 				</textElement>
-				<text><![CDATA[Actividad]]></text>
+				<text><![CDATA[Actividad:]]></text>
 			</staticText>
 			<textField isBlankWhenNull="true">
 				<reportElement x="420" y="200" width="115" height="12" uuid="45aebcc5-8b1f-4b78-98c9-a050f3b3c137">
-					<printWhenExpression><![CDATA[$P{receptor_telefono} != null && !$P{receptor_telefono}.trim().isEmpty()]]></printWhenExpression>
+					<printWhenExpression><![CDATA[$P{receptor_actividad_economica} != null && !$P{receptor_actividad_economica}.trim().isEmpty()]]></printWhenExpression>
 				</reportElement>
 				<textElement>
 					<font fontName="DejaVu Sans" size="9"/>

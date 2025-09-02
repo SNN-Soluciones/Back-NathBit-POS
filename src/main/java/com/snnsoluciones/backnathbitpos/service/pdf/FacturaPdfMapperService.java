@@ -137,7 +137,11 @@ public class FacturaPdfMapperService {
           cliente.getTelefonoNumero() != null ? cliente.getTelefonoNumero()
               : ""); // SIN "Teléfono: "
       params.put("receptor_direccion", direccion != null ? direccion : ""); // SIN "Dirección: "
-      params.put("receptor_actividad_economica", factura.getActividadReceptor().isEmpty() ? factura.getActividadReceptor() : null);
+      params.put("receptor_actividad_economica",
+          factura.getActividadReceptor() != null && !factura.getActividadReceptor().trim().isEmpty()
+              ? factura.getActividadReceptor().trim()
+              : "");
+
     } else {
       // Cliente genérico
       params.put("receptor_nombre", "");

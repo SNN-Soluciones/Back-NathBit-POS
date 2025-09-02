@@ -22,6 +22,8 @@ public interface CategoriaProductoRepository extends JpaRepository<CategoriaProd
     // Todas las categorías activas de una empresa, ordenadas
     List<CategoriaProducto> findByEmpresaIdAndActivoTrueOrderByOrdenAscNombreAsc(Long empresaId);
 
+    List<CategoriaProducto> findByEmpresaIdAndActivoTrueOrderByOrdenAsc(Long empresaId);
+
     // Búsqueda paginada por empresa
     @Query("""
            SELECT c

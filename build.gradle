@@ -119,6 +119,9 @@ dependencies {
     implementation "com.google.zxing:javase:${zxingVersion}"
     implementation "jfree:jfreechart:${jFreeChartVersion}"
 
+    implementation 'org.apache.poi:poi:5.2.4'
+    implementation 'org.apache.poi:poi-ooxml:5.2.4'
+
     // ================== Documentation ==================
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 

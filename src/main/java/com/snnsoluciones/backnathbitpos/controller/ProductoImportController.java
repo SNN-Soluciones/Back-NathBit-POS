@@ -6,6 +6,9 @@ import com.snnsoluciones.backnathbitpos.service.ProductoImportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -26,51 +29,52 @@ public class ProductoImportController {
 
     private final ProductoImportService productoImportService;
 
-    @PostMapping(value = "/{empresaId}/excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/{empresaId}/validar-mapeo")
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
-    @Operation(summary = "Importar productos desde Excel",
-        description = "Importa productos masivamente desde un archivo Excel")
-    public ResponseEntity<ApiResponse<ProductoImportResultDto>> importarDesdeExcel(
+    @Operation(summary = "Validar mapeo de Excel",
+        description = "Muestra cómo se está mapeando cada fila del Excel para debugging")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> validarMapeo(
         @PathVariable Long empresaId,
         @RequestPart("archivo") MultipartFile archivo) {
 
-        log.info("Importando productos desde Excel para empresa: {}", empresaId);
-
         try {
-            // Validar archivo
-            if (archivo.isEmpty()) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.<ProductoImportResultDto>builder()
-                        .success(false)
-                        .message("El archivo está vacío")
-                        .build());
+            List<ProductoImportDto> productos = productoImportService.procesarArchivoExcel(archivo);
+
+            // Tomar los primeros 5 productos para análisis
+            List<Map<String, Object>> muestraProductos = new ArrayList<>();
+            for (int i = 0; i < Math.min(5, productos.size()); i++) {
+                ProductoImportDto prod = productos.get(i);
+                Map<String, Object> info = new HashMap<>();
+                info.put("codigo", prod.getCodigo());
+                info.put("nombre", prod.getNombreProducto());
+                info.put("precio", prod.getPrecio());
+                info.put("productoExento", prod.getProductoExento());
+                info.put("codigoBarras", prod.getCodigoBarras());
+                info.put("estadoProducto", prod.getEstadoProducto());
+                info.put("impuestoCalculado", prod.getProductoExento() ? "EXENTO" : "IVA 13%");
+                muestraProductos.add(info);
             }
 
-            // Validar extensión
-            String filename = archivo.getOriginalFilename();
-            if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.<ProductoImportResultDto>builder()
-                        .success(false)
-                        .message("El archivo debe ser Excel (.xlsx o .xls)")
-                        .build());
-            }
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("totalProductos", productos.size());
+            resultado.put("muestra", muestraProductos);
+            resultado.put("productosExentos", productos.stream()
+                .filter(p -> p.getProductoExento() != null && p.getProductoExento())
+                .count());
+            resultado.put("productosGravados", productos.stream()
+                .filter(p -> p.getProductoExento() == null || !p.getProductoExento())
+                .count());
 
-            // Procesar importación
-            ProductoImportResultDto resultado = productoImportService
-                .importarDesdeExcel(empresaId, archivo);
-
-            return ResponseEntity.ok(ApiResponse.<ProductoImportResultDto>builder()
+            return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
                 .success(true)
-                .message(String.format("Importación completada: %d exitosos, %d errores",
-                    resultado.getExitosos(), resultado.getErrores()))
+                .message("Mapeo validado correctamente")
                 .data(resultado)
                 .build());
 
         } catch (Exception e) {
-            log.error("Error al importar productos", e);
+            log.error("Error al validar mapeo", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.<ProductoImportResultDto>builder()
+                .body(ApiResponse.<Map<String, Object>>builder()
                     .success(false)
                     .message("Error al procesar el archivo: " + e.getMessage())
                     .build());

@@ -413,9 +413,7 @@ public class FacturaXMLGeneratorService {
       if (impuestoNeto.signum() < 0) {
         impuestoNeto = BigDecimal.ZERO;
       }
-      if (factura.getCliente() == null || !factura.getCliente().getTieneExoneracion()) {
-        agregarElemento(doc, lineaDetalle, "ImpuestoAsumidoEmisorFabrica", "0");
-      }
+      agregarElemento(doc, lineaDetalle, "ImpuestoAsumidoEmisorFabrica", "0");
 
       agregarElemento(doc, lineaDetalle, "ImpuestoNeto", fmtMonto(impuestoNeto));
 
@@ -526,9 +524,7 @@ public class FacturaXMLGeneratorService {
     agregarElemento(doc, resumen, "TotalImpuesto",
         fmtMonto(factura.getTotalImpuesto()));
 
-    if (factura.getCliente() == null || !factura.getCliente().getTieneExoneracion()) {
-      agregarElemento(doc, resumen, "TotalImpAsumEmisorFabrica", "0");
-    }
+    agregarElemento(doc, resumen, "TotalImpAsumEmisorFabrica", "0");
 
     agregarElemento(doc, resumen, "TotalIVADevuelto", "0");
 

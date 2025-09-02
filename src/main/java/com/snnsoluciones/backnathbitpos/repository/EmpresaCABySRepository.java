@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.EmpresaCAByS;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,4 +21,16 @@ public interface EmpresaCABySRepository extends JpaRepository<EmpresaCAByS, Long
         "WHERE c.codigo = :codigo " +
         "AND ec.activo = true")
     List<EmpresaCAByS> findByCodigoCabysCodigo(@Param("codigo") String codigo);
+
+    Optional<EmpresaCAByS> findByEmpresaIdAndCodigoCabysIdAndActivoTrue(
+        Long empresaId,
+        Long codigoCabysId
+    );
+
+    // Buscar por empresa y código CABYS (string)
+    Optional<EmpresaCAByS> findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(
+        Long empresaId,
+        String codigoCabys
+    );
+
 }

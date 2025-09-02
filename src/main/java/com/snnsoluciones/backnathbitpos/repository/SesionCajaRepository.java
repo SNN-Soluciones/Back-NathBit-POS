@@ -74,4 +74,7 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
     LIMIT 1
     """)
     Optional<SesionCaja> findUltimaSesionCerradaByTerminalId(@Param("terminalId") Long terminalId);
+
+    @Query("SELECT s FROM SesionCaja s WHERE s.usuario.id = :usuarioId AND s.estado = 'ABIERTA' AND s.fechaHoraCierre IS NULL")
+    Optional<SesionCaja> findActivaByUsuarioId(@Param("usuarioId") Long usuarioId);
 }

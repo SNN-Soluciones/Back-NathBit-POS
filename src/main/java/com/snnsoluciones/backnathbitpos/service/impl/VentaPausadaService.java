@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.entity.VentaPausada;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.VentaPausadaRepository;
+import java.util.HashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -202,7 +203,19 @@ public class VentaPausadaService {
     }
 
     private String generarDescripcion(Map<String, Object> datosFactura) {
+        if (datosFactura == null) {
+            return "Venta sin título";
+        }
+
         StringBuilder desc = new StringBuilder();
+
+        Map<String, Object> receptor = (Map<String, Object>)
+            datosFactura.getOrDefault("receptor", new HashMap<>());
+
+        String nombre = (String) receptor.get("nombre");
+        if (nombre != null && !nombre.isEmpty()) {
+            desc.append(nombre);
+        }
 
         // Intentar obtener el nombre del cliente
         if (datosFactura.containsKey("cliente")) {
@@ -213,12 +226,12 @@ public class VentaPausadaService {
         }
 
         // Si no hay cliente, usar cantidad de items
-        if (desc.length() == 0 && datosFactura.containsKey("detalles")) {
+        if (desc.isEmpty() && datosFactura.containsKey("detalles")) {
             List<Map<String, Object>> detalles = (List<Map<String, Object>>) datosFactura.get("detalles");
             desc.append("Venta con ").append(detalles.size()).append(" productos");
         }
 
-        return desc.length() > 0 ? desc.toString() : "Venta sin título";
+        return !desc.isEmpty() ? desc.toString() : "Venta sin título";
     }
 
     private String calcularTiempoTranscurrido(LocalDateTime fecha) {

@@ -135,6 +135,10 @@ public class SecurityContextService {
      * Verifica si el usuario actual tiene alguno de los roles especificados
      */
     public boolean hasAnyRole(String... roles) {
+        if (roles == null || roles.length == 0) {
+            return false;
+        }
+
         String currentRole = getCurrentUserRole();
         if (currentRole == null) {
             return false;

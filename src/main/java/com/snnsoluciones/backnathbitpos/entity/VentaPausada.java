@@ -1,10 +1,12 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.Type;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
@@ -31,6 +33,7 @@ public class VentaPausada {
     private Long terminalId;
     
     @Column(name = "datos_factura", nullable = false, columnDefinition = "jsonb")
+    @Type(JsonType.class)  // Si usas Hibernate Types
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> datosFactura;
     

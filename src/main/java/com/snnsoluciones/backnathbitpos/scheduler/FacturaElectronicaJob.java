@@ -201,19 +201,29 @@ public class FacturaElectronicaJob {
 
       if ("ACEPTADO".equalsIgnoreCase(estado.getIndEstado())) {
         factura.setEstado(EstadoFactura.ACEPTADA);
+        bitacora.setEstado(EstadoBitacora.ACEPTADA); // ← AGREGAR ESTA LÍNEA
         bitacora.setHaciendaMensaje("Aceptada por MH");
       } else if ("RECHAZADO".equalsIgnoreCase(estado.getIndEstado()) || "ERROR".equalsIgnoreCase(
           estado.getIndEstado())) {
         factura.setEstado(EstadoFactura.RECHAZADA);
+        bitacora.setEstado(EstadoBitacora.RECHAZADA); // ← AGREGAR ESTA LÍNEA
         bitacora.setHaciendaMensaje(estado.getDetalleMensaje() != null
             ? estado.getDetalleMensaje()
             : "Rechazada/Error en MH");
       } else {
         factura.setEstado(EstadoFactura.ENVIADA); // sigue en RECIBIDO/PROCESANDO
+        // La bitácora sigue en PROCESANDO, no cambiar
         bitacora.setHaciendaMensaje("Pendiente en MH: " + estado.getIndEstado());
       }
 
       facturaRepository.save(factura);
+      bitacoraRepository.save(bitacora);
+    } else {
+      // Si no se pudo obtener estado después del polling
+      // La bitácora queda en PROCESANDO para reintento posterior
+      log.warn("No se pudo obtener estado definitivo de Hacienda para factura {}",
+          factura.getClave());
+      bitacora.setHaciendaMensaje("Timeout esperando respuesta de Hacienda");
       bitacoraRepository.save(bitacora);
     }
 
@@ -224,8 +234,10 @@ public class FacturaElectronicaJob {
 
       log.info("[6/6] Enviando correo...");
       enviarEmail(bitacora, factura, pdf);
-    }
 
+      bitacora.setEstado(EstadoBitacora.ACEPTADA); // ← Por si acaso
+      bitacoraRepository.save(bitacora);
+    }
     log.info("✅ Factura {} completada con estado {}", factura.getClave(), factura.getEstado());
   }
 
@@ -384,12 +396,12 @@ public class FacturaElectronicaJob {
 
     if (bitacora.getIntentos() >= MAX_INTENTOS) {
       // Marcar como error permanente
-      bitacora.setEstado(EstadoBitacora.ERROR);
+      bitacora.setEstado(EstadoBitacora.ERROR); // ← YA ESTÁ CORRECTO
       log.error("Factura {} marcada como ERROR después de {} intentos",
           bitacora.getClave(), MAX_INTENTOS);
     } else {
       // Programar reintento
-      bitacora.setEstado(EstadoBitacora.PENDIENTE);
+      bitacora.setEstado(EstadoBitacora.PENDIENTE); // ← CAMBIAR DE PROCESANDO A PENDIENTE
       bitacora.setProximoIntento(calcularProximoIntento(bitacora.getIntentos()));
       log.warn("Factura {} será reintentada en {}",
           bitacora.getClave(), bitacora.getProximoIntento());

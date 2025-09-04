@@ -29,14 +29,14 @@ public class ProductoImportDto {
     private String codigoBarras;
     private BigDecimal precioCompra;
     private Integer existenciaMinima;
-    private Boolean productoExento; // 1 = exento, 0 = gravado
-    private Boolean afectaInventario; // "1" o "2" en Excel
-    private String estadoProducto; // "A" = Activo, "D" = Desactivado
+    private Boolean productoExento;          // 1 = exento, 0 = gravado
+    private Boolean afectaInventario;       // "1" o "2" en Excel
+    private String estadoProducto;       // "A" = Activo, "D" = Desactivado
 
     // Campos calculados o por defecto
     private Long empresaId;
     private Long categoriaId;
-    private Long cabysId; // ID del código CABYS
+    private String cabysId;     // ID del código CABYS
 
     // Para control de importación
     private Boolean importado = false;

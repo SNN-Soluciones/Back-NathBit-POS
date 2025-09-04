@@ -33,4 +33,7 @@ public interface EmpresaCABySRepository extends JpaRepository<EmpresaCAByS, Long
         String codigoCabys
     );
 
+    Optional<EmpresaCAByS> findByEmpresaIdAndCodigoCabysCodigo(Long empresaId, String codigoCabys);
+
+
 }

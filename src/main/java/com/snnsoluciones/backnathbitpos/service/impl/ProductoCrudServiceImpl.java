@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
@@ -352,6 +354,71 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     );
 
     return dto;
+  }
+
+  @Override
+  @Transactional
+  public ProductoDto actualizarPrecio(Long empresaId, Long productoId, ActualizarPrecioDto dto) {
+    log.debug("Actualizando precio del producto: {} de empresa: {}", productoId, empresaId);
+
+    // Buscar el producto
+    Producto producto = productoRepository.findById(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + productoId));
+
+    // Validar que pertenece a la empresa
+    if (!producto.getEmpresa().getId().equals(empresaId)) {
+      throw new BusinessException("El producto no pertenece a la empresa especificada");
+    }
+
+    // Actualizar precio
+    producto.setPrecioVenta(dto.getPrecioVenta());
+
+    // Actualizar aplica servicio si viene en el DTO
+    if (dto.getAplicaServicio() != null) {
+      producto.setAplicaServicio(dto.getAplicaServicio());
+    }
+
+    // Actualizar impuesto IVA si viene en el DTO
+    if (dto.getCodigoTarifaIVA() != null) {
+      // Buscar el impuesto IVA actual
+      ProductoImpuesto impuestoIVA = producto.getImpuestos().stream()
+          .filter(imp -> imp.getTipoImpuesto() == TipoImpuesto.IVA)
+          .findFirst()
+          .orElse(null);
+
+      if (impuestoIVA != null) {
+        // Actualizar tarifa IVA existente
+        CodigoTarifaIVA nuevaTarifa = CodigoTarifaIVA.fromCodigo(dto.getCodigoTarifaIVA());
+        if (nuevaTarifa == null) {
+          throw new BusinessException("Código de tarifa IVA inválido: " + dto.getCodigoTarifaIVA());
+        }
+        impuestoIVA.setCodigoTarifaIVA(nuevaTarifa);
+        impuestoIVA.setPorcentaje(nuevaTarifa.getPorcentaje());
+      } else {
+        // Crear nuevo impuesto IVA si no existe
+        CodigoTarifaIVA nuevaTarifa = CodigoTarifaIVA.fromCodigo(dto.getCodigoTarifaIVA());
+        if (nuevaTarifa == null) {
+          throw new BusinessException("Código de tarifa IVA inválido: " + dto.getCodigoTarifaIVA());
+        }
+
+        ProductoImpuesto nuevoImpuesto = new ProductoImpuesto();
+        nuevoImpuesto.setProducto(producto);
+        nuevoImpuesto.setTipoImpuesto(TipoImpuesto.IVA);
+        nuevoImpuesto.setCodigoTarifaIVA(nuevaTarifa);
+        nuevoImpuesto.setPorcentaje(nuevaTarifa.getPorcentaje());
+        nuevoImpuesto.setActivo(true);
+
+        producto.getImpuestos().add(nuevoImpuesto);
+      }
+    }
+
+    // Guardar cambios
+    producto = productoRepository.save(producto);
+
+    log.info("Precio del producto {} actualizado exitosamente a {}",
+        productoId, dto.getPrecioVenta());
+
+    return convertirADto(producto);
   }
 
   private String limpiarNombreParaRuta(String nombre) {

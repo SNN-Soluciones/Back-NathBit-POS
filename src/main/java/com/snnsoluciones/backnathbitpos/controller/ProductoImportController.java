@@ -131,4 +131,60 @@ public class ProductoImportController {
             .data(resultado)
             .build());
     }
+
+    @PostMapping("/{empresaId}/excel")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+    @Operation(summary = "Importar productos desde Excel",
+        description = "Importa productos directamente desde archivo Excel")
+    public ResponseEntity<ApiResponse<ProductoImportResultDto>> importarDesdeExcel(
+        @PathVariable Long empresaId,
+        @RequestPart("archivo") MultipartFile archivo) {
+
+        try {
+            log.info("Iniciando importación desde Excel para empresa: {}", empresaId);
+
+            // Validar archivo
+            if (archivo.isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.<ProductoImportResultDto>builder()
+                        .success(false)
+                        .message("El archivo está vacío")
+                        .build());
+            }
+
+            // Validar tipo de archivo
+            String contentType = archivo.getContentType();
+            if (contentType == null ||
+                (!contentType.equals("application/vnd.ms-excel") &&
+                    !contentType.equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.<ProductoImportResultDto>builder()
+                        .success(false)
+                        .message("El archivo debe ser un Excel (.xlsx o .xls)")
+                        .build());
+            }
+
+            // Procesar importación
+            ProductoImportResultDto resultado = productoImportService
+                .importarDesdeExcel(empresaId, archivo);
+
+            log.info("Importación completada: {} exitosos, {} errores",
+                resultado.getExitosos(), resultado.getErrores());
+
+            return ResponseEntity.ok(ApiResponse.<ProductoImportResultDto>builder()
+                .success(true)
+                .message(String.format("Importación completada: %d productos importados exitosamente, %d errores",
+                    resultado.getExitosos(), resultado.getErrores()))
+                .data(resultado)
+                .build());
+
+        } catch (Exception e) {
+            log.error("Error al importar desde Excel", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<ProductoImportResultDto>builder()
+                    .success(false)
+                    .message("Error al procesar el archivo: " + e.getMessage())
+                    .build());
+        }
+    }
 }

@@ -16,4 +16,5 @@ public interface ProductoCrudService {
 
     // Generación de código
     String generarCodigoInterno(Long empresaId);
+    ProductoDto actualizarPrecio(Long empresaId, Long productoId, ActualizarPrecioDto dto);
 }

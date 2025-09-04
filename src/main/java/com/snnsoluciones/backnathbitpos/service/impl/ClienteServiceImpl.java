@@ -375,6 +375,19 @@ public class ClienteServiceImpl implements ClienteService {
         dto.setUbicacion(ubicDto);
       }
 
+      if (cliente.getActividades() != null && !cliente.getActividades().isEmpty()) {
+        Set<ActividadEconomicaDto> actividadesDto = new HashSet<>();
+        for (ClienteActividad ca : cliente.getActividades()) {
+          ActividadEconomicaDto actDto = new ActividadEconomicaDto();
+          actDto.setCodigo(ca.getCodigoActividad());
+          actDto.setDescripcion(ca.getDescripcion());
+          actividadesDto.add(actDto);
+        }
+        dto.setActividades(actividadesDto);
+      } else {
+        dto.setActividades(new HashSet<>()); // Set vacío si no hay actividades
+      }
+
       // Exoneración (si tiene)
       if (cliente.getExoneraciones() != null && !cliente.getExoneraciones().isEmpty()) {
         var exo = cliente.getExoneraciones().iterator().next(); // ejemplo: tomamos la 1ª

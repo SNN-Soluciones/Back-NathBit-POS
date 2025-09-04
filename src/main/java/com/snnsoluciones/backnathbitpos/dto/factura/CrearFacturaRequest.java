@@ -29,6 +29,11 @@ public class CrearFacturaRequest {
     @NotNull(message = "Terminal es requerida")
     private Long terminalId;
 
+    private Long facturaReferenciaId;
+
+    private String razonNotaCredito;
+    private boolean anulacionCompleta = false;
+
     private String emailReceptor;
 
     private String actividadReceptor;

@@ -13,7 +13,9 @@ public enum EstadoFactura {
     ANULADA("Anulada por el usuario"),
     ERROR("Error en el procesamiento"),
     NOTIFICADA("Notificada al cliente"),
-    CANCELADA("Cancelada por el usuario"); // <-- NUEVO ESTADO
+    CANCELADA("Cancelada por el usuario"), // <-- NUEVO ESTADO
+    TOTALMENTE_ACREDITADA("Factura con nota de crédito completa"),
+    PARCIALMENTE_ACREDITADA("Factura con nota de crédito parcial");
 
     private final String descripcion;
 

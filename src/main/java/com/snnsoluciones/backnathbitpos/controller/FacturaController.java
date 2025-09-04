@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.impl.FacturaResponseBuilder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -201,6 +202,31 @@ public class FacturaController {
             log.error("Error al validar totales", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Error al validar totales: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/for-credit")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<FacturaForCreditResponse>> obtenerParaNotaCredito(
+        @PathVariable Long id) {
+
+        log.info("Obteniendo datos de factura {} para nota de crédito", id);
+
+        try {
+            FacturaForCreditResponse response = facturaService.obtenerParaNotaCredito(id);
+
+            return ResponseEntity.ok(
+                ApiResponse.ok(
+                    "Factura obtenida para nota de crédito",
+                    response
+                )
+            );
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Factura no encontrada"));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getMessage()));
         }
     }
 }

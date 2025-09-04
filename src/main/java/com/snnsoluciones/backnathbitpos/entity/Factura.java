@@ -98,6 +98,9 @@ public class Factura {
     @Column(name = "razon_referencia", length = 180)
     private String razonReferencia;
 
+    @Column(name = "fecha_emision_referencia")
+    private String fechaEmisionReferencia;
+
     // ========== DATOS COMERCIALES ==========
     @Column(name = "condicion_venta", nullable = false)
     @Enumerated(EnumType.STRING)
@@ -186,6 +189,15 @@ public class Factura {
 
     @Column(name = "total_comprobante", precision = 18, scale = 5)
     private BigDecimal totalComprobante = BigDecimal.ZERO;
+
+    @Column(name = "monto_acreditado", precision = 19, scale = 5)
+    private BigDecimal montoAcreditado = BigDecimal.ZERO;
+
+    @Column(name = "parcialmente_acreditada")
+    private Boolean parcialmenteAcreditada = Boolean.FALSE;
+
+    @Column(name = "totalmente_acreditada")
+    private Boolean totalmenteAcreditada = Boolean.FALSE;
 
     // ========== RELACIONES ==========
     @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

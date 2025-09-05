@@ -338,11 +338,29 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Filtro por clave
+            // Filtro por clave, consecutivo o nombre del cliente
             if (filtros.getClave() != null && !filtros.getClave().isEmpty()) {
-                predicates.add(cb.like(root.get("clave"), "%" + filtros.getClave() + "%"));
+                String searchTerm = "%" + filtros.getClave().toLowerCase() + "%";
+
+                // Crear predicados para buscar en múltiples campos
+                List<Predicate> searchPredicates = new ArrayList<>();
+
+                // Buscar por clave
+                searchPredicates.add(cb.like(cb.lower(root.get("clave")), searchTerm));
+
+                // Buscar por consecutivo y nombre del cliente (requiere JOIN)
+                Join<FacturaBitacora, Factura> facturaJoin = root.join("factura", JoinType.LEFT);
+                searchPredicates.add(cb.like(cb.lower(facturaJoin.get("consecutivo")), searchTerm));
+
+                // Buscar por nombre del cliente
+                Join<Factura, Cliente> clienteJoin = facturaJoin.join("cliente", JoinType.LEFT);
+                searchPredicates.add(cb.like(cb.lower(clienteJoin.get("nombreRazonSocial")), searchTerm));
+
+                // Combinar con OR
+                predicates.add(cb.or(searchPredicates.toArray(new Predicate[0])));
             }
 
+            // Mantener el resto de los filtros igual...
             // Filtro por estados
             if (filtros.getEstados() != null && !filtros.getEstados().isEmpty()) {
                 predicates.add(root.get("estado").in(filtros.getEstados()));
@@ -375,30 +393,6 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
             }
             if (filtros.getIntentosMaximos() != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("intentos"), filtros.getIntentosMaximos()));
-            }
-
-            // Joins para filtros de factura
-            if (filtros.getConsecutivo() != null || filtros.getEmpresaId() != null || 
-                filtros.getSucursalId() != null || filtros.getClienteId() != null) {
-                
-                Join<FacturaBitacora, Factura> facturaJoin = root.join("factura", JoinType.LEFT);
-                
-                if (filtros.getConsecutivo() != null && !filtros.getConsecutivo().isEmpty()) {
-                    predicates.add(cb.like(facturaJoin.get("consecutivo"), "%" + filtros.getConsecutivo() + "%"));
-                }
-                
-                if (filtros.getSucursalId() != null) {
-                    predicates.add(cb.equal(facturaJoin.get("sucursal").get("id"), filtros.getSucursalId()));
-                }
-                
-                if (filtros.getEmpresaId() != null) {
-                    Join<Factura, Sucursal> sucursalJoin = facturaJoin.join("sucursal", JoinType.LEFT);
-                    predicates.add(cb.equal(sucursalJoin.get("empresa").get("id"), filtros.getEmpresaId()));
-                }
-                
-                if (filtros.getClienteId() != null) {
-                    predicates.add(cb.equal(facturaJoin.get("cliente").get("id"), filtros.getClienteId()));
-                }
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

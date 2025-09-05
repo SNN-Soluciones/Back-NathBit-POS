@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.empresa.CertificadoResponse;
+import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.UrlCertificadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaActividad;
@@ -66,4 +67,6 @@ public interface EmpresaService {
      * @return true si tiene acceso
      */
     boolean usuarioTieneAcceso(Long usuarioId, Long empresaId);
+
+    Page<EmpresaResponse> listar(Pageable pageable);
 }

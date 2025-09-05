@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.security.jwt;
 
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,34 +19,55 @@ import java.util.Collections;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    
+
     private final JwtTokenProvider tokenProvider;
-    
+
     @Override
-    protected void doFilterInternal(HttpServletRequest request, 
-                                  HttpServletResponse response, 
-                                  FilterChain filterChain) throws ServletException, IOException {
-        
+    protected void doFilterInternal(HttpServletRequest request,
+        HttpServletResponse response,
+        FilterChain filterChain) throws ServletException, IOException {
+
         String token = getTokenFromRequest(request);
-        
+
         if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
             Long userId = tokenProvider.getUserIdFromToken(token);
             String email = tokenProvider.getEmailFromToken(token);
             String rol = tokenProvider.getRolFromToken(token);
-            
-            UsernamePasswordAuthenticationToken authentication = 
+
+            // Crear objeto de contexto con información adicional
+            ContextoUsuario contexto = new ContextoUsuario();
+            contexto.setUserId(userId);
+            contexto.setEmail(email);
+            contexto.setRol(rol);
+
+            // Intentar obtener contexto empresa/sucursal del token
+            try {
+                Long empresaId = tokenProvider.getEmpresaIdFromToken(token);
+                contexto.setEmpresaId(empresaId);
+            } catch (Exception e) {
+                // Es opcional, no hacer nada
+            }
+
+            try {
+                Long sucursalId = tokenProvider.getSucursalIdFromToken(token);
+                contexto.setSucursalId(sucursalId);
+            } catch (Exception e) {
+                // Es opcional, no hacer nada
+            }
+
+            UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
-                    userId,
+                    contexto,  // Principal ahora es el contexto completo
                     null,
                     Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + rol))
                 );
-            
+
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
-        
+
         filterChain.doFilter(request, response);
     }
-    
+
     private String getTokenFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {

@@ -10,10 +10,11 @@ import java.util.List;
 @Builder
 public class LoginResponse {
     private String token;
+    private String refreshToken;  // AÑADIDO: Faltaba este campo
     private UsuarioResponse usuario;
     private boolean requiereSeleccion;
     private String rutaDestino;
-    
+
     // Campos opcionales según rol
     private List<EmpresaResumen> empresas;  // Para SUPER_ADMIN
     private EmpresaResumen empresa;         // Para ADMIN

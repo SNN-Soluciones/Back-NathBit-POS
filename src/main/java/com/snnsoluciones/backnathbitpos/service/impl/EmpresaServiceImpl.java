@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.empresa.CertificadoResponse;
+import com.snnsoluciones.backnathbitpos.dto.empresa.EmpresaResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.UrlCertificadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaConfigHacienda;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -34,6 +36,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional
 @Slf4j
 public class EmpresaServiceImpl implements EmpresaService {
+
+    private final ModelMapper modelMapper;
 
     private final EmpresaRepository empresaRepository;
     private final EmpresaConfigHaciendaRepository configHaciendaRepository;
@@ -353,5 +357,11 @@ public class EmpresaServiceImpl implements EmpresaService {
     public boolean usuarioTieneAcceso(Long usuarioId, Long empresaId) {
         // Para SUPER_ADMIN, verificar en la tabla usuarios_empresas
         return usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaId(usuarioId, empresaId);
+    }
+
+    @Override
+    public Page<EmpresaResponse> listar(Pageable pageable) {
+        Page<Empresa> empresa = empresaRepository.findAll(pageable);
+        return empresa.map(e -> modelMapper.map(e, EmpresaResponse.class));
     }
 }

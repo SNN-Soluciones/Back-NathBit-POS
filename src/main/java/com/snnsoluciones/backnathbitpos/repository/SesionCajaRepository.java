@@ -77,4 +77,20 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
 
     @Query("SELECT s FROM SesionCaja s WHERE s.usuario.id = :usuarioId AND s.estado = 'ABIERTA' AND s.fechaHoraCierre IS NULL")
     Optional<SesionCaja> findActivaByUsuarioId(@Param("usuarioId") Long usuarioId);
+
+    /**
+     * Busca una sesión de caja activa para un usuario en una sucursal específica
+     * @param usuarioId ID del usuario
+     * @param sucursalId ID de la sucursal
+     * @return Sesión activa si existe
+     */
+    @Query("SELECT sc FROM SesionCaja sc " +
+        "WHERE sc.usuario.id = :usuarioId " +
+        "AND sc.terminal.sucursal.id = :sucursalId " +
+        "AND sc.estado = 'ABIERTA' " +
+        "AND sc.fechaHoraCierre IS NULL")
+    Optional<SesionCaja> findSesionActivaByUsuarioAndSucursal(
+        @Param("usuarioId") Long usuarioId,
+        @Param("sucursalId") Long sucursalId
+    );
 }

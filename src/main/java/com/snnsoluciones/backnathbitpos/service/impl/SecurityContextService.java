@@ -94,6 +94,32 @@ public class SecurityContextService {
     }
 
     /**
+     * Obtiene el ID del terminal actual basado en la sesión de caja activa
+     * @return ID del terminal o null si no hay sesión activa
+     */
+    public Long getCurrentTerminalId() {
+        Long userId = getCurrentUserId();
+        Long sucursalId = getCurrentSucursalId();
+
+        if (sucursalId == null) {
+            log.debug("No hay sucursal en el contexto, no se puede determinar el terminal");
+            return null;
+        }
+
+        // Buscar sesión de caja activa
+        Optional<SesionCaja> sesionActiva = getSesionCajaActiva();
+
+        if (sesionActiva.isPresent()) {
+            Long terminalId = sesionActiva.get().getTerminal().getId();
+            log.debug("Terminal activo encontrado: {}", terminalId);
+            return terminalId;
+        }
+
+        log.debug("No hay sesión de caja activa para el usuario");
+        return null;
+    }
+
+    /**
      * Verifica si el usuario actual es de nivel sistema (ROOT o SOPORTE)
      */
     public boolean isRolSistema() {
@@ -135,5 +161,50 @@ public class SecurityContextService {
     public Optional<String> getRequestHeader(String headerName) {
         return getCurrentRequest()
             .map(request -> request.getHeader(headerName));
+    }
+
+    /**
+     * Verifica si el usuario actual tiene alguno de los roles especificados
+     * @param roles roles a verificar
+     * @return true si tiene al menos uno de los roles
+     */
+    public boolean hasAnyRole(String... roles) {
+        String currentRole = getCurrentUserRole();
+        if (currentRole == null) {
+            return false;
+        }
+
+        for (String role : roles) {
+            if (currentRole.equals(role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Verifica si el usuario actual tiene el rol especificado
+     * @param role rol a verificar
+     * @return true si tiene el rol
+     */
+    public boolean hasRole(String role) {
+        String currentRole = getCurrentUserRole();
+        return currentRole != null && currentRole.equals(role);
+    }
+
+    /**
+     * Verifica si el usuario es supervisor (tiene permisos elevados)
+     * @return true si es supervisor
+     */
+    public boolean isSupervisor() {
+        return hasAnyRole("JEFE_CAJAS", "ADMIN", "SUPER_ADMIN", "ROOT", "SOPORTE");
+    }
+
+    /**
+     * Verifica si el usuario es operativo (cajero, mesero, etc)
+     * @return true si es operativo
+     */
+    public boolean isOperativo() {
+        return hasAnyRole("CAJERO", "MESERO", "COCINERO", "JEFE_CAJAS");
     }
 }

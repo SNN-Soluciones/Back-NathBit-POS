@@ -29,7 +29,8 @@ app:
 
   jwt:
     secret: ${JWT_SECRET:oY4vU2yN1tR9kQ8wL6bC0pA3fZ7eH5sM8xG4jV1uK9dT2lQ6wP0nB3rF8cJ6mZ4q
-    expiration-in-ms: 86400000 # 24 horas
+    expiration: 86400000 # 24 horas
+    refresh-expiration: 604800000 # 7 días - AGREGAR ESTA LÍNEA
 
 server:
   port: 8080

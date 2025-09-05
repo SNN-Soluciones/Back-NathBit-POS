@@ -43,8 +43,8 @@ public class AuthServiceImpl implements AuthService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // Buscar usuario
-        Usuario usuario = usuarioService.buscarPorEmail(request.getEmail())
+        Usuario usuario = usuarioService.buscarPorUsername(request.getEmail())
+            .or(() -> usuarioService.buscarPorEmail(request.getEmail()))
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         // Generar tokens

@@ -781,7 +781,7 @@ public class FacturaServiceImpl implements FacturaService {
         .clienteTipoIdentificacion(factura.getCliente() != null ? factura.getCliente().getTipoIdentificacion().getCodigo() : null)
         .emailReceptor(factura.getEmailReceptor())
         .clienteTieneExoneracion(factura.getCliente() != null && factura.getCliente().getExoneraciones() != null && !factura.getCliente().getExoneraciones().isEmpty())
-        .exoneraciones(factura.getCliente() != null ? convertirExoneraciones(factura.getCliente().getExoneraciones()) : null)
+//        .exoneraciones(factura.getCliente() != null ? convertirExoneraciones(factura.getCliente().getExoneraciones()) : null)
 
         // Datos comerciales
         .condicionVenta(factura.getCondicionVenta().getCodigo())
@@ -819,8 +819,8 @@ public class FacturaServiceImpl implements FacturaService {
 
         // Listas
         .detalles(convertirDetallesParaCredito(factura.getDetalles()))
-        .otrosCargos(convertirOtrosCargos(factura.getOtrosCargos()))
-        .resumenImpuestos(convertirResumenImpuestos(factura.getResumenImpuestos()))
+//        .otrosCargos(convertirOtrosCargos(factura.getOtrosCargos()))
+//        .resumenImpuestos(convertirResumenImpuestos(factura.getResumenImpuestos()))
 
         .build();
   }
@@ -849,8 +849,8 @@ public class FacturaServiceImpl implements FacturaService {
             .subtotal(detalle.getSubtotal())
             .montoImpuesto(detalle.getMontoImpuesto())
             .montoTotalLinea(detalle.getMontoTotalLinea())
-            .descuentos(convertirDescuentos(detalle.getDescuentos()))
-            .impuestos(convertirImpuestos(detalle.getImpuestos()))
+//            .descuentos(convertirDescuentos(detalle.getDescuentos()))
+//            .impuestos(convertirImpuestos(detalle.getImpuestos()))
             .cantidadAcreditar(detalle.getCantidad()) // Por defecto toda la cantidad
             .seleccionado(false) // Por defecto no seleccionado
             .build())
@@ -863,11 +863,11 @@ public class FacturaServiceImpl implements FacturaService {
 
     return descuentos.stream()
         .map(desc -> FacturaForCreditResponse.DescuentoDto.builder()
-            .codigoDescuento(desc.get.getCodigoDescuento())
-            .naturalezaDescuento(desc.getNaturalezaDescuento())
-            .porcentaje(desc.getPorcentaje())
-            .montoDescuento(desc.getMontoDescuento())
-            .orden(desc.getOrden())
+//            .codigoDescuento(desc.get.getCodigoDescuento())
+//            .naturalezaDescuento(desc.getNaturalezaDescuento())
+//            .porcentaje(desc.getPorcentaje())
+//            .montoDescuento(desc.getMontoDescuento())
+//            .orden(desc.getOrden())
             .build())
         .collect(Collectors.toList());
   }

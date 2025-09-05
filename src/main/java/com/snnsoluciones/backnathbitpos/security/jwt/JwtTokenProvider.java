@@ -13,13 +13,13 @@ import java.util.Map;
 @Component
 public class JwtTokenProvider {
 
-    @Value("${jwt.secret}")
+    @Value("${app.jwt.secret}")
     private String jwtSecret;
 
-    @Value("${jwt.expiration}")
+    @Value("${app.jwt.expiration}")
     private int jwtExpiration;
 
-    @Value("${jwt.refresh-expiration:604800000}") // 7 días por defecto
+    @Value("${app.jwt.refresh-expiration:604800000}") // 7 días por defecto
     private int refreshExpiration;
 
     public String generateToken(Long userId, String email, String rol) {

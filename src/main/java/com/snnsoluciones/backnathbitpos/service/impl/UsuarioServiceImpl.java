@@ -77,4 +77,9 @@ public class UsuarioServiceImpl implements UsuarioService {
     public Optional<Usuario> buscarPorUsername(String username) {
         return usuarioRepository.findByUsernameIgnoreCase(username);
     }
+
+    @Override
+    public List<Usuario> listarPorEmpresa(Long empresaId) {
+        return usuarioRepository.findByEmpresaId(empresaId);
+    }
 }

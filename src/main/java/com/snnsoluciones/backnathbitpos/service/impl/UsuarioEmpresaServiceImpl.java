@@ -9,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,5 +88,10 @@ public class UsuarioEmpresaServiceImpl implements UsuarioEmpresaService {
             return false;
         }
       return usuarioEmpresaRepository.existsByUsuarioIdAndEmpresaId(usuarioId, empresaId);
+    }
+
+    @Override
+    public Optional<UsuarioEmpresa> buscarPorId(Long id) {
+        return usuarioEmpresaRepository.findById(id);
     }
 }

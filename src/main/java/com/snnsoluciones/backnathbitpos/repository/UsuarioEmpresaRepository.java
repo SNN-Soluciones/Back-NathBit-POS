@@ -15,8 +15,12 @@ import java.util.Optional;
 public interface UsuarioEmpresaRepository extends JpaRepository<UsuarioEmpresa, Long> {
     
     List<UsuarioEmpresa> findByUsuarioId(Long usuarioId);
-    
-    List<UsuarioEmpresa> findByEmpresaId(Long empresaId);
+
+    @Query("SELECT ue FROM UsuarioEmpresa ue " +
+        "WHERE ue.empresa.id = :empresaId " +
+        "AND ue.activo = true " +
+        "AND ue.usuario.activo = true")
+    List<UsuarioEmpresa> findByEmpresaId(@Param("empresaId") Long empresaId);
     
     List<UsuarioEmpresa> findBySucursalId(Long sucursalId);
     
@@ -29,4 +33,7 @@ public interface UsuarioEmpresaRepository extends JpaRepository<UsuarioEmpresa, 
     List<Empresa> findEmpresasByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     Optional<Object> findByUsuarioIdAndEmpresaId(Long id, Long empresaId);
+
+    Optional<UsuarioEmpresa> findById(Long id);
+
 }

@@ -61,4 +61,13 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
         @Param("empresasPermitidas") List<Long> empresasPermitidas,
         Pageable pageable
     );
+
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "JOIN UsuarioEmpresa ue ON ue.usuario = u " +
+        "WHERE ue.empresa.id = :empresaId " +
+        "AND u.activo = true " +
+        "AND ue.activo = true " +
+        "ORDER BY u.nombre, u.apellidos")
+    List<Usuario> findByEmpresaId(@Param("empresaId") Long empresaId);
+
 }

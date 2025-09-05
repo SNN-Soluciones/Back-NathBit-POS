@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,171 +25,115 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityContextService {
-    
+
     private final UsuarioRepository usuarioRepository;
     private final SesionCajaRepository sesionCajaRepository;
-    
+
+    /**
+     * Obtiene el contexto completo del usuario actual
+     */
+    public ContextoUsuario getContextoActual() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new UnauthorizedException("Usuario no autenticado");
+        }
+
+        // El JwtAuthenticationFilter guarda el ContextoUsuario como principal
+        if (authentication.getPrincipal() instanceof ContextoUsuario) {
+            return (ContextoUsuario) authentication.getPrincipal();
+        }
+
+        throw new UnauthorizedException("Contexto de usuario no válido");
+    }
+
     /**
      * Obtiene el ID del usuario actual desde el SecurityContext
      */
     public Long getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new UnauthorizedException("Usuario no autenticado");
-        }
-        
-        // El JwtAuthenticationFilter guarda el userId como principal
-        if (authentication.getPrincipal() instanceof Long) {
-            return (Long) authentication.getPrincipal();
-        }
-        
-        throw new UnauthorizedException("No se pudo obtener el ID del usuario");
+        return getContextoActual().getUserId();
     }
-    
+
     /**
-     * Obtiene el usuario actual completo
+     * Obtiene el usuario actual completo desde la base de datos
      */
     public Usuario getCurrentUser() {
         Long userId = getCurrentUserId();
         return usuarioRepository.findById(userId)
             .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
     }
-    
+
+    /**
+     * Obtiene el email del usuario actual
+     */
+    public String getCurrentUserEmail() {
+        return getContextoActual().getEmail();
+    }
+
     /**
      * Obtiene el rol del usuario actual
      */
     public String getCurrentUserRole() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        
-        if (authentication != null && authentication.getAuthorities() != null) {
-            return authentication.getAuthorities().stream()
-                .findFirst()
-                .map(auth -> auth.getAuthority().replace("ROLE_", ""))
-                .orElse(null);
-        }
-        
-        return null;
+        return getContextoActual().getRol();
     }
-    
+
     /**
-     * Obtiene el ID de la empresa desde los headers HTTP
+     * Obtiene el ID de la empresa del contexto actual
+     * @return ID de la empresa o null si no hay contexto de empresa
      */
     public Long getCurrentEmpresaId() {
-        HttpServletRequest request = getCurrentHttpRequest();
-        String empresaId = request.getHeader("X-Empresa-Id");
-        
-        if (empresaId == null || empresaId.isEmpty()) {
-            // Si no viene en headers, buscar la sesión de caja activa
-            return getEmpresaIdFromSesionCaja().orElse(null);
-        }
-        
-        try {
-            return Long.parseLong(empresaId);
-        } catch (NumberFormatException e) {
-            log.error("ID de empresa inválido: {}", empresaId);
-            return null;
-        }
+        return getContextoActual().getEmpresaId();
     }
-    
+
     /**
-     * Obtiene el ID de la sucursal desde los headers HTTP
+     * Obtiene el ID de la sucursal del contexto actual
+     * @return ID de la sucursal o null si no hay contexto de sucursal
      */
     public Long getCurrentSucursalId() {
-        HttpServletRequest request = getCurrentHttpRequest();
-        String sucursalId = request.getHeader("X-Sucursal-Id");
-        
-        if (sucursalId == null || sucursalId.isEmpty()) {
-            // Si no viene en headers, buscar la sesión de caja activa
-            return getSucursalIdFromSesionCaja().orElse(null);
-        }
-        
-        try {
-            return Long.parseLong(sucursalId);
-        } catch (NumberFormatException e) {
-            log.error("ID de sucursal inválido: {}", sucursalId);
-            return null;
-        }
+        return getContextoActual().getSucursalId();
     }
-    
+
     /**
-     * Obtiene el ID del terminal desde los headers HTTP o sesión de caja
+     * Verifica si el usuario actual es de nivel sistema (ROOT o SOPORTE)
      */
-    public Long getCurrentTerminalId() {
-        HttpServletRequest request = getCurrentHttpRequest();
-        String terminalId = request.getHeader("X-Terminal-Id");
-        
-        if (terminalId == null || terminalId.isEmpty()) {
-            // Si no viene en headers, buscar la sesión de caja activa
-            return getTerminalIdFromSesionCaja().orElse(null);
-        }
-        
-        try {
-            return Long.parseLong(terminalId);
-        } catch (NumberFormatException e) {
-            log.error("ID de terminal inválido: {}", terminalId);
-            return null;
-        }
+    public boolean isRolSistema() {
+        String rol = getCurrentUserRole();
+        return "ROOT".equals(rol) || "SOPORTE".equals(rol);
     }
-    
+
     /**
-     * Verifica si el usuario actual tiene alguno de los roles especificados
+     * Verifica si el usuario actual tiene una sesión de caja activa
      */
-    public boolean hasAnyRole(String... roles) {
-        if (roles == null || roles.length == 0) {
-            return false;
+    public Optional<SesionCaja> getSesionCajaActiva() {
+        Long userId = getCurrentUserId();
+        Long sucursalId = getCurrentSucursalId();
+
+        if (sucursalId == null) {
+            return Optional.empty();
         }
 
-        String currentRole = getCurrentUserRole();
-        if (currentRole == null) {
-            return false;
-        }
-        
-        for (String role : roles) {
-            if (currentRole.equals(role)) {
-                return true;
-            }
-        }
-        
-        return false;
+        return sesionCajaRepository.findSesionActivaByUsuarioAndSucursal(userId, sucursalId);
     }
-    
+
     /**
-     * Verifica si el usuario actual tiene un rol específico
+     * Obtiene el request actual si está disponible
      */
-    public boolean hasRole(String role) {
-        String currentRole = getCurrentUserRole();
-        return currentRole != null && currentRole.equals(role);
+    public Optional<HttpServletRequest> getCurrentRequest() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes)
+            RequestContextHolder.getRequestAttributes();
+
+        if (attrs != null) {
+            return Optional.of(attrs.getRequest());
+        }
+
+        return Optional.empty();
     }
-    
+
     /**
-     * Obtiene la sesión de caja activa del usuario
+     * Obtiene un header del request actual
      */
-    public Optional<SesionCaja> getCurrentSesionCaja() {
-        Long userId = getCurrentUserId();
-        return sesionCajaRepository.findActivaByUsuarioId(userId);
-    }
-    
-    // Métodos privados auxiliares
-    
-    private HttpServletRequest getCurrentHttpRequest() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) 
-            RequestContextHolder.currentRequestAttributes();
-        return attributes.getRequest();
-    }
-    
-    private Optional<Long> getEmpresaIdFromSesionCaja() {
-        return getCurrentSesionCaja()
-            .map(session -> session.getTerminal().getSucursal().getEmpresa().getId());
-    }
-    
-    private Optional<Long> getSucursalIdFromSesionCaja() {
-        return getCurrentSesionCaja()
-            .map(session -> session.getTerminal().getSucursal().getId());
-    }
-    
-    private Optional<Long> getTerminalIdFromSesionCaja() {
-        return getCurrentSesionCaja()
-            .map(session -> session.getTerminal().getId());
+    public Optional<String> getRequestHeader(String headerName) {
+        return getCurrentRequest()
+            .map(request -> request.getHeader(headerName));
     }
 }

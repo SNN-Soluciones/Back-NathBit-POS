@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.config;
 
+import com.snnsoluciones.backnathbitpos.security.ContextHeaderFilter;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtAuthenticationEntryPoint;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
     private final JwtAuthenticationFilter authenticationFilter;
+    private final ContextHeaderFilter contextHeaderFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -83,6 +85,7 @@ public class SecurityConfig {
 
         // Agregar filtro JWT antes del filtro de autenticación
         http.addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(contextHeaderFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

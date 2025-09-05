@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.usuarios.UsuarioResponse;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresa;
 import com.snnsoluciones.backnathbitpos.exception.NotFoundException;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioService;
@@ -263,6 +264,11 @@ public class AuthServiceImpl implements AuthService {
 
     private Long getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return (Long) auth.getPrincipal();
+
+        if (auth != null && auth.getPrincipal() instanceof ContextoUsuario contexto) {
+          return contexto.getUserId();
+        }
+
+        throw new RuntimeException("No se pudo obtener el usuario actual");
     }
 }

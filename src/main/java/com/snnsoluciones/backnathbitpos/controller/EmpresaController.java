@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Tag(name = "Empresas", description = "Consulta y gestión de empresas")
 @Slf4j
-public class EmpresaController {
+public class EmpresaController extends BaseController{
 
     private final EmpresaService empresaService;
     private final UsuarioService usuarioService;
@@ -113,7 +113,8 @@ public class EmpresaController {
         @RequestParam(name = "sortBy", defaultValue = "nombreComercial") String sortBy,
         @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection) {
 
-        Long usuarioId = getCurrentUserId();
+        // CAMBIO 2: Usar getCurrentUserId() heredado de BaseController
+        Long usuarioId = getCurrentUserId(); // Ya no necesita parsear, viene del BaseController
 
         Sort.Direction direction = sortDirection.equalsIgnoreCase("DESC")
             ? Sort.Direction.DESC
@@ -164,23 +165,15 @@ public class EmpresaController {
 
     // ==================== MÉTODOS AUXILIARES ====================
 
-    private Long getCurrentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return Long.parseLong(auth.getName());
-    }
-
     private boolean validarAccesoEmpresa(Empresa empresa) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ROOT") ||
-                a.getAuthority().equals("ROLE_SOPORTE"))) {
+        // Usar isRolSistema() heredado de BaseController
+        if (isRolSistema()) {
             return true;
         }
 
-        if (auth.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"))) {
-            Long usuarioId = Long.parseLong(auth.getName());
+        // Para SUPER_ADMIN, verificar acceso a la empresa
+        if ("SUPER_ADMIN".equals(getCurrentUserRole())) {
+            Long usuarioId = getCurrentUserId();
             return empresaService.usuarioTieneAcceso(usuarioId, empresa.getId());
         }
 

@@ -142,9 +142,4 @@ public class EmpresaCreacionController {
             return ResponseEntity.ok(ApiResponse.error("Certificado inválido o PIN incorrecto"));
         }
     }
-
-    private Long getCurrentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return Long.parseLong(auth.getName());
-    }
 }

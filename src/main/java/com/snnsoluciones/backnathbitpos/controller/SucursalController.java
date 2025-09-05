@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/sucursales")
 @RequiredArgsConstructor
 @Tag(name = "Sucursales", description = "Gestión de sucursales")
-public class SucursalController {
+public class SucursalController extends BaseController {
 
   private final SucursalService sucursalService;
   private final EmpresaService empresaService;
@@ -113,30 +113,29 @@ public class SucursalController {
       @PathVariable(name = "usuarioId") Long usuarioId,
       @PathVariable(name = "empresaId") Long empresaId) {
 
-    // Validación de seguridad
-    Long usuarioActualId = getCurrentUserId();
+    // CAMBIO 2: Usar getCurrentUserId() del BaseController
+    Long usuarioActualId = getCurrentUserId(); // Ahora viene del BaseController
+
     Usuario usuarioActual = usuarioService.buscarPorId(usuarioActualId)
         .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-    // Si no es ROOT/SOPORTE, validar que sea su propio usuario
-    if (!usuarioActual.esRolSistema() && !usuarioActualId.equals(usuarioId)) {/**/
+    // CAMBIO 3: Usar isRolSistema() del BaseController
+    if (!isRolSistema() && !usuarioActualId.equals(usuarioId)) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN)
           .body(ApiResponse.error("Solo puede ver sus propias sucursales"));
     }
 
-    if (usuarioActual.esRolSistema()) {
+    if (isRolSistema()) {
       return ResponseEntity.ok(ApiResponse.ok(sucursalService.listarPorEmpresa(empresaId).stream()
           .map((element) -> modelMapper.map(element, SucursalResponse.class))
           .collect(Collectors.toList())));
     }
 
     // Validar que el usuario tenga acceso a esa empresa
-    if (!usuarioActual.esRolSistema()) {
-      boolean tieneAccesoEmpresa = usuarioEmpresaService.tieneAcceso(usuarioId, empresaId, null);
-      if (!tieneAccesoEmpresa) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-            .body(ApiResponse.error("No tiene acceso a esta empresa"));
-      }
+    boolean tieneAccesoEmpresa = usuarioEmpresaService.tieneAcceso(usuarioId, empresaId, null);
+    if (!tieneAccesoEmpresa) {
+      return ResponseEntity.status(HttpStatus.FORBIDDEN)
+          .body(ApiResponse.error("No tiene acceso a esta empresa"));
     }
 
     List<Sucursal> sucursales = sucursalService.listarPorUsuarioYEmpresa(usuarioId, empresaId);
@@ -145,13 +144,6 @@ public class SucursalController {
         .collect(Collectors.toList());
 
     return ResponseEntity.ok(ApiResponse.ok(response));
-  }
-
-  private Long getCurrentUserId() {
-    return (Long) org.springframework.security.core.context.SecurityContextHolder
-        .getContext()
-        .getAuthentication()
-        .getPrincipal();
   }
 
   // Métodos de conversión

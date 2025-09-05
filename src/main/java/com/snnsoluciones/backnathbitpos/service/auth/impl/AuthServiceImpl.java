@@ -137,7 +137,7 @@ public class AuthServiceImpl implements AuthService {
                     .empresa(empresaAdmin)
                     .sucursales(sucursalesAdmin)
                     .requiereSeleccion(true)
-                    .rutaDestino("/dashboard-sucursales/" + empresaAdmin.getId())
+                    .rutaDestino("/dashboard-sucursales/")
                     .build();
 
             case CAJERO:
@@ -177,7 +177,7 @@ public class AuthServiceImpl implements AuthService {
                 return responseBuilder
                     .contexto(contextoOp)
                     .requiereSeleccion(false)
-                    .rutaDestino("/sistema")
+                    .rutaDestino("/pos")
                     .build();
 
             default:

@@ -35,4 +35,6 @@ public interface EmailAuditLogRepository extends JpaRepository<EmailAuditLog, Lo
      * Buscar emails pendientes de reintento
      */
     List<EmailAuditLog> findByEstadoInAndIntentosLessThan(List<EstadoEmail> estados, Integer maxIntentos);
+
+    Optional<EmailAuditLog> findByFacturaIdAndEstado(Long facturaId, EstadoEmail estado);
 }

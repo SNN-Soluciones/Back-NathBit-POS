@@ -117,12 +117,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     
     @Override
     @Transactional(readOnly = true)
-    public Optional<SesionCaja> buscarSesionActivaPorTerminal(Long terminalId) {
-        return sesionCajaRepository.findSesionAbiertaByTerminalId(terminalId);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
     public Optional<SesionCaja> buscarPorId(Long id) {
         return sesionCajaRepository.findById(id);
     }
@@ -204,5 +198,32 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     @Transactional(readOnly = true)
     public boolean terminalTieneSesionAbierta(Long terminalId) {
         return sesionCajaRepository.findSesionAbiertaByTerminalId(terminalId).isPresent();
+    }
+
+    @Override
+    public Optional<SesionCaja> buscarSesionActivaPorTerminal(Long terminalId) {
+        return sesionCajaRepository.findByTerminalIdAndEstado(terminalId, EstadoSesion.ABIERTA);
+    }
+
+    @Override
+    public List<SesionCaja> listarSesionesDia(Long sucursalId, LocalDate fecha) {
+        LocalDateTime inicio = fecha.atStartOfDay();
+        LocalDateTime fin = fecha.atTime(LocalTime.MAX);
+
+        return sesionCajaRepository.findBySucursalIdAndFechaBetween(
+            sucursalId, inicio, fin
+        );
+    }
+
+    @Override
+    public boolean validarCierreDia(Long terminalId) {
+        // Verificar si hay sesiones del día anterior sin cerrar
+        LocalDate ayer = LocalDate.now().minusDays(1);
+        LocalDateTime inicioAyer = ayer.atStartOfDay();
+        LocalDateTime finAyer = ayer.atTime(LocalTime.MAX);
+
+        return !sesionCajaRepository.existsByTerminalIdAndEstadoAndFechaBetween(
+            terminalId, EstadoSesion.ABIERTA, inicioAyer, finAyer
+        );
     }
 }

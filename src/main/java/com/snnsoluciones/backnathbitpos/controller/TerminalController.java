@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.documento.GenerarConsecutivoRequest;
 import com.snnsoluciones.backnathbitpos.dto.terminal.TerminalRequest;
 import com.snnsoluciones.backnathbitpos.dto.terminal.TerminalResponse;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
+import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
 import com.snnsoluciones.backnathbitpos.service.SucursalService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +30,7 @@ public class TerminalController {
 
     private final TerminalService terminalService;
     private final SucursalService sucursalService;
+    private final SesionCajaService sesionCajaService;
 
     @Operation(summary = "Listar terminales por sucursal")
     @GetMapping("/sucursal/{sucursalId}")
@@ -121,30 +123,100 @@ public class TerminalController {
         );
     }
 
-    // Método helper para convertir
-    private TerminalResponse convertirAResponse(Terminal terminal) {
-        // Construir mapa de consecutivos actuales
-        Map<String, Long> consecutivos = new HashMap<>();
-        consecutivos.put("01", terminal.getConsecutivoFacturaElectronica());
-        consecutivos.put("04", terminal.getConsecutivoTiqueteElectronico());
-        consecutivos.put("03", terminal.getConsecutivoNotaCredito());
-        consecutivos.put("02", terminal.getConsecutivoNotaDebito());
+    @Operation(summary = "Cambiar estado de terminal")
+    @PatchMapping("/{id}/estado")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
+    public ResponseEntity<ApiResponse<TerminalResponse>> cambiarEstado(
+        @PathVariable Long id,
+        @RequestBody Map<String, Boolean> request) {
 
-        return TerminalResponse.builder()
+        Boolean activa = request.get("activa");
+        if (activa == null) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Debe especificar el estado"));
+        }
+
+        // Verificar que no tenga sesión activa si se quiere desactivar
+        if (!activa && terminalService.estaOcupada(id)) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("No se puede desactivar una terminal con sesión activa"));
+        }
+
+        Terminal terminal = terminalService.buscarPorId(id)
+            .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
+
+        terminal.setActiva(activa);
+        terminal = terminalService.actualizar(id, terminal);
+
+        return ResponseEntity.ok(ApiResponse.ok(convertirAResponse(terminal)));
+    }
+
+    @Operation(summary = "Verificar disponibilidad de terminal")
+    @GetMapping("/{id}/disponible")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+    public ResponseEntity<ApiResponse<Boolean>> verificarDisponibilidad(@PathVariable Long id) {
+        boolean disponible = !terminalService.estaOcupada(id);
+        return ResponseEntity.ok(ApiResponse.ok(disponible));
+    }
+
+    @Operation(summary = "Listar terminales libres por sucursal")
+    @GetMapping("/sucursal/{sucursalId}/libres")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+    public ResponseEntity<ApiResponse<List<TerminalResponse>>> listarTerminalesLibres(
+        @PathVariable Long sucursalId) {
+
+        List<Terminal> terminales = terminalService.listarPorSucursal(sucursalId)
+            .stream()
+            .filter(t -> t.getActiva() && !terminalService.estaOcupada(t.getId()))
+            .toList();
+
+        List<TerminalResponse> response = terminales.stream()
+            .map(this::convertirAResponse)
+            .collect(Collectors.toList());
+
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    private TerminalResponse convertirAResponse(Terminal terminal) {
+        TerminalResponse.TerminalResponseBuilder builder = TerminalResponse.builder()
             .id(terminal.getId())
             .numeroTerminal(terminal.getNumeroTerminal())
             .nombre(terminal.getNombre())
             .descripcion(terminal.getDescripcion())
             .activa(terminal.getActiva())
-            .imprimirAutomatico(terminal.getImprimirAutomatico())
             .sucursalId(terminal.getSucursal().getId())
             .sucursalNombre(terminal.getSucursal().getNombre())
-            .sucursalNumero(terminal.getSucursal().getNumeroSucursal())
-            .consecutivosActuales(consecutivos)
-            .tieneSesionActiva(false) // Por ahora false, sesiones es fase 2
-            .usuarioSesion(null) // Por ahora null, sesiones es fase 2
-            .createdAt(terminal.getCreatedAt())
-            .updatedAt(terminal.getUpdatedAt())
-            .build();
+            .tipoImpresion(terminal.getTipoImpresion())
+            .imprimirAutomatico(terminal.getImprimirAutomatico())
+            // Consecutivos
+            .consecutivoFacturaElectronica(terminal.getConsecutivoFacturaElectronica())
+            .consecutivoTiqueteElectronico(terminal.getConsecutivoTiqueteElectronico())
+            .consecutivoNotaCredito(terminal.getConsecutivoNotaCredito())
+            .consecutivoNotaDebito(terminal.getConsecutivoNotaDebito())
+            .consecutivoFacturaCompra(terminal.getConsecutivoFacturaCompra())
+            .consecutivoFacturaExportacion(terminal.getConsecutivoFacturaExportacion())
+            .consecutivoReciboPago(terminal.getConsecutivoReciboPago())
+            .consecutivoTiqueteInterno(terminal.getConsecutivoTiqueteInterno())
+            .consecutivoFacturaInterna(terminal.getConsecutivoFacturaInterna())
+            .consecutivoProforma(terminal.getConsecutivoProforma())
+            .consecutivoOrdenPedido(terminal.getConsecutivoOrdenPedido());
+
+        // Verificar si tiene sesión activa
+        boolean tieneSesionActiva = terminalService.estaOcupada(terminal.getId());
+        builder.tieneSesionActiva(tieneSesionActiva);
+
+        // Si tiene sesión, obtener info adicional
+        if (tieneSesionActiva) {
+            // Este método debería agregarse al servicio para obtener la sesión activa
+            sesionCajaService.buscarSesionActivaPorTerminal(terminal.getId())
+                .ifPresent(sesion -> {
+                    builder.usuarioSesion(sesion.getUsuario().getNombre())
+                        .fechaAperturaSesion(sesion.getFechaHoraApertura());
+                });
+        }
+
+        return builder.build();
     }
+
+
 }

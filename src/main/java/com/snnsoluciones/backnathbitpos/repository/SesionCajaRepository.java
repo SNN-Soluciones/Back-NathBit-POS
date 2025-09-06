@@ -93,4 +93,29 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
         @Param("usuarioId") Long usuarioId,
         @Param("sucursalId") Long sucursalId
     );
+
+    Optional<SesionCaja> findByTerminalIdAndEstado(Long terminalId, EstadoSesion estado);
+
+    @Query("SELECT s FROM SesionCaja s WHERE s.terminal.sucursal.id = :sucursalId " +
+        "AND s.fechaHoraApertura BETWEEN :inicio AND :fin")
+    List<SesionCaja> findBySucursalIdAndFechaBetween(
+        @Param("sucursalId") Long sucursalId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fin") LocalDateTime fin
+    );
+
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM SesionCaja s " +
+        "WHERE s.terminal.id = :terminalId AND s.estado = :estado " +
+        "AND s.fechaHoraApertura BETWEEN :inicio AND :fin")
+    boolean existsByTerminalIdAndEstadoAndFechaBetween(
+        @Param("terminalId") Long terminalId,
+        @Param("estado") EstadoSesion estado,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fin") LocalDateTime fin
+    );
+
+    // Query para obtener resumen de ventas por medio de pago
+    @Query("SELECT s FROM SesionCaja s LEFT JOIN FETCH s.usuario LEFT JOIN FETCH s.terminal " +
+        "WHERE s.estado = :estado ORDER BY s.fechaHoraApertura DESC")
+    List<SesionCaja> findAllByEstadoWithDetails(@Param("estado") EstadoSesion estado);
 }

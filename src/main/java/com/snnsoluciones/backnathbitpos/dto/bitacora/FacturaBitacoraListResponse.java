@@ -31,6 +31,10 @@ public class FacturaBitacoraListResponse {
     // Datos adicionales útiles para la vista
     private String consecutivoFactura;
     private String nombreCliente;
+    private String numeroIdentificacionCliente;
+    private String correoCliente;
+    private String codigoActividadCliente;
+    private LocalDateTime fechaEnvioEmail;
     private String empresaNombre;
     private String sucursalNombre;
     private BigDecimal montoTotal;
@@ -39,4 +43,11 @@ public class FacturaBitacoraListResponse {
     private boolean puedeReintentar;
     private boolean tieneError;
     private String mensajeError; // Solo el mensaje resumido
+
+    // Información de pagos
+    private String medioPagoPrincipal;    // El medio de pago principal (si hay varios)
+    private String referenciasPago;       // Referencias concatenadas si hay
+    private BigDecimal montoRecibido;    // Total recibido
+    private BigDecimal vuelto;           // Vuelto si aplica
+    private String montosDetalle;       // Para mostrar los montos individuales
 }

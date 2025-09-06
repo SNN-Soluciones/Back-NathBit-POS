@@ -9,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaResumenDto;
 import com.snnsoluciones.backnathbitpos.dto.bitacora.ReintentarProcesamientoRequest;
 import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
@@ -20,6 +21,7 @@ import com.snnsoluciones.backnathbitpos.service.pdf.FacturaPdfService;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import java.text.DecimalFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -53,6 +55,7 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
     private final FacturaRepository facturaRepository;
     private final StorageService storageService;
     private final FacturaPdfService facturaPdfService;
+    private final EmailAuditLogRepository emailAuditLogRepository;
 
     @Override
     public Page<FacturaBitacoraListResponse> buscarConFiltros(FacturaBitacoraFilterRequest filtros) {
@@ -424,13 +427,63 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
                 .montoTotal(factura.getTotalComprobante())
                 .empresaNombre(factura.getSucursal().getEmpresa().getNombreComercial())
                 .sucursalNombre(factura.getSucursal().getNombre());
-            
+
             if (factura.getCliente() != null) {
-                builder.nombreCliente(factura.getCliente().getRazonSocial());
+                Cliente cliente = factura.getCliente();
+                builder.nombreCliente(cliente.getRazonSocial())
+                    .numeroIdentificacionCliente(cliente.getNumeroIdentificacion());
+
+                // Obtener el correo usado para esta factura
+                if (factura.getEmailReceptor() != null) {
+                    builder.correoCliente(factura.getEmailReceptor());
+                }
+
+                // Obtener código de actividad (asumiendo que hay una actividad principal)
+                if (factura.getActividadReceptor() != null && !factura.getActividadReceptor().isEmpty()) {
+                    builder.codigoActividadCliente(
+                        factura.getActividadReceptor()
+                    );
+                }
+            }
+
+            if (factura.getMediosPago() != null && !factura.getMediosPago().isEmpty()) {
+                // Concatenar todos los medios de pago
+                String mediosPago = factura.getMediosPago().stream()
+                    .map(mp -> mp.getMedioPago().getDescripcion())
+                    .collect(Collectors.joining(" || "));
+
+                String referencias = factura.getMediosPago().stream()
+                    .map(mp -> mp.getReferencia() != null && !mp.getReferencia().trim().isEmpty()
+                        ? mp.getReferencia()
+                        : "N/A")
+                    .collect(Collectors.joining(" || "));
+
+                builder.medioPagoPrincipal(mediosPago);
+
+                builder.referenciasPago(referencias);
+
+                // Si queremos también los montos por medio de pago (opcional)
+                String montosRecibidos = factura.getMediosPago().stream()
+                    .map(mp -> formatearMontoBigDecimal(mp.getMonto()))
+                    .collect(Collectors.joining(" - "));
+
+                // Guardar en un campo nuevo o reusar montoRecibido
+                builder.montosDetalle(montosRecibidos); // Necesitarías agregar este campo
             }
         }
 
-        return builder.build();
+      emailAuditLogRepository.findByFacturaIdAndEstado(
+          bitacora.getFacturaId(),
+          EstadoEmail.ENVIADO
+      ).ifPresent(emailLog -> builder.fechaEnvioEmail(emailLog.getFechaEnvio()));
+
+      return builder.build();
+    }
+
+    private String formatearMontoBigDecimal(BigDecimal monto) {
+        if (monto == null) return "₡0";
+        DecimalFormat df = new DecimalFormat("₡#,###.##");
+        return df.format(monto);
     }
 
     /**

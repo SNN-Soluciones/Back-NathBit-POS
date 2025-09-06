@@ -30,4 +30,7 @@ public interface SesionCajaService {
     // Validaciones
     boolean usuarioTieneSesionAbierta(Long usuarioId);
     boolean terminalTieneSesionAbierta(Long terminalId);
+
+    List<SesionCaja> listarSesionesDia(Long sucursalId, LocalDate fecha);
+    boolean validarCierreDia(Long terminalId);
 }

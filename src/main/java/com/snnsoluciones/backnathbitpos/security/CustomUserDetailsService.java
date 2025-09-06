@@ -2,45 +2,41 @@ package com.snnsoluciones.backnathbitpos.security;
 
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
+import com.snnsoluciones.backnathbitpos.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
-
-@Service
-@RequiredArgsConstructor
+/**
+ * Servicio para cargar usuarios para Spring Security
+ * Trabaja con tu AuthService existente sin cambios
+ */
 @Slf4j
+@Service("userDetailsService")  // Nombre explícito para evitar conflictos
+@RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
 
-    private final UsuarioRepository usuarioRepository;
+    private final UsuarioService usuarioService;
 
     @Override
-    public UserDetails loadUserByUsername(String usernameOrEmail) throws UsernameNotFoundException {
-        log.debug("Intentando autenticar con: {}", usernameOrEmail);
+    @Transactional(readOnly = true)
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        log.debug("Cargando usuario para Spring Security: {}", username);
 
-        // Buscar primero por username, luego por email
-        Usuario usuario = usuarioRepository.findByUsernameIgnoreCase(usernameOrEmail)
-            .or(() -> usuarioRepository.findByEmail(usernameOrEmail))
-            .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado: " + usernameOrEmail));
+        // Usar el mismo método que tu AuthService
+        Usuario usuario = usuarioService.buscarPorUsername(username)
+            .or(() -> usuarioService.buscarPorEmail(username))
+            .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado: " + username));
 
-        log.debug("Usuario encontrado: {} - {}", usuario.getUsername(), usuario.getEmail());
+        if (!usuario.getActivo()) {
+            throw new UsernameNotFoundException("Usuario inactivo: " + username);
+        }
 
-        return User.builder()
-            .username(usuario.getEmail()) // Spring Security necesita un identificador único
-            .password(usuario.getPassword())
-            .authorities(Collections.singletonList(
-                new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name())
-            ))
-            .accountExpired(false)
-            .accountLocked(false)
-            .credentialsExpired(false)
-            .disabled(!usuario.getActivo())
-            .build();
+        // Retornar CustomUserDetails para tener info adicional disponible
+        return new CustomUserDetails(usuario);
     }
 }

@@ -2,7 +2,6 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.factura.CrearFacturaRequest;
 
-import com.snnsoluciones.backnathbitpos.dto.factura.FacturaForCreditResponse;
 import com.snnsoluciones.backnathbitpos.dto.factura.ValidacionTotalesRequest;
 import com.snnsoluciones.backnathbitpos.dto.factura.ValidacionTotalesResponse;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
@@ -58,6 +57,4 @@ public interface FacturaService {
      * Validar totales antes de crear la factura
      */
     ValidacionTotalesResponse validarTotales(ValidacionTotalesRequest request);
-
-    FacturaForCreditResponse obtenerParaNotaCredito(Long facturaId);
 }

@@ -175,7 +175,6 @@ public class FacturaServiceImpl implements FacturaService {
     Factura facturaGuardada = facturaRepository.save(factura);
 
     if (request.getTipoDocumento() == TipoDocumento.NOTA_CREDITO) {
-      procesarNotaCredito(facturaGuardada, request);
       // Volver a guardar porque procesarNotaCredito modifica la factura
       facturaGuardada = facturaRepository.save(facturaGuardada);
     }
@@ -753,98 +752,6 @@ public class FacturaServiceImpl implements FacturaService {
     // Usar la misma validación completa
     return validarTotalesCompleto(request);
   }
-  // En FacturaService.java agregar este método:
-
-  @Override
-  @Transactional(readOnly = true)
-  public FacturaForCreditResponse obtenerParaNotaCredito(Long facturaId) {
-    Factura factura = facturaRepository.findByIdWithRelaciones(facturaId)
-        .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada: " + facturaId));
-
-    // Validar que puede generar NC
-    validarFacturaParaNotaCredito(factura);
-
-    // Calcular monto disponible
-    BigDecimal montoDisponible = factura.getTotalComprobante()
-        .subtract(factura.getMontoAcreditado());
-
-    return FacturaForCreditResponse.builder()
-        .id(factura.getId())
-        .consecutivo(factura.getConsecutivo())
-        .clave(factura.getClave())
-        .fechaEmision(factura.getFechaEmision())
-
-        // Cliente
-        .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
-        .clienteNombre(factura.getCliente() != null ? factura.getCliente().getRazonSocial() : null)
-        .clienteIdentificacion(
-            factura.getCliente() != null ? factura.getCliente().getNumeroIdentificacion() : null)
-        .clienteTipoIdentificacion(
-            factura.getCliente() != null ? factura.getCliente().getTipoIdentificacion().getCodigo()
-                : null)
-        .emailReceptor(factura.getEmailReceptor())
-        .clienteTieneExoneracion(
-            factura.getCliente() != null && factura.getCliente().getExoneraciones() != null
-                && !factura.getCliente().getExoneraciones().isEmpty())
-
-        // IMPORTANTE: Incluir estos campos
-        .sesionCajaId(factura.getSesionCaja().getId())
-        .usuarioId(factura.getCajero().getId())
-        .codigoActividadReceptor(factura.getActividadReceptor()) // Para que el frontend lo tenga
-
-        // Datos comerciales
-        .condicionVenta(factura.getCondicionVenta().getCodigo())
-        .plazoCredito(factura.getPlazoCredito())
-        .situacionComprobante(factura.getSituacion().name())
-
-        // Montos
-        .totalComprobante(factura.getTotalComprobante())
-        .montoAcreditado(factura.getMontoAcreditado())
-        .montoDisponibleParaAcreditar(montoDisponible)
-        .moneda(factura.getMoneda().name())
-        .tipoCambio(factura.getTipoCambio())
-
-        // Info adicional
-        .sucursalNombre(factura.getSucursal().getNombre())
-        .sucursalId(factura.getSucursal().getId())
-        .terminalId(factura.getTerminal().getId())
-        .terminalNombre(factura.getTerminal().getNombre())
-
-        // Totales desglosados
-        .totalServiciosGravados(factura.getTotalServiciosGravados())
-        .totalServiciosExentos(factura.getTotalServiciosExentos())
-        .totalServiciosExonerados(factura.getTotalServiciosExonerados())
-        .totalMercanciasGravadas(factura.getTotalMercanciasGravadas())
-        .totalMercanciasExentas(factura.getTotalMercanciasExentas())
-        .totalMercanciasExoneradas(factura.getTotalMercanciasExoneradas())
-        .totalImpuesto(factura.getTotalImpuesto())
-        .totalDescuentos(factura.getTotalDescuentos())
-        .totalOtrosCargos(factura.getTotalOtrosCargos())
-
-        // Listas con impuestos y descuentos
-        .detalles(convertirDetallesParaCredito(factura.getDetalles()))
-        .build();
-  }
-
-  // Métodos helpers para convertir las listas anidadas
-  private List<FacturaForCreditResponse.DescuentoDto> convertirDescuentos(List<FacturaDescuento> descuentos) {
-    if (descuentos == null || descuentos.isEmpty()) {
-      return new ArrayList<>();
-    }
-
-    return descuentos.stream()
-        .map(desc -> FacturaForCreditResponse.DescuentoDto.builder()
-            .codigoDescuento(desc.getCodigoDescuento())
-            .codigoDescuentoOTRO(desc.getCodigoDescuentoOTRO())
-            .naturalezaDescuento(desc.getNaturalezaDescuento())
-            .porcentaje(desc.getPorcentaje())
-            .montoDescuento(desc.getMontoDescuento())
-            .orden(desc.getOrden())
-            .build())
-        .collect(Collectors.toList());
-  }
-
-// ... más métodos de conversión ...
 
   private void validarFacturaParaNotaCredito(Factura factura) {
     // Validar estado
@@ -903,69 +810,6 @@ public class FacturaServiceImpl implements FacturaService {
     if (factura.getMontoAcreditado().compareTo(factura.getTotalComprobante()) >= 0) {
       throw new IllegalStateException("Esta factura no tiene monto disponible para acreditar");
     }
-  }
-
-  private List<FacturaForCreditResponse.ImpuestoDto> convertirImpuestos(List<FacturaDetalleImpuesto> impuestos) {
-    if (impuestos == null || impuestos.isEmpty()) {
-      return new ArrayList<>();
-    }
-
-    return impuestos.stream()
-        .map(imp -> FacturaForCreditResponse.ImpuestoDto.builder()
-            .codigoImpuesto(imp.getCodigoImpuesto())
-            .codigoTarifaIVA(imp.getCodigoTarifaIVA())
-            .tarifa(imp.getTarifa())
-            .baseImponible(imp.getBaseImponible())
-            .montoImpuesto(imp.getMontoImpuesto())
-            .tieneExoneracion(imp.getTieneExoneracion())
-            .montoExoneracion(imp.getMontoExoneracion())
-            .impuestoNeto(imp.getImpuestoNeto())
-            .exoneracion(imp.getTieneExoneracion() ?
-                FacturaForCreditResponse.ExoneracionDto.builder()
-                    .tipoDocumentoEX(imp.getTipoDocumentoExoneracion())
-                    .numeroDocumentoEX(imp.getNumeroDocumentoExoneracion())
-                    .codigoInstitucion(imp.getCodigoInstitucion())
-                    .fechaEmisionExoneracion(imp.getFechaEmisionExoneracion())
-                    .institucionOtorgante(imp.getNombreInstitucion())
-                    .porcentajeExonerado(imp.getTarifaExonerada())
-                    .articulo(imp.getArticuloExoneracion())
-                    .inciso(imp.getIncisoExoneracion())
-                    .build() : null)
-            .build())
-        .collect(Collectors.toList());
-  }
-
-  private List<FacturaForCreditResponse.DetalleForCreditDto> convertirDetallesParaCredito(
-      List<FacturaDetalle> detalles) {
-    return detalles.stream()
-        .map(detalle -> FacturaForCreditResponse.DetalleForCreditDto.builder()
-            .id(detalle.getId())
-            .numeroLinea(detalle.getNumeroLinea())
-            .productoId(detalle.getProducto().getId())
-            .productoCodigo(detalle.getProducto().getCodigoInterno())
-            .productoNombre(detalle.getDescripcionPersonalizada() != null ?
-                detalle.getDescripcionPersonalizada() :
-                detalle.getProducto().getNombre())
-            .codigoCabys(detalle.getCodigoCabys() != null ?
-                detalle.getCodigoCabys() :
-                detalle.getProducto().getEmpresaCabys().getCodigoCabys().getCodigo())
-            .esServicio(detalle.getEsServicio() != null ?
-                detalle.getEsServicio() :
-                detalle.getProducto().getEsServicio())
-            .unidadMedida(detalle.getUnidadMedida())
-            .cantidad(detalle.getCantidad())
-            .precioUnitario(detalle.getPrecioUnitario())
-            .montoTotal(detalle.getMontoTotal())
-            .montoDescuento(detalle.getMontoDescuento())
-            .subtotal(detalle.getSubtotal())
-            .montoImpuesto(detalle.getMontoImpuesto())
-            .montoTotalLinea(detalle.getMontoTotalLinea())
-            .descuentos(convertirDescuentos(detalle.getDescuentos())) // DESCOMENTAR ESTA LÍNEA
-            .impuestos(convertirImpuestos(detalle.getImpuestos()))     // DESCOMENTAR ESTA LÍNEA
-            .cantidadAcreditar(detalle.getCantidad()) // Por defecto toda la cantidad
-            .seleccionado(false) // Por defecto no seleccionado
-            .build())
-        .collect(Collectors.toList());
   }
 
   /**
@@ -1159,76 +1003,6 @@ public class FacturaServiceImpl implements FacturaService {
     req.setTotalImpuesto(totalImpuestoNeto.setScale(5, RoundingMode.HALF_UP));
     req.setTotalOtrosCargos(totalOtrosCargos.setScale(5, RoundingMode.HALF_UP));
     req.setTotalComprobante(totalComprobante);
-  }
-
-  private void procesarNotaCredito(Factura notaCredito, CrearFacturaRequest request) {
-    if (request.getFacturaReferenciaId() == null) {
-      throw new IllegalArgumentException(
-          "Las notas de crédito requieren una factura de referencia"
-      );
-    }
-
-    // Obtener factura original
-    Factura facturaOriginal = facturaRepository.findById(request.getFacturaReferenciaId())
-        .orElseThrow(() -> new EntityNotFoundException(
-            "Factura de referencia no encontrada: " + request.getFacturaReferenciaId()
-        ));
-
-    // Validar nuevamente
-    validarFacturaParaNotaCredito(facturaOriginal);
-
-    // Establecer referencias según documentación de Hacienda
-    notaCredito.setFacturaReferencia(facturaOriginal);
-    notaCredito.setCodigoReferencia("01"); // Factura electrónica
-    notaCredito.setFechaEmisionReferencia(facturaOriginal.getFechaEmision());
-
-    // IMPORTANTE: Copiar la actividad del receptor SOLO si es necesaria
-    // (NC sobre Factura Electrónica)
-    if (facturaOriginal.getTipoDocumento() == TipoDocumento.FACTURA_ELECTRONICA
-        && request.getActividadReceptor() != null) {
-      notaCredito.setActividadReceptor(request.getActividadReceptor());
-    }
-
-    // Determinar código de referencia según el caso
-    if (request.getRazonNotaCredito() != null &&
-        request.getRazonNotaCredito().contains("exoneración")) {
-      notaCredito.setCodigoReferencia("12"); // Exoneración posterior
-    } else if (request.isAnulacionCompleta()) {
-      notaCredito.setCodigoReferencia("01"); // Anula documento
-    } else if (request.getRazonNotaCredito() != null &&
-        request.getRazonNotaCredito().toLowerCase().contains("devolución")) {
-      notaCredito.setCodigoReferencia("06"); // Devolución mercancía
-    } else {
-      notaCredito.setCodigoReferencia("02"); // Corrige monto
-    }
-
-    notaCredito.setRazonReferencia(request.getRazonNotaCredito() != null ?
-        request.getRazonNotaCredito() : "Nota de crédito sobre factura");
-
-    // Calcular monto de la NC (valor absoluto)
-    BigDecimal montoNotaCredito = notaCredito.getTotalComprobante().abs();
-
-    // Actualizar factura original
-    BigDecimal nuevoMontoAcreditado = facturaOriginal.getMontoAcreditado()
-        .add(montoNotaCredito);
-
-    facturaOriginal.setMontoAcreditado(nuevoMontoAcreditado);
-
-    // Determinar si es total o parcial
-    if (nuevoMontoAcreditado.compareTo(facturaOriginal.getTotalComprobante()) >= 0) {
-      // Acreditación completa
-      facturaOriginal.setEstado(EstadoFactura.TOTALMENTE_ACREDITADA);
-      facturaOriginal.setTotalmenteAcreditada(true);
-      log.info("Factura {} totalmente acreditada", facturaOriginal.getConsecutivo());
-    } else {
-      // Acreditación parcial
-      facturaOriginal.setEstado(EstadoFactura.PARCIALMENTE_ACREDITADA);
-      facturaOriginal.setParcialmenteAcreditada(true);
-      log.info("Factura {} parcialmente acreditada. Monto acreditado: {}",
-          facturaOriginal.getConsecutivo(), nuevoMontoAcreditado);
-    }
-
-    facturaRepository.save(facturaOriginal);
   }
 
   private static BigDecimal defaultZero(BigDecimal x) {

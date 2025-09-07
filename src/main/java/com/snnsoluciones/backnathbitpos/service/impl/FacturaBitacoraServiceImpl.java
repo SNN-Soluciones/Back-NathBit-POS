@@ -7,7 +7,6 @@ import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaBitacoraFilterReques
 import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaBitacoraListResponse;
 import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaResumenDto;
 import com.snnsoluciones.backnathbitpos.dto.bitacora.ReintentarProcesamientoRequest;
-import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
@@ -24,7 +23,6 @@ import jakarta.persistence.criteria.Predicate;
 import java.text.DecimalFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.Resource;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;

@@ -32,6 +32,7 @@ public class FacturaResponse {
     private Long clienteId;
     private String clienteNombre;
     private String clienteIdentificacion;
+    private String actividadReceptor;
 
     // Moneda
     private Moneda moneda;

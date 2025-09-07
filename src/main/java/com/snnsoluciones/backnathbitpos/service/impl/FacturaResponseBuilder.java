@@ -42,6 +42,7 @@ public class FacturaResponseBuilder {
         .clienteIdentificacion(factura.getCliente() != null
             ? factura.getCliente().getNumeroIdentificacion() : null)
 
+        .actividadReceptor(factura.getActividadReceptor())
         // Moneda
         .moneda(factura.getMoneda())
         .tipoCambio(factura.getTipoCambio())

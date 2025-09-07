@@ -129,6 +129,8 @@ public class FacturaXMLGeneratorService {
       // Resumen
       agregarResumen(doc, root, factura);
 
+      agregarInformacionReferencia(doc, root, factura);
+
       return documentToString(doc);
 
     } catch (Exception e) {
@@ -624,6 +626,35 @@ public class FacturaXMLGeneratorService {
     }
     if (inciso != null) {
       agregarElemento(doc, ex, "Inciso", inciso);
+    }
+  }
+
+  private void agregarInformacionReferencia(Document doc, Element root, Factura factura) {
+    if (factura.getTipoDocumento() != TipoDocumento.NOTA_CREDITO
+        && factura.getTipoDocumento() != TipoDocumento.NOTA_DEBITO) {
+      return;
+    }
+    if (factura.getNumeroReferencia() == null || factura.getCodigoReferencia() == null) {
+      return;
+    }
+
+    Element infoRef = doc.createElement("InformacionReferencia");
+    root.appendChild(infoRef);
+
+    agregarElemento(doc, infoRef, "TipoDocIR", factura.getTipoDocReferencia().getCodigo());
+
+    if ("99".equals(factura.getCodigoReferencia()) && factura.getRazonReferencia() != null) {
+      agregarElemento(doc, infoRef, "TipoDocRefOTRO", "OTRO DOCUMENTO");
+    }
+
+    agregarElemento(doc, infoRef, "Numero", factura.getNumeroReferencia());
+
+    agregarElemento(doc, infoRef, "FechaEmisionIR", factura.getFechaEmisionReferencia());
+
+    agregarElemento(doc, infoRef, "Codigo", factura.getCodigoReferencia());
+
+    if (factura.getRazonReferencia() != null && !factura.getRazonReferencia().isBlank()) {
+      agregarElemento(doc, infoRef, "Razon", factura.getRazonReferencia());
     }
   }
 }

@@ -27,4 +27,16 @@ public enum TipoImpuesto {
         .filter(tipo -> tipo.codigo.equals(codigo))
         .findFirst();
   }
+
+  public static TipoImpuesto fromCodigo(String codigo) {
+    if (codigo == null) {
+      return null;
+    }
+    for (TipoImpuesto tipo : values()) {
+      if (tipo.codigo.equals(codigo)) {
+        return tipo;
+      }
+    }
+    throw new IllegalArgumentException("Código Impuesto no valido");
+  }
 }

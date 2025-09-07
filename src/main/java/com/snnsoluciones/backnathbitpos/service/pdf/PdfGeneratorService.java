@@ -37,7 +37,9 @@ public class PdfGeneratorService {
             "factura_electronica_80mm",
             "detalle_factura_80mm",
             "otros_cargos_80mm",
-            "exoneraciones_80mm"
+            "exoneraciones_80mm",
+
+            "ventas_basico"
         };
 
         for (String reporte : reportes) {

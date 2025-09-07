@@ -8,21 +8,25 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
-/**
- * RowMapper para convertir resultados SQL a ReporteVentasLineaDTO
- * Necesario porque @Query con queries nativas no mapea automáticamente a DTOs
- */
 @Component
 public class ReporteVentasRowMapper implements RowMapper<ReporteVentasLineaDTO> {
-    
+
     @Override
     public ReporteVentasLineaDTO mapRow(ResultSet rs, int rowNum) throws SQLException {
+        // fecha_emision es VARCHAR ISO con offset: 2025-09-02T11:07:52.98118523-06:00
+        String fechaEmisionStr = rs.getString("fechaEmision");
+        LocalDateTime fechaEmision = null;
+        if (fechaEmisionStr != null && !fechaEmisionStr.isBlank()) {
+            fechaEmision = OffsetDateTime.parse(fechaEmisionStr).toLocalDateTime();
+        }
+
         return ReporteVentasLineaDTO.builder()
             .clave(rs.getString("clave"))
             .consecutivo(rs.getString("consecutivo"))
             .tipoDocumento(rs.getString("tipoDocumento"))
-            .fechaEmision(rs.getObject("fechaEmision", LocalDateTime.class))
+            .fechaEmision(fechaEmision)
             .actividadEconomicaCodigo(rs.getString("actividadEconomicaCodigo"))
             .actividadEconomicaDescripcion(rs.getString("actividadEconomicaDescripcion"))
             .clienteNombre(rs.getString("clienteNombre"))
@@ -45,13 +49,9 @@ public class ReporteVentasRowMapper implements RowMapper<ReporteVentasLineaDTO> 
             .estado(rs.getString("estado"))
             .build();
     }
-    
-    /**
-     * Helper para obtener BigDecimal de forma segura
-     * Si el valor es NULL en la BD, retorna BigDecimal.ZERO
-     */
-    private BigDecimal getBigDecimalSafe(ResultSet rs, String columnName) throws SQLException {
-        BigDecimal value = rs.getBigDecimal(columnName);
-        return value != null ? value : BigDecimal.ZERO;
+
+    private BigDecimal getBigDecimalSafe(ResultSet rs, String column) throws SQLException {
+        BigDecimal v = rs.getBigDecimal(column);
+        return v != null ? v : BigDecimal.ZERO;
     }
 }

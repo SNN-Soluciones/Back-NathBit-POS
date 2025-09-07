@@ -54,58 +54,63 @@ public class FacturaServiceImpl implements FacturaService {
   @Transactional
   public Factura crear(CrearFacturaRequest request) {
     log.info("Creando factura tipo: {}", request.getTipoDocumento());
+
+    // PASO 1: Validar estructura según v4.4 de Hacienda
+    // Verifica que todos los campos requeridos estén presentes y con formato correcto
     validarEstructuraV44(request);
 
+    // PASO 2: Recalcular totales para asegurar consistencia
+    // Recalcula totalImpuesto, totalOtrosCargos y totalComprobante
     recomputarTotalesAutoritativo(request);
 
-    // 1. Validaciones de negocio básicas
+    // PASO 3: Validaciones básicas de negocio
+    // Verifica que FE tenga cliente, que haya detalles y medios de pago
     validarRequestBasico(request);
 
-    // 2. Validación completa de totales (El checkeo del Doc)
+    // PASO 4: Validación exhaustiva de totales
+    // Verifica que todos los cálculos matemáticos sean correctos
     ValidacionTotalesResponse validacion = validarTotalesCompleto(request);
     if (!validacion.isEsValido()) {
       throw new IllegalArgumentException("Validación de totales falló: " + validacion.getMensaje());
     }
 
-    // 3. Crear entidad factura
+    // PASO 5: Crear entidad Factura vacía
     Factura factura = new Factura();
 
-    // Datos básicos
+    // PASO 6: Establecer datos básicos del documento
     factura.setTipoDocumento(request.getTipoDocumento());
     factura.setCondicionVenta(CondicionVenta.fromCodigo(request.getCondicionVenta()));
     factura.setPlazoCredito(request.getPlazoCredito());
     factura.setSituacion(SituacionDocumento.valueOf(request.getSituacionComprobante()));
     factura.setMoneda(request.getMoneda());
-    factura.setTipoCambio(request.getTipoCambio());
     factura.setObservaciones(request.getObservaciones());
+
+    // Actividad del receptor (solo para FE con cliente persona jurídica)
     if (request.getActividadReceptor() != null) {
       factura.setActividadReceptor(request.getActividadReceptor());
     }
 
-    // Vuelto
+    // Vuelto (para pagos en efectivo)
     if (request.getVuelto() != null) {
       factura.setVuelto(request.getVuelto());
     }
 
-    // Cliente (opcional para TE)
+    // PASO 7: Establecer cliente (opcional para TE)
     if (request.getClienteId() != null) {
       Cliente cliente = clienteRepository.findById(request.getClienteId())
           .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
       factura.setCliente(cliente);
     }
-    BigDecimal tc = null;
 
-    if (request.getTipoCambio() != null) {
-      tc = request.getTipoCambio();
-    } else {
-      // Si moneda es CRC, es 1.00000; si es USD y no vino, decide tu regla (puede ser obligatorio)
-      tc = BigDecimal.ONE; // o lanza excepción si USD debe traer TC real
-    }
+    // PASO 8: Manejar tipo de cambio
+    BigDecimal tc = request.getTipoCambio() != null ? request.getTipoCambio() : BigDecimal.ONE;
+    factura.setTipoCambio(tc);
 
+    // PASO 9: Manejar email del receptor
     if (request.getEmailReceptor() != null && !request.getEmailReceptor().isBlank()) {
       factura.setEmailReceptor(request.getEmailReceptor());
     } else if (request.getClienteId() != null) {
-      // Si no se especificó email, usar el principal del cliente
+      // Si no viene email, usar el del cliente
       Cliente cliente = clienteService.obtenerPorId(request.getClienteId());
       if (cliente != null) {
         String emailPrincipal = clienteService.obtenerEmailSugerido(cliente.getId());
@@ -113,11 +118,10 @@ public class FacturaServiceImpl implements FacturaService {
       }
     }
 
-    factura.setTipoCambio(tc);
-
+    // Versión de catálogos (v4.4)
     factura.setVersionCatalogos(request.getVersionCatalogos());
 
-    // Terminal y sesión
+    // PASO 10: Establecer terminal, sucursal y sesión
     Terminal terminal = terminalService.buscarPorId(request.getTerminalId())
         .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
     factura.setTerminal(terminal);
@@ -129,60 +133,90 @@ public class FacturaServiceImpl implements FacturaService {
     usuarioRepository.findById(request.getUsuarioId())
         .ifPresent(factura::setCajero);
 
-    // Generar consecutivo
+    // PASO 11: Generar consecutivo único para este tipo de documento
     String consecutivo = terminalService.generarNumeroConsecutivo(
         request.getTerminalId(),
         request.getTipoDocumento()
     );
     factura.setConsecutivo(consecutivo);
 
-    // Fecha emisión
+    // PASO 12: Establecer fecha de emisión (hora de Costa Rica)
     ZonedDateTime fechaEmisionCR = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
     factura.setFechaEmision(fechaEmisionCR.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
 
-    // Generar clave y código seguridad si es electrónica
+    // PASO 13: Si es electrónica, generar código seguridad y clave
     if (factura.esElectronica()) {
-      factura.generarCodigoSeguridad();
-      String clave = generarClave(factura);
+      factura.generarCodigoSeguridad(); // Genera 8 dígitos aleatorios
+      String clave = generarClave(factura); // Genera clave de 50 dígitos
       factura.setClave(clave);
       log.info("Clave generada: {} para consecutivo: {}", clave, consecutivo);
     }
 
-    // 4. Asignar totales ya validados (confiamos en el frontend validado)
+    // PASO 14: Asignar todos los totales ya validados
     asignarTotales(factura, request);
 
-    // 5. Guardar descuento global si existe
+    // PASO 15: Guardar descuento global si existe
     if (request.getDescuentoGlobalPorcentaje() != null) {
       factura.setDescuentoGlobalPorcentaje(request.getDescuentoGlobalPorcentaje());
       factura.setMontoDescuentoGlobal(request.getMontoDescuentoGlobal());
       factura.setMotivoDescuentoGlobal(request.getMotivoDescuentoGlobal());
     }
 
-    // 6. Procesar detalles (sin calcular, solo guardar)
+    // PASO 16: Procesar líneas de detalle (productos/servicios)
     procesarDetalles(factura, request.getDetalles());
 
-    // 7. Procesar otros cargos
+    // PASO 17: Procesar otros cargos (ej: 10% servicio)
     procesarOtrosCargos(factura, request.getOtrosCargos());
 
-    // 8. Procesar medios de pago
+    // PASO 18: Procesar medios de pago
     procesarMediosPago(factura, request.getMediosPago());
 
-    // 9. Procesar resumen de impuestos
+    // PASO 19: Procesar resumen de impuestos
     procesarResumenImpuestos(factura, request.getResumenImpuestos());
 
-    // 10. Guardar factura
+    // PASO 20: Guardar factura por primera vez
     factura.setEstado(EstadoFactura.GENERADA);
     Factura facturaGuardada = facturaRepository.save(factura);
 
+    // PASO 21: Si es NOTA DE CRÉDITO, procesar información de referencia
     if (request.getTipoDocumento() == TipoDocumento.NOTA_CREDITO) {
-      // Volver a guardar porque procesarNotaCredito modifica la factura
+      if (request.getInformacionReferencia() != null && !request.getInformacionReferencia().isEmpty()) {
+        InformacionReferenciaDto ref = request.getInformacionReferencia().get(0);
+
+        // IMPORTANTE: usar getTipoDoc() NO getCodigo()
+        // getTipoDoc() = "01" (Factura Electrónica), "04" (Tiquete), etc.
+        facturaGuardada.setTipoDocReferencia(
+            TipoDocumento.fromCodigo(ref.getTipoDoc())
+                .orElse(TipoDocumento.FACTURA_ELECTRONICA)
+        );
+
+        // Número puede ser clave (50 dig) o consecutivo
+        facturaGuardada.setNumeroReferencia(ref.getNumero());
+
+        // Fecha del documento original
+        facturaGuardada.setFechaEmisionReferencia(ref.getFechaEmision());
+
+        // Código de motivo: 01=Anula, 02=Corrige monto, 06=Devolución
+        facturaGuardada.setCodigoReferencia(ref.getCodigo());
+
+        // Descripción textual del motivo
+        facturaGuardada.setRazonReferencia(ref.getRazon());
+
+        // Establecer relación con factura original si viene el ID
+        if (request.getFacturaReferenciaId() != null) {
+          Factura facturaOriginal = facturaRepository.findById(request.getFacturaReferenciaId())
+              .orElseThrow(() -> new EntityNotFoundException("Factura de referencia no encontrada"));
+          facturaGuardada.setFacturaReferencia(facturaOriginal);
+        }
+      }
+
+      // PASO 22: Guardar cambios de la nota de crédito
       facturaGuardada = facturaRepository.save(facturaGuardada);
     }
 
-    // 11. Si es electrónica, crear job para procesamiento asíncrono
+    // PASO 23: Si es electrónica, crear job para envío asíncrono a Hacienda
     if (factura.esElectronica() && factura.getClave() != null) {
       try {
-        // Crear entrada en bitácora
         FacturaBitacora bitacora = FacturaBitacora.builder()
             .facturaId(facturaGuardada.getId())
             .clave(facturaGuardada.getClave())
@@ -196,12 +230,13 @@ public class FacturaServiceImpl implements FacturaService {
             facturaGuardada.getClave(), bitacora.getId());
 
       } catch (Exception e) {
-        // No fallar la creación de factura por error en bitácora
+        // No fallar si hay error creando bitácora
         log.error("Error creando bitácora para factura {}: {}",
             facturaGuardada.getClave(), e.getMessage());
       }
     }
 
+    // PASO 24: Retornar la factura creada
     return facturaGuardada;
   }
 

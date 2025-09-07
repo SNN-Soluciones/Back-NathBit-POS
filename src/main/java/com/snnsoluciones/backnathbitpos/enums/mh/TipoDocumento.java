@@ -39,4 +39,12 @@ public enum TipoDocumento {
             .filter(tipo -> tipo.codigo.equals(codigo))
             .findFirst();
     }
+
+    public static Optional<TipoDocumento> fromCodigo(String codigo) {
+        if (codigo == null) return Optional.empty();
+
+        return Arrays.stream(values())
+            .filter(tipo -> tipo.getCodigo().equals(codigo))
+            .findFirst();
+    }
 }

@@ -101,6 +101,14 @@ public class Factura {
     @Column(name = "fecha_emision_referencia")
     private String fechaEmisionReferencia;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_doc_referencia")
+    private TipoDocumento tipoDocReferencia;
+
+    // Número de referencia (clave o consecutivo del documento referenciado)
+    @Column(name = "numero_referencia", length = 50)
+    private String numeroReferencia;
+
     // ========== DATOS COMERCIALES ==========
     @Column(name = "condicion_venta", nullable = false)
     @Enumerated(EnumType.STRING)

@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
+import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
@@ -32,9 +33,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Implementación del servicio de Factura con validación completa
- * "¡Piensa McFly, piensa!" - Doc Brown
- * Arquitectura La Jachuda 🚀
+ * Implementación del servicio de Factura con validación completa "¡Piensa McFly, piensa!" - Doc
+ * Brown Arquitectura La Jachuda 🚀
  */
 @Slf4j
 @Service
@@ -180,7 +180,6 @@ public class FacturaServiceImpl implements FacturaService {
       facturaGuardada = facturaRepository.save(facturaGuardada);
     }
 
-
     // 11. Si es electrónica, crear job para procesamiento asíncrono
     if (factura.esElectronica() && factura.getClave() != null) {
       try {
@@ -229,8 +228,7 @@ public class FacturaServiceImpl implements FacturaService {
   }
 
   /**
-   * VALIDACIÓN COMPLETA - El checkeo del Doc
-   * Validamos TODOS los cálculos sin recalcular
+   * VALIDACIÓN COMPLETA - El checkeo del Doc Validamos TODOS los cálculos sin recalcular
    */
   private ValidacionTotalesResponse validarTotalesCompleto(CrearFacturaRequest request) {
     List<String> advertencias = new ArrayList<>();
@@ -318,7 +316,8 @@ public class FacturaServiceImpl implements FacturaService {
 
       // 3. Validar total descuentos
       BigDecimal totalDescuentosCalculado = sumaDescuentosLineas
-          .add(request.getMontoDescuentoGlobal() != null ? request.getMontoDescuentoGlobal() : BigDecimal.ZERO);
+          .add(request.getMontoDescuentoGlobal() != null ? request.getMontoDescuentoGlobal()
+              : BigDecimal.ZERO);
 
       if (!sonIguales(totalDescuentosCalculado, request.getTotalDescuentos())) {
         advertencias.add(String.format(
@@ -507,7 +506,8 @@ public class FacturaServiceImpl implements FacturaService {
     for (DetalleFacturaRequest detalleReq : detallesReq) {
       // Buscar producto
       Producto producto = productoRepository.findById(detalleReq.getProductoId())
-          .orElseThrow(() -> new RuntimeException("Producto no encontrado: " + detalleReq.getProductoId()));
+          .orElseThrow(
+              () -> new RuntimeException("Producto no encontrado: " + detalleReq.getProductoId()));
 
       // Crear detalle
       FacturaDetalle detalle = new FacturaDetalle();
@@ -520,7 +520,8 @@ public class FacturaServiceImpl implements FacturaService {
           detalleReq.getCodigoCabys() : producto.getEmpresaCabys().getCodigoCabys().getCodigo());
       detalle.setDetalle(producto.getNombre());
 
-      if (detalleReq.getDescripcionPersonalizada() != null && !detalleReq.getDescripcionPersonalizada().trim().isEmpty()) {
+      if (detalleReq.getDescripcionPersonalizada() != null
+          && !detalleReq.getDescripcionPersonalizada().trim().isEmpty()) {
         detalle.setDescripcionPersonalizada(detalleReq.getDescripcionPersonalizada().trim());
       }
 
@@ -600,7 +601,8 @@ public class FacturaServiceImpl implements FacturaService {
       cargo.setMontoCargo(cargoReq.getMontoCargo());
 
       // Si es cobro de tercero (04)
-      if ("04".equals(cargoReq.getTipoDocumentoOC()) && cargoReq.getTerceroTipoIdentificacion() != null) {
+      if ("04".equals(cargoReq.getTipoDocumentoOC())
+          && cargoReq.getTerceroTipoIdentificacion() != null) {
         cargo.setTerceroTipoIdentificacion(cargoReq.getTerceroTipoIdentificacion());
         cargo.setTerceroNumeroIdentificacion(cargoReq.getTerceroNumeroIdentificacion());
         cargo.setTerceroNombre(cargoReq.getTerceroNombre());
@@ -723,7 +725,8 @@ public class FacturaServiceImpl implements FacturaService {
         .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
 
     if (!factura.getEstado().puedeAnularse()) {
-      throw new RuntimeException("La factura no puede ser anulada en estado: " + factura.getEstado());
+      throw new RuntimeException(
+          "La factura no puede ser anulada en estado: " + factura.getEstado());
     }
 
     factura.setEstado(EstadoFactura.ANULADA);
@@ -740,7 +743,8 @@ public class FacturaServiceImpl implements FacturaService {
         .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
 
     if (!factura.getEstado().puedeReprocesarse()) {
-      throw new RuntimeException("La factura no puede ser reenviada en estado: " + factura.getEstado());
+      throw new RuntimeException(
+          "La factura no puede ser reenviada en estado: " + factura.getEstado());
     }
   }
 
@@ -749,25 +753,21 @@ public class FacturaServiceImpl implements FacturaService {
     // Usar la misma validación completa
     return validarTotalesCompleto(request);
   }
-
-  @Override
   // En FacturaService.java agregar este método:
 
+  @Override
+  @Transactional(readOnly = true)
   public FacturaForCreditResponse obtenerParaNotaCredito(Long facturaId) {
-    log.info("Obteniendo factura {} para generar nota de crédito", facturaId);
-
-    // Obtener factura con todas sus relaciones
     Factura factura = facturaRepository.findByIdWithRelaciones(facturaId)
-        .orElseThrow(() -> new EntityNotFoundException("Factura no encontrada: " + facturaId));
+        .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada: " + facturaId));
 
-    // Validaciones
+    // Validar que puede generar NC
     validarFacturaParaNotaCredito(factura);
 
     // Calcular monto disponible
     BigDecimal montoDisponible = factura.getTotalComprobante()
         .subtract(factura.getMontoAcreditado());
 
-    // Construir respuesta
     return FacturaForCreditResponse.builder()
         .id(factura.getId())
         .consecutivo(factura.getConsecutivo())
@@ -777,11 +777,20 @@ public class FacturaServiceImpl implements FacturaService {
         // Cliente
         .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
         .clienteNombre(factura.getCliente() != null ? factura.getCliente().getRazonSocial() : null)
-        .clienteIdentificacion(factura.getCliente() != null ? factura.getCliente().getNumeroIdentificacion() : null)
-        .clienteTipoIdentificacion(factura.getCliente() != null ? factura.getCliente().getTipoIdentificacion().getCodigo() : null)
+        .clienteIdentificacion(
+            factura.getCliente() != null ? factura.getCliente().getNumeroIdentificacion() : null)
+        .clienteTipoIdentificacion(
+            factura.getCliente() != null ? factura.getCliente().getTipoIdentificacion().getCodigo()
+                : null)
         .emailReceptor(factura.getEmailReceptor())
-        .clienteTieneExoneracion(factura.getCliente() != null && factura.getCliente().getExoneraciones() != null && !factura.getCliente().getExoneraciones().isEmpty())
-//        .exoneraciones(factura.getCliente() != null ? convertirExoneraciones(factura.getCliente().getExoneraciones()) : null)
+        .clienteTieneExoneracion(
+            factura.getCliente() != null && factura.getCliente().getExoneraciones() != null
+                && !factura.getCliente().getExoneraciones().isEmpty())
+
+        // IMPORTANTE: Incluir estos campos
+        .sesionCajaId(factura.getSesionCaja().getId())
+        .usuarioId(factura.getCajero().getId())
+        .codigoActividadReceptor(factura.getActividadReceptor()) // Para que el frontend lo tenga
 
         // Datos comerciales
         .condicionVenta(factura.getCondicionVenta().getCodigo())
@@ -794,11 +803,6 @@ public class FacturaServiceImpl implements FacturaService {
         .montoDisponibleParaAcreditar(montoDisponible)
         .moneda(factura.getMoneda().name())
         .tipoCambio(factura.getTipoCambio())
-
-        // Descuento global
-        .descuentoGlobalPorcentaje(factura.getDescuentoGlobalPorcentaje())
-        .montoDescuentoGlobal(factura.getMontoDescuentoGlobal())
-        .motivoDescuentoGlobal(factura.getMotivoDescuentoGlobal())
 
         // Info adicional
         .sucursalNombre(factura.getSucursal().getNombre())
@@ -817,57 +821,25 @@ public class FacturaServiceImpl implements FacturaService {
         .totalDescuentos(factura.getTotalDescuentos())
         .totalOtrosCargos(factura.getTotalOtrosCargos())
 
-        // Listas
+        // Listas con impuestos y descuentos
         .detalles(convertirDetallesParaCredito(factura.getDetalles()))
-//        .otrosCargos(convertirOtrosCargos(factura.getOtrosCargos()))
-//        .resumenImpuestos(convertirResumenImpuestos(factura.getResumenImpuestos()))
-
         .build();
   }
 
-  private List<FacturaForCreditResponse.DetalleForCreditDto> convertirDetallesParaCredito(List<FacturaDetalle> detalles) {
-    return detalles.stream()
-        .map(detalle -> FacturaForCreditResponse.DetalleForCreditDto.builder()
-            .id(detalle.getId())
-            .numeroLinea(detalle.getNumeroLinea())
-            .productoId(detalle.getProducto().getId())
-            .productoCodigo(detalle.getProducto().getCodigoInterno())
-            .productoNombre(detalle.getDescripcionPersonalizada() != null ?
-                detalle.getDescripcionPersonalizada() :
-                detalle.getProducto().getNombre())
-            .codigoCabys(detalle.getCodigoCabys() != null ?
-                detalle.getCodigoCabys() :
-                detalle.getProducto().getEmpresaCabys().getCodigoCabys().getCodigo())
-            .esServicio(detalle.getEsServicio() != null ?
-                detalle.getEsServicio() :
-                detalle.getProducto().getEsServicio())
-            .unidadMedida(detalle.getUnidadMedida())
-            .cantidad(detalle.getCantidad())
-            .precioUnitario(detalle.getPrecioUnitario())
-            .montoTotal(detalle.getMontoTotal())
-            .montoDescuento(detalle.getMontoDescuento())
-            .subtotal(detalle.getSubtotal())
-            .montoImpuesto(detalle.getMontoImpuesto())
-            .montoTotalLinea(detalle.getMontoTotalLinea())
-//            .descuentos(convertirDescuentos(detalle.getDescuentos()))
-//            .impuestos(convertirImpuestos(detalle.getImpuestos()))
-            .cantidadAcreditar(detalle.getCantidad()) // Por defecto toda la cantidad
-            .seleccionado(false) // Por defecto no seleccionado
-            .build())
-        .collect(Collectors.toList());
-  }
-
   // Métodos helpers para convertir las listas anidadas
-  private List<FacturaForCreditResponse.DescuentoDto> convertirDescuentos(List<FacturaDetalle> descuentos) {
-    if (descuentos == null || descuentos.isEmpty()) return new ArrayList<>();
+  private List<FacturaForCreditResponse.DescuentoDto> convertirDescuentos(List<FacturaDescuento> descuentos) {
+    if (descuentos == null || descuentos.isEmpty()) {
+      return new ArrayList<>();
+    }
 
     return descuentos.stream()
         .map(desc -> FacturaForCreditResponse.DescuentoDto.builder()
-//            .codigoDescuento(desc.get.getCodigoDescuento())
-//            .naturalezaDescuento(desc.getNaturalezaDescuento())
-//            .porcentaje(desc.getPorcentaje())
-//            .montoDescuento(desc.getMontoDescuento())
-//            .orden(desc.getOrden())
+            .codigoDescuento(desc.getCodigoDescuento())
+            .codigoDescuentoOTRO(desc.getCodigoDescuentoOTRO())
+            .naturalezaDescuento(desc.getNaturalezaDescuento())
+            .porcentaje(desc.getPorcentaje())
+            .montoDescuento(desc.getMontoDescuento())
+            .orden(desc.getOrden())
             .build())
         .collect(Collectors.toList());
   }
@@ -933,40 +905,80 @@ public class FacturaServiceImpl implements FacturaService {
     }
   }
 
-  private FacturaForCreditResponse.DetalleForCreditDto convertirDetalleParaCredito(
-      FacturaDetalle detalle) {
-    return FacturaForCreditResponse.DetalleForCreditDto.builder()
-        .id(detalle.getId())
-        .productoId(detalle.getProducto().getId())
-        .productoCodigo(detalle.getProducto().getCodigoInterno())
-        .productoNombre(detalle.getDescripcionPersonalizada() != null ?
-            detalle.getDescripcionPersonalizada() :
-            detalle.getProducto().getNombre())
-        .cantidad(detalle.getCantidad())
-        .precioUnitario(detalle.getPrecioUnitario())
-        .montoTotal(detalle.getMontoTotal())
-        .montoDescuento(detalle.getMontoDescuento())
-        .montoImpuesto(detalle.getMontoImpuesto())
-        .montoTotalLinea(detalle.getMontoTotalLinea())
-        .unidadMedida(detalle.getUnidadMedida())
-        .codigoCabys(detalle.getCodigoCabys())
-        .build();
+  private List<FacturaForCreditResponse.ImpuestoDto> convertirImpuestos(List<FacturaDetalleImpuesto> impuestos) {
+    if (impuestos == null || impuestos.isEmpty()) {
+      return new ArrayList<>();
+    }
+
+    return impuestos.stream()
+        .map(imp -> FacturaForCreditResponse.ImpuestoDto.builder()
+            .codigoImpuesto(imp.getCodigoImpuesto())
+            .codigoTarifaIVA(imp.getCodigoTarifaIVA())
+            .tarifa(imp.getTarifa())
+            .baseImponible(imp.getBaseImponible())
+            .montoImpuesto(imp.getMontoImpuesto())
+            .tieneExoneracion(imp.getTieneExoneracion())
+            .montoExoneracion(imp.getMontoExoneracion())
+            .impuestoNeto(imp.getImpuestoNeto())
+            .exoneracion(imp.getTieneExoneracion() ?
+                FacturaForCreditResponse.ExoneracionDto.builder()
+                    .tipoDocumentoEX(imp.getTipoDocumentoExoneracion())
+                    .numeroDocumentoEX(imp.getNumeroDocumentoExoneracion())
+                    .codigoInstitucion(imp.getCodigoInstitucion())
+                    .fechaEmisionExoneracion(imp.getFechaEmisionExoneracion())
+                    .institucionOtorgante(imp.getNombreInstitucion())
+                    .porcentajeExonerado(imp.getTarifaExonerada())
+                    .articulo(imp.getArticuloExoneracion())
+                    .inciso(imp.getIncisoExoneracion())
+                    .build() : null)
+            .build())
+        .collect(Collectors.toList());
+  }
+
+  private List<FacturaForCreditResponse.DetalleForCreditDto> convertirDetallesParaCredito(
+      List<FacturaDetalle> detalles) {
+    return detalles.stream()
+        .map(detalle -> FacturaForCreditResponse.DetalleForCreditDto.builder()
+            .id(detalle.getId())
+            .numeroLinea(detalle.getNumeroLinea())
+            .productoId(detalle.getProducto().getId())
+            .productoCodigo(detalle.getProducto().getCodigoInterno())
+            .productoNombre(detalle.getDescripcionPersonalizada() != null ?
+                detalle.getDescripcionPersonalizada() :
+                detalle.getProducto().getNombre())
+            .codigoCabys(detalle.getCodigoCabys() != null ?
+                detalle.getCodigoCabys() :
+                detalle.getProducto().getEmpresaCabys().getCodigoCabys().getCodigo())
+            .esServicio(detalle.getEsServicio() != null ?
+                detalle.getEsServicio() :
+                detalle.getProducto().getEsServicio())
+            .unidadMedida(detalle.getUnidadMedida())
+            .cantidad(detalle.getCantidad())
+            .precioUnitario(detalle.getPrecioUnitario())
+            .montoTotal(detalle.getMontoTotal())
+            .montoDescuento(detalle.getMontoDescuento())
+            .subtotal(detalle.getSubtotal())
+            .montoImpuesto(detalle.getMontoImpuesto())
+            .montoTotalLinea(detalle.getMontoTotalLinea())
+            .descuentos(convertirDescuentos(detalle.getDescuentos())) // DESCOMENTAR ESTA LÍNEA
+            .impuestos(convertirImpuestos(detalle.getImpuestos()))     // DESCOMENTAR ESTA LÍNEA
+            .cantidadAcreditar(detalle.getCantidad()) // Por defecto toda la cantidad
+            .seleccionado(false) // Por defecto no seleccionado
+            .build())
+        .collect(Collectors.toList());
   }
 
   /**
-   * Valida estructura de la factura según v4.4 (sin armar XML):
-   * - Catálogos/códigos presentes y con formato válido
-   * - Exoneraciones completas cuando se marcan en una línea
-   * - Servicio 10% NO como impuesto; debe venir en Otros Cargos (código 06)
-   * - Descuento 99 OTROS con código OTRO y naturaleza obligatoria
-   * - Medios de pago válidos y suma = totalComprobante (con tolerancia)
-   * - Campos de No Sujetos presentes
-   * - versionCatalogos presente
+   * Valida estructura de la factura según v4.4 (sin armar XML): - Catálogos/códigos presentes y con
+   * formato válido - Exoneraciones completas cuando se marcan en una línea - Servicio 10% NO como
+   * impuesto; debe venir en Otros Cargos (código 06) - Descuento 99 OTROS con código OTRO y
+   * naturaleza obligatoria - Medios de pago válidos y suma = totalComprobante (con tolerancia) -
+   * Campos de No Sujetos presentes - versionCatalogos presente
    */
   private void validarEstructuraV44(CrearFacturaRequest request) {
     final Pattern P_UNIDAD = Pattern.compile("^[0-9A-Z._-]{1,30}$");
-    final Pattern P_CABYS  = Pattern.compile("^[0-9]{13}$");
-    final Set<String> MEDIOS_VALIDOS = Set.of("01","02","03","04","05","06","07","99");
+    final Pattern P_CABYS = Pattern.compile("^[0-9]{13}$");
+    final Set<String> MEDIOS_VALIDOS = Set.of("01", "02", "03", "04", "05", "06", "07", "99");
     final BigDecimal TOLERANCIA = new BigDecimal("0.01");
 
     // ------ Encabezado mínimo ------
@@ -981,8 +993,10 @@ public class FacturaServiceImpl implements FacturaService {
     requireNonBlank(request.getVersionCatalogos(), "versionCatalogos es requerido");
 
     // ------ No Sujetos ------
-    requireNotNull(request.getTotalServiciosNoSujetos(), "totalServiciosNoSujetos es requerido (puede ser 0)");
-    requireNotNull(request.getTotalMercanciasNoSujetas(), "totalMercanciasNoSujetos es requerido (puede ser 0)");
+    requireNotNull(request.getTotalServiciosNoSujetos(),
+        "totalServiciosNoSujetos es requerido (puede ser 0)");
+    requireNotNull(request.getTotalMercanciasNoSujetas(),
+        "totalMercanciasNoSujetos es requerido (puede ser 0)");
     requireNotNull(request.getTotalNoSujeto(), "totalNoSujeto es requerido (puede ser 0)");
 
     // ------ Detalles ------
@@ -992,7 +1006,7 @@ public class FacturaServiceImpl implements FacturaService {
 
     for (int i = 0; i < request.getDetalles().size(); i++) {
       var d = request.getDetalles().get(i);
-      final String ctx = " (línea " + (i+1) + ")";
+      final String ctx = " (línea " + (i + 1) + ")";
 
       // Unidad de medida
       requireNonBlank(d.getUnidadMedida(), "Unidad de medida es requerida" + ctx);
@@ -1007,8 +1021,10 @@ public class FacturaServiceImpl implements FacturaService {
         for (var desc : d.getDescuentos()) {
           requireNonBlank(desc.getCodigoDescuento(), "Código de descuento es requerido" + ctx);
           if ("99".equals(desc.getCodigoDescuento())) {
-            requireNonBlank(desc.getCodigoDescuentoOTRO(), "Para código 99 (OTROS) se requiere 'codigoDescuentoOTRO'" + ctx);
-            requireNonBlank(desc.getNaturalezaDescuento(), "Para código 99 (OTROS) se requiere 'naturalezaDescuento'" + ctx);
+            requireNonBlank(desc.getCodigoDescuentoOTRO(),
+                "Para código 99 (OTROS) se requiere 'codigoDescuentoOTRO'" + ctx);
+            requireNonBlank(desc.getNaturalezaDescuento(),
+                "Para código 99 (OTROS) se requiere 'naturalezaDescuento'" + ctx);
           }
         }
       }
@@ -1018,7 +1034,9 @@ public class FacturaServiceImpl implements FacturaService {
         for (var imp : d.getImpuestos()) {
           // Bloqueo: servicio 10% no puede venir como impuesto
           if ("12".equals(imp.getCodigoImpuesto())) { // ese 12 lo usaban en FE para "servicio"
-            throw new IllegalArgumentException("El 10% de servicio NO debe enviarse como impuesto; use Otros Cargos (código 06) en el resumen" + ctx);
+            throw new IllegalArgumentException(
+                "El 10% de servicio NO debe enviarse como impuesto; use Otros Cargos (código 06) en el resumen"
+                    + ctx);
           }
           requireNonBlank(imp.getCodigoImpuesto(), "codigoImpuesto requerido" + ctx);
           requireNonBlank(imp.getCodigoTarifaIVA(), "codigoTarifaIVA requerido" + ctx);
@@ -1026,24 +1044,33 @@ public class FacturaServiceImpl implements FacturaService {
           // Exoneración coherente
           if (Boolean.TRUE.equals(imp.getTieneExoneracion())) {
             if (imp.getExoneracion() == null) {
-              throw new IllegalArgumentException("Se marcó tieneExoneracion pero falta ExoneracionRequest" + ctx);
+              throw new IllegalArgumentException(
+                  "Se marcó tieneExoneracion pero falta ExoneracionRequest" + ctx);
             }
             var ex = imp.getExoneracion();
-            requireNonBlank(ex.getTipoDocumentoEX(), "Exoneración: tipoDocumentoEX requerido" + ctx);
-            requireNonBlank(ex.getNumeroDocumentoEX(), "Exoneración: numeroDocumentoEX requerido" + ctx);
-            requireNotNull(ex.getFechaEmisionExoneracion(), "Exoneración: fechaEmisionExoneracion requerida" + ctx);
-            requireNonBlank(ex.getInstitucionOtorgante(), "Exoneración: institucionOtorgante requerida" + ctx);
-            requireNotNull(ex.getPorcentajeExonerado(), "Exoneración: porcentajeExonerado requerido" + ctx);
+            requireNonBlank(ex.getTipoDocumentoEX(),
+                "Exoneración: tipoDocumentoEX requerido" + ctx);
+            requireNonBlank(ex.getNumeroDocumentoEX(),
+                "Exoneración: numeroDocumentoEX requerido" + ctx);
+            requireNotNull(ex.getFechaEmisionExoneracion(),
+                "Exoneración: fechaEmisionExoneracion requerida" + ctx);
+            requireNonBlank(ex.getInstitucionOtorgante(),
+                "Exoneración: institucionOtorgante requerida" + ctx);
+            requireNotNull(ex.getPorcentajeExonerado(),
+                "Exoneración: porcentajeExonerado requerido" + ctx);
             if (ex.getPorcentajeExonerado().compareTo(BigDecimal.ZERO) < 0
                 || ex.getPorcentajeExonerado().compareTo(new BigDecimal("100")) > 0) {
-              throw new IllegalArgumentException("Exoneración: porcentajeExonerado debe estar entre 0 y 100" + ctx);
+              throw new IllegalArgumentException(
+                  "Exoneración: porcentajeExonerado debe estar entre 0 y 100" + ctx);
             }
           }
 
           // Impuesto asumido (si marcas la bandera, debe traer monto)
           if (Boolean.TRUE.equals(imp.getImpuestoAsumidoPorEmisor())) {
-            if (imp.getMontoImpuestoAsumido() == null || imp.getMontoImpuestoAsumido().compareTo(BigDecimal.ZERO) < 0) {
-              throw new IllegalArgumentException("Impuesto asumido por emisor marcado pero sin monto válido" + ctx);
+            if (imp.getMontoImpuestoAsumido() == null
+                || imp.getMontoImpuestoAsumido().compareTo(BigDecimal.ZERO) < 0) {
+              throw new IllegalArgumentException(
+                  "Impuesto asumido por emisor marcado pero sin monto válido" + ctx);
             }
           }
         }
@@ -1155,6 +1182,13 @@ public class FacturaServiceImpl implements FacturaService {
     notaCredito.setCodigoReferencia("01"); // Factura electrónica
     notaCredito.setFechaEmisionReferencia(facturaOriginal.getFechaEmision());
 
+    // IMPORTANTE: Copiar la actividad del receptor SOLO si es necesaria
+    // (NC sobre Factura Electrónica)
+    if (facturaOriginal.getTipoDocumento() == TipoDocumento.FACTURA_ELECTRONICA
+        && request.getActividadReceptor() != null) {
+      notaCredito.setActividadReceptor(request.getActividadReceptor());
+    }
+
     // Determinar código de referencia según el caso
     if (request.getRazonNotaCredito() != null &&
         request.getRazonNotaCredito().contains("exoneración")) {
@@ -1208,18 +1242,23 @@ public class FacturaServiceImpl implements FacturaService {
       throw new IllegalArgumentException(msg);
     }
   }
+
   private static void requireNotNull(Object val, String msg) {
     if (val == null) {
       throw new IllegalArgumentException(msg);
     }
   }
+
   private static void requireRegex(Pattern p, String val, String msg) {
     if (val == null || !p.matcher(val).matches()) {
       throw new IllegalArgumentException(msg);
     }
   }
+
   private static boolean casiIgual(BigDecimal a, BigDecimal b, BigDecimal tolerancia) {
-    if (a == null || b == null) return false;
+    if (a == null || b == null) {
+      return false;
+    }
     return a.subtract(b).abs().compareTo(tolerancia) <= 0;
   }
 }

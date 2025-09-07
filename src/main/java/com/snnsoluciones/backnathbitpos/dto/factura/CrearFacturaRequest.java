@@ -172,4 +172,19 @@ public class CrearFacturaRequest {
     @NotNull
     @DecimalMin(value = "0.01", message = "Total del comprobante debe ser mayor a 0")
     private BigDecimal totalComprobante;
+
+    /**
+     * Lista de información de referencia
+     * OBLIGATORIO para:
+     * - Nota de Crédito (NC)
+     * - Nota de Débito (ND)
+     * - Factura Electrónica de Compra (FEC)
+     * - Recibo Electrónico de Pago (REP)
+     * - Factura Electrónica cuando se usa código 11 en autorización/exoneración
+     *
+     * Máximo 10 referencias según v4.4
+     */
+    @Valid
+    @Size(max = 10, message = "Máximo 10 referencias permitidas")
+    private List<InformacionReferenciaDto> informacionReferencia;
 }

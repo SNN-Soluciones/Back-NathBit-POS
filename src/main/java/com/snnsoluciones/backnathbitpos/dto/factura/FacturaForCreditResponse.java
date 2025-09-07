@@ -18,6 +18,11 @@ public class FacturaForCreditResponse {
     private String clave;
     private String fechaEmision;
 
+    // Campos necesarios para NC
+    private Long sesionCajaId;
+    private Long usuarioId;
+    private String codigoActividadReceptor;
+
     // Cliente
     private Long clienteId;
     private String clienteNombre;

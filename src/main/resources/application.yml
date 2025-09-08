@@ -37,10 +37,10 @@ server:
 
 storage:
   spaces:
-    access-key: DO00C3NT8QYQ9R7HHJRW
-    secret-key: HyOasERhBvz4pLciZTf0W8utirzlvYPR41bteNSeYLA
-    endpoint: https://nyc3.digitaloceanspaces.com
-    region: nyc3
+    access-key: QTF7BXEVCUCZFPR930G0
+    secret-key: JP3tLInSAGED1AnAnbwrGRlyTXH8jQeWAiqKHqfh
+    endpoint: https://ewr1.vultrobjects.com
+    region: ewr1          # si tu SDK no acepta 'ewr1', usar 'us-east-1'
     bucket: snn-soluciones
     base-folder: NathBit-POS
 

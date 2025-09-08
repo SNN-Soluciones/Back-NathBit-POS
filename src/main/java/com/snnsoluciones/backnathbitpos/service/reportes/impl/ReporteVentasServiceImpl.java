@@ -48,7 +48,6 @@ public class ReporteVentasServiceImpl implements ReporteVentasService {
         switch (request.getFormato()) {
             case EXCEL -> generarExcelProgramatico(datos);
             case PDF -> generarPDFJasper(datos);
-            case CSV -> generarCSV(datos);
         }
 
         return datos;

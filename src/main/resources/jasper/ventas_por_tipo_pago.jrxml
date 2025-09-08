@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with Jaspersoft Studio version 6.21.3.final using JasperReports Library version 6.21.3-4a3078d20785ebe464f18037d738d12fc98c13cf  -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="ventas_por_tipo_pago" pageWidth="612" pageHeight="792" columnWidth="572" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="a1b2c3d4-e5f6-7890-1234-567890abcdef">
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+	<style name="Title" fontName="Arial" fontSize="18" isBold="true"/>
+	<style name="SubTitle" fontName="Arial" fontSize="14" isBold="true"/>
+	<style name="Column header" forecolor="#FFFFFF" backcolor="#1E40AF" fontName="Arial" fontSize="10" isBold="true"/>
+	<style name="Detail" fontName="Arial" fontSize="10"/>
+	<style name="Row" mode="Transparent">
+		<conditionalStyle>
+			<conditionExpression><![CDATA[$V{REPORT_COUNT}%2 == 0]]></conditionExpression>
+			<style backcolor="#F3F4F6"/>
+		</conditionalStyle>
+	</style>
+	<parameter name="empresaNombre" class="java.lang.String"/>
+	<parameter name="empresaIdentificacion" class="java.lang.String"/>
+	<parameter name="sucursalNombre" class="java.lang.String"/>
+	<parameter name="fechaDesde" class="java.time.LocalDate"/>
+	<parameter name="fechaHasta" class="java.time.LocalDate"/>
+	<parameter name="usuarioGenera" class="java.lang.String"/>
+	<parameter name="logo" class="java.io.InputStream"/>
+	<parameter name="totalGeneral" class="java.math.BigDecimal"/>
+	<field name="medioPago" class="java.lang.String"/>
+	<field name="descripcion" class="java.lang.String"/>
+	<field name="cantidadDocumentos" class="java.lang.Integer"/>
+	<field name="montoTotal" class="java.math.BigDecimal"/>
+	<field name="porcentaje" class="java.math.BigDecimal"/>
+	<variable name="totalDocumentos" class="java.lang.Integer" calculation="Sum">
+		<variableExpression><![CDATA[$F{cantidadDocumentos}]]></variableExpression>
+	</variable>
+	<variable name="totalMonto" class="java.math.BigDecimal" calculation="Sum">
+		<variableExpression><![CDATA[$F{montoTotal}]]></variableExpression>
+	</variable>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<title>
+		<band height="120" splitType="Stretch">
+			<image hAlign="Center" vAlign="Middle">
+				<reportElement x="20" y="10" width="80" height="80" uuid="11111111-1111-1111-1111-111111111111"/>
+				<imageExpression><![CDATA[$P{logo}]]></imageExpression>
+			</image>
+			<textField>
+				<reportElement style="Title" x="110" y="10" width="350" height="25" uuid="22222222-2222-2222-2222-222222222222"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$P{empresaNombre}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="110" y="35" width="350" height="20" uuid="33333333-3333-3333-3333-333333333333"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="Arial" size="12"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Cédula: " + $P{empresaIdentificacion}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="110" y="55" width="350" height="20" uuid="44444444-4444-4444-4444-444444444444"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="Arial" size="12"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Sucursal: " + $P{sucursalNombre}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="SubTitle" x="0" y="95" width="572" height="20" uuid="55555555-5555-5555-5555-555555555555"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[REPORTE DE VENTAS POR TIPO DE PAGO]]></text>
+			</staticText>
+			<textField>
+				<reportElement x="470" y="10" width="100" height="15" uuid="66666666-6666-6666-6666-666666666666"/>
+				<textElement textAlignment="Right">
+					<font fontName="Arial" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Fecha: " + java.time.LocalDate.now()]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="470" y="25" width="100" height="15" uuid="77777777-7777-7777-7777-777777777777"/>
+				<textElement textAlignment="Right">
+					<font fontName="Arial" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Hora: " + new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date())]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement x="0" y="115" width="572" height="1" forecolor="#D1D5DB" uuid="88888888-8888-8888-8888-888888888888"/>
+			</line>
+		</band>
+	</title>
+	<pageHeader>
+		<band height="35" splitType="Stretch">
+			<textField>
+				<reportElement x="0" y="5" width="572" height="25" uuid="99999999-9999-9999-9999-999999999999"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="Arial" size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Período del " + $P{fechaDesde}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + " al " + $P{fechaHasta}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))]]></textFieldExpression>
+			</textField>
+		</band>
+	</pageHeader>
+	<columnHeader>
+		<band height="30" splitType="Stretch">
+			<rectangle>
+				<reportElement style="Column header" mode="Opaque" x="0" y="0" width="572" height="30" uuid="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"/>
+			</rectangle>
+			<staticText>
+				<reportElement style="Column header" x="10" y="5" width="60" height="20" uuid="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[CÓDIGO]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="Column header" x="80" y="5" width="200" height="20" uuid="cccccccc-cccc-cccc-cccc-cccccccccccc"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle"/>
+				<text><![CDATA[TIPO DE PAGO]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="Column header" x="290" y="5" width="80" height="20" uuid="dddddddd-dddd-dddd-dddd-dddddddddddd"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[CANTIDAD]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="Column header" x="380" y="5" width="100" height="20" uuid="eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle"/>
+				<text><![CDATA[MONTO TOTAL]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="Column header" x="490" y="5" width="70" height="20" uuid="ffffffff-ffff-ffff-ffff-ffffffffffff"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[%]]></text>
+			</staticText>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="25" splitType="Stretch">
+			<rectangle>
+				<reportElement style="Row" mode="Opaque" x="0" y="0" width="572" height="25" uuid="11223344-5566-7788-99aa-bbccddeeff00"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#E5E7EB"/>
+				</graphicElement>
+			</rectangle>
+			<textField>
+				<reportElement style="Detail" x="10" y="2" width="60" height="20" uuid="11223344-5566-7788-99aa-bbccddeeff11"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{medioPago}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="Detail" x="80" y="2" width="200" height="20" uuid="11223344-5566-7788-99aa-bbccddeeff22"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{descripcion}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="Detail" x="290" y="2" width="80" height="20" uuid="11223344-5566-7788-99aa-bbccddeeff33"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{cantidadDocumentos}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.00">
+				<reportElement style="Detail" x="380" y="2" width="100" height="20" uuid="11223344-5566-7788-99aa-bbccddeeff44"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{montoTotal}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#0.00 &apos;%&apos;">
+				<reportElement style="Detail" x="490" y="2" width="70" height="20" uuid="11223344-5566-7788-99aa-bbccddeeff55"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{porcentaje}]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+	<columnFooter>
+		<band height="10" splitType="Stretch"/>
+	</columnFooter>
+	<pageFooter>
+		<band height="30" splitType="Stretch">
+			<textField>
+				<reportElement x="0" y="10" width="280" height="15" uuid="aabbccdd-eeff-0011-2233-445566778899"/>
+				<textElement>
+					<font fontName="Arial" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Generado por: " + $P{usuarioGenera}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="470" y="10" width="80" height="15" uuid="99887766-5544-3322-1100-ffeeddccbbaa"/>
+				<textElement textAlignment="Right">
+					<font fontName="Arial" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Página " + $V{PAGE_NUMBER}]]></textFieldExpression>
+			</textField>
+			<textField evaluationTime="Report">
+				<reportElement x="550" y="10" width="20" height="15" uuid="00112233-4455-6677-8899-aabbccddeeff"/>
+				<textElement textAlignment="Left">
+					<font fontName="Arial" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[" de " + $V{PAGE_NUMBER}]]></textFieldExpression>
+			</textField>
+		</band>
+	</pageFooter>
+	<summary>
+		<band height="100" splitType="Stretch">
+			<line>
+				<reportElement x="0" y="5" width="572" height="1" forecolor="#6B7280" uuid="12121212-3434-5656-7878-909090909090"/>
+				<graphicElement>
+					<pen lineWidth="1.5"/>
+				</graphicElement>
+			</line>
+			<staticText>
+				<reportElement style="SubTitle" x="80" y="15" width="200" height="20" uuid="23232323-4545-6767-8989-010101010101"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="12"/>
+				</textElement>
+				<text><![CDATA[TOTAL GENERAL:]]></text>
+			</staticText>
+			<textField>
+				<reportElement style="SubTitle" x="290" y="15" width="80" height="20" uuid="34343434-5656-7878-9090-121212121212"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="12"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{totalDocumentos}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.00">
+				<reportElement style="SubTitle" x="380" y="15" width="100" height="20" uuid="45454545-6767-8989-0101-232323232323"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="12"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{totalMonto}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="490" y="15" width="70" height="20" uuid="56565656-7878-9090-1212-343434343434"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="Arial" size="12" isBold="true"/>
+				</textElement>
+				<text><![CDATA[100.00 %]]></text>
+			</staticText>
+			<rectangle>
+				<reportElement x="0" y="50" width="572" height="40" forecolor="#E5E7EB" uuid="67676767-8989-0101-2323-454545454545"/>
+			</rectangle>
+			<staticText>
+				<reportElement x="10" y="60" width="552" height="20" forecolor="#6B7280" uuid="78787878-9090-1212-3434-565656565656"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="Arial" size="9" isItalic="true"/>
+				</textElement>
+				<text><![CDATA[Para visualizar gráficos detallados, exporte a Excel]]></text>
+			</staticText>
+		</band>
+	</summary>
+</jasperReport>

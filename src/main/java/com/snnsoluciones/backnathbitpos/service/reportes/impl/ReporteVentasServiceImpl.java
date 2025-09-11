@@ -64,32 +64,55 @@ public class ReporteVentasServiceImpl implements ReporteVentasService {
             .orElseThrow(() -> new EntityNotFoundException("Sucursal no encontrada"));
 
         String sql = """
-            SELECT\s
-                f.clave,
-                f.consecutivo,
-                f.tipo_documento AS tipoDocumento,
-                f.fecha_emision AS fechaEmision,
-                ae.codigo AS actividadEconomicaCodigo,
-                ae.descripcion AS actividadEconomicaDescripcion,
-                COALESCE(c.razon_social, 'CLIENTE GENERICO') AS clienteNombre,
-                COALESCE(c.numero_identificacion, '000000000') AS clienteIdentificacion,
-                COALESCE(c.tipo_identificacion, 'OTRO') AS clienteTipoIdentificacion,
-                f.total_mercancias_gravadas AS totalMercanciasGravadas,
-                f.total_mercancias_exentas AS totalMercanciasExentas,
-                f.total_mercancias_exoneradas AS totalMercanciasExoneradas,
-                f.total_servicios_gravados AS totalServiciosGravados,
-                f.total_servicios_exentos AS totalServiciosExentos,
-                f.total_servicios_exonerados AS totalServiciosExonerados,
-                f.total_venta_neta AS totalVentaNeta,
-                f.total_impuesto AS totalImpuesto,
-                f.total_descuentos AS totalDescuentos,
-                COALESCE(f.total_exonerado, 0) AS montoTotalExonerado,
-                f.total_otros_cargos AS totalOtrosCargos,
-                f.total_comprobante AS totalComprobante,
-                f.codigo_moneda AS moneda,
-                f.tipo_cambio AS tipoCambio,
-                f.estado
+            SELECT
+              f.clave,
+              f.consecutivo,
+              f.tipo_documento AS tipoDocumento,
+              f.fecha_emision  AS fechaEmision,
+            
+              ae.codigo        AS actividadEconomicaCodigo,
+              ae.descripcion   AS actividadEconomicaDescripcion,
+            
+              COALESCE(c.razon_social, 'CLIENTE GENERICO')  AS clienteNombre,
+              COALESCE(c.numero_identificacion, '000000000') AS clienteIdentificacion,
+              COALESCE(c.tipo_identificacion, 'OTRO')        AS clienteTipoIdentificacion,
+            
+              -- SERVICIOS
+              COALESCE(f.total_servicios_gravados,    0) AS totalServiciosGravados,
+              COALESCE(f.total_servicios_exentos,     0) AS totalServiciosExentos,
+              COALESCE(f.total_servicios_exonerados,  0) AS totalServiciosExonerados,
+              /* si la columna existe, déjala; si no, quítala del SELECT */
+              COALESCE(f.total_servicios_no_sujetos,  0) AS totalServiciosNoSujetos,
+            
+              -- MERCANCÍAS
+              COALESCE(f.total_mercancias_gravadas,   0) AS totalMercanciasGravadas,
+              COALESCE(f.total_mercancias_exentas,    0) AS totalMercanciasExentas,
+              COALESCE(f.total_mercancias_exoneradas, 0) AS totalMercanciasExoneradas,
+              /* hay bases con no_sujetas / no_sujetos. Si solo tienes una, usa esa y quita la otra. */
+              COALESCE(f.total_mercancias_no_sujetas, 0) AS totalMercanciasNoSujetos,
+            
+              -- TOTALES (nombres EXACTOS para el mapper)
+              COALESCE(f.total_venta_neta,  0) AS totalVentaNeta,
+              COALESCE(f.total_impuesto,    0) AS totalImpuesto,
+              COALESCE(f.total_descuentos,  0) AS totalDescuentos,
+              COALESCE(f.total_exonerado,   0) AS montoTotalExonerado,   -- 👈 alias que tu mapper busca
+              COALESCE(f.total_comprobante, 0) AS totalComprobante,
+              
+              COALESCE(f.total_otros_cargos,      0) AS totalOtrosCargos,
+              
+              COALESCE(f.total_gravado,     0) AS subtotalGravado,
+              COALESCE(f.total_exento,       0) AS subtotalExento,
+              COALESCE(f.total_exonerado,    0) AS subtotalExonerado,
+              COALESCE(f.total_no_sujeto,   0) AS subtotalNoSujetos,
+            
+            
+              f.codigo_moneda AS moneda,
+              f.tipo_cambio   AS tipoCambio
+            
             FROM facturas f
+            JOIN factura_bitacora fb
+              ON fb.factura_id = f.id
+             AND fb.estado = 'ACEPTADA'
             INNER JOIN sucursales s ON f.sucursal_id = s.id
             LEFT JOIN empresa_actividades ea ON ea.empresa_id = s.empresa_id AND ea.es_principal = true
             LEFT JOIN actividades_economicas ae ON ea.actividad_id = ae.id
@@ -97,9 +120,8 @@ public class ReporteVentasServiceImpl implements ReporteVentasService {
             WHERE f.sucursal_id = ?
               AND f.fecha_emision >= ?
               AND f.fecha_emision <= ?
-              AND f.estado IN ('ACEPTADA', 'GENERADA')
-              AND f.tipo_documento IN ('FACTURA_ELECTRONICA', 'TIQUETE_ELECTRONICO', 'NOTA_CREDITO')
-            ORDER BY f.fecha_emision ASC, f.consecutivo ASC
+              AND f.tipo_documento IN ('FACTURA_ELECTRONICO','TIQUETE_ELECTRONICO')
+            ORDER BY f.fecha_emision ASC, f.consecutivo ASC;
             """;
 
         List<ReporteVentasLineaDTO> lineas =

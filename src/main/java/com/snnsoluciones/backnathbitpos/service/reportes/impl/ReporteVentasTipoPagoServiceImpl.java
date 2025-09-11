@@ -89,90 +89,127 @@ public class ReporteVentasTipoPagoServiceImpl implements ReporteVentasTipoPagoSe
   @Transactional(readOnly = true)
   public ReporteVentasTipoPagoResponse obtenerDatosReporte(ReporteVentasTipoPagoRequest request) {
 
-    // Obtener sucursal y empresa
+    // 1) Sucursal
     Sucursal sucursal = sucursalRepository.findById(request.getSucursalId())
         .orElseThrow(() -> new EntityNotFoundException("Sucursal no encontrada"));
 
-    // Query SQL para obtener ventas agrupadas por tipo de pago
+    // 2) Rango [desde 00:00, hasta+1d 00:00)
+    var desde = request.getFechaDesde().atStartOfDay();
+    var hastaExclusive = request.getFechaHasta().plusDays(1).atStartOfDay();
+
+    // 3) Sumar por medio normalizado
     String sql = """
-            SELECT 
-                fmp.medio_pago as tipo_pago,
-                COUNT(DISTINCT f.id) as cantidad_documentos,
-                SUM(fmp.monto) as monto_total
-            FROM factura_medios_pago fmp
-            INNER JOIN facturas f ON fmp.factura_id = f.id
-            WHERE f.sucursal_id = ?
-              AND DATE(f.fecha_emision) >= ?
-              AND DATE(f.fecha_emision) <= ?
-              AND f.tipo_documento IN ('FE', 'TE')
-              %s
-            GROUP BY fmp.medio_pago
-            ORDER BY monto_total DESC
-        """.formatted(
-        request.isIncluirAnuladas() ? "" : "AND f.estado NOT IN ('ANULADA', 'RECHAZADA')");
+        WITH facturas_rango AS (
+          SELECT f.id
+          FROM facturas f
+          WHERE f.sucursal_id = ?
+            AND f.fecha_emision >= ?
+            AND f.fecha_emision <  ?
+            AND f.tipo_documento IN ('FACTURA_ELECTRONICO','TIQUETE_ELECTRONICO')
+            AND f.estado NOT IN ('ANULADA','RECHAZADA')
+        ),
+        agg AS (
+          SELECT
+            CASE
+              WHEN p.medio_pago IN ('SINPE','SINPE_MOVIL') THEN 'SINPE_MOVIL'
+              WHEN p.medio_pago IN ('DEPOSITO','TRANSFERENCIA_BANCARIA') THEN 'TRANSFERENCIA'
+              ELSE p.medio_pago
+            END AS medio_norm,
+            COUNT(DISTINCT p.factura_id) AS cantidad_documentos,
+            SUM(p.monto)                 AS monto_total
+          FROM factura_medios_pago p
+          JOIN facturas_rango fr ON fr.id = p.factura_id
+          GROUP BY medio_norm
+        )
+        SELECT m.medio_pago,
+               COALESCE(agg.cantidad_documentos, 0) AS cantidad_documentos,
+               COALESCE(agg.monto_total, 0)         AS monto_total
+        FROM (VALUES ('EFECTIVO'),
+                     ('TARJETA'),
+                     ('TRANSFERENCIA'),
+                     ('SINPE_MOVIL')) AS m(medio_pago)
+        LEFT JOIN agg ON agg.medio_norm = m.medio_pago
+        ORDER BY ARRAY_POSITION(ARRAY['EFECTIVO','TARJETA','TRANSFERENCIA','SINPE_MOVIL'], m.medio_pago)
+        """;
 
-    List<Map<String, Object>> resultados = jdbcTemplate.queryForList(
+    List<VentasPorTipoPagoDTO> detalles = jdbcTemplate.query(
         sql,
-        request.getSucursalId(),
-        request.getFechaDesde(),
-        request.getFechaHasta()
-    );
-
-    // Calcular total general
-    BigDecimal totalGeneral = resultados.stream()
-        .map(r -> (BigDecimal) r.get("monto_total"))
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-    Integer totalDocs = resultados.stream()
-        .map(r -> ((Long) r.get("cantidad_documentos")).intValue())
-        .reduce(0, Integer::sum);
-
-    // Mapear resultados
-    List<VentasPorTipoPagoDTO> detalles = resultados.stream()
-        .map(row -> {
-          String codigoMedioPago = (String) row.get("tipo_pago");
-          BigDecimal monto = (BigDecimal) row.get("monto_total");
-          Integer cantidad = ((Long) row.get("cantidad_documentos")).intValue();
-
-          // Calcular porcentaje
-          BigDecimal porcentaje = BigDecimal.ZERO;
-          if (totalGeneral.compareTo(BigDecimal.ZERO) > 0) {
-            porcentaje = monto.divide(totalGeneral, 4, RoundingMode.HALF_UP)
-                .multiply(new BigDecimal(100))
-                .setScale(2, RoundingMode.HALF_UP);
-          }
+        ps -> {
+          ps.setLong(1, request.getSucursalId());
+          ps.setTimestamp(2, Timestamp.valueOf(desde));
+          ps.setTimestamp(3, Timestamp.valueOf(hastaExclusive));
+        },
+        (rs, i) -> {
+          String medioEnum = rs.getString("medio_pago");                // EFECTIVO | TARJETA | ...
+          int cantidad = rs.getInt("cantidad_documentos");
+          BigDecimal monto = rs.getBigDecimal("monto_total");
 
           return VentasPorTipoPagoDTO.builder()
-              .medioPago(codigoMedioPago)
-              .descripcion(obtenerDescripcionMedioPago(codigoMedioPago))
+              .medioPago(medioEnum)
+              .descripcion(obtenerDescripcionMedioPago(medioEnum))
               .cantidadDocumentos(cantidad)
-              .montoTotal(monto)
-              .porcentaje(porcentaje)
+              .montoTotal(monto != null ? monto.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO)
               .build();
-        })
-        .collect(Collectors.toList());
+        }
+    );
 
-    // Obtener usuario actual
+    // 4) Totales y %
+    BigDecimal totalGeneral = detalles.stream()
+        .map(VentasPorTipoPagoDTO::getMontoTotal)
+        .reduce(BigDecimal.ZERO, BigDecimal::add)
+        .setScale(2, RoundingMode.HALF_UP);
+
+    detalles.forEach(d -> {
+      if (totalGeneral.compareTo(BigDecimal.ZERO) > 0) {
+        d.setPorcentaje(
+            d.getMontoTotal()
+                .divide(totalGeneral, 4, RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("100"))
+                .setScale(2, RoundingMode.HALF_UP)
+        );
+      } else {
+        d.setPorcentaje(BigDecimal.ZERO);
+      }
+    });
+
+    // 5) Total de documentos (distinct facturas con mismos filtros)
+    String countSql = """
+      SELECT COUNT(DISTINCT f.id)
+      FROM facturas f
+      WHERE f.sucursal_id = ?
+        AND f.fecha_emision >= ?
+        AND f.fecha_emision <  ?
+        AND f.tipo_documento IN ('FACTURA_ELECTRONICO','TIQUETE_ELECTRONICO')
+        AND f.estado NOT IN ('ANULADA','RECHAZADA')
+      """;
+    Integer totalDocs = jdbcTemplate.queryForObject(
+        countSql,
+        new Object[]{ request.getSucursalId(), Timestamp.valueOf(desde), Timestamp.valueOf(hastaExclusive) },
+        Integer.class
+    );
+
+    // 6) Usuario que genera
     String usuarioActual;
     try {
       Usuario usuario = securityContextService.getCurrentUser();
       usuarioActual = usuario.getNombre() + " " + usuario.getApellidos();
     } catch (Exception e) {
-      // Si falla, usa SecurityUtils
       usuarioActual = SecurityUtils.getCurrentUserLogin();
     }
 
+    // 7) Armar response
+    DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     return ReporteVentasTipoPagoResponse.builder()
         .sucursalNombre(sucursal.getNombre())
         .empresaNombre(sucursal.getEmpresa().getNombreComercial())
         .empresaIdentificacion(sucursal.getEmpresa().getIdentificacion())
         .fechaGeneracion(LocalDateTime.now())
         .usuarioGenera(usuarioActual)
-        .fechaDesde(request.getFechaDesde().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-        .fechaHasta(request.getFechaHasta().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")))
+        .fechaDesde(request.getFechaDesde().format(fmt))
+        .fechaHasta(request.getFechaHasta().format(fmt))
         .detalles(detalles)
         .totalGeneral(totalGeneral)
-        .totalDocumentos(totalDocs)
+        .totalDocumentos(totalDocs != null ? totalDocs : 0)
         .build();
   }
 
@@ -195,12 +232,12 @@ public class ReporteVentasTipoPagoServiceImpl implements ReporteVentasTipoPagoSe
       parametros.put("usuarioGenera", datos.getUsuarioGenera());
       parametros.put("totalGeneral", datos.getTotalGeneral());
 
-      String logo =
-          sucursal.getEmpresa().getLogoUrl() != null ? sucursal.getEmpresa().getLogoUrl() : "";
-      byte[] logoByte = this.storageService.downloadFileAsBytes(logo);
-
-      // Logo si existe
-      parametros.put("logo", logoByte);
+      String logoPath = sucursal.getEmpresa().getLogoUrl();
+      byte[] logoBytes = null;
+      if (logoPath != null && !logoPath.isBlank()) {
+        try { logoBytes = storageService.downloadFileAsBytes(logoPath); } catch (Exception ignore) {}
+      }
+      parametros.put("logo", (logoBytes != null && logoBytes.length > 0) ? new ByteArrayInputStream(logoBytes) : null);
 
       // Generar PDF usando el servicio existente
       JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(datos.getDetalles());
@@ -263,12 +300,29 @@ public class ReporteVentasTipoPagoServiceImpl implements ReporteVentasTipoPagoSe
     }
   }
 
-  private String obtenerDescripcionMedioPago(String codigo) {
+  private String obtenerDescripcionMedioPago(String enumValue) {
     try {
-      MedioPago mp = MedioPago.fromCodigo(codigo);
+      // El valor viene como EFECTIVO, TARJETA, etc. (nombre del enum)
+      MedioPago mp = MedioPago.valueOf(enumValue);
       return mp.getDescripcion();
     } catch (Exception e) {
-      return "Desconocido (" + codigo + ")";
+      // Si falla, intentar devolver algo legible
+      if (enumValue != null) {
+        // Convertir EFECTIVO -> Efectivo, TARJETA -> Tarjeta, etc.
+        return enumValue.substring(0, 1).toUpperCase() +
+            enumValue.substring(1).toLowerCase().replace("_", " ");
+      }
+      return "Desconocido";
+    }
+  }
+
+  // También necesitas agregar este método para obtener el código si lo necesitas
+  private String obtenerCodigoMedioPago(String enumValue) {
+    try {
+      MedioPago mp = MedioPago.valueOf(enumValue);
+      return mp.getCodigo();
+    } catch (Exception e) {
+      return "99"; // Código para "Otros"
     }
   }
 

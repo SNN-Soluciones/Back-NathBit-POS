@@ -14,5 +14,6 @@ public class EmpresaResumen {
     private String email;
     private String identificacion;
     private String logo;
+    private Boolean requiereHacienda;
     private boolean activa;
 }

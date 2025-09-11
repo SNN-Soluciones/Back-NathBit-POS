@@ -105,6 +105,8 @@ public class SecurityConfig {
             "http://localhost:4200",      // Angular desarrollo
             "http://localhost:4201",      // Angular testing
             "http://localhost:8080",
+            "https://nathbit.com",
+            "https://www.nathbit.com",
             "http://45.32.164.243:4200"// Por si pruebas desde otro puerto
         ));
 

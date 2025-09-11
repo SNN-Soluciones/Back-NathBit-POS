@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.mappers;
 
 import com.snnsoluciones.backnathbitpos.dto.reporte.ReporteVentasLineaDTO;
+import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Component;
 
@@ -46,7 +47,7 @@ public class ReporteVentasRowMapper implements RowMapper<ReporteVentasLineaDTO> 
             .totalComprobante(getBigDecimalSafe(rs, "totalComprobante"))
             .moneda(rs.getString("moneda"))
             .tipoCambio(getBigDecimalSafe(rs, "tipoCambio"))
-            .estado(rs.getString("estado"))
+            .estado(EstadoBitacora.ACEPTADA.toString())
             .build();
     }
 

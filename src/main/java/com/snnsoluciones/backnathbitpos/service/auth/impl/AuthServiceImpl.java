@@ -94,6 +94,7 @@ public class AuthServiceImpl implements AuthService {
                         .email(ue.getEmpresa().getEmail())
                         .identificacion(ue.getEmpresa().getIdentificacion())
                         .logo(ue.getEmpresa().getLogoUrl())
+                        .requiereHacienda(ue.getEmpresa().getRequiereHacienda())
                         .activa(ue.getEmpresa().getActiva())
                         .build())
                     .collect(Collectors.toList());
@@ -120,6 +121,7 @@ public class AuthServiceImpl implements AuthService {
                     .nombreComercial(asignacionEmpresa.getEmpresa().getNombreComercial())
                     .email(asignacionEmpresa.getEmpresa().getEmail())
                     .identificacion(asignacionEmpresa.getEmpresa().getIdentificacion())
+                    .requiereHacienda(asignacionEmpresa.getEmpresa().getRequiereHacienda())
                     .logo(asignacionEmpresa.getEmpresa().getLogoUrl())
                     .activa(asignacionEmpresa.getEmpresa().getActiva())
                     .build();
@@ -129,7 +131,10 @@ public class AuthServiceImpl implements AuthService {
                     .filter(us -> us.getActivo())
                     .map(us -> new SucursalResumen(
                         us.getSucursal().getId(),
-                        us.getSucursal().getNombre()
+                        us.getSucursal().getNombre(),
+                        us.getSucursal().getNumeroSucursal(),
+                        us.getSucursal().getModoFacturacion(),
+                        us.getSucursal().getActiva()
                     ))
                     .collect(Collectors.toList());
 
@@ -165,12 +170,16 @@ public class AuthServiceImpl implements AuthService {
                         .nombreComercial(asignacionOp.getEmpresa().getNombreComercial())
                         .email(asignacionOp.getEmpresa().getEmail())
                         .identificacion(asignacionOp.getEmpresa().getIdentificacion())
+                        .requiereHacienda(asignacionOp.getEmpresa().getRequiereHacienda())
                         .logo(asignacionOp.getEmpresa().getLogoUrl())
                         .activa(asignacionOp.getEmpresa().getActiva())
                         .build())
                     .sucursal(new SucursalResumen(
                         asignacionOp.getSucursal().getId(),
-                        asignacionOp.getSucursal().getNombre()
+                        asignacionOp.getSucursal().getNombre(),
+                        asignacionOp.getSucursal().getNumeroSucursal(),
+                        asignacionOp.getSucursal().getModoFacturacion(),
+                        asignacionOp.getSucursal().getActiva()
                     ))
                     .build();
 

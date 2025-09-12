@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.usuarios.*;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresa;
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -73,45 +74,6 @@ public class UsuarioController extends BaseController {
         }
 
         return ResponseEntity.ok(ApiResponse.ok(convertirAResponse(usuario)));
-    }
-
-    @Operation(summary = "Actualizar usuario",
-        description = "Solo se puede actualizar nombre, apellidos y estado. Email y rol no se pueden cambiar.")
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<ApiResponse<UsuarioResponse>> actualizar(
-        @PathVariable Long id,
-        @Valid @RequestBody UsuarioUpdateRequest request) {
-
-        // Verificar acceso antes de actualizar
-        if (!isRolSistema()) {
-            Long empresaId = getCurrentEmpresaId();
-            boolean tieneAcceso = usuarioEmpresaService.listarPorUsuario(id).stream()
-                .anyMatch(ue -> ue.getEmpresa().getId().equals(empresaId));
-
-            if (!tieneAcceso) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiResponse.error("No tienes acceso a este usuario"));
-            }
-        }
-
-        // Solo actualizar campos permitidos
-        Usuario usuarioExistente = usuarioService.buscarPorId(id)
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
-        usuarioExistente.setNombre(request.getNombre());
-        usuarioExistente.setApellidos(request.getApellidos());
-        usuarioExistente.setTelefono(request.getTelefono());
-        usuarioExistente.setActivo(request.getActivo());
-
-        // Si se proporciona nueva contraseña
-        if (request.getPassword() != null && !request.getPassword().isEmpty()) {
-            usuarioExistente.setPassword(request.getPassword()); // El servicio la encriptará
-        }
-
-        Usuario actualizado = usuarioService.actualizar(id, usuarioExistente);
-
-        return ResponseEntity.ok(ApiResponse.ok("Usuario actualizado", convertirAResponse(actualizado)));
     }
 
     @Operation(summary = "Eliminar usuario (desactivar)")
@@ -220,5 +182,122 @@ public class UsuarioController extends BaseController {
         response.setEmpresas(empresas);
 
         return response;
+    }
+
+    // Agregar estos métodos a UsuarioController.java para validar permisos de edición
+
+    @Operation(summary = "Validar si puede editar un usuario")
+    @GetMapping("/{id}/puede-editar")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<ApiResponse<Boolean>> puedeEditar(@PathVariable Long id) {
+        Usuario usuarioActual = usuarioService.buscarPorId(getCurrentUserId())
+            .orElseThrow(() -> new RuntimeException("Usuario actual no encontrado"));
+
+        Usuario usuarioObjetivo = usuarioService.buscarPorId(id)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        boolean puedeEditar = validarPermisoEdicion(usuarioActual, usuarioObjetivo);
+
+        return ResponseEntity.ok(ApiResponse.ok(puedeEditar));
+    }
+
+    private boolean validarPermisoEdicion(Usuario editor, Usuario objetivo) {
+        // ROOT puede editar a todos menos a otros ROOT
+        if (editor.getRol() == RolNombre.ROOT) {
+            return objetivo.getRol() != RolNombre.ROOT;
+        }
+
+        // SOPORTE puede editar a todos menos ROOT y otros SOPORTE
+        if (editor.getRol() == RolNombre.SOPORTE) {
+            return objetivo.getRol() != RolNombre.ROOT &&
+                objetivo.getRol() != RolNombre.SOPORTE;
+        }
+
+        // SUPER_ADMIN puede editar usuarios de sus empresas (excepto ROOT/SOPORTE)
+        if (editor.getRol() == RolNombre.SUPER_ADMIN) {
+            if (objetivo.getRol() == RolNombre.ROOT ||
+                objetivo.getRol() == RolNombre.SOPORTE) {
+                return false;
+            }
+
+            // Verificar que el objetivo esté en alguna de sus empresas
+            List<Long> empresasEditor = usuarioEmpresaService.listarPorUsuario(editor.getId())
+                .stream()
+                .map(ue -> ue.getEmpresa().getId())
+                .collect(Collectors.toList());
+
+            List<Long> empresasObjetivo = usuarioEmpresaService.listarPorUsuario(objetivo.getId())
+                .stream()
+                .map(ue -> ue.getEmpresa().getId())
+                .collect(Collectors.toList());
+
+            // Debe haber al menos una empresa en común
+            return empresasEditor.stream().anyMatch(empresasObjetivo::contains);
+        }
+
+        // ADMIN puede editar solo roles operativos de su empresa
+        if (editor.getRol() == RolNombre.ADMIN) {
+            // No puede editar roles sistema o empresariales
+            if (objetivo.getRol() == RolNombre.ROOT ||
+                objetivo.getRol() == RolNombre.SOPORTE ||
+                objetivo.getRol() == RolNombre.SUPER_ADMIN ||
+                objetivo.getRol() == RolNombre.ADMIN) {
+                return false;
+            }
+
+            // Verificar que estén en la misma empresa
+            List<Long> empresasEditor = usuarioEmpresaService.listarPorUsuario(editor.getId())
+                .stream()
+                .map(ue -> ue.getEmpresa().getId())
+                .collect(Collectors.toList());
+
+            List<Long> empresasObjetivo = usuarioEmpresaService.listarPorUsuario(objetivo.getId())
+                .stream()
+                .map(ue -> ue.getEmpresa().getId())
+                .collect(Collectors.toList());
+
+            return empresasEditor.stream().anyMatch(empresasObjetivo::contains);
+        }
+
+        return false;
+    }
+
+    @Operation(summary = "Actualizar usuario",
+        description = "Solo se puede actualizar nombre, apellidos, teléfono y estado. Email y rol no se pueden cambiar.")
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<ApiResponse<UsuarioResponse>> actualizar(
+        @PathVariable Long id,
+        @Valid @RequestBody UsuarioUpdateRequest request) {
+
+        // Verificar acceso antes de actualizar
+        if (!isRolSistema()) {
+            Long empresaId = getCurrentEmpresaId();
+            boolean tieneAcceso = usuarioEmpresaService.listarPorUsuario(id).stream()
+                .anyMatch(ue -> ue.getEmpresa().getId().equals(empresaId));
+
+            if (!tieneAcceso) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("No tienes acceso a este usuario"));
+            }
+        }
+
+        // Solo actualizar campos permitidos
+        Usuario usuarioExistente = usuarioService.buscarPorId(id)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        usuarioExistente.setNombre(request.getNombre());
+        usuarioExistente.setApellidos(request.getApellidos());
+        usuarioExistente.setTelefono(request.getTelefono());
+        usuarioExistente.setActivo(request.getActivo());
+
+        // Si se proporciona nueva contraseña
+        if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+            usuarioExistente.setPassword(request.getPassword());
+        }
+
+        Usuario actualizado = usuarioService.actualizar(id, usuarioExistente);
+
+        return ResponseEntity.ok(ApiResponse.ok("Usuario actualizado", convertirAResponse(actualizado)));
     }
 }

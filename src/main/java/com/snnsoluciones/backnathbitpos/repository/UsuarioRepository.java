@@ -20,47 +20,11 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     Optional<Usuario> findByUsernameIgnoreCase(String username);
 
-    // Buscar por empresa
-    @Query("SELECT DISTINCT u FROM Usuario u " +
-        "JOIN u.usuarioEmpresas ue " +
-        "WHERE ue.empresa.id = :empresaId AND ue.activo = true")
-    Page<Usuario> findByEmpresaId(@Param("empresaId") Long empresaId, Pageable pageable);
-
-    // Buscar por sucursal
-    @Query("SELECT DISTINCT u FROM Usuario u " +
-        "JOIN u.usuarioSucursales us " +
-        "WHERE us.sucursal.id = :sucursalId AND us.activo = true")
-    Page<Usuario> findBySucursalId(@Param("sucursalId") Long sucursalId, Pageable pageable);
-
-    // Buscar por múltiples empresas
-    @Query("SELECT DISTINCT u FROM Usuario u " +
-        "JOIN u.usuarioEmpresas ue " +
-        "WHERE ue.empresa.id IN :empresasIds AND ue.activo = true")
-    Page<Usuario> findByEmpresasIds(@Param("empresasIds") List<Long> empresasIds, Pageable pageable);
-
     // Buscar por múltiples sucursales
     @Query("SELECT DISTINCT u FROM Usuario u " +
         "JOIN u.usuarioSucursales us " +
         "WHERE us.sucursal.id IN :sucursalesIds AND us.activo = true")
     Page<Usuario> findBySucursalesIds(@Param("sucursalesIds") List<Long> sucursalesIds, Pageable pageable);
-
-    // Buscar usuarios con alguna asignación
-    @Query("SELECT DISTINCT u FROM Usuario u " +
-        "WHERE EXISTS (SELECT 1 FROM UsuarioEmpresa ue WHERE ue.usuario = u AND ue.activo = true)")
-    Page<Usuario> findConAsignacion(Pageable pageable);
-
-    // Buscar por sucursal validando empresas permitidas
-    @Query("SELECT DISTINCT u FROM Usuario u " +
-        "JOIN u.usuarioSucursales us " +
-        "JOIN us.sucursal s " +
-        "WHERE us.sucursal.id = :sucursalId " +
-        "AND s.empresa.id IN :empresasPermitidas " +
-        "AND us.activo = true")
-    Page<Usuario> findBySucursalIdYEmpresasPermitidas(
-        @Param("sucursalId") Long sucursalId,
-        @Param("empresasPermitidas") List<Long> empresasPermitidas,
-        Pageable pageable
-    );
 
     @Query("SELECT DISTINCT u FROM Usuario u " +
         "JOIN UsuarioEmpresa ue ON ue.usuario = u " +
@@ -69,5 +33,72 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
         "AND ue.activo = true " +
         "ORDER BY u.nombre, u.apellidos")
     List<Usuario> findByEmpresaId(@Param("empresaId") Long empresaId);
+
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN UsuarioEmpresa ue ON u.id = ue.usuario.id " +
+        "WHERE ue.empresa.id = :empresaId " +
+        "AND u.rol != 'ROOT'") // Ocultar ROOT
+    Page<Usuario> findByEmpresaId(@Param("empresaId") Long empresaId, Pageable pageable);
+
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN UsuarioSucursal us ON u.id = us.usuario.id " +
+        "WHERE us.sucursal.id = :sucursalId " +
+        "AND u.rol != 'ROOT'")
+    Page<Usuario> findBySucursalId(@Param("sucursalId") Long sucursalId, Pageable pageable);
+
+    // Consulta para usuarios de una empresa, filtrando por sucursal pero incluyendo roles superiores
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN UsuarioEmpresa ue ON u.id = ue.usuario.id " +
+        "LEFT JOIN UsuarioSucursal us ON u.id = us.usuario.id " +
+        "WHERE ue.empresa.id = :empresaId " +
+        "AND (us.sucursal.id = :sucursalId OR u.rol IN ('SUPER_ADMIN', 'ADMIN')) " +
+        "AND u.rol != 'ROOT'")
+    Page<Usuario> findByEmpresaIdAndSucursalIdIncludeSuperiores(
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        Pageable pageable);
+
+    // Consulta para SUPER_ADMIN - usuarios de múltiples empresas
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN UsuarioEmpresa ue ON u.id = ue.usuario.id " +
+        "WHERE ue.empresa.id IN :empresasIds " +
+        "AND u.rol != 'ROOT'")
+    Page<Usuario> findByEmpresasIds(@Param("empresasIds") List<Long> empresasIds, Pageable pageable);
+
+    // Consulta para ADMIN - usuarios de múltiples sucursales
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN UsuarioSucursal us ON u.id = us.usuario.id " +
+        "LEFT JOIN UsuarioEmpresa ue ON u.id = ue.usuario.id " +
+        "WHERE (us.sucursal.id IN :sucursalesIds " +
+        "OR (ue.empresa.id = :empresaId AND u.rol IN ('SUPER_ADMIN', 'ADMIN'))) " +
+        "AND u.rol != 'ROOT'")
+    Page<Usuario> findBySucursalesIds(
+        @Param("sucursalesIds") List<Long> sucursalesIds,
+        @Param("empresaId") Long empresaId,
+        Pageable pageable);
+
+    // Todos los usuarios excepto ROOT
+    @Query("SELECT u FROM Usuario u WHERE u.rol != 'ROOT'")
+    Page<Usuario> findAllExceptRoot(Pageable pageable);
+
+    // Usuarios con asignación (empresa o sucursal)
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN UsuarioEmpresa ue ON u.id = ue.usuario.id " +
+        "LEFT JOIN UsuarioSucursal us ON u.id = us.usuario.id " +
+        "WHERE (ue.id IS NOT NULL OR us IS NOT NULL) " +
+        "AND u.rol != 'ROOT'")
+    Page<Usuario> findConAsignacion(Pageable pageable);
+
+    // Validar si sucursal pertenece a empresas permitidas
+    @Query("SELECT DISTINCT u FROM Usuario u " +
+        "LEFT JOIN UsuarioSucursal us ON u.id = us.usuario.id " +
+        "LEFT JOIN us.sucursal s " +
+        "WHERE us.sucursal.id = :sucursalId " +
+        "AND s.empresa.id IN :empresasPermitidas " +
+        "AND u.rol != 'ROOT'")
+    Page<Usuario> findBySucursalIdYEmpresasPermitidas(
+        @Param("sucursalId") Long sucursalId,
+        @Param("empresasPermitidas") List<Long> empresasPermitidas,
+        Pageable pageable);
 
 }

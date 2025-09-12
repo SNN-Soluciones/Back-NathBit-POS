@@ -12,14 +12,14 @@ public class UsuarioListadoResponse {
     private String email;
     private String nombre;
     private String apellidos;
+    private String telefono;
     private RolNombre rol;
     private Boolean activo;
-    
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
     // Asignaciones
     private List<String> empresas;
     private List<String> sucursales;
-    
-    // Auditoría
-    private String creadoPor;
-    private LocalDateTime fechaCreacion;
+    private Boolean tieneAsignacion;
 }

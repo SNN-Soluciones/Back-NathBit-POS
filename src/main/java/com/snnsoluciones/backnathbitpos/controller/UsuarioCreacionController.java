@@ -77,25 +77,55 @@ public class UsuarioCreacionController {
   @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
   public ResponseEntity<ApiResponse<List<RolNombre>>> obtenerRolesCreables(Authentication auth) {
 
-    // Obtener el usuario actual por email (que viene en auth.getName())
-    String emailUsuario = auth.getName();
-    Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
+    log.info("=== ENDPOINT: OBTENER ROLES CREABLES ===");
+    log.info("Authentication principal type: {}", auth.getPrincipal().getClass().getName());
 
-    if (usuarioActual == null) {
-      log.error("Usuario no encontrado con email: {}", emailUsuario);
-      return ResponseEntity.status(HttpStatus.FORBIDDEN)
-          .body(ApiResponse.error("Usuario no encontrado"));
+    try {
+      // Obtener el usuario actual del contexto
+      ContextoUsuario contexto = (ContextoUsuario) auth.getPrincipal();
+      Long usuarioId = contexto.getUserId();
+
+      log.info("Usuario ID del contexto: {}", usuarioId);
+
+      Usuario usuarioActual = usuarioService.buscarPorId(usuarioId).orElse(null);
+
+      if (usuarioActual == null) {
+        log.error("Usuario no encontrado con ID: {}", usuarioId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ApiResponse.error("Usuario no encontrado"));
+      }
+
+      List<RolNombre> rolesCreables = usuarioPermisosService.obtenerRolesCreables(
+          usuarioActual.getRol());
+
+      log.info("Usuario {} con rol {} puede crear roles: {}",
+          usuarioActual.getEmail(), usuarioActual.getRol(), rolesCreables);
+
+      return ResponseEntity.ok(
+          ApiResponse.ok("Roles disponibles para crear", rolesCreables)
+      );
+
+    } catch (ClassCastException e) {
+      log.error("Error al obtener ContextoUsuario del Authentication", e);
+      // Fallback: intentar con el nombre (email)
+      String emailUsuario = auth.getName();
+      log.info("Fallback: buscando por email: {}", emailUsuario);
+
+      Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
+
+      if (usuarioActual == null) {
+        log.error("Usuario no encontrado con email: {}", emailUsuario);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ApiResponse.error("Usuario no encontrado"));
+      }
+
+      List<RolNombre> rolesCreables = usuarioPermisosService.obtenerRolesCreables(
+          usuarioActual.getRol());
+
+      return ResponseEntity.ok(
+          ApiResponse.ok("Roles disponibles para crear", rolesCreables)
+      );
     }
-
-    List<RolNombre> rolesCreables = usuarioPermisosService.obtenerRolesCreables(
-        usuarioActual.getRol());
-
-    log.info("Usuario {} con rol {} puede crear roles: {}",
-        emailUsuario, usuarioActual.getRol(), rolesCreables);
-
-    return ResponseEntity.ok(
-        ApiResponse.ok("Roles disponibles para crear", rolesCreables)
-    );
   }
 
   @Operation(summary = "Obtener empresas asignables por el usuario actual")
@@ -104,30 +134,74 @@ public class UsuarioCreacionController {
   public ResponseEntity<ApiResponse<List<Map<String, Object>>>> obtenerEmpresasAsignables(
       Authentication auth) {
 
-    String emailUsuario = auth.getName();
-    Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
+    log.info("=== ENDPOINT: OBTENER EMPRESAS ASIGNABLES ===");
 
-    if (usuarioActual == null) {
-      return ResponseEntity.status(HttpStatus.FORBIDDEN)
-          .body(ApiResponse.error("Usuario no encontrado"));
+    try {
+      // Obtener el usuario actual del contexto
+      ContextoUsuario contexto = (ContextoUsuario) auth.getPrincipal();
+      Long usuarioId = contexto.getUserId();
+
+      log.info("Usuario ID del contexto: {}", usuarioId);
+
+      Usuario usuarioActual = usuarioService.buscarPorId(usuarioId).orElse(null);
+
+      if (usuarioActual == null) {
+        log.error("Usuario no encontrado con ID: {}", usuarioId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ApiResponse.error("Usuario no encontrado"));
+      }
+
+      List<Empresa> empresas = usuarioPermisosService.obtenerEmpresasAsignables(usuarioActual);
+
+      log.info("Usuario {} con rol {} tiene {} empresas asignables",
+          usuarioActual.getEmail(), usuarioActual.getRol(), empresas.size());
+
+      // Convertir a formato simple para el frontend
+      List<Map<String, Object>> empresasResponse = empresas.stream()
+          .map(empresa -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", empresa.getId());
+            map.put("nombreComercial", empresa.getNombreComercial()); // Cambié 'nombre' por 'nombreComercial'
+            map.put("identificacion", empresa.getIdentificacion());
+            return map;
+          })
+          .toList();
+
+      return ResponseEntity.ok(
+          ApiResponse.ok("Empresas disponibles", empresasResponse)
+      );
+
+    } catch (ClassCastException e) {
+      log.error("Error al obtener ContextoUsuario del Authentication", e);
+      // Fallback: intentar con el nombre (email)
+      String emailUsuario = auth.getName();
+      log.info("Fallback: buscando por email: {}", emailUsuario);
+
+      Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
+
+      if (usuarioActual == null) {
+        log.error("Usuario no encontrado con email: {}", emailUsuario);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ApiResponse.error("Usuario no encontrado"));
+      }
+
+      List<Empresa> empresas = usuarioPermisosService.obtenerEmpresasAsignables(usuarioActual);
+
+      // Convertir a formato simple para el frontend
+      List<Map<String, Object>> empresasResponse = empresas.stream()
+          .map(empresa -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", empresa.getId());
+            map.put("nombreComercial", empresa.getNombreComercial());
+            map.put("identificacion", empresa.getIdentificacion());
+            return map;
+          })
+          .toList();
+
+      return ResponseEntity.ok(
+          ApiResponse.ok("Empresas disponibles", empresasResponse)
+      );
     }
-
-    List<Empresa> empresas = usuarioPermisosService.obtenerEmpresasAsignables(usuarioActual);
-
-    // Convertir a formato simple para el frontend
-    List<Map<String, Object>> empresasResponse = empresas.stream()
-        .map(empresa -> {
-          Map<String, Object> map = new HashMap<>();
-          map.put("id", empresa.getId());
-          map.put("nombre", empresa.getNombreComercial());
-          map.put("identificacion", empresa.getIdentificacion());
-          return map;
-        })
-        .toList();
-
-    return ResponseEntity.ok(
-        ApiResponse.ok("Empresas disponibles", empresasResponse)
-    );
   }
 
   @Operation(summary = "Obtener sucursales asignables de una empresa")

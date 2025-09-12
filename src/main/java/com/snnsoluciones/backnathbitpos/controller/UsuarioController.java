@@ -174,7 +174,7 @@ public class UsuarioController extends BaseController { // CAMBIO 1: Extender Ba
             Long empresaId = getCurrentEmpresaId();
             asignaciones = asignaciones.stream()
                 .filter(a -> a.getEmpresa().getId().equals(empresaId))
-                .collect(Collectors.toList());
+                .toList();
         }
 
         List<UsuarioEmpresaResponse> response = asignaciones.stream()

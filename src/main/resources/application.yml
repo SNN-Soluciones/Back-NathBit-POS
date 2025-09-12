@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/nathbitpos
-    username: ${DB_USER:snnsoluciones}
-    password: ${DB_PASSWORD:@39NSNm90@1}
+    url: jdbc:postgresql://45.32.164.243:5432/nathbitpos
+    username: snnsoluciones
+    password: "@39NSNm90@1"
 
   jpa:
     hibernate:

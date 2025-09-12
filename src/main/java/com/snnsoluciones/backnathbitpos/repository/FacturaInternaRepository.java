@@ -24,8 +24,9 @@ public interface FacturaInternaRepository extends JpaRepository<FacturaInterna, 
     Page<FacturaInterna> findByEmpresaIdAndSucursalId(Long empresaId, Long sucursalId, Pageable pageable);
     
     // Buscar facturas de hoy
-    @Query("SELECT f FROM FacturaInterna f WHERE f.sucursal.id = :sucursalId " +
-           "AND DATE(f.fechaEmision) = CURRENT_DATE")
+    @Query(value = "SELECT * FROM factura_interna f WHERE f.sucursal_id = :sucursalId " +
+        "AND DATE(f.fecha_emision) = CURRENT_DATE",
+        nativeQuery = true)
     List<FacturaInterna> findFacturasHoy(@Param("sucursalId") Long sucursalId);
     
     // Obtener siguiente número de factura

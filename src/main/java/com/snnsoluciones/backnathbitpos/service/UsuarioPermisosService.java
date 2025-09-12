@@ -12,8 +12,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -26,14 +27,19 @@ public class UsuarioPermisosService {
     private final UsuarioSucursalRepository usuarioSucursalRepository;
 
     /**
-     * Determina qué roles puede crear un usuario según su rol actual
+     * Obtiene los roles que un usuario puede crear basado en su propio rol
      */
     public List<RolNombre> obtenerRolesCreables(RolNombre rolCreador) {
         List<RolNombre> rolesPermitidos = new ArrayList<>();
-        
+
         switch (rolCreador) {
             case ROOT:
-                // ROOT puede crear todo menos otro ROOT
+                // ROOT puede crear todos los roles
+                rolesPermitidos.addAll(Arrays.asList(RolNombre.values()));
+                break;
+
+            case SOPORTE:
+                // SOPORTE puede crear todos excepto ROOT
                 rolesPermitidos.addAll(Arrays.asList(
                     RolNombre.SOPORTE,
                     RolNombre.SUPER_ADMIN,
@@ -44,21 +50,9 @@ public class UsuarioPermisosService {
                     RolNombre.COCINA
                 ));
                 break;
-                
-            case SOPORTE:
-                // SOPORTE puede crear todo menos ROOT y SOPORTE
-                rolesPermitidos.addAll(Arrays.asList(
-                    RolNombre.SUPER_ADMIN,
-                    RolNombre.ADMIN,
-                    RolNombre.JEFE_CAJAS,
-                    RolNombre.CAJERO,
-                    RolNombre.MESERO,
-                    RolNombre.COCINA
-                ));
-                break;
-                
+
             case SUPER_ADMIN:
-                // SUPER_ADMIN puede crear de su nivel para abajo
+                // SUPER_ADMIN puede crear desde su nivel hacia abajo
                 rolesPermitidos.addAll(Arrays.asList(
                     RolNombre.SUPER_ADMIN,
                     RolNombre.ADMIN,
@@ -68,9 +62,9 @@ public class UsuarioPermisosService {
                     RolNombre.COCINA
                 ));
                 break;
-                
+
             case ADMIN:
-                // ADMIN solo puede crear roles operativos
+                // ADMIN solo puede crear roles operativos (NO otros ADMIN)
                 rolesPermitidos.addAll(Arrays.asList(
                     RolNombre.JEFE_CAJAS,
                     RolNombre.CAJERO,
@@ -78,13 +72,13 @@ public class UsuarioPermisosService {
                     RolNombre.COCINA
                 ));
                 break;
-                
+
             default:
                 // Roles operativos no pueden crear usuarios
                 log.warn("Rol {} intentó crear usuarios", rolCreador);
                 break;
         }
-        
+
         return rolesPermitidos;
     }
 
@@ -93,17 +87,17 @@ public class UsuarioPermisosService {
      */
     public List<Empresa> obtenerEmpresasAsignables(Usuario usuarioCreador) {
         RolNombre rol = usuarioCreador.getRol();
-        
+
         // ROOT y SOPORTE pueden asignar a cualquier empresa
         if (rol == RolNombre.ROOT || rol == RolNombre.SOPORTE) {
             return empresaRepository.findAllByActivaTrue();
         }
-        
+
         // SUPER_ADMIN y ADMIN solo pueden asignar a sus empresas
         if (rol == RolNombre.SUPER_ADMIN || rol == RolNombre.ADMIN) {
             return usuarioEmpresaRepository.findEmpresasByUsuarioId(usuarioCreador.getId());
         }
-        
+
         // Otros roles no pueden asignar
         return new ArrayList<>();
     }
@@ -113,30 +107,30 @@ public class UsuarioPermisosService {
      */
     public List<Sucursal> obtenerSucursalesAsignables(Usuario usuarioCreador, Long empresaId) {
         RolNombre rol = usuarioCreador.getRol();
-        
+
         // ROOT y SOPORTE pueden asignar a cualquier sucursal de la empresa
         if (rol == RolNombre.ROOT || rol == RolNombre.SOPORTE) {
             return sucursalRepository.findAllByEmpresaIdAndActivaTrue(empresaId);
         }
-        
+
         // SUPER_ADMIN puede asignar a cualquier sucursal de sus empresas
         if (rol == RolNombre.SUPER_ADMIN) {
             // Verificar que la empresa sea suya
             boolean esEmpresaPropia = usuarioEmpresaRepository
                 .existsByUsuarioIdAndEmpresaId(usuarioCreador.getId(), empresaId);
-            
+
             if (esEmpresaPropia) {
                 return sucursalRepository.findAllByEmpresaIdAndActivaTrue(empresaId);
             }
         }
-        
+
         // ADMIN solo puede asignar a sus sucursales asignadas
         if (rol == RolNombre.ADMIN) {
             return usuarioSucursalRepository.findSucursalesByUsuarioIdAndEmpresaId(
                 usuarioCreador.getId(), empresaId
             );
         }
-        
+
         return new ArrayList<>();
     }
 
@@ -145,10 +139,10 @@ public class UsuarioPermisosService {
      */
     public void validarPermisoCreacion(Usuario creador, RolNombre rolACrear) {
         List<RolNombre> rolesPermitidos = obtenerRolesCreables(creador.getRol());
-        
+
         if (!rolesPermitidos.contains(rolACrear)) {
             throw new RuntimeException(
-                String.format("Usuario con rol %s no puede crear usuarios con rol %s", 
+                String.format("Usuario con rol %s no puede crear usuarios con rol %s",
                     creador.getRol(), rolACrear)
             );
         }
@@ -157,77 +151,96 @@ public class UsuarioPermisosService {
     /**
      * Valida las asignaciones según el rol a crear y quien lo crea
      */
-    public void validarAsignaciones(Usuario creador, RolNombre rolACrear, 
-                                   List<Long> empresasIds, List<Long> sucursalesIds) {
-        
-        // ROOT y SOPORTE creando cualquier rol pueden dejar sin asignaciones
-        if (creador.getRol() == RolNombre.ROOT || creador.getRol() == RolNombre.SOPORTE) {
-            return; // Sin validaciones adicionales
+    public void validarAsignaciones(Usuario creador, RolNombre rolACrear,
+        List<Long> empresasIds, List<Long> sucursalesIds) {
+
+        // ROOT y SOPORTE no necesitan asignaciones
+        if (rolACrear == RolNombre.ROOT || rolACrear == RolNombre.SOPORTE) {
+            if (empresasIds != null && !empresasIds.isEmpty()) {
+                log.warn("Se intentó asignar empresas a un rol {}, se ignorarán", rolACrear);
+            }
+            return;
         }
-        
-        // Para otros creadores, validar según el rol a crear
+
+        // Todos los demás roles necesitan al menos una empresa
+        if (empresasIds == null || empresasIds.isEmpty()) {
+            throw new RuntimeException(
+                String.format("El rol %s requiere al menos una empresa asignada", rolACrear)
+            );
+        }
+
+        // Validaciones específicas por rol
         switch (rolACrear) {
             case SUPER_ADMIN:
-                if (empresasIds == null || empresasIds.isEmpty()) {
-                    throw new RuntimeException("SUPER_ADMIN debe tener al menos una empresa asignada");
+                // SUPER_ADMIN puede tener múltiples empresas
+                if (creador.getRol() == RolNombre.SUPER_ADMIN || creador.getRol() == RolNombre.ADMIN) {
+                    validarEmpresasPropias(creador, empresasIds);
                 }
-                // Validar que solo asigne sus propias empresas
-                validarEmpresasPropias(creador, empresasIds);
                 break;
-                
+
             case ADMIN:
-                if (empresasIds == null || empresasIds.size() != 1) {
+                // ADMIN debe tener exactamente una empresa
+                if (empresasIds.size() != 1) {
                     throw new RuntimeException("ADMIN debe tener exactamente una empresa asignada");
                 }
-                validarEmpresasPropias(creador, empresasIds);
-                
+                // Y puede tener múltiples sucursales
                 if (sucursalesIds != null && !sucursalesIds.isEmpty()) {
                     validarSucursalesPropias(creador, empresasIds.get(0), sucursalesIds);
                 }
                 break;
-                
+
             case JEFE_CAJAS:
             case CAJERO:
             case MESERO:
             case COCINA:
-                if (empresasIds == null || empresasIds.size() != 1) {
+                // Roles operativos: una empresa, una sucursal
+                if (empresasIds.size() != 1) {
                     throw new RuntimeException("Roles operativos deben tener exactamente una empresa");
                 }
-                validarEmpresasPropias(creador, empresasIds);
-                
-                // Sucursal es opcional, pero si se especifica debe ser válida
-                if (sucursalesIds != null && sucursalesIds.size() == 1) {
-                    validarSucursalesPropias(creador, empresasIds.get(0), sucursalesIds);
+                if (sucursalesIds == null || sucursalesIds.size() != 1) {
+                    throw new RuntimeException("Roles operativos deben tener exactamente una sucursal");
                 }
+                validarSucursalesPropias(creador, empresasIds.get(0), sucursalesIds);
                 break;
         }
     }
 
+    /**
+     * Valida que las empresas a asignar sean propias del creador
+     */
     private void validarEmpresasPropias(Usuario creador, List<Long> empresasIds) {
-        List<Long> empresasPermitidas = obtenerEmpresasAsignables(creador)
+        if (creador.getRol() == RolNombre.ROOT || creador.getRol() == RolNombre.SOPORTE) {
+            return; // Tienen acceso a todas
+        }
+
+        List<Long> empresasPropias = usuarioEmpresaRepository
+            .findEmpresasByUsuarioId(creador.getId())
             .stream()
             .map(Empresa::getId)
             .toList();
-        
+
         for (Long empresaId : empresasIds) {
-            if (!empresasPermitidas.contains(empresaId)) {
+            if (!empresasPropias.contains(empresaId)) {
                 throw new RuntimeException(
-                    "No tiene permisos para asignar usuarios a la empresa ID: " + empresaId
+                    String.format("No tienes permisos para asignar usuarios a la empresa con ID %d", empresaId)
                 );
             }
         }
     }
 
+    /**
+     * Valida que las sucursales a asignar sean propias del creador
+     */
     private void validarSucursalesPropias(Usuario creador, Long empresaId, List<Long> sucursalesIds) {
-        List<Long> sucursalesPermitidas = obtenerSucursalesAsignables(creador, empresaId)
-            .stream()
+        List<Sucursal> sucursalesPermitidas = obtenerSucursalesAsignables(creador, empresaId);
+        List<Long> idsPermitidos = sucursalesPermitidas.stream()
             .map(Sucursal::getId)
             .toList();
-        
+
         for (Long sucursalId : sucursalesIds) {
-            if (!sucursalesPermitidas.contains(sucursalId)) {
+            if (!idsPermitidos.contains(sucursalId)) {
                 throw new RuntimeException(
-                    "No tiene permisos para asignar usuarios a la sucursal ID: " + sucursalId
+                    String.format("No tienes permisos para asignar usuarios a la sucursal con ID %d", sucursalId)
                 );
             }
         }

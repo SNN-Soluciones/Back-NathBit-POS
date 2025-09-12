@@ -18,4 +18,7 @@ public class UsuarioUpdateRequest {
     private RolNombre rol;
     
     private Boolean activo;
+
+    private String telefono;
+
 }

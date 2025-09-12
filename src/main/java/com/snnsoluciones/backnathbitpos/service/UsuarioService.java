@@ -23,4 +23,8 @@ public interface UsuarioService {
     Optional<Usuario> buscarPorUsername(String username);
 
     List<Usuario> listarPorEmpresa(Long empresaId);
+
+    void cambiarPassword(Long usuarioId, String nuevaPassword);
+
+    boolean verificarPassword(Long usuarioId, String password);
 }

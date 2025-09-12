@@ -9,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import com.snnsoluciones.backnathbitpos.service.UsuarioAsignacionService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioCreacionService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioListadoService;
@@ -25,7 +26,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -77,15 +77,21 @@ public class UsuarioCreacionController {
   @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
   public ResponseEntity<ApiResponse<List<RolNombre>>> obtenerRolesCreables(Authentication auth) {
 
-    Long usuarioId = getCurrentUserId();
+    // Obtener el usuario actual por email (que viene en auth.getName())
+    String emailUsuario = auth.getName();
+    Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
 
-    Usuario usuarioActual = usuarioService.buscarPorId(usuarioId).orElse(null);
     if (usuarioActual == null) {
+      log.error("Usuario no encontrado con email: {}", emailUsuario);
       return ResponseEntity.status(HttpStatus.FORBIDDEN)
-          .body(ApiResponse.error("No tiene permisos para obtener empresas asignables"));
+          .body(ApiResponse.error("Usuario no encontrado"));
     }
+
     List<RolNombre> rolesCreables = usuarioPermisosService.obtenerRolesCreables(
         usuarioActual.getRol());
+
+    log.info("Usuario {} con rol {} puede crear roles: {}",
+        emailUsuario, usuarioActual.getRol(), rolesCreables);
 
     return ResponseEntity.ok(
         ApiResponse.ok("Roles disponibles para crear", rolesCreables)
@@ -98,13 +104,14 @@ public class UsuarioCreacionController {
   public ResponseEntity<ApiResponse<List<Map<String, Object>>>> obtenerEmpresasAsignables(
       Authentication auth) {
 
-    Long usuarioId = getCurrentUserId();
+    String emailUsuario = auth.getName();
+    Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
 
-    Usuario usuarioActual = usuarioService.buscarPorId(usuarioId).orElse(null);
     if (usuarioActual == null) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN)
-          .body(ApiResponse.error("No tiene permisos para obtener empresas asignables"));
+          .body(ApiResponse.error("Usuario no encontrado"));
     }
+
     List<Empresa> empresas = usuarioPermisosService.obtenerEmpresasAsignables(usuarioActual);
 
     // Convertir a formato simple para el frontend
@@ -130,13 +137,14 @@ public class UsuarioCreacionController {
       @PathVariable Long empresaId,
       Authentication auth) {
 
-    Long usuarioId = getCurrentUserId();
+    String emailUsuario = auth.getName();
+    Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
 
-    Usuario usuarioActual = usuarioService.buscarPorId(usuarioId).orElse(null);
     if (usuarioActual == null) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN)
-          .body(ApiResponse.error("No tiene permisos para obtener empresas asignables"));
+          .body(ApiResponse.error("Usuario no encontrado"));
     }
+
     List<Sucursal> sucursales = usuarioPermisosService.obtenerSucursalesAsignables(
         usuarioActual, empresaId);
 
@@ -172,18 +180,23 @@ public class UsuarioCreacionController {
         empresaId, sucursalId, incluirSinAsignar);
 
     try {
-      Long usuarioId = getCurrentUserId();
+      ContextoUsuario contexto = (ContextoUsuario) auth.getPrincipal();
+      Long usuarioId = contexto.getUserId();
 
       Usuario usuarioActual = usuarioService.buscarPorId(usuarioId).orElse(null);
+
       if (usuarioActual == null) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-            .body(ApiResponse.error("No tiene permisos para listar usuarios"));
+            .body(ApiResponse.error("Usuario no encontrado"));
       }
 
-      if(usuarioActual.getRol().equals(RolNombre.ROOT) && empresaId == null) {
+      // Si es ROOT y no especifica empresa, listar todos
+      if (usuarioActual.getRol().equals(RolNombre.ROOT) && empresaId == null) {
         Page<UsuarioListadoResponse> usuarios = usuarioListadoService.findAll(pageable);
         return ResponseEntity.ok(ApiResponse.ok("Usuarios listados exitosamente", usuarios));
       }
+
+      // Para todos los demás casos, aplicar filtros
       Page<UsuarioListadoResponse> usuarios = usuarioListadoService.listarUsuariosFiltrados(
           usuarioActual,
           empresaId,
@@ -200,45 +213,10 @@ public class UsuarioCreacionController {
       log.error("Error de negocio: {}", e.getMessage());
       return ResponseEntity.badRequest()
           .body(ApiResponse.error(e.getMessage()));
+    } catch (Exception e) {
+      log.error("Error inesperado al listar usuarios", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(ApiResponse.error("Error interno al listar usuarios"));
     }
-  }
-
-  @Operation(summary = "Gestionar asignaciones de empresa para un usuario",
-      description = "Permite agregar, reemplazar o quitar empresas de un usuario existente")
-  @PutMapping("/{usuarioId}/asignaciones-empresa")
-  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
-  public ResponseEntity<ApiResponse<String>> gestionarAsignacionesEmpresa(
-      @PathVariable Long usuarioId,
-      @Valid @RequestBody UsuarioAsignacionRequest request,
-      Authentication auth) {
-
-    log.info("=== ENDPOINT: GESTIONAR ASIGNACIONES EMPRESA ===");
-    log.info("Usuario ID: {}, Modo: {}, Empresas: {}",
-        usuarioId, request.getModo(), request.getEmpresasIds());
-
-    try {
-      Object solicitante = usuarioService.buscarPorEmail(auth.getName());
-
-      if (solicitante == null) {
-        return ResponseEntity.notFound().build();
-      }
-      usuarioAsignacionService.gestionarAsignacionesEmpresa(usuarioId, request,
-          (Usuario) solicitante);
-
-      String mensaje = String.format("Asignaciones actualizadas exitosamente. Modo: %s",
-          request.getModo());
-
-      return ResponseEntity.ok(ApiResponse.ok(mensaje, mensaje));
-
-    } catch (RuntimeException e) {
-      log.error("Error de negocio: {}", e.getMessage());
-      return ResponseEntity.badRequest()
-          .body(ApiResponse.error(e.getMessage()));
-    }
-  }
-
-  private Long getCurrentUserId() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    return Long.parseLong(auth.getName());
   }
 }

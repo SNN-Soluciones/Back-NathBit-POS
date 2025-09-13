@@ -31,6 +31,8 @@ public class CrearFacturaRequest {
 
     private Long facturaReferenciaId;
 
+    @Size(max = 100, message = "El nombre del receptor no puede exceder 100 caracteres")
+    private String nombreReceptor;
     private String razonNotaCredito;
     private boolean anulacionCompleta = false;
 

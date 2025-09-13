@@ -109,8 +109,7 @@ public class FacturaPdfMapperService {
         empresa.getTipoIdentificacion(), empresa.getIdentificacion()));
 
     // Contacto
-    params.put("emisor_telefono", sucursal.getTelefono() != null ?
-        sucursal.getTelefono() : empresa.getTelefono());
+    params.put("emisor_telefono", empresa.getTelefono());
     params.put("emisor_correo", sucursal.getEmail() != null ?
         sucursal.getEmail() : empresa.getEmail());
 
@@ -143,12 +142,13 @@ public class FacturaPdfMapperService {
               : "");
 
     } else {
-      // Cliente genérico
-      params.put("receptor_nombre", "");
+      // Cliente NO existe - usar nombre manual si está disponible
+      params.put("receptor_nombre", factura.getNombreReceptor() != null ? factura.getNombreReceptor() : "");
       params.put("receptor_identificacion", "");
-      params.put("receptor_correo", "");
+      params.put("receptor_correo", factura.getEmailReceptor() != null ? factura.getEmailReceptor() : "");
       params.put("receptor_telefono", "");
       params.put("receptor_direccion", "");
+      params.put("receptor_actividad_economica", "");
     }
   }
 

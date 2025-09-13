@@ -100,6 +100,10 @@ public class FacturaServiceImpl implements FacturaService {
       factura.setCliente(cliente);
     }
 
+    if (request.getNombreReceptor() != null && !request.getNombreReceptor().trim().isEmpty()) {
+      factura.setNombreReceptor(request.getNombreReceptor().trim());
+    }
+
     // PASO 8: Manejar tipo de cambio
     BigDecimal tc = request.getTipoCambio() != null ? request.getTipoCambio() : BigDecimal.ONE;
     factura.setTipoCambio(tc);

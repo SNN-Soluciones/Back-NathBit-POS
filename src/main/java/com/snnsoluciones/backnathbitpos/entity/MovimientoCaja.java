@@ -27,9 +27,9 @@ public class MovimientoCaja {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sesion_caja_id", nullable = false)
     private SesionCaja sesionCaja;
-    
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_movimiento", nullable = false)
+    @Column(name = "tipo_movimiento", nullable = false, columnDefinition = "varchar(50)")
     private TipoMovimientoCaja tipoMovimiento;
     
     @Column(name = "monto", precision = 18, scale = 2, nullable = false)

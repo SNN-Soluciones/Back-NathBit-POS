@@ -3,9 +3,10 @@
 package com.snnsoluciones.backnathbitpos.enums;
 
 public enum TipoProducto {
-    PRODUCTO,       // Producto normal
-    SERVICIO,       // Servicio
-    COMBO,          // Combo/paquete
-    MODIFICADOR,    // Modificador/extra
-    MATERIA_PRIMA   // Para control de inventario
+    VENTA,          // Producto para venta directa (antes PRODUCTO)
+    SERVICIO,       // Servicio (lo mantienes)
+    COMBO,          // Combo/paquete (lo mantienes)
+    MODIFICADOR,    // Modificador/extra (lo mantienes)
+    MATERIA_PRIMA,  // Solo materia prima, no se vende
+    AMBOS           // Se puede vender Y usar como materia prima (NUEVO)
 }

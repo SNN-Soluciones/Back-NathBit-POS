@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import jakarta.persistence.*;
@@ -29,7 +30,7 @@ import org.mapstruct.Mapper;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Producto {
+public class Producto{
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -113,6 +114,28 @@ public class Producto {
 
     @Column(name = "imagen_key", length = 255)
     private String imagenKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TipoProducto tipo = TipoProducto.VENTA;
+
+    @Column(name = "unidad_medida_compra", length = 50)
+    private String unidadMedidaCompra;
+
+    @Column(name = "precio_compra", precision = 10, scale = 2)
+    private BigDecimal precioCompra;
+
+    @Column(name = "factor_conversion", precision = 10, scale = 4)
+    private BigDecimal factorConversion;
+
+    @Column(name = "unidad_medida_uso", length = 50)
+    private String unidadMedidaUso;
+
+    @Column(name = "requiere_inventario", nullable = false)
+    private Boolean requiereInventario = true;  // ¿Se controla stock?
+
+    @Column(name = "requiere_receta", nullable = false)
+    private Boolean requiereReceta = false;     // ¿Necesita receta para producirse?
 
     // Métodos helper
     public void agregarImpuesto(ProductoImpuesto impuesto) {

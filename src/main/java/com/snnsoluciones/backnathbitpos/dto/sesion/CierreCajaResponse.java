@@ -23,4 +23,6 @@ public class CierreCajaResponse {
     private BigDecimal totalEfectivo;
     private BigDecimal totalTarjeta;
     private BigDecimal totalTransferencia;
+    private BigDecimal totalVales;
+    private String observaciones;
 }

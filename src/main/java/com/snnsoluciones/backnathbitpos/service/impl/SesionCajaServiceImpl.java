@@ -1,9 +1,12 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
+import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
+import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
@@ -29,10 +32,16 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     private final SesionCajaRepository sesionCajaRepository;
     private final UsuarioRepository usuarioRepository;
     private final TerminalRepository terminalRepository;
-    
+    private final MovimientoCajaRepository movimientoCajaRepository;
+    private final SecurityContextService securityContext;
+
     @Override
     public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
         log.info("Abriendo sesión de caja para usuario: {} en terminal: {}", usuarioId, terminalId);
+
+        if (!puedeAbrirCaja()) {
+            throw new RuntimeException("No tiene permisos para abrir caja");
+        }
         
         // Validar que no tenga sesión abierta
         if (usuarioTieneSesionAbierta(usuarioId)) {
@@ -80,33 +89,39 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         
         return sesion;
     }
-    
+
     @Override
     public SesionCaja cerrarSesion(Long sesionId, BigDecimal montoCierre, String observaciones) {
-        log.info("Cerrando sesión de caja ID: {}", sesionId);
-        
+        // Validar permisos
+        if (!puedeCerrarCaja(sesionId)) {
+            throw new RuntimeException("No tiene permisos para cerrar esta caja");
+        }
+
         SesionCaja sesion = sesionCajaRepository.findById(sesionId)
             .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
-        
-        if (!sesion.puedeCerrarse()) {
-            throw new RuntimeException("La sesión no puede cerrarse en su estado actual");
-        }
-        
-        // Calcular diferencia
-        BigDecimal montoEsperado = sesion.calcularMontoEsperado();
+
+        // 🔥 AQUÍ USAS calcularMontoEsperado
+        BigDecimal montoEsperado = calcularMontoEsperado(sesion);
+
+        // Validar diferencia
         BigDecimal diferencia = montoCierre.subtract(montoEsperado);
-        
-        // Actualizar datos de cierre
+
+        // Si hay diferencia significativa y no es supervisor
+        if (diferencia.abs().compareTo(new BigDecimal("10000")) > 0 && !securityContext.isSupervisor()) {
+            throw new RuntimeException(String.format(
+                "Diferencia de ₡%.2f requiere autorización de supervisor. Esperado: ₡%.2f, Cierre: ₡%.2f",
+                diferencia, montoEsperado, montoCierre
+            ));
+        }
+
+        // Actualizar sesión
         sesion.setFechaHoraCierre(LocalDateTime.now());
         sesion.setMontoCierre(montoCierre);
         sesion.setDiferenciaCierre(diferencia);
         sesion.setObservacionesCierre(observaciones);
         sesion.setEstado(EstadoSesion.CERRADA);
-        
-        sesion = sesionCajaRepository.save(sesion);
-        log.info("Sesión cerrada. Diferencia: {}", diferencia);
-        
-        return sesion;
+
+        return sesionCajaRepository.save(sesion);
     }
     
     @Override
@@ -225,5 +240,109 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         return !sesionCajaRepository.existsByTerminalIdAndEstadoAndFechaBetween(
             terminalId, EstadoSesion.ABIERTA, inicioAyer, finAyer
         );
+    }
+
+    @Override
+    public ResumenCajaDetalladoDTO obtenerResumenDetallado(Long sesionId) {
+        SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+            .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+        // Validar acceso
+        if (!puedeVerResumen(sesion)) {
+            throw new RuntimeException("No tiene permisos para ver este resumen");
+        }
+
+        ResumenCajaDetalladoDTO resumen = new ResumenCajaDetalladoDTO();
+        resumen.setSesionId(sesionId);
+        resumen.setTerminal(sesion.getTerminal().getNombre());
+        resumen.setCajero(sesion.getUsuario().getNombre().concat(" ").concat(sesion.getUsuario().getApellidos()));
+        resumen.setFechaApertura(sesion.getFechaHoraApertura());
+        resumen.setFechaCierre(sesion.getFechaHoraCierre());
+
+        // Montos básicos
+        resumen.setMontoInicial(sesion.getMontoInicial());
+        resumen.setVentasEfectivo(sesion.getTotalEfectivo());
+        resumen.setVentasTarjeta(sesion.getTotalTarjeta());
+        resumen.setVentasTransferencia(sesion.getTotalTransferencia());
+        resumen.setVentasOtros(sesion.getTotalOtros());
+
+        // Movimientos
+        resumen.setEntradasAdicionales(
+            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.ENTRADA_ADICIONAL)
+        );
+        resumen.setVales(
+            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_VALE)
+        );
+        resumen.setDepositos(
+            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_DEPOSITO)
+        );
+
+        // 🔥 AQUÍ TAMBIÉN USAS calcularMontoEsperado
+        resumen.setMontoEsperado(calcularMontoEsperado(sesion));
+        resumen.setMontoCierre(sesion.getMontoCierre());
+
+        // Contadores
+        resumen.setCantidadFacturas(sesion.getCantidadFacturas());
+        resumen.setCantidadTiquetes(sesion.getCantidadTiquetes());
+        resumen.setCantidadNotasCredito(sesion.getCantidadNotasCredito());
+
+        // Lista de movimientos
+        resumen.setMovimientos(
+            movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
+        );
+
+        return resumen;
+    }
+
+    private boolean puedeVerResumen(SesionCaja sesion) {
+        // Supervisores pueden ver todo
+        if (securityContext.isSupervisor()) {
+            return true;
+        }
+        // Cajero solo puede ver su propia sesión
+        return sesion.getUsuario().getId().equals(securityContext.getCurrentUserId());
+    }
+
+    private boolean puedeAbrirCaja() {
+        return securityContext.hasAnyRole("CAJERO", "JEFE_CAJAS", "ADMIN", "SUPER_ADMIN", "ROOT");
+    }
+
+    private boolean puedeCerrarCaja(Long sesionId) {
+        // JEFE_CAJAS y superiores pueden cerrar cualquier caja
+        if (securityContext.isSupervisor()) {
+            return true;
+        }
+
+        // CAJERO solo puede cerrar su propia caja
+        SesionCaja sesion = sesionCajaRepository.findById(sesionId).orElse(null);
+        return sesion != null &&
+            sesion.getUsuario().getId().equals(securityContext.getCurrentUserId());
+    }
+
+    @Override
+    public BigDecimal obtenerTotalVales(Long sesionId) {
+        // Implementar query para sumar vales/salidas
+        return movimientoCajaRepository
+            .sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_VALE);
+    }
+
+    @Override
+    public BigDecimal calcularMontoEsperado(SesionCaja sesion) {
+        // Monto inicial
+        BigDecimal montoEsperado = sesion.getMontoInicial();
+
+        // + Ventas en efectivo
+        montoEsperado = montoEsperado.add(sesion.getTotalEfectivo());
+
+        // + Entradas adicionales (si agregaron más efectivo durante el día)
+        BigDecimal entradas = movimientoCajaRepository
+            .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.ENTRADA_ADICIONAL);
+        montoEsperado = montoEsperado.add(entradas);
+
+        // - Salidas (vales y depósitos)
+        BigDecimal salidas = movimientoCajaRepository.sumSalidasBySesionId(sesion.getId());
+        montoEsperado = montoEsperado.subtract(salidas);
+
+        return montoEsperado;
     }
 }

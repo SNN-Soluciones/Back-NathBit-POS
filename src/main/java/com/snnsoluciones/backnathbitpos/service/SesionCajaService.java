@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service;
 
+import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 
 import java.math.BigDecimal;
@@ -15,6 +16,10 @@ public interface SesionCajaService {
     SesionCaja cerrarSesion(Long sesionId, BigDecimal montoCierre, String observaciones);
     Optional<SesionCaja> buscarSesionActiva(Long usuarioId);
     Optional<SesionCaja> buscarSesionActivaPorTerminal(Long terminalId);
+
+    ResumenCajaDetalladoDTO obtenerResumenDetallado(Long sesionId);
+    BigDecimal calcularMontoEsperado(SesionCaja sesion);
+    BigDecimal obtenerTotalVales(Long sesionId);
     
     // Consultas
     Optional<SesionCaja> buscarPorId(Long id);

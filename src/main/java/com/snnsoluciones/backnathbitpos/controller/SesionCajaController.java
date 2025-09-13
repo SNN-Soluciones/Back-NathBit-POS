@@ -2,16 +2,24 @@ package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.sesion.*;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.MovimientoCajaDTO;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.RegistrarValeRequest;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
+import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
+import com.snnsoluciones.backnathbitpos.service.MovimientoCajaService;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
+import com.snnsoluciones.backnathbitpos.service.impl.SecurityContextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +37,8 @@ import java.util.stream.Collectors;
 public class SesionCajaController {
 
   private final SesionCajaService sesionCajaService;
+  private final MovimientoCajaService movimientoCajaService;
+  private final SecurityContextService securityContextService;
   private final JwtTokenProvider jwtTokenProvider;
 
   @Operation(summary = "Abrir sesión de caja")
@@ -77,21 +87,40 @@ public class SesionCajaController {
     }
   }
 
-  @Operation(summary = "Cerrar sesión de caja")
   @PostMapping("/{id}/cerrar")
   @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
   public ResponseEntity<ApiResponse<CierreCajaResponse>> cerrarSesion(
       @PathVariable Long id,
-      @Valid @RequestBody CerrarSesionRequest request) {
+      @Valid @RequestBody CerrarSesionRequest request,
+      HttpServletRequest httpRequest) {
 
     try {
-      // Verificar que la sesión pertenece al usuario
+      String token = httpRequest.getHeader("Authorization").substring(7);
+      Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
+
+      // Verificar que la sesión existe
       SesionCaja sesion = sesionCajaService.buscarPorId(id)
           .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
 
-      if (!sesion.puedeCerrarse()) {
+      // Validar permisos (cajero solo su propia sesión, supervisores cualquiera)
+      if (!securityContextService.isSupervisor() &&
+          !sesion.getUsuario().getId().equals(usuarioId)) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ApiResponse.error("No tiene permisos para cerrar esta sesión"));
+      }
+
+      // Obtener monto esperado antes de cerrar
+      BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
+      BigDecimal diferencia = request.getMontoCierre().subtract(montoEsperado);
+
+      // Si hay diferencia significativa y no es supervisor
+      BigDecimal umbral = new BigDecimal("10000"); // ₡10,000 de tolerancia
+      if (diferencia.abs().compareTo(umbral) > 0 && !securityContextService.isSupervisor()) {
         return ResponseEntity.badRequest()
-            .body(ApiResponse.error("La sesión no puede cerrarse"));
+            .body(ApiResponse.error(String.format(
+                "Diferencia de ₡%.2f requiere autorización. Esperado: ₡%.2f, Cierre: ₡%.2f",
+                diferencia, montoEsperado, request.getMontoCierre()
+            )));
       }
 
       // Cerrar sesión
@@ -101,7 +130,7 @@ public class SesionCajaController {
           request.getObservaciones()
       );
 
-      // Construir respuesta con resumen
+      // Construir respuesta mejorada
       CierreCajaResponse response = CierreCajaResponse.builder()
           .sesionId(sesionCerrada.getId())
           .fechaApertura(sesionCerrada.getFechaHoraApertura())
@@ -109,15 +138,17 @@ public class SesionCajaController {
           .montoInicial(sesionCerrada.getMontoInicial())
           .totalVentas(sesionCerrada.getTotalVentas())
           .totalDevoluciones(sesionCerrada.getTotalDevoluciones())
-          .montoEsperado(sesionCerrada.calcularMontoEsperado())
+          .totalVales(movimientoCajaService.obtenerTotalVales(id)) // NUEVO
+          .montoEsperado(montoEsperado) // CALCULADO
           .montoCierre(sesionCerrada.getMontoCierre())
-          .diferencia(sesionCerrada.getDiferenciaCierre())
+          .diferencia(diferencia) // CALCULADA
           .cantidadFacturas(sesionCerrada.getCantidadFacturas())
           .cantidadTiquetes(sesionCerrada.getCantidadTiquetes())
           .cantidadNotasCredito(sesionCerrada.getCantidadNotasCredito())
           .totalEfectivo(sesionCerrada.getTotalEfectivo())
           .totalTarjeta(sesionCerrada.getTotalTarjeta())
           .totalTransferencia(sesionCerrada.getTotalTransferencia())
+          .observaciones(sesionCerrada.getObservacionesCierre())
           .build();
 
       return ResponseEntity.ok(ApiResponse.ok(
@@ -190,6 +221,100 @@ public class SesionCajaController {
         .build();
 
     return ResponseEntity.ok(ApiResponse.ok(resumen));
+  }
+
+  // Agregar en SesionCajaController.java
+
+  @Operation(summary = "Obtener resumen detallado de sesión")
+  @GetMapping("/{id}/resumen-detallado")
+  @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+  public ResponseEntity<ApiResponse<ResumenCajaDetalladoDTO>> obtenerResumenDetallado(
+      @PathVariable Long id,
+      HttpServletRequest request) {
+
+    try {
+      // Validar acceso
+      Long usuarioId = jwtTokenProvider.getUserIdFromToken(getToken(request));
+
+      // Obtener resumen detallado
+      ResumenCajaDetalladoDTO resumen = sesionCajaService.obtenerResumenDetallado(id);
+
+      return ResponseEntity.ok(ApiResponse.ok(
+          "Resumen obtenido exitosamente",
+          resumen
+      ));
+
+    } catch (Exception e) {
+      log.error("Error obteniendo resumen detallado: {}", e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error("Error al obtener resumen: " + e.getMessage()));
+    }
+  }
+
+  @Operation(summary = "Registrar vale de caja")
+  @PostMapping("/{id}/vale")
+  @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+  public ResponseEntity<ApiResponse<MovimientoCajaDTO>> registrarVale(
+      @PathVariable Long id,
+      @Valid @RequestBody RegistrarValeRequest request,
+      HttpServletRequest httpRequest) {
+
+    try {
+      // Solo supervisores pueden autorizar vales
+      MovimientoCaja vale = movimientoCajaService.registrarVale(
+          id,
+          request.getMonto(),
+          request.getConcepto()
+      );
+
+      MovimientoCajaDTO response = MovimientoCajaDTO.builder()
+          .id(vale.getId())
+          .tipoMovimiento(vale.getTipoMovimiento().name())
+          .monto(vale.getMonto())
+          .concepto(vale.getConcepto())
+          .fechaHora(vale.getFechaHora())
+          .autorizadoPor(vale.getAutorizadoPorId())
+          .build();
+
+      return ResponseEntity.ok(ApiResponse.ok(
+          "Vale registrado exitosamente",
+          response
+      ));
+
+    } catch (Exception e) {
+      log.error("Error registrando vale: {}", e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error("Error al registrar vale: " + e.getMessage()));
+    }
+  }
+
+  @Operation(summary = "Obtener movimientos de caja")
+  @GetMapping("/{id}/movimientos")
+  @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+  public ResponseEntity<ApiResponse<List<MovimientoCajaDTO>>> obtenerMovimientos(
+      @PathVariable Long id) {
+
+    try {
+      List<MovimientoCaja> movimientos = movimientoCajaService.obtenerMovimientosPorSesion(id);
+
+      List<MovimientoCajaDTO> response = movimientos.stream()
+          .map(m -> MovimientoCajaDTO.builder()
+              .id(m.getId())
+              .tipoMovimiento(m.getTipoMovimiento().name())
+              .monto(m.getMonto())
+              .concepto(m.getConcepto())
+              .fechaHora(m.getFechaHora())
+              .observaciones(m.getObservaciones())
+              .build())
+          .collect(Collectors.toList());
+
+      return ResponseEntity.ok(ApiResponse.ok(response));
+
+    } catch (Exception e) {
+      log.error("Error obteniendo movimientos: {}", e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error("Error al obtener movimientos: " + e.getMessage()));
+    }
   }
 
   // Métodos helper

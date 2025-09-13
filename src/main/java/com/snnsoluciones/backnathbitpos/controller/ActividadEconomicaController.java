@@ -22,7 +22,7 @@ public class ActividadEconomicaController {
 
     @Operation(summary = "Buscar actividades económicas")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<List<ActividadEconomica>>> buscar(
         @RequestParam(required = false) String search) {
         

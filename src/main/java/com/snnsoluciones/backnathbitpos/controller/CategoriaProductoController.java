@@ -32,7 +32,7 @@ public class CategoriaProductoController {
 
     @Operation(summary = "Listar categorías por empresa")
     @GetMapping("/empresa/{empresaId}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<List<CategoriaProductoResponse>>> listarPorEmpresa(
             @PathVariable Long empresaId,
             @RequestParam(required = false) String busqueda) {
@@ -52,7 +52,7 @@ public class CategoriaProductoController {
 
     @Operation(summary = "Obtener categoría por ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<CategoriaProductoResponse>> obtenerPorId(@PathVariable Long id) {
         
         CategoriaProducto categoria = categoriaService.buscarPorId(id).orElse(null);

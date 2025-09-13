@@ -31,6 +31,7 @@ public class ProductoPOSController {
   private final ProductoCrudService productoCrudService;
 
   @Operation(summary = "Buscar producto por código (interno o barras)")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
   @GetMapping("/buscar-codigo")
   public ResponseEntity<ApiResponse<ProductoDto>> buscarPorCodigo(
       @RequestParam Long empresaId,
@@ -60,6 +61,7 @@ public class ProductoPOSController {
 
   @Operation(summary = "Búsqueda rápida de productos (nombre, código, descripción)")
   @GetMapping("/busqueda-rapida")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
   public ResponseEntity<ApiResponse<Page<ProductoListDto>>> busquedaRapida(
       @RequestParam Long empresaId,
       @RequestParam(required = false) String termino,
@@ -88,6 +90,7 @@ public class ProductoPOSController {
 
   @Operation(summary = "Listar productos por categoría")
   @GetMapping("/por-categoria/{categoriaId}")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
   public ResponseEntity<ApiResponse<Page<ProductoListDto>>> listarPorCategoria(
       @PathVariable Long categoriaId,
       @RequestParam(defaultValue = "0") int page,
@@ -110,6 +113,7 @@ public class ProductoPOSController {
 
   @Operation(summary = "Obtener productos más vendidos (para sugerencias)")
   @GetMapping("/mas-vendidos")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
   public ResponseEntity<ApiResponse<List<ProductoListDto>>> productosMasVendidos(
       @RequestParam Long empresaId,
       @RequestParam(defaultValue = "10") int limite) {
@@ -122,7 +126,7 @@ public class ProductoPOSController {
   }
 
   @PatchMapping("/{empresaId}/{productoId}/precio")
-  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
   @Operation(summary = "Actualizar precio", description = "Actualiza únicamente el precio de un producto")
   public ResponseEntity<ApiResponse<ProductoDto>> actualizarPrecio(
       @PathVariable Long empresaId,

@@ -34,7 +34,7 @@ public class TerminalController {
 
     @Operation(summary = "Listar terminales por sucursal")
     @GetMapping("/sucursal/{sucursalId}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<List<TerminalResponse>>> listarPorSucursal(
         @PathVariable Long sucursalId) {
 
@@ -48,7 +48,7 @@ public class TerminalController {
 
     @Operation(summary = "Obtener terminal por ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<TerminalResponse>> obtenerPorId(@PathVariable Long id) {
         Terminal terminal = terminalService.buscarPorId(id)
             .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
@@ -58,7 +58,7 @@ public class TerminalController {
 
     @Operation(summary = "Crear nueva terminal")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<TerminalResponse>> crear(
         @Valid @RequestBody TerminalRequest request) {
 
@@ -81,7 +81,7 @@ public class TerminalController {
 
     @Operation(summary = "Actualizar terminal")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<TerminalResponse>> actualizar(
         @PathVariable Long id,
         @Valid @RequestBody TerminalRequest request) {
@@ -103,7 +103,7 @@ public class TerminalController {
 
     @Operation(summary = "Eliminar terminal")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
         terminalService.eliminar(id);
         return ResponseEntity.ok(ApiResponse.ok("Terminal eliminada exitosamente", null));
@@ -111,7 +111,7 @@ public class TerminalController {
 
     @Operation(summary = "Generar siguiente consecutivo")
     @PostMapping("/{id}/siguiente-consecutivo")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<String>> generarConsecutivo(
         @PathVariable Long id,
         @Valid @RequestBody GenerarConsecutivoRequest request) {
@@ -125,7 +125,7 @@ public class TerminalController {
 
     @Operation(summary = "Cambiar estado de terminal")
     @PatchMapping("/{id}/estado")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<TerminalResponse>> cambiarEstado(
         @PathVariable Long id,
         @RequestBody Map<String, Boolean> request) {
@@ -153,7 +153,7 @@ public class TerminalController {
 
     @Operation(summary = "Verificar disponibilidad de terminal")
     @GetMapping("/{id}/disponible")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<Boolean>> verificarDisponibilidad(@PathVariable Long id) {
         boolean disponible = !terminalService.estaOcupada(id);
         return ResponseEntity.ok(ApiResponse.ok(disponible));
@@ -161,7 +161,7 @@ public class TerminalController {
 
     @Operation(summary = "Listar terminales libres por sucursal")
     @GetMapping("/sucursal/{sucursalId}/libres")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     public ResponseEntity<ApiResponse<List<TerminalResponse>>> listarTerminalesLibres(
         @PathVariable Long sucursalId) {
 

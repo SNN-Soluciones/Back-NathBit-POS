@@ -22,7 +22,7 @@ public class ProductoCategoriaController {
     private final ProductoCategoriaService categoriaService;
     
     @PutMapping("/{productoId}/categorias")
-    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     @Operation(summary = "Asignar categorías", description = "Asigna un conjunto de categorías a un producto (reemplaza las existentes)")
     public ResponseEntity<ApiResponse<Void>> asignarCategorias(
             @PathVariable Long productoId,
@@ -38,7 +38,7 @@ public class ProductoCategoriaController {
     }
     
     @PostMapping("/{productoId}/categorias/{categoriaId}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
     @Operation(summary = "Agregar categoría", description = "Agrega una categoría adicional al producto")
     public ResponseEntity<ApiResponse<Void>> agregarCategoria(
             @PathVariable Long productoId,

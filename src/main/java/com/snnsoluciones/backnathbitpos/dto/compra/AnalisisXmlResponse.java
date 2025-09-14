@@ -19,19 +19,47 @@ public class AnalisisXmlResponse {
     private Integer cantidadLineas;
     private List<String> erroresValidacion;
     private List<ProductoNoEncontrado> productosNoEncontrados;
-    
+    private List<LineaAnalisis> lineas; // AGREGAR ESTA LÍNEA
+    private Integer plazoCredito; // AGREGAR PLAZO CRÉDITO
+    private String condicionVenta; // AGREGAR CONDICIÓN DE VENTA
+
     @Data
     public static class EmisorInfo {
         private String identificacion;
+        private String tipoIdentificacion; // Agregar
         private String nombre;
+        private String razonSocial; // Agregar
         private boolean existeEnSistema;
         private Long proveedorId;
+        private String telefono; // Agregar
+        private String email; // Agregar
+        private String provincia; // Agregar
+        private String canton; // Agregar
+        private String distrito; // Agregar
+        private String otrasSenas; // Agregar
     }
-    
+
     @Data
     public static class ProductoNoEncontrado {
         private String codigo;
         private String descripcion;
         private String codigoCabys;
+    }
+
+    // AGREGAR ESTA CLASE INTERNA
+    @Data
+    public static class LineaAnalisis {
+        private Integer numeroLinea;
+        private String codigo;
+        private String codigoCabys;
+        private BigDecimal cantidad;
+        private String unidadMedida;
+        private String descripcion;
+        private BigDecimal precioUnitario;
+        private BigDecimal montoDescuento;
+        private BigDecimal montoTotal;
+        private BigDecimal montoImpuesto;
+        private boolean existeEnSistema;
+        private Long productoId;
     }
 }

@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.Producto;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,4 +22,5 @@ public interface ProductoCrudService {
     Optional<Producto> buscarPorCodigoInterno(Long empresaId, String codigoInterno);
     Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras);
     void save(Producto producto);
+    List<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId);
 }

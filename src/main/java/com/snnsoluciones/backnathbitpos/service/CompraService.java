@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.util.XmlProcessorService;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -49,6 +50,15 @@ public class CompraService {
     try {
       // Procesar XML
       FacturaXmlDto facturaXml = xmlProcessorService.procesarFacturaXml(xmlContent);
+      List<AnalisisXmlResponse.LineaAnalisis> lineasAnalisis = new ArrayList<>();
+
+      Proveedor proveedor = null;
+      if (empresaId != null && facturaXml.getEmisor() != null) {
+        proveedor = proveedorRepository.findByNumeroIdentificacionAndEmpresaId(
+            facturaXml.getEmisor().getNumeroIdentificacion(),
+            empresaId
+        ).orElse(null);
+      }
 
       analisis.setEsValido(true);
       analisis.setClave(facturaXml.getClave());
@@ -57,6 +67,80 @@ public class CompraService {
       analisis.setTotalComprobante(facturaXml.getTotalComprobante());
       analisis.setMoneda(facturaXml.getCodigoMoneda());
       analisis.setCantidadLineas(facturaXml.getDetalles().size());
+      analisis.setPlazoCredito(facturaXml.getPlazoCredito());
+      analisis.setCondicionVenta(facturaXml.getCondicionVenta());
+
+      for (FacturaXmlDto.DetalleDto detalle : facturaXml.getDetalles()) {
+        AnalisisXmlResponse.LineaAnalisis linea = new AnalisisXmlResponse.LineaAnalisis();
+        linea.setNumeroLinea(detalle.getNumeroLinea());
+        linea.setCodigo(detalle.getCodigo());
+        linea.setCodigoCabys(detalle.getCodigoCabys());
+        linea.setCantidad(detalle.getCantidad());
+        linea.setUnidadMedida(detalle.getUnidadMedida());
+        linea.setDescripcion(detalle.getDetalle());
+        linea.setPrecioUnitario(detalle.getPrecioUnitario());
+        linea.setMontoDescuento(detalle.getMontoDescuento());
+        linea.setMontoTotal(detalle.getMontoTotal());
+        linea.setMontoImpuesto(detalle.getMontoImpuesto());
+
+        boolean productoEncontrado = false;
+        Long productoId = null;
+
+        // Estrategia 1: Buscar por código de proveedor (si el proveedor existe)
+        if (proveedor != null && detalle.getCodigo() != null) {
+          // Buscar en la tabla producto_codigo_proveedor
+          Optional<ProductoCodigoProveedor> codigoProveedor =
+              productoCodigoProveedorRepository.findByProveedorAndCodigo(
+                  proveedor.getId(), detalle.getCodigo()
+              );
+
+          if (codigoProveedor.isPresent()) {
+            productoEncontrado = true;
+            productoId = codigoProveedor.get().getProducto().getId();
+          }
+        }
+
+        // Estrategia 2: Si no encontramos por código proveedor, buscar por CABYS
+        if (!productoEncontrado && detalle.getCodigoCabys() != null) {
+          // Buscar productos con el mismo CABYS
+          List<Producto> productosConCabys = productoService
+              .findByEmpresaIdAndCodigoCabys(empresaId, detalle.getCodigoCabys());
+
+          if (productosConCabys.size() == 1) {
+            // Si solo hay uno, lo usamos
+            productoEncontrado = true;
+            productoId = productosConCabys.get(0).getId();
+          } else if (productosConCabys.size() > 1) {
+            // Si hay varios, intentar matchear por descripción similar
+            for (Producto p : productosConCabys) {
+              if (sonDescripcionesSimilares(p.getDescripcion(), detalle.getDetalle())) {
+                productoEncontrado = true;
+                productoId = p.getId();
+                break;
+              }
+            }
+          }
+        }
+
+        linea.setExisteEnSistema(productoEncontrado);
+        linea.setProductoId(productoId);
+
+        // Si no existe, agregarlo a productos no encontrados
+        if (!productoEncontrado) {
+          AnalisisXmlResponse.ProductoNoEncontrado noEncontrado =
+              new AnalisisXmlResponse.ProductoNoEncontrado();
+          noEncontrado.setCodigo(detalle.getCodigo());
+          noEncontrado.setDescripcion(detalle.getDetalle());
+          noEncontrado.setCodigoCabys(detalle.getCodigoCabys());
+          analisis.getProductosNoEncontrados().add(noEncontrado);
+        }
+
+        lineasAnalisis.add(linea);
+      }
+
+
+      analisis.setLineas(lineasAnalisis);
+
 
       // Verificar si ya existe la factura
       if (compraRepository.existsByClaveHacienda(facturaXml.getClave())) {
@@ -68,10 +152,14 @@ public class CompraService {
       if (facturaXml.getEmisor() != null) {
         AnalisisXmlResponse.EmisorInfo emisorInfo = new AnalisisXmlResponse.EmisorInfo();
         emisorInfo.setIdentificacion(facturaXml.getEmisor().getNumeroIdentificacion());
+        emisorInfo.setTipoIdentificacion(facturaXml.getEmisor().getTipoIdentificacion());
         emisorInfo.setNombre(facturaXml.getEmisor().getNombre());
+        emisorInfo.setRazonSocial(facturaXml.getEmisor().getNombreComercial());
+        emisorInfo.setTelefono(facturaXml.getEmisor().getTelefono());
+        emisorInfo.setEmail(facturaXml.getEmisor().getCorreoElectronico());
 
         // Buscar proveedor por empresa
-        Proveedor proveedor = proveedorRepository.findByNumeroIdentificacionAndEmpresaId(
+        proveedor = proveedorRepository.findByNumeroIdentificacionAndEmpresaId(
             facturaXml.getEmisor().getNumeroIdentificacion(),
             empresaId
         ).orElse(null);
@@ -574,5 +662,16 @@ public class CompraService {
     Compra compra = compraRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Compra no encontrada"));
     return convertirADto(compra);
+  }
+
+  private boolean sonDescripcionesSimilares(String desc1, String desc2) {
+    if (desc1 == null || desc2 == null) return false;
+
+    // Normalizar: quitar espacios extras, convertir a minúsculas
+    String norm1 = desc1.trim().toLowerCase().replaceAll("\\s+", " ");
+    String norm2 = desc2.trim().toLowerCase().replaceAll("\\s+", " ");
+
+    // Verificar si una contiene a la otra
+    return norm1.contains(norm2) || norm2.contains(norm1);
   }
 }

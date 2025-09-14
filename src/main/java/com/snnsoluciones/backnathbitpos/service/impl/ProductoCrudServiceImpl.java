@@ -15,6 +15,7 @@ import com.snnsoluciones.backnathbitpos.service.ProductoCategoriaService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImpuestoService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -435,6 +436,11 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
   @Override
   public void save(Producto producto) {
     productoRepository.save(producto);
+  }
+
+  @Override
+  public List<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId) {
+    return productoRepository.findAllByEmpresaIdAndEmpresaCabys_CodigoCabys_Codigo(empresaId, codigoCabysId);
   }
 
   private String limpiarNombreParaRuta(String nombre) {

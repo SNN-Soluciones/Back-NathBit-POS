@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.Producto;
+import java.util.Optional;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface ProductoCrudService {
@@ -17,4 +18,7 @@ public interface ProductoCrudService {
     // Generación de código
     String generarCodigoInterno(Long empresaId);
     ProductoDto actualizarPrecio(Long empresaId, Long productoId, ActualizarPrecioDto dto);
+    Optional<Producto> buscarPorCodigoInterno(Long empresaId, String codigoInterno);
+    Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras);
+    void save(Producto producto);
 }

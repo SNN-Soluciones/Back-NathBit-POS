@@ -16,6 +16,7 @@ import com.snnsoluciones.backnathbitpos.service.ProductoImpuestoService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -419,6 +420,21 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
         productoId, dto.getPrecioVenta());
 
     return convertirADto(producto);
+  }
+
+  @Override
+  public Optional<Producto> buscarPorCodigoInterno(Long empresaId, String codigoInterno) {
+    return productoRepository.findByCodigoInternoAndEmpresaId(codigoInterno, empresaId);
+  }
+
+  @Override
+  public Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras) {
+    return productoRepository.findByCodigoBarrasAndEmpresaId(codigoBarras, empresaId);
+  }
+
+  @Override
+  public void save(Producto producto) {
+    productoRepository.save(producto);
   }
 
   private String limpiarNombreParaRuta(String nombre) {

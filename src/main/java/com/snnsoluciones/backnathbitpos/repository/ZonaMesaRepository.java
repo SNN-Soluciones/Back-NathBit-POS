@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface ZonaMesaRepository extends JpaRepository<ZonaMesa, Long> {
-  List<ZonaMesa> findBySucursalIdAndActivoTrueOrderByOrdenAsc(Long sucursalId);
+  List<ZonaMesa> findBySucursalIdAndActivoTrueOrderByOrdenExhibicionAsc(Long sucursalId);
 }

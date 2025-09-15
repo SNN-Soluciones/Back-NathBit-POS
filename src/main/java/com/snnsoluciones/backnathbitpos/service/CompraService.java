@@ -4,7 +4,6 @@ import com.snnsoluciones.backnathbitpos.dto.compra.*;
 import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.DetalleDto;
 import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.ImpuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.ResumenFacturaDto;
-import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCreateDto;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
@@ -37,8 +36,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class CompraService {
-
-  private final ProductoMapper productoMapper;
 
   private final CompraRepository compraRepository;
   private final ProveedorRepository proveedorRepository;

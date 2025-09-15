@@ -18,7 +18,7 @@ public class Mesa {
   private ZonaMesa zona;
 
   // Código visible para staff (p.ej: A1, B3)
-  @Column(nullable = false, length = 20)
+  @Column(name = "numero_mesa", nullable = false, length = 20)
   private String codigo;
 
   @Column(length = 60)
@@ -32,7 +32,7 @@ public class Mesa {
   private EstadoMesa estado = EstadoMesa.LIBRE;
 
   @Column(nullable = false)
-  private Boolean activa = true;
+  private Boolean activo = true;
 
   @Column(nullable = false)
   private Integer orden = 0;

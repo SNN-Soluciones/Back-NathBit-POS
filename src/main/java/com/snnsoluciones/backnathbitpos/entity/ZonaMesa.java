@@ -25,6 +25,6 @@ public class ZonaMesa {
   @Column(nullable = false)
   private Boolean activo = true;
 
-  @Column(nullable = false)
-  private Integer orden = 0;
+  @Column(name = "orden_exhibicion", nullable = false)
+  private Integer ordenExhibicion = 1;
 }

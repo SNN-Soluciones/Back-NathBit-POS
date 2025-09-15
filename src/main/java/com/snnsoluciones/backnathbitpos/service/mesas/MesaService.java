@@ -34,7 +34,7 @@ public class MesaService {
         .zona(zona).codigo(req.codigo().trim()).nombre(req.nombre())
         .capacidad(req.capacidad() == null ? 2 : req.capacidad())
         .orden(req.orden() == null ? 0 : req.orden())
-        .estado(EstadoMesa.LIBRE).activa(true).build();
+        .estado(EstadoMesa.LIBRE).activo(true).build();
 
     mesaRepo.save(m);
     registrarHistorial(m, EstadoMesa.LIBRE, "CREADA", null);
@@ -59,7 +59,7 @@ public class MesaService {
     m.setNombre(req.nombre());
     if (req.capacidad() != null) m.setCapacidad(req.capacidad());
     if (req.orden() != null) m.setOrden(req.orden());
-    if (req.activa() != null) m.setActiva(req.activa());
+    if (req.activa() != null) m.setActivo(req.activa());
 
     return toDto(m);
   }
@@ -120,6 +120,6 @@ public class MesaService {
 
   private MesaResponse toDto(Mesa m) {
     return new MesaResponse(m.getId(), m.getCodigo(), m.getNombre(), m.getCapacidad(),
-        m.getOrden(), m.getEstado(), m.getActiva(), m.getZona().getId(), m.getUnionGroupId());
+        m.getOrden(), m.getEstado(), m.getActivo(), m.getZona().getId(), m.getUnionGroupId());
   }
 }

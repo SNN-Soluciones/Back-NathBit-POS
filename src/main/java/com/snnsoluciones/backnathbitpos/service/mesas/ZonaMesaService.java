@@ -25,16 +25,16 @@ public class ZonaMesaService {
     // (opcional) valida que sucursal pertenezca a empresaId
     ZonaMesa z = ZonaMesa.builder()
         .sucursal(sucursal).nombre(req.nombre().trim())
-        .descripcion(req.descripcion()).orden(req.orden() == null ? 0 : req.orden())
+        .descripcion(req.descripcion()).ordenExhibicion(req.orden() == null ? 0 : req.orden())
         .activo(true).build();
     zonaRepo.save(z);
-    return new ZonaResponse(z.getId(), z.getNombre(), z.getDescripcion(), z.getOrden(), z.getActivo());
+    return new ZonaResponse(z.getId(), z.getNombre(), z.getDescripcion(), z.getOrdenExhibicion(), z.getActivo());
   }
 
   @Transactional(readOnly = true)
   public List<ZonaResponse> listar(Long sucursalId) {
-    return zonaRepo.findBySucursalIdAndActivoTrueOrderByOrdenAsc(sucursalId).stream()
-        .map(z -> new ZonaResponse(z.getId(), z.getNombre(), z.getDescripcion(), z.getOrden(), z.getActivo()))
+    return zonaRepo.findBySucursalIdAndActivoTrueOrderByOrdenExhibicionAsc(sucursalId).stream()
+        .map(z -> new ZonaResponse(z.getId(), z.getNombre(), z.getDescripcion(), z.getOrdenExhibicion(), z.getActivo()))
         .toList();
   }
 
@@ -44,8 +44,8 @@ public class ZonaMesaService {
         .orElseThrow(() -> new EntityNotFoundException("Zona no encontrada"));
     z.setNombre(req.nombre().trim());
     z.setDescripcion(req.descripcion());
-    if (req.orden() != null) z.setOrden(req.orden());
+    if (req.orden() != null) z.setOrdenExhibicion(req.orden());
     if (req.activo() != null) z.setActivo(req.activo());
-    return new ZonaResponse(z.getId(), z.getNombre(), z.getDescripcion(), z.getOrden(), z.getActivo());
+    return new ZonaResponse(z.getId(), z.getNombre(), z.getDescripcion(), z.getOrdenExhibicion(), z.getActivo());
   }
 }

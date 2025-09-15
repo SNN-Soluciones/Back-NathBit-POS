@@ -1,35 +1,39 @@
-// src/main/java/.../entity/MesaEstadoHist.java
+// MesaEstadoHist.java - CORREGIDO
 package com.snnsoluciones.backnathbitpos.entity;
 
-import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
 import jakarta.persistence.*;
 import lombok.*;
-
+import org.hibernate.annotations.CreationTimestamp;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "mesa_estado_hist", indexes = {
-  @Index(name = "ix_hist_mesa_fecha", columnList = "mesa_id, fecha_cambio desc")
-})
+@Table(name = "mesa_estado_hist")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class MesaEstadoHist {
-  @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @ManyToOne(optional = false, fetch = FetchType.LAZY)
-  @JoinColumn(name = "mesa_id", nullable = false, foreignKey = @ForeignKey(name = "fk_hist_mesa"))
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "mesa_id", nullable = false)
   private Mesa mesa;
 
-  @Enumerated(EnumType.STRING)
-  @Column(nullable = false, length = 30)
-  private EstadoMesa estado;
+  @Column(name = "estado_anterior")
+  private String estadoAnterior;
 
-  @Column(length = 160)
-  private String motivo;
+  @Column(name = "estado_nuevo", nullable = false)
+  private String estadoNuevo;
 
   @Column(name = "usuario_id")
-  private Long usuarioId; // si manejas usuarios/operadores
+  private Long usuarioId;
 
-  @Column(name = "fecha_cambio", nullable = false)
-  private OffsetDateTime fechaCambio;
+  @Column(name = "orden_id")
+  private Long ordenId;
+
+  @Column(name = "observacion")
+  private String observacion;
+
+  @CreationTimestamp
+  @Column(name = "created_at")
+  private OffsetDateTime createdAt;
 }

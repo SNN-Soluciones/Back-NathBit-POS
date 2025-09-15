@@ -29,7 +29,11 @@ public class Mesa {
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 30)
-  private EstadoMesa estado = EstadoMesa.LIBRE;
+  private EstadoMesa estado = EstadoMesa.DISPONIBLE;
+
+  @ManyToOne(optional = false, fetch = FetchType.LAZY)
+  @JoinColumn(name = "sucursal_id", nullable = false, foreignKey = @ForeignKey(name = "fk_mesa_sucursal"))
+  private Sucursal sucursal;
 
   @Column(nullable = false)
   private Boolean activo = true;

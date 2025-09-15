@@ -164,6 +164,30 @@ public class Compra {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "mensaje_receptor_enviado")
+    private Boolean mensajeReceptorEnviado = false;
+
+    @Column(name = "tipo_mensaje_receptor", length = 2)
+    private String tipoMensajeReceptor; // 05, 06, 07
+
+    @Column(name = "consecutivo_mensaje_receptor", length = 20)
+    private String consecutivoMensajeReceptor;
+
+    @Column(name = "fecha_mensaje_receptor")
+    private LocalDateTime fechaMensajeReceptor;
+
+    @Column(name = "justificacion_mensaje", columnDefinition = "TEXT")
+    private String justificacionMensaje;
+
+    @Column(name = "monto_impuesto_aceptado", precision = 18, scale = 5)
+    private BigDecimal montoImpuestoAceptado;
+
+    @Column(name = "xml_mensaje_receptor", columnDefinition = "TEXT")
+    private String xmlMensajeReceptor;
+
+    @Column(name = "respuesta_hacienda_mensaje", columnDefinition = "TEXT")
+    private String respuestaHaciendaMensaje;
+
     // Relación con detalles
     @OneToMany(mappedBy = "compra", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CompraDetalle> detalles = new ArrayList<>();

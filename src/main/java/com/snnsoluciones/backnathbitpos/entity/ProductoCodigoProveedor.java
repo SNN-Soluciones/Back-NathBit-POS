@@ -12,6 +12,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import lombok.Data;
@@ -57,6 +58,9 @@ public class ProductoCodigoProveedor {
     
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
+
+    @Column(name = "precio_compra")
+    private BigDecimal precioCompra;
     
     @Column(name = "observaciones")
     private String observaciones;

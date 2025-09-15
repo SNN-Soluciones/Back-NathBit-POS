@@ -2,9 +2,11 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.MensajeReceptorBitacora;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,34 @@ import java.util.Optional;
 
 @Repository
 public interface MensajeReceptorBitacoraRepository extends JpaRepository<MensajeReceptorBitacora, Long> {
+
+
+    @Query("""
+      SELECT m FROM MensajeReceptorBitacora m
+      WHERE m.estado IN (:estados)
+        AND (m.proximoIntento IS NULL OR m.proximoIntento <= :ahora)
+        AND m.intentos < :maxIntentos
+      ORDER BY m.updatedAt ASC
+      """)
+    List<MensajeReceptorBitacora> findPendientesParaProcesar(
+        @Param("estados") List<EstadoBitacora> estados,
+        @Param("ahora") LocalDateTime ahora,
+        @Param("maxIntentos") int maxIntentos,
+        Pageable pageable);
+
+    @Modifying
+    @Transactional
+    @Query("""
+      UPDATE MensajeReceptorBitacora m
+      SET m.estado = :nuevo, m.updatedAt = :ahora
+      WHERE m.id = :id AND m.estado = :esperado
+      """)
+    int claimParaProcesar(@Param("id") Long id,
+        @Param("esperado") EstadoBitacora esperado,
+        @Param("nuevo") EstadoBitacora nuevo,
+        @Param("ahora") LocalDateTime ahora);
+
+    Optional<MensajeReceptorBitacora> findById(Long id);
     
     // Buscar por compra
     Optional<MensajeReceptorBitacora> findByCompraId(Long compraId);

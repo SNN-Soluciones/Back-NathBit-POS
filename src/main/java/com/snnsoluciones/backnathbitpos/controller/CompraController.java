@@ -54,10 +54,11 @@ public class CompraController {
   public ResponseEntity<ApiResponse<CompraDto>> crearDesdeXml(
       @PathVariable Long empresaId,
       @PathVariable Long sucursalId,
+      @PathVariable Long terminalId,
       @RequestBody @Valid CrearCompraDesdeXmlRequest request) {
 
     log.info("Creando compra desde XML para empresa {} sucursal {}", empresaId, sucursalId);
-    CompraDto compra = compraService.crearCompraDesdeXml(empresaId, sucursalId, request);
+    CompraDto compra = compraService.crearCompraDesdeXml(empresaId, sucursalId, request, terminalId);
 
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.created("Compra creada exitosamente", compra));

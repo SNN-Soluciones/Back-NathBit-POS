@@ -1,16 +1,26 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.compra.*;
+import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.DetalleDto;
+import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.ImpuestoDto;
+import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.ResumenFacturaDto;
+import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCreateDto;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
+import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoCompra;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoCompra;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
+import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.util.XmlProcessorService;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,6 +38,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class CompraService {
 
+  private final ProductoMapper productoMapper;
+
   private final CompraRepository compraRepository;
   private final ProveedorRepository proveedorRepository;
   private final ProductoCrudService productoService;
@@ -37,6 +49,8 @@ public class CompraService {
   private final UsuarioRepository usuarioRepository;
   private final XmlProcessorService xmlProcessorService;
   private final ProductoInventarioService inventarioService;
+  private final TerminalService terminalService;
+  private final MensajeReceptorBitacoraRepository mensajeReceptorBitacoraRepository;
 
   /**
    * Analiza un XML de factura sin procesarlo
@@ -64,10 +78,12 @@ public class CompraService {
       analisis.setClave(facturaXml.getClave());
       analisis.setNumeroDocumento(facturaXml.getNumeroConsecutivo());
       analisis.setFechaEmision(facturaXml.getFechaEmision());
-      analisis.setMoneda(facturaXml.getCodigoMoneda() != null ? facturaXml.getCodigoMoneda() : "CRC");
+      analisis.setMoneda(
+          facturaXml.getCodigoMoneda() != null ? facturaXml.getCodigoMoneda() : "CRC");
       analisis.setCondicionVenta(facturaXml.getCondicionVenta());
       analisis.setPlazoCredito(facturaXml.getPlazoCredito());
-      analisis.setCantidadLineas(facturaXml.getDetalles() != null ? facturaXml.getDetalles().size() : 0);
+      analisis.setCantidadLineas(
+          facturaXml.getDetalles() != null ? facturaXml.getDetalles().size() : 0);
 
       // Procesar emisor
       if (facturaXml.getEmisor() != null) {
@@ -105,9 +121,12 @@ public class CompraService {
           linea.setUnidadMedida(detalleXml.getUnidadMedida());
           linea.setDescripcion(detalleXml.getDetalle());
           linea.setPrecioUnitario(detalleXml.getPrecioUnitario());
-          linea.setMontoDescuento(detalleXml.getMontoDescuento() != null ? detalleXml.getMontoDescuento() : BigDecimal.ZERO);
+          linea.setMontoDescuento(
+              detalleXml.getMontoDescuento() != null ? detalleXml.getMontoDescuento()
+                  : BigDecimal.ZERO);
           linea.setNaturalezaDescuento(detalleXml.getNaturalezaDescuento());
-          linea.setMontoTotal(detalleXml.getSubTotal() != null ? detalleXml.getSubTotal() : detalleXml.getMontoTotal());
+          linea.setMontoTotal(detalleXml.getSubTotal() != null ? detalleXml.getSubTotal()
+              : detalleXml.getMontoTotal());
 
           // Procesar impuestos
           if (detalleXml.getImpuestos() != null && !detalleXml.getImpuestos().isEmpty()) {
@@ -130,7 +149,8 @@ public class CompraService {
             exoneracion.setNumeroDocumento(detalleXml.getExoneracion().getNumeroDocumento());
             exoneracion.setNombreInstitucion(detalleXml.getExoneracion().getNombreInstitucion());
             exoneracion.setFechaEmision(detalleXml.getExoneracion().getFechaEmision());
-            exoneracion.setPorcentajeExoneracion(detalleXml.getExoneracion().getPorcentajeExoneracion());
+            exoneracion.setPorcentajeExoneracion(
+                detalleXml.getExoneracion().getPorcentajeExoneracion());
             exoneracion.setMontoExoneracion(detalleXml.getExoneracion().getMontoExoneracion());
             linea.setExoneracion(exoneracion);
           }
@@ -176,16 +196,31 @@ public class CompraService {
         resumen.setTotalComprobante(facturaXml.getResumenFactura().getTotalComprobante());
       } else {
         // Fallback para estructura antigua
-        resumen.setTotalGravado(facturaXml.getTotalGravado() != null ? facturaXml.getTotalGravado() : BigDecimal.ZERO);
-        resumen.setTotalExento(facturaXml.getTotalExento() != null ? facturaXml.getTotalExento() : BigDecimal.ZERO);
-        resumen.setTotalExonerado(facturaXml.getTotalExonerado() != null ? facturaXml.getTotalExonerado() : BigDecimal.ZERO);
-        resumen.setTotalVenta(facturaXml.getTotalVenta() != null ? facturaXml.getTotalVenta() : BigDecimal.ZERO);
-        resumen.setTotalDescuentos(facturaXml.getTotalDescuentos() != null ? facturaXml.getTotalDescuentos() : BigDecimal.ZERO);
-        resumen.setTotalVentaNeta(facturaXml.getTotalVentaNeta() != null ? facturaXml.getTotalVentaNeta() : BigDecimal.ZERO);
-        resumen.setTotalImpuesto(facturaXml.getTotalImpuesto() != null ? facturaXml.getTotalImpuesto() : BigDecimal.ZERO);
+        resumen.setTotalGravado(
+            facturaXml.getTotalGravado() != null ? facturaXml.getTotalGravado() : BigDecimal.ZERO);
+        resumen.setTotalExento(
+            facturaXml.getTotalExento() != null ? facturaXml.getTotalExento() : BigDecimal.ZERO);
+        resumen.setTotalExonerado(
+            facturaXml.getTotalExonerado() != null ? facturaXml.getTotalExonerado()
+                : BigDecimal.ZERO);
+        resumen.setTotalVenta(
+            facturaXml.getTotalVenta() != null ? facturaXml.getTotalVenta() : BigDecimal.ZERO);
+        resumen.setTotalDescuentos(
+            facturaXml.getTotalDescuentos() != null ? facturaXml.getTotalDescuentos()
+                : BigDecimal.ZERO);
+        resumen.setTotalVentaNeta(
+            facturaXml.getTotalVentaNeta() != null ? facturaXml.getTotalVentaNeta()
+                : BigDecimal.ZERO);
+        resumen.setTotalImpuesto(
+            facturaXml.getTotalImpuesto() != null ? facturaXml.getTotalImpuesto()
+                : BigDecimal.ZERO);
         resumen.setTotalIVADevuelto(BigDecimal.ZERO);
-        resumen.setTotalOtrosCargos(facturaXml.getTotalOtrosCargos() != null ? facturaXml.getTotalOtrosCargos() : BigDecimal.ZERO);
-        resumen.setTotalComprobante(facturaXml.getTotalComprobante() != null ? facturaXml.getTotalComprobante() : BigDecimal.ZERO);
+        resumen.setTotalOtrosCargos(
+            facturaXml.getTotalOtrosCargos() != null ? facturaXml.getTotalOtrosCargos()
+                : BigDecimal.ZERO);
+        resumen.setTotalComprobante(
+            facturaXml.getTotalComprobante() != null ? facturaXml.getTotalComprobante()
+                : BigDecimal.ZERO);
       }
 
       analisis.setResumenTotales(resumen);
@@ -208,7 +243,7 @@ public class CompraService {
    */
   @Transactional
   public CompraDto crearCompraDesdeXml(Long empresaId, Long sucursalId,
-      CrearCompraDesdeXmlRequest request) {
+      CrearCompraDesdeXmlRequest request, Long terminalId) {
     try {
       // Procesar XML
       FacturaXmlDto facturaXml = xmlProcessorService.procesarFacturaXml(request.getXmlContent());
@@ -247,121 +282,172 @@ public class CompraService {
 
       // Obtener usuario actual
       String username = SecurityContextHolder.getContext().getAuthentication().getName();
-      Usuario usuario = usuarioRepository.findByEmail(username)
-          .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+      Usuario usuario = usuarioRepository.findByUsernameIgnoreCase(username)
+          .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-      // Obtener moneda
-      Moneda moneda = Moneda.fromCodigo(facturaXml.getCodigoMoneda());
-
-      // Crear compra
+      // Crear la compra
       Compra compra = new Compra();
       compra.setEmpresa(empresa);
       compra.setSucursal(sucursal);
       compra.setProveedor(proveedor);
       compra.setUsuario(usuario);
-      compra.setTipoCompra(TipoCompra.FACTURA_PROVEEDOR_INSCRITO);
-      compra.setTipoDocumentoHacienda(TipoDocumento.FACTURA_ELECTRONICA);
+      compra.setTipoCompra(TipoCompra.FACTURA_ELECTRONICA_COMPRA);
+      compra.setTipoDocumentoHacienda(TipoDocumento.MENSAJE_RECEPTOR);
       compra.setNumeroDocumento(facturaXml.getNumeroConsecutivo());
       compra.setClaveHacienda(facturaXml.getClave());
+      compra.setConsecutivoHacienda(facturaXml.getNumeroConsecutivo());
       compra.setFechaEmision(facturaXml.getFechaEmision());
       compra.setFechaRecepcion(LocalDateTime.now());
+      compra.setEstado(EstadoCompra.PENDIENTE_ENVIO);
       compra.setCondicionVenta(facturaXml.getCondicionVenta());
       compra.setPlazoCredito(facturaXml.getPlazoCredito());
       compra.setMedioPago(facturaXml.getMedioPago());
-      compra.setMoneda(moneda);
-      compra.setTipoCambio(facturaXml.getTipoCambio());
-
-      // Asignar totales
-      compra.setTotalServiciosGravados(facturaXml.getTotalServiciosGravados() != null ?
-          facturaXml.getTotalServiciosGravados() : BigDecimal.ZERO);
-      compra.setTotalServiciosExentos(facturaXml.getTotalServiciosExentos() != null ?
-          facturaXml.getTotalServiciosExentos() : BigDecimal.ZERO);
-      compra.setTotalMercanciasGravadas(facturaXml.getTotalMercanciasGravadas() != null ?
-          facturaXml.getTotalMercanciasGravadas() : BigDecimal.ZERO);
-      compra.setTotalMercanciasExentas(facturaXml.getTotalMercanciasExentas() != null ?
-          facturaXml.getTotalMercanciasExentas() : BigDecimal.ZERO);
-
-      compra.setTotalGravado(facturaXml.getTotalGravado());
-      compra.setTotalExento(facturaXml.getTotalExento());
-      compra.setTotalExonerado(facturaXml.getTotalExonerado());
-      compra.setTotalVenta(facturaXml.getTotalVenta());
-      compra.setTotalDescuentos(facturaXml.getTotalDescuentos());
-      compra.setTotalVentaNeta(facturaXml.getTotalVentaNeta());
-      compra.setTotalImpuesto(facturaXml.getTotalImpuesto());
-      compra.setTotalOtrosCargos(facturaXml.getTotalOtrosCargos() != null ?
-          facturaXml.getTotalOtrosCargos() : BigDecimal.ZERO);
-      compra.setTotalComprobante(facturaXml.getTotalComprobante());
-
-      compra.setEstado(EstadoCompra.ACEPTADA);
-      compra.setXmlOriginal(request.getXmlContent());
+      compra.setMoneda(facturaXml.getCodigoMoneda() != null ?
+          Moneda.valueOf(facturaXml.getCodigoMoneda()) : Moneda.CRC);
+      compra.setTipoCambio(facturaXml.getTipoCambio() != null ?
+          facturaXml.getTipoCambio() : BigDecimal.ONE);
       compra.setObservaciones(request.getObservaciones());
+      compra.setXmlOriginal(request.getXmlContent());
 
-      // Procesar detalles
-      for (FacturaXmlDto.DetalleDto detalleXml : facturaXml.getDetalles()) {
+      // Agregar datos del mensaje receptor
+      compra.setTipoMensajeReceptor(request.getTipoMensajeReceptor());
+      compra.setJustificacionMensaje(request.getJustificacionRechazo());
+      compra.setMontoImpuestoAceptado(request.getMontoTotalImpuestoAceptado());
+      compra.setMensajeReceptorEnviado(false);
+
+      // Generar consecutivo para el mensaje receptor
+      // Buscar una terminal activa en la sucursal (puedes mejorar esto según tu lógica)
+      Terminal terminal = terminalService.buscarPorId(terminalId)
+          .orElseThrow(() -> new BadRequestException("No hay terminal activa en la sucursal"));
+
+      String consecutivoMensaje = terminalService.generarNumeroConsecutivo(
+          terminal.getId(),
+          TipoDocumento.MENSAJE_RECEPTOR
+      );
+      compra.setConsecutivoMensajeReceptor(consecutivoMensaje);
+      compra.setFechaMensajeReceptor(LocalDateTime.now());
+
+      // Procesar totales...
+      if (facturaXml.getResumenFactura() != null) {
+        ResumenFacturaDto resumen = facturaXml.getResumenFactura();
+        compra.setTotalGravado(resumen.getTotalGravado() != null ?
+            resumen.getTotalGravado() : BigDecimal.ZERO);
+        compra.setTotalExento(resumen.getTotalExento() != null ?
+            resumen.getTotalExento() : BigDecimal.ZERO);
+        compra.setTotalExonerado(resumen.getTotalExonerado() != null ?
+            resumen.getTotalExonerado() : BigDecimal.ZERO);
+        compra.setTotalVenta(resumen.getTotalVenta() != null ?
+            resumen.getTotalVenta() : BigDecimal.ZERO);
+        compra.setTotalDescuentos(resumen.getTotalDescuentos() != null ?
+            resumen.getTotalDescuentos() : BigDecimal.ZERO);
+        compra.setTotalVentaNeta(resumen.getTotalVentaNeta() != null ?
+            resumen.getTotalVentaNeta() : BigDecimal.ZERO);
+        compra.setTotalImpuesto(resumen.getTotalImpuesto() != null ?
+            resumen.getTotalImpuesto() : BigDecimal.ZERO);
+        compra.setTotalOtrosCargos(resumen.getTotalOtrosCargos() != null ?
+            resumen.getTotalOtrosCargos() : BigDecimal.ZERO);
+        compra.setTotalComprobante(resumen.getTotalComprobante() != null ?
+            resumen.getTotalComprobante() : BigDecimal.ZERO);
+      }
+
+      // Procesar detalles...
+      int numeroLinea = 1;
+      for (DetalleDto lineaXml : facturaXml.getDetalles()) {
         CompraDetalle detalle = new CompraDetalle();
-        detalle.setNumeroLinea(detalleXml.getNumeroLinea());
-        detalle.setCodigo(detalleXml.getCodigo());
-        detalle.setCodigoCabys(detalleXml.getCodigoCabys());
-        detalle.setDescripcion(detalleXml.getDetalle());
-        detalle.setCantidad(detalleXml.getCantidad());
-        detalle.setUnidadMedida(detalleXml.getUnidadMedida());
-        detalle.setPrecioUnitario(detalleXml.getPrecioUnitario());
-        detalle.setMontoTotal(detalleXml.getMontoTotal());
-        detalle.setMontoDescuento(detalleXml.getMontoDescuento() != null ?
-            detalleXml.getMontoDescuento() : BigDecimal.ZERO);
-        detalle.setNaturalezaDescuento(detalleXml.getNaturalezaDescuento());
-        detalle.setSubTotal(detalleXml.getSubTotal());
-        detalle.setCodigoTarifaIVA(detalleXml.getImpuestos().get(0).getCodigoTarifa());
-        detalle.setTarifaIVA(detalleXml.getImpuestos().get(0).getTarifa());
-        detalle.setMontoImpuesto(detalleXml.getImpuestos().get(0).getMonto() != null ?
-            detalleXml.getImpuestos().get(0).getMonto() : BigDecimal.ZERO);
-        detalle.setMontoTotalLinea(detalleXml.getMontoTotalLinea());
+        detalle.setNumeroLinea(numeroLinea++);
+        detalle.setCodigo(lineaXml.getCodigo());
+        detalle.setCodigoCabys(lineaXml.getCodigoCabys());
+        detalle.setDescripcion(lineaXml.getDetalle());
+        detalle.setCantidad(lineaXml.getCantidad());
+        detalle.setUnidadMedida(lineaXml.getUnidadMedida());
+        detalle.setPrecioUnitario(lineaXml.getPrecioUnitario());
+        detalle.setMontoTotal(lineaXml.getMontoTotal());
+        detalle.setMontoDescuento(lineaXml.getMontoDescuento() != null ?
+            lineaXml.getMontoDescuento() : BigDecimal.ZERO);
+        detalle.setNaturalezaDescuento(lineaXml.getNaturalezaDescuento());
+        detalle.setSubTotal(lineaXml.getSubTotal());
 
-        // Buscar producto por código del proveedor
-        ProductoCodigoProveedor pcp = productoCodigoProveedorRepository
-            .findByProveedorAndCodigo(proveedor.getId(), detalleXml.getCodigo())
-            .orElse(null);
+        // Procesar impuestos si existen
+        if (lineaXml.getImpuestos() != null && !lineaXml.getImpuestos().isEmpty()) {
+          ImpuestoDto impuesto = lineaXml.getImpuestos().get(0);
+          detalle.setCodigoTarifaIVA(impuesto.getCodigoTarifa());
+          detalle.setTarifaIVA(impuesto.getTarifa());
+          detalle.setMontoImpuesto(impuesto.getMonto());
+        } else {
+          detalle.setCodigoTarifaIVA("08"); // Exento por defecto
+          detalle.setTarifaIVA(BigDecimal.ZERO);
+          detalle.setMontoImpuesto(BigDecimal.ZERO);
+        }
 
-        if (pcp != null && pcp.getProducto().getEmpresa().getId().equals(empresaId)) {
-          Producto producto = pcp.getProducto();
-          detalle.setProducto(producto);
-          detalle.setEsServicio(producto.getEsServicio());
+        detalle.setMontoTotalLinea(lineaXml.getMontoTotalLinea());
 
-          // Usar el factor de conversión si existe
-          if (pcp.getFactorConversion() != null) {
-            detalle.setFactorConversion(new BigDecimal(pcp.getFactorConversion()));
-            detalle.setUnidadMedidaComercial(pcp.getUnidadCompra());
+        // Buscar producto si se requiere
+        if (request.getProcesarInventario()) {
+          Optional<Producto> productoOpt = productoService.buscarPorCodigoBarras(
+              empresaId,
+              lineaXml.getCodigo());
+
+          if (productoOpt.isPresent()) {
+            detalle.setProducto(productoOpt.get());
+          } else if (request.getCrearProductosSiNoExisten()) {
+            // Crear producto nuevo
+            Producto nuevoProducto = crearProductoDesdeLinea(lineaXml, empresa);
+            detalle.setProducto(nuevoProducto);
+            nuevoProducto.setRequiereInventario(false);
           }
-
-          // Actualizar precio de compra en el producto
-          producto.setPrecioCompra(detalleXml.getPrecioUnitario());
-          producto.setUltimoPrecioCompra(detalleXml.getPrecioUnitario());
-          producto.setFechaUltimaCompra(LocalDateTime.now());
-          productoService.save(producto);
-        } else if (request.getCrearProductosSiNoExisten()) {
-          // TODO: Implementar creación automática de productos
-          log.warn("Producto no encontrado y creación automática no implementada: " +
-              detalleXml.getDetalle());
         }
 
         compra.addDetalle(detalle);
       }
 
-      // Guardar compra
+      // Guardar la compra
       compra = compraRepository.save(compra);
 
-      // Actualizar inventario si se solicitó
-      if (request.getProcesarInventario() && !compra.getDetalles().isEmpty()) {
+      // Crear registro en mensaje receptor bitácora
+      MensajeReceptorBitacora bitacora = new MensajeReceptorBitacora();
+      bitacora.setCompraId(compra.getId());
+      bitacora.setClave(compra.getClaveHacienda());
+      bitacora.setEstado(EstadoBitacora.PENDIENTE);
+      bitacora.setTipoMensaje(request.getTipoMensajeReceptor());
+      bitacora.setConsecutivo(consecutivoMensaje);
+      bitacora.setIntentos(0);
+      bitacora.setCreatedAt(LocalDateTime.now());
+      bitacora.setUpdatedAt(LocalDateTime.now());
+
+      // Si el tipo de mensaje es rechazo o parcial, validar que tenga justificación
+      if (("06".equals(request.getTipoMensajeReceptor()) || "07".equals(
+          request.getTipoMensajeReceptor()))
+          && (request.getJustificacionRechazo() == null || request.getJustificacionRechazo().trim()
+          .isEmpty())) {
+        throw new BadRequestException(
+            "La justificación es requerida para rechazos y aceptaciones parciales");
+      }
+
+      // Si es aceptación parcial, validar el monto de impuesto
+      if ("06".equals(request.getTipoMensajeReceptor())
+          && request.getMontoTotalImpuestoAceptado() == null) {
+        throw new BadRequestException(
+            "El monto de impuesto aceptado es requerido para aceptaciones parciales");
+      }
+
+      mensajeReceptorBitacoraRepository.save(bitacora);
+
+      // Procesar inventario si se requiere
+      if (request.getProcesarInventario() && compra.getEstado() == EstadoCompra.PENDIENTE_ENVIO) {
         inventarioService.procesarCompra(compra);
       }
 
+      log.info("Compra creada exitosamente con ID: {} y mensaje receptor en bitácora",
+          compra.getId());
+
+      // TODO: Aquí puedes llamar a un método async para procesar el mensaje receptor
+      // Por ejemplo: mensajeReceptorService.procesarAsync(bitacora.getId());
+
       return convertirADto(compra);
 
-    } catch (BadRequestException e) {
-      throw e;
     } catch (Exception e) {
       log.error("Error creando compra desde XML: ", e);
-      throw new BadRequestException("Error procesando la factura: " + e.getMessage());
+      throw new RuntimeException("Error procesando la compra: " + e.getMessage());
     }
   }
 
@@ -657,7 +743,9 @@ public class CompraService {
   }
 
   private boolean sonDescripcionesSimilares(String desc1, String desc2) {
-    if (desc1 == null || desc2 == null) return false;
+    if (desc1 == null || desc2 == null) {
+      return false;
+    }
 
     // Normalizar: quitar espacios extras, convertir a minúsculas
     String norm1 = desc1.trim().toLowerCase().replaceAll("\\s+", " ");
@@ -665,5 +753,50 @@ public class CompraService {
 
     // Verificar si una contiene a la otra
     return norm1.contains(norm2) || norm2.contains(norm1);
+  }
+
+  /**
+   * Crea un producto nuevo desde una línea del XML
+   */
+  private Producto crearProductoDesdeLinea(DetalleDto lineaXml, Empresa empresa) {
+    List<ProductoCodigoProveedor> productoCodigoProveedorList = productoCodigoProveedorRepository.findAll();
+    ProductoCodigoProveedor productoCodigoProveedor = new ProductoCodigoProveedor();
+    productoCodigoProveedor.setCodigo(lineaXml.getCodigo());
+    productoCodigoProveedor.setUnidadCompra(lineaXml.getUnidadMedida());
+    productoCodigoProveedor.setPrecioCompra(lineaXml.getPrecioUnitario());
+    productoCodigoProveedorList.add(productoCodigoProveedor);
+
+    Producto producto = new Producto();
+    producto.setEmpresa(empresa);
+    producto.setNombre(lineaXml.getDetalle());
+    producto.setDescripcion(lineaXml.getDetalle());
+    producto.setActivo(true);
+    producto.setRequiereInventario(false); // Por defecto no controla inventario
+    producto.setUnidadMedida(UnidadMedida.valueOf(lineaXml.getUnidadMedida()));
+    producto.setCodigosProveedor(productoCodigoProveedorList);
+    // Precios - usar el precio unitario de la compra como referencia
+    producto.setPrecioVenta(
+        lineaXml.getPrecioUnitario().multiply(new BigDecimal("1.30"))); // 30% de margen por defecto
+
+    // IVA
+    if (lineaXml.getImpuestos() != null && !lineaXml.getImpuestos().isEmpty()) {
+      ImpuestoDto impuesto = lineaXml.getImpuestos().get(0);
+      ProductoImpuesto productoImpuesto = new ProductoImpuesto();
+      productoImpuesto.setCodigoTarifaIVA(CodigoTarifaIVA.fromCodigo(impuesto.getCodigoTarifa()));
+      productoImpuesto.setActivo(true);
+      productoImpuesto.setTipoImpuesto(TipoImpuesto.fromCodigo(impuesto.getCodigo()));
+      productoImpuesto.setPorcentaje(impuesto.getTarifa());
+      Set<ProductoImpuesto> productoImpuestos = new HashSet<>();
+      productoImpuestos.add(productoImpuesto);
+      producto.setImpuestos(productoImpuestos);
+    } else {
+      producto.setImpuestos(null);
+    }
+
+    // Categoría por defecto (deberías tener una categoría "Sin categoría" o similar)
+    // producto.setCategoria(categoriaService.obtenerCategoriaPorDefecto(empresa.getId()));
+
+    productoService.save(producto);
+    return producto;
   }
 }

@@ -10,9 +10,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import lombok.Data;
 
 @Entity
 @Table(name = "mensaje_receptor_bitacora")
+@Data
 public class MensajeReceptorBitacora {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,6 +32,9 @@ public class MensajeReceptorBitacora {
     
     @Column(name = "tipo_mensaje", length = 2)
     private String tipoMensaje; // 05, 06, 07
+
+    @Column(name = "justificacion")
+    private String justificacion;
     
     @Column(name = "consecutivo", length = 20)
     private String consecutivo;

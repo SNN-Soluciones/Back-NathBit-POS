@@ -55,6 +55,42 @@ public class S3PathBuilder {
   }
 
   /**
+   * Genera la ruta completa para un archivo XML de Mensaje Receptor en S3
+   * Formato:
+   * NathBit-POS/empresas/{empresa}/facturas/mensaje-receptor/{YYYY}/{MMMM}/{clave}-{tag}.xml
+   */
+  public String buildXmlPathMR(String claveComprobante, String empresaNombre, String tagArchivo) {
+    if (empresaNombre == null || empresaNombre.trim().isEmpty()) {
+      throw new IllegalArgumentException("El nombre de la empresa no puede estar vacío");
+    }
+
+    String empresaNormalizada = normalizeCompanyName(empresaNombre);
+
+    LocalDateTime ahora = LocalDateTime.now();
+    String year = String.valueOf(ahora.getYear());
+    String month = ahora.getMonth().getDisplayName(TextStyle.FULL, LOCALE_ES).toUpperCase();
+
+    String tag = (tagArchivo == null || tagArchivo.trim().isEmpty()) ? "mr" : tagArchivo.trim();
+    String filename = String.format("%s-%s.xml", claveComprobante, tag);
+
+    return String.format("%s/empresas/%s/facturas/mensaje-receptor/%s/%s/%s",
+        S3_PATH_PREFIX,
+        empresaNormalizada,
+        year,
+        month,
+        filename
+    );
+  }
+
+  /**
+   * Overload conveniente cuando ya tienes la Empresa.
+   */
+  public String buildXmlPathMR(String claveComprobante, Empresa empresa, String tagArchivo) {
+    String empresaNombre = obtenerNombreEmpresa(empresa);
+    return buildXmlPathMR(claveComprobante, empresaNombre, tagArchivo);
+  }
+
+  /**
    * Genera la ruta para un PDF
    */
   public String buildPdfPath(Factura factura) {

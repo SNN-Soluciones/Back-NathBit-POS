@@ -147,6 +147,10 @@ public class HaciendaClient {
     }
   }
 
+  public ResponseEntity<Void> postMensajeReceptor(String accessToken, boolean produccion, RecepcionRequest payload) {
+    return postRecepcion(accessToken, produccion, payload);
+  }
+
   // ===================== Helper opcional =====================
   // Útil para loggear JSONs de request/response cuando depuras (sin romper tipado)
   private String toJson(Object o) {

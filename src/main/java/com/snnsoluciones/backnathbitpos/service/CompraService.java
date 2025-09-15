@@ -46,109 +46,30 @@ public class CompraService {
     AnalisisXmlResponse analisis = new AnalisisXmlResponse();
     analisis.setErroresValidacion(new ArrayList<>());
     analisis.setProductosNoEncontrados(new ArrayList<>());
+    analisis.setLineas(new ArrayList<>());
 
     try {
       // Procesar XML
       FacturaXmlDto facturaXml = xmlProcessorService.procesarFacturaXml(xmlContent);
-      List<AnalisisXmlResponse.LineaAnalisis> lineasAnalisis = new ArrayList<>();
 
-      Proveedor proveedor = null;
-      if (empresaId != null && facturaXml.getEmisor() != null) {
-        proveedor = proveedorRepository.findByNumeroIdentificacionAndEmpresaId(
-            facturaXml.getEmisor().getNumeroIdentificacion(),
-            empresaId
-        ).orElse(null);
+      // Validar estructura básica
+      if (facturaXml.getClave() == null || facturaXml.getClave().isEmpty()) {
+        analisis.setEsValido(false);
+        analisis.getErroresValidacion().add("XML inválido: No se encontró la clave del documento");
+        return analisis;
       }
 
+      // Llenar datos básicos
       analisis.setEsValido(true);
       analisis.setClave(facturaXml.getClave());
       analisis.setNumeroDocumento(facturaXml.getNumeroConsecutivo());
       analisis.setFechaEmision(facturaXml.getFechaEmision());
-      analisis.setTotalComprobante(facturaXml.getTotalComprobante());
-      analisis.setMoneda(facturaXml.getCodigoMoneda());
-      analisis.setCantidadLineas(facturaXml.getDetalles().size());
-      analisis.setPlazoCredito(facturaXml.getPlazoCredito());
+      analisis.setMoneda(facturaXml.getCodigoMoneda() != null ? facturaXml.getCodigoMoneda() : "CRC");
       analisis.setCondicionVenta(facturaXml.getCondicionVenta());
+      analisis.setPlazoCredito(facturaXml.getPlazoCredito());
+      analisis.setCantidadLineas(facturaXml.getDetalles() != null ? facturaXml.getDetalles().size() : 0);
 
-      for (FacturaXmlDto.DetalleDto detalle : facturaXml.getDetalles()) {
-        AnalisisXmlResponse.LineaAnalisis linea = new AnalisisXmlResponse.LineaAnalisis();
-        linea.setNumeroLinea(detalle.getNumeroLinea());
-        linea.setCodigo(detalle.getCodigo());
-        linea.setCodigoCabys(detalle.getCodigoCabys());
-        linea.setCantidad(detalle.getCantidad());
-        linea.setUnidadMedida(detalle.getUnidadMedida());
-        linea.setDescripcion(detalle.getDetalle());
-        linea.setPrecioUnitario(detalle.getPrecioUnitario());
-        linea.setMontoDescuento(detalle.getMontoDescuento());
-        linea.setMontoTotal(detalle.getMontoTotal());
-        linea.setMontoImpuesto(detalle.getMontoImpuesto());
-
-        boolean productoEncontrado = false;
-        Long productoId = null;
-
-        // Estrategia 1: Buscar por código de proveedor (si el proveedor existe)
-        if (proveedor != null && detalle.getCodigo() != null) {
-          // Buscar en la tabla producto_codigo_proveedor
-          Optional<ProductoCodigoProveedor> codigoProveedor =
-              productoCodigoProveedorRepository.findByProveedorAndCodigo(
-                  proveedor.getId(), detalle.getCodigo()
-              );
-
-          if (codigoProveedor.isPresent()) {
-            productoEncontrado = true;
-            productoId = codigoProveedor.get().getProducto().getId();
-          }
-        }
-
-        // Estrategia 2: Si no encontramos por código proveedor, buscar por CABYS
-        if (!productoEncontrado && detalle.getCodigoCabys() != null) {
-          // Buscar productos con el mismo CABYS
-          List<Producto> productosConCabys = productoService
-              .findByEmpresaIdAndCodigoCabys(empresaId, detalle.getCodigoCabys());
-
-          if (productosConCabys.size() == 1) {
-            // Si solo hay uno, lo usamos
-            productoEncontrado = true;
-            productoId = productosConCabys.get(0).getId();
-          } else if (productosConCabys.size() > 1) {
-            // Si hay varios, intentar matchear por descripción similar
-            for (Producto p : productosConCabys) {
-              if (sonDescripcionesSimilares(p.getDescripcion(), detalle.getDetalle())) {
-                productoEncontrado = true;
-                productoId = p.getId();
-                break;
-              }
-            }
-          }
-        }
-
-        linea.setExisteEnSistema(productoEncontrado);
-        linea.setProductoId(productoId);
-
-        // Si no existe, agregarlo a productos no encontrados
-        if (!productoEncontrado) {
-          AnalisisXmlResponse.ProductoNoEncontrado noEncontrado =
-              new AnalisisXmlResponse.ProductoNoEncontrado();
-          noEncontrado.setCodigo(detalle.getCodigo());
-          noEncontrado.setDescripcion(detalle.getDetalle());
-          noEncontrado.setCodigoCabys(detalle.getCodigoCabys());
-          analisis.getProductosNoEncontrados().add(noEncontrado);
-        }
-
-        lineasAnalisis.add(linea);
-      }
-
-
-      analisis.setLineas(lineasAnalisis);
-
-
-      // Verificar si ya existe la factura
-      if (compraRepository.existsByClaveHacienda(facturaXml.getClave())) {
-        analisis.setEsValido(false);
-        analisis.getErroresValidacion().add("Esta factura ya fue procesada anteriormente");
-      }
-
-      // Analizar emisor
+      // Procesar emisor
       if (facturaXml.getEmisor() != null) {
         AnalisisXmlResponse.EmisorInfo emisorInfo = new AnalisisXmlResponse.EmisorInfo();
         emisorInfo.setIdentificacion(facturaXml.getEmisor().getNumeroIdentificacion());
@@ -158,46 +79,117 @@ public class CompraService {
         emisorInfo.setTelefono(facturaXml.getEmisor().getTelefono());
         emisorInfo.setEmail(facturaXml.getEmisor().getCorreoElectronico());
 
-        // Buscar proveedor por empresa
-        proveedor = proveedorRepository.findByNumeroIdentificacionAndEmpresaId(
-            facturaXml.getEmisor().getNumeroIdentificacion(),
-            empresaId
-        ).orElse(null);
-
-        if (proveedor != null) {
-          emisorInfo.setExisteEnSistema(true);
-          emisorInfo.setProveedorId(proveedor.getId());
-
-          // Analizar productos usando código del proveedor
-          for (FacturaXmlDto.DetalleDto detalle : facturaXml.getDetalles()) {
-            boolean productoEncontrado = false;
-
-            // Buscar por código del proveedor PRIMERO
-            ProductoCodigoProveedor pcp = productoCodigoProveedorRepository
-                .findByProveedorAndCodigo(proveedor.getId(), detalle.getCodigo())
-                .orElse(null);
-
-            if (pcp != null && pcp.getProducto().getEmpresa().getId().equals(empresaId)) {
-              productoEncontrado = true;
-            }
-
-            if (!productoEncontrado) {
-              AnalisisXmlResponse.ProductoNoEncontrado productoNoEncontrado =
-                  new AnalisisXmlResponse.ProductoNoEncontrado();
-              productoNoEncontrado.setCodigo(detalle.getCodigo());
-              productoNoEncontrado.setCodigoCabys(detalle.getCodigoCabys());
-              productoNoEncontrado.setDescripcion(detalle.getDetalle());
-              analisis.getProductosNoEncontrados().add(productoNoEncontrado);
-            }
-          }
+        // Verificar si existe en el sistema
+        if (empresaId != null) {
+          Optional<Proveedor> proveedorOpt = proveedorRepository.findByNumeroIdentificacionAndEmpresaId(
+              facturaXml.getEmisor().getNumeroIdentificacion(),
+              empresaId
+          );
+          emisorInfo.setExisteEnSistema(proveedorOpt.isPresent());
+          proveedorOpt.ifPresent(p -> emisorInfo.setProveedorId(p.getId()));
         } else {
           emisorInfo.setExisteEnSistema(false);
-          analisis.getErroresValidacion()
-              .add("El proveedor no existe en el sistema. Debe crearlo primero.");
         }
 
         analisis.setEmisor(emisorInfo);
       }
+
+      // Procesar líneas
+      if (facturaXml.getDetalles() != null) {
+        for (FacturaXmlDto.DetalleDto detalleXml : facturaXml.getDetalles()) {
+          AnalisisXmlResponse.LineaAnalisis linea = new AnalisisXmlResponse.LineaAnalisis();
+          linea.setNumeroLinea(detalleXml.getNumeroLinea());
+          linea.setCodigo(detalleXml.getCodigo());
+          linea.setCodigoCabys(detalleXml.getCodigoCabys());
+          linea.setCantidad(detalleXml.getCantidad());
+          linea.setUnidadMedida(detalleXml.getUnidadMedida());
+          linea.setDescripcion(detalleXml.getDetalle());
+          linea.setPrecioUnitario(detalleXml.getPrecioUnitario());
+          linea.setMontoDescuento(detalleXml.getMontoDescuento() != null ? detalleXml.getMontoDescuento() : BigDecimal.ZERO);
+          linea.setNaturalezaDescuento(detalleXml.getNaturalezaDescuento());
+          linea.setMontoTotal(detalleXml.getSubTotal() != null ? detalleXml.getSubTotal() : detalleXml.getMontoTotal());
+
+          // Procesar impuestos
+          if (detalleXml.getImpuestos() != null && !detalleXml.getImpuestos().isEmpty()) {
+            FacturaXmlDto.ImpuestoDto impuestoPrincipal = detalleXml.getImpuestos().get(0);
+            linea.setCodigoTarifaIVA(impuestoPrincipal.getCodigoTarifa());
+            linea.setTarifaIVA(impuestoPrincipal.getTarifa());
+            linea.setMontoImpuesto(impuestoPrincipal.getMonto());
+          } else {
+            linea.setMontoImpuesto(BigDecimal.ZERO);
+          }
+
+          // Calcular monto total línea
+          BigDecimal montoTotalLinea = linea.getMontoTotal().add(linea.getMontoImpuesto());
+          linea.setMontoTotalLinea(montoTotalLinea);
+
+          // Procesar exoneraciones
+          if (detalleXml.getExoneracion() != null) {
+            AnalisisXmlResponse.ExoneracionInfo exoneracion = new AnalisisXmlResponse.ExoneracionInfo();
+            exoneracion.setTipoDocumento(detalleXml.getExoneracion().getTipoDocumento());
+            exoneracion.setNumeroDocumento(detalleXml.getExoneracion().getNumeroDocumento());
+            exoneracion.setNombreInstitucion(detalleXml.getExoneracion().getNombreInstitucion());
+            exoneracion.setFechaEmision(detalleXml.getExoneracion().getFechaEmision());
+            exoneracion.setPorcentajeExoneracion(detalleXml.getExoneracion().getPorcentajeExoneracion());
+            exoneracion.setMontoExoneracion(detalleXml.getExoneracion().getMontoExoneracion());
+            linea.setExoneracion(exoneracion);
+          }
+
+          // Verificar si producto existe
+          if (empresaId != null && detalleXml.getCodigo() != null) {
+            Optional<Producto> productoOpt = productoService.findByEmpresaIdAndCodigoCabys(
+                empresaId,
+                detalleXml.getCodigo()
+            );
+            linea.setExisteEnSistema(productoOpt.isPresent());
+            productoOpt.ifPresent(p -> linea.setProductoId(p.getId()));
+
+            if (!productoOpt.isPresent()) {
+              AnalisisXmlResponse.ProductoNoEncontrado pne = new AnalisisXmlResponse.ProductoNoEncontrado();
+              pne.setCodigo(detalleXml.getCodigo());
+              pne.setDescripcion(detalleXml.getDetalle());
+              pne.setCodigoCabys(detalleXml.getCodigoCabys());
+              analisis.getProductosNoEncontrados().add(pne);
+            }
+          } else {
+            linea.setExisteEnSistema(false);
+          }
+
+          analisis.getLineas().add(linea);
+        }
+      }
+
+      // Procesar resumen de totales
+      AnalisisXmlResponse.ResumenTotales resumen = new AnalisisXmlResponse.ResumenTotales();
+
+      // Si el XML tiene la nueva estructura ResumenFactura
+      if (facturaXml.getResumenFactura() != null) {
+        resumen.setTotalGravado(facturaXml.getResumenFactura().getTotalGravado());
+        resumen.setTotalExento(facturaXml.getResumenFactura().getTotalExento());
+        resumen.setTotalExonerado(facturaXml.getResumenFactura().getTotalExonerado());
+        resumen.setTotalVenta(facturaXml.getResumenFactura().getTotalVenta());
+        resumen.setTotalDescuentos(facturaXml.getResumenFactura().getTotalDescuentos());
+        resumen.setTotalVentaNeta(facturaXml.getResumenFactura().getTotalVentaNeta());
+        resumen.setTotalImpuesto(facturaXml.getResumenFactura().getTotalImpuesto());
+        resumen.setTotalIVADevuelto(facturaXml.getResumenFactura().getTotalIVADevuelto());
+        resumen.setTotalOtrosCargos(facturaXml.getResumenFactura().getTotalOtrosCargos());
+        resumen.setTotalComprobante(facturaXml.getResumenFactura().getTotalComprobante());
+      } else {
+        // Fallback para estructura antigua
+        resumen.setTotalGravado(facturaXml.getTotalGravado() != null ? facturaXml.getTotalGravado() : BigDecimal.ZERO);
+        resumen.setTotalExento(facturaXml.getTotalExento() != null ? facturaXml.getTotalExento() : BigDecimal.ZERO);
+        resumen.setTotalExonerado(facturaXml.getTotalExonerado() != null ? facturaXml.getTotalExonerado() : BigDecimal.ZERO);
+        resumen.setTotalVenta(facturaXml.getTotalVenta() != null ? facturaXml.getTotalVenta() : BigDecimal.ZERO);
+        resumen.setTotalDescuentos(facturaXml.getTotalDescuentos() != null ? facturaXml.getTotalDescuentos() : BigDecimal.ZERO);
+        resumen.setTotalVentaNeta(facturaXml.getTotalVentaNeta() != null ? facturaXml.getTotalVentaNeta() : BigDecimal.ZERO);
+        resumen.setTotalImpuesto(facturaXml.getTotalImpuesto() != null ? facturaXml.getTotalImpuesto() : BigDecimal.ZERO);
+        resumen.setTotalIVADevuelto(BigDecimal.ZERO);
+        resumen.setTotalOtrosCargos(facturaXml.getTotalOtrosCargos() != null ? facturaXml.getTotalOtrosCargos() : BigDecimal.ZERO);
+        resumen.setTotalComprobante(facturaXml.getTotalComprobante() != null ? facturaXml.getTotalComprobante() : BigDecimal.ZERO);
+      }
+
+      analisis.setResumenTotales(resumen);
+      analisis.setTotalComprobante(resumen.getTotalComprobante());
 
       // Determinar tipo de documento
       analisis.setTipoDocumento("FACTURA_ELECTRONICA");
@@ -319,10 +311,10 @@ public class CompraService {
             detalleXml.getMontoDescuento() : BigDecimal.ZERO);
         detalle.setNaturalezaDescuento(detalleXml.getNaturalezaDescuento());
         detalle.setSubTotal(detalleXml.getSubTotal());
-        detalle.setCodigoTarifaIVA(detalleXml.getCodigoTarifa());
-        detalle.setTarifaIVA(detalleXml.getTarifa());
-        detalle.setMontoImpuesto(detalleXml.getMontoImpuesto() != null ?
-            detalleXml.getMontoImpuesto() : BigDecimal.ZERO);
+        detalle.setCodigoTarifaIVA(detalleXml.getImpuestos().get(0).getCodigoTarifa());
+        detalle.setTarifaIVA(detalleXml.getImpuestos().get(0).getTarifa());
+        detalle.setMontoImpuesto(detalleXml.getImpuestos().get(0).getMonto() != null ?
+            detalleXml.getImpuestos().get(0).getMonto() : BigDecimal.ZERO);
         detalle.setMontoTotalLinea(detalleXml.getMontoTotalLinea());
 
         // Buscar producto por código del proveedor

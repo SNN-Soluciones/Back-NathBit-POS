@@ -22,5 +22,5 @@ public interface ProductoCrudService {
     Optional<Producto> buscarPorCodigoInterno(Long empresaId, String codigoInterno);
     Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras);
     void save(Producto producto);
-    List<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId);
+    Optional<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId);
 }

@@ -19,24 +19,26 @@ public class AnalisisXmlResponse {
     private Integer cantidadLineas;
     private List<String> erroresValidacion;
     private List<ProductoNoEncontrado> productosNoEncontrados;
-    private List<LineaAnalisis> lineas; // AGREGAR ESTA LÍNEA
-    private Integer plazoCredito; // AGREGAR PLAZO CRÉDITO
-    private String condicionVenta; // AGREGAR CONDICIÓN DE VENTA
+    private List<LineaAnalisis> lineas;
+    private Integer plazoCredito;
+    private String condicionVenta;
+
+    private ResumenTotales resumenTotales;
 
     @Data
     public static class EmisorInfo {
         private String identificacion;
-        private String tipoIdentificacion; // Agregar
+        private String tipoIdentificacion;
         private String nombre;
-        private String razonSocial; // Agregar
+        private String razonSocial;
         private boolean existeEnSistema;
         private Long proveedorId;
-        private String telefono; // Agregar
-        private String email; // Agregar
-        private String provincia; // Agregar
-        private String canton; // Agregar
-        private String distrito; // Agregar
-        private String otrasSenas; // Agregar
+        private String telefono;
+        private String email;
+        private String provincia;
+        private String canton;
+        private String distrito;
+        private String otrasSenas;
     }
 
     @Data
@@ -46,7 +48,6 @@ public class AnalisisXmlResponse {
         private String codigoCabys;
     }
 
-    // AGREGAR ESTA CLASE INTERNA
     @Data
     public static class LineaAnalisis {
         private Integer numeroLinea;
@@ -57,9 +58,53 @@ public class AnalisisXmlResponse {
         private String descripcion;
         private BigDecimal precioUnitario;
         private BigDecimal montoDescuento;
+        private String naturalezaDescuento; // AGREGAR
         private BigDecimal montoTotal;
         private BigDecimal montoImpuesto;
+        private String codigoTarifaIVA; // AGREGAR
+        private BigDecimal tarifaIVA; // AGREGAR
+        private BigDecimal montoTotalLinea; // AGREGAR (montoTotal + montoImpuesto)
         private boolean existeEnSistema;
         private Long productoId;
+
+        // AGREGAR: Información de exoneraciones si aplica
+        private ExoneracionInfo exoneracion;
+    }
+
+    // NUEVA CLASE: Resumen de totales según estructura de Hacienda
+    @Data
+    public static class ResumenTotales {
+        private BigDecimal totalGravado;
+        private BigDecimal totalExento;
+        private BigDecimal totalExonerado;
+        private BigDecimal totalVenta;
+        private BigDecimal totalDescuentos;
+        private BigDecimal totalVentaNeta;
+        private BigDecimal totalImpuesto;
+        private BigDecimal totalIVADevuelto; // Para casos especiales
+        private BigDecimal totalOtrosCargos;
+        private BigDecimal totalComprobante;
+
+        // Desglose de impuestos si necesario
+        private List<ImpuestoDetalle> detalleImpuestos;
+    }
+
+    @Data
+    public static class ImpuestoDetalle {
+        private String codigo; // 01=IVA, 02=Selectivo consumo, etc
+        private String codigoTarifa; // 01=0%, 02=1%, 04=2%, 08=4%, etc
+        private BigDecimal tarifa;
+        private BigDecimal monto;
+        private BigDecimal montoExportacion;
+    }
+
+    @Data
+    public static class ExoneracionInfo {
+        private String tipoDocumento;
+        private String numeroDocumento;
+        private String nombreInstitucion;
+        private LocalDateTime fechaEmision;
+        private BigDecimal porcentajeExoneracion;
+        private BigDecimal montoExoneracion;
     }
 }

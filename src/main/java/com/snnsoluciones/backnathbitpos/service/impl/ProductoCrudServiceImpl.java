@@ -439,7 +439,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
   }
 
   @Override
-  public List<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId) {
+  public Optional<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId) {
     return productoRepository.findAllByEmpresaIdAndEmpresaCabys_CodigoCabys_Codigo(empresaId, codigoCabysId);
   }
 

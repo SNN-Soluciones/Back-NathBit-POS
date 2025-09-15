@@ -104,35 +104,29 @@ public class XmlProcessorService {
       Element linea = (Element) lineasDetalle.item(i);
       FacturaXmlDto.DetalleDto detalle = new FacturaXmlDto.DetalleDto();
 
-      // NumeroLinea
-      String numeroLinea = getTextContent(linea, "NumeroLinea");
-      if (numeroLinea != null && !numeroLinea.trim().isEmpty()) {
-        detalle.setNumeroLinea(Integer.parseInt(numeroLinea.trim()));
+      detalle.setNumeroLinea(parseInt(getTextContent(linea, "NumeroLinea"), i + 1));
+
+      // Código
+      NodeList codigos = linea.getElementsByTagName("Codigo");
+      if (codigos.getLength() > 0) {
+        Element codigo = (Element) codigos.item(0);
+        detalle.setCodigo(getTextContent(codigo, "Codigo"));
       }
 
-      // Código del producto
-      Element codigoComercial = (Element) linea.getElementsByTagName("CodigoComercial").item(0);
-      if (codigoComercial != null) {
-        detalle.setCodigo(getTextContent(codigoComercial, "Codigo"));
-        // El código CABYS está en el tag CodigoCABYS, no en CodigoComercial
+      // Código CABYS
+      NodeList codigosCabys = linea.getElementsByTagName("CodigoComercial");
+      if (codigosCabys.getLength() > 0) {
+        Element codigoCabys = (Element) codigosCabys.item(0);
+        detalle.setCodigoCabys(getTextContent(codigoCabys, "Codigo"));
       }
-      detalle.setCodigoCabys(getTextContent(linea, "CodigoCABYS"));
 
-      // Cantidad
-      detalle.setCantidad(parseBigDecimal(getTextContent(linea, "Cantidad"), BigDecimal.ZERO));
-
-      // Unidad de medida
+      detalle.setCantidad(parseBigDecimal(getTextContent(linea, "Cantidad"), BigDecimal.ONE));
       detalle.setUnidadMedida(getTextContent(linea, "UnidadMedida"));
-
-      // Descripción
       detalle.setDetalle(getTextContent(linea, "Detalle"));
-
-      // Precio unitario
       detalle.setPrecioUnitario(
           parseBigDecimal(getTextContent(linea, "PrecioUnitario"), BigDecimal.ZERO));
-
-      // Monto total
-      detalle.setMontoTotal(parseBigDecimal(getTextContent(linea, "MontoTotal"), BigDecimal.ZERO));
+      detalle.setMontoTotal(
+          parseBigDecimal(getTextContent(linea, "MontoTotal"), BigDecimal.ZERO));
 
       // Descuento
       Element descuento = (Element) linea.getElementsByTagName("Descuento").item(0);
@@ -140,30 +134,48 @@ public class XmlProcessorService {
         detalle.setMontoDescuento(
             parseBigDecimal(getTextContent(descuento, "MontoDescuento"), BigDecimal.ZERO));
         detalle.setNaturalezaDescuento(getTextContent(descuento, "NaturalezaDescuento"));
+      } else {
+        detalle.setMontoDescuento(BigDecimal.ZERO);
       }
 
-      // SubTotal
       detalle.setSubTotal(parseBigDecimal(getTextContent(linea, "SubTotal"), BigDecimal.ZERO));
 
       // Impuesto
       Element impuesto = (Element) linea.getElementsByTagName("Impuesto").item(0);
       if (impuesto != null) {
-        detalle.setCodigoImpuesto(getTextContent(impuesto, "Codigo"));
-        detalle.setCodigoTarifa(getTextContent(impuesto, "CodigoTarifaIVA"));
-        detalle.setTarifa(parseBigDecimal(getTextContent(impuesto, "Tarifa"), BigDecimal.ZERO));
-        detalle.setMontoImpuesto(
-            parseBigDecimal(getTextContent(impuesto, "Monto"), BigDecimal.ZERO));
+        // Crear lista de impuestos
+        List<FacturaXmlDto.ImpuestoDto> impuestos = new ArrayList<>();
+        FacturaXmlDto.ImpuestoDto impuestoDto = new FacturaXmlDto.ImpuestoDto();
+
+        impuestoDto.setCodigo(getTextContent(impuesto, "Codigo"));
+        impuestoDto.setCodigoTarifa(getTextContent(impuesto, "CodigoTarifa"));
+        impuestoDto.setTarifa(parseBigDecimal(getTextContent(impuesto, "Tarifa"), BigDecimal.ZERO));
+        impuestoDto.setMonto(parseBigDecimal(getTextContent(impuesto, "Monto"), BigDecimal.ZERO));
+
+        impuestos.add(impuestoDto);
+        detalle.setImpuestos(impuestos);
 
         // Exoneración
         Element exoneracion = (Element) impuesto.getElementsByTagName("Exoneracion").item(0);
         if (exoneracion != null) {
-          detalle.setTieneExoneracion(true);
-          detalle.setMontoExoneracion(
+          FacturaXmlDto.ExoneracionDto exoneracionDto = new FacturaXmlDto.ExoneracionDto();
+          exoneracionDto.setTipoDocumento(getTextContent(exoneracion, "TipoDocumento"));
+          exoneracionDto.setNumeroDocumento(getTextContent(exoneracion, "NumeroDocumento"));
+          exoneracionDto.setNombreInstitucion(getTextContent(exoneracion, "NombreInstitucion"));
+
+          String fechaExoneracion = getTextContent(exoneracion, "FechaEmision");
+          if (fechaExoneracion != null) {
+            exoneracionDto.setFechaEmision(
+                LocalDateTime.parse(fechaExoneracion, DateTimeFormatter.ISO_DATE_TIME));
+          }
+
+          exoneracionDto.setPorcentajeExoneracion(
+              parseBigDecimal(getTextContent(exoneracion, "PorcentajeExoneracion"), BigDecimal.ZERO));
+          exoneracionDto.setMontoExoneracion(
               parseBigDecimal(getTextContent(exoneracion, "MontoExoneracion"), BigDecimal.ZERO));
+
+          detalle.setExoneracion(exoneracionDto);
         }
-      } else {
-        // No hay impuesto (producto exento)
-        detalle.setMontoImpuesto(BigDecimal.ZERO);
       }
 
       // MontoTotalLinea
@@ -178,6 +190,9 @@ public class XmlProcessorService {
     // Extraer resumen
     Element resumen = (Element) doc.getElementsByTagName("ResumenFactura").item(0);
     if (resumen != null) {
+      // Crear ResumenFacturaDto
+      FacturaXmlDto.ResumenFacturaDto resumenFactura = new FacturaXmlDto.ResumenFacturaDto();
+
       // Códigos de moneda y tipo de cambio
       Element codigoTipoMoneda = (Element) resumen.getElementsByTagName("CodigoTipoMoneda").item(0);
       if (codigoTipoMoneda != null) {
@@ -186,39 +201,53 @@ public class XmlProcessorService {
             parseBigDecimal(getTextContent(codigoTipoMoneda, "TipoCambio"), BigDecimal.ONE));
       }
 
-      // Totales por tipo
-      factura.setTotalServiciosGravados(
+      // Llenar todos los totales en ResumenFacturaDto
+      resumenFactura.setTotalServiciosGravados(
           parseBigDecimal(getTextContent(resumen, "TotalServGravados"), BigDecimal.ZERO));
-      factura.setTotalServiciosExentos(
+      resumenFactura.setTotalServiciosExentos(
           parseBigDecimal(getTextContent(resumen, "TotalServExentos"), BigDecimal.ZERO));
-      factura.setTotalServiciosExonerados(
+      resumenFactura.setTotalServiciosExonerados(
           parseBigDecimal(getTextContent(resumen, "TotalServExonerado"), BigDecimal.ZERO));
-      factura.setTotalMercanciasGravadas(
-          parseBigDecimal(getTextContent(resumen, "TotalMercanciasGravadas"), BigDecimal.ZERO));
-      factura.setTotalMercanciasExentas(
-          parseBigDecimal(getTextContent(resumen, "TotalMercanciasExentas"), BigDecimal.ZERO));
-      factura.setTotalMercanciasExoneradas(
+      resumenFactura.setTotalMercanciasGravadas(
+          parseBigDecimal(getTextContent(resumen, "TotalMercGravadas"), BigDecimal.ZERO));
+      resumenFactura.setTotalMercanciasExentas(
+          parseBigDecimal(getTextContent(resumen, "TotalMercExentas"), BigDecimal.ZERO));
+      resumenFactura.setTotalMercanciasExoneradas(
           parseBigDecimal(getTextContent(resumen, "TotalMercExonerada"), BigDecimal.ZERO));
-
-      // Totales generales
-      factura.setTotalGravado(
+      resumenFactura.setTotalGravado(
           parseBigDecimal(getTextContent(resumen, "TotalGravado"), BigDecimal.ZERO));
-      factura.setTotalExento(
+      resumenFactura.setTotalExento(
           parseBigDecimal(getTextContent(resumen, "TotalExento"), BigDecimal.ZERO));
-      factura.setTotalExonerado(
+      resumenFactura.setTotalExonerado(
           parseBigDecimal(getTextContent(resumen, "TotalExonerado"), BigDecimal.ZERO));
-      factura.setTotalVenta(
+      resumenFactura.setTotalVenta(
           parseBigDecimal(getTextContent(resumen, "TotalVenta"), BigDecimal.ZERO));
-      factura.setTotalDescuentos(
+      resumenFactura.setTotalDescuentos(
           parseBigDecimal(getTextContent(resumen, "TotalDescuentos"), BigDecimal.ZERO));
-      factura.setTotalVentaNeta(
+      resumenFactura.setTotalVentaNeta(
           parseBigDecimal(getTextContent(resumen, "TotalVentaNeta"), BigDecimal.ZERO));
-      factura.setTotalImpuesto(
+      resumenFactura.setTotalImpuesto(
           parseBigDecimal(getTextContent(resumen, "TotalImpuesto"), BigDecimal.ZERO));
-      factura.setTotalOtrosCargos(
+      resumenFactura.setTotalIVADevuelto(
+          parseBigDecimal(getTextContent(resumen, "TotalIVADevuelto"), BigDecimal.ZERO));
+      resumenFactura.setTotalOtrosCargos(
           parseBigDecimal(getTextContent(resumen, "TotalOtrosCargos"), BigDecimal.ZERO));
-      factura.setTotalComprobante(
+      resumenFactura.setTotalComprobante(
           parseBigDecimal(getTextContent(resumen, "TotalComprobante"), BigDecimal.ZERO));
+
+      // Asignar el resumen
+      factura.setResumenFactura(resumenFactura);
+
+      // También llenar los campos antiguos para compatibilidad
+      factura.setTotalGravado(resumenFactura.getTotalGravado());
+      factura.setTotalExento(resumenFactura.getTotalExento());
+      factura.setTotalExonerado(resumenFactura.getTotalExonerado());
+      factura.setTotalVenta(resumenFactura.getTotalVenta());
+      factura.setTotalDescuentos(resumenFactura.getTotalDescuentos());
+      factura.setTotalVentaNeta(resumenFactura.getTotalVentaNeta());
+      factura.setTotalImpuesto(resumenFactura.getTotalImpuesto());
+      factura.setTotalOtrosCargos(resumenFactura.getTotalOtrosCargos());
+      factura.setTotalComprobante(resumenFactura.getTotalComprobante());
     }
 
     // Guardar XML original
@@ -227,20 +256,12 @@ public class XmlProcessorService {
     return factura;
   }
 
-  /**
-   * Método helper para parsear BigDecimal con manejo de errores
-   */
-  private BigDecimal parseBigDecimal(String value, BigDecimal defaultValue) {
-    if (value == null || value.trim().isEmpty()) {
-      return defaultValue;
-    }
-
+  private boolean esBase64(String str) {
     try {
-      // Limpiar el valor: quitar espacios y reemplazar coma por punto si es necesario
-      String cleanValue = value.trim().replace(",", ".");
-      return new BigDecimal(cleanValue);
-    } catch (NumberFormatException e) {
-      return defaultValue;
+      Base64.getDecoder().decode(str);
+      return true;
+    } catch (IllegalArgumentException e) {
+      return false;
     }
   }
 
@@ -260,17 +281,25 @@ public class XmlProcessorService {
     return null;
   }
 
-  private String getTextContent(Element parent, String tagName, String defaultValue) {
-    String value = getTextContent(parent, tagName);
-    return value != null ? value : defaultValue;
+  private BigDecimal parseBigDecimal(String value, BigDecimal defaultValue) {
+    if (value == null || value.trim().isEmpty()) {
+      return defaultValue;
+    }
+    try {
+      return new BigDecimal(value.trim());
+    } catch (NumberFormatException e) {
+      return defaultValue;
+    }
   }
 
-  private boolean esBase64(String str) {
+  private Integer parseInt(String value, Integer defaultValue) {
+    if (value == null || value.trim().isEmpty()) {
+      return defaultValue;
+    }
     try {
-      Base64.getDecoder().decode(str);
-      return true;
-    } catch (IllegalArgumentException e) {
-      return false;
+      return Integer.parseInt(value.trim());
+    } catch (NumberFormatException e) {
+      return defaultValue;
     }
   }
 }

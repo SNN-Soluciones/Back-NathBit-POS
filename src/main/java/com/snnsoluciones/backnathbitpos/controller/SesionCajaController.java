@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.dto.sesiones.RegistrarValeRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
+import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.MovimientoCajaService;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
@@ -356,5 +357,135 @@ public class SesionCajaController {
     String token = httpRequest.getHeader("Authorization");
     token = token.substring(7, token.length());
     return token;
+  }
+
+  @Operation(summary = "Obtener todas las sesiones (Admin)")
+  @GetMapping("/todas")
+  @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+  public ResponseEntity<ApiResponse<List<SesionCajaResponse>>> obtenerTodasLasSesiones() {
+    try {
+      List<SesionCaja> sesiones = sesionCajaService.buscarTodas();
+
+      List<SesionCajaResponse> response = sesiones.stream()
+          .map(this::construirResponse)
+          .collect(Collectors.toList());
+
+      return ResponseEntity.ok(ApiResponse.ok(
+          "Sesiones obtenidas exitosamente",
+          response
+      ));
+    } catch (Exception e) {
+      log.error("Error obteniendo todas las sesiones: {}", e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error("Error al obtener sesiones: " + e.getMessage()));
+    }
+  }
+
+  @Operation(summary = "Obtener sesiones por estado (Admin)")
+  @GetMapping("/estado/{estado}")
+  @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+  public ResponseEntity<ApiResponse<List<SesionCajaResponse>>> obtenerSesionesPorEstado(
+      @PathVariable String estado) {
+
+    try {
+      EstadoSesion estadoEnum = EstadoSesion.valueOf(estado.toUpperCase());
+      List<SesionCaja> sesiones = sesionCajaService.buscarPorEstado(estadoEnum);
+
+      List<SesionCajaResponse> response = sesiones.stream()
+          .map(this::construirResponse)
+          .collect(Collectors.toList());
+
+      return ResponseEntity.ok(ApiResponse.ok(
+          "Sesiones " + estado + " obtenidas",
+          response
+      ));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error("Estado inválido: " + estado));
+    } catch (Exception e) {
+      log.error("Error obteniendo sesiones por estado: {}", e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error("Error: " + e.getMessage()));
+    }
+  }
+
+  @Operation(summary = "Cerrar sesión administrativamente")
+  @PostMapping("/{id}/cerrar-admin")
+  @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+  public ResponseEntity<ApiResponse<CierreCajaResponse>> cerrarSesionAdmin(
+      @PathVariable Long id,
+      @Valid @RequestBody CerrarSesionRequest request,
+      HttpServletRequest httpRequest) {
+
+    try {
+      String token = httpRequest.getHeader("Authorization").substring(7);
+      Long usuarioAdminId = jwtTokenProvider.getUserIdFromToken(token);
+      String usuarioAdminNombre = jwtTokenProvider.getEmailFromToken(token);
+
+      // Verificar que la sesión existe
+      SesionCaja sesion = sesionCajaService.buscarPorId(id)
+          .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+      // Verificar que está abierta
+      if (sesion.getEstado() != EstadoSesion.ABIERTA) {
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error("La sesión no está abierta"));
+      }
+
+      // Agregar nota de cierre administrativo
+      String observacionesAdmin = request.getObservaciones() +
+          " | Cerrado por admin: " + usuarioAdminNombre + " (ID: " + usuarioAdminId + ")";
+
+      CerrarSesionRequest requestAdmin = CerrarSesionRequest.builder()
+          .montoCierre(request.getMontoCierre())
+          .observaciones(observacionesAdmin)
+          .build();
+
+      // Obtener monto esperado antes de cerrar
+      BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
+      BigDecimal diferencia = request.getMontoCierre().subtract(montoEsperado);
+
+      // Cerrar sesión (sin validación de umbral para admin)
+      SesionCaja sesionCerrada = sesionCajaService.cerrarSesionAdmin(
+          id,
+          request.getMontoCierre(),
+          observacionesAdmin
+      );
+
+      // Construir respuesta
+      CierreCajaResponse response = CierreCajaResponse.builder()
+          .sesionId(sesionCerrada.getId())
+          .fechaApertura(sesionCerrada.getFechaHoraApertura())
+          .fechaCierre(sesionCerrada.getFechaHoraCierre())
+          .montoInicial(sesionCerrada.getMontoInicial())
+          .totalVentas(sesionCerrada.getTotalVentas())
+          .totalDevoluciones(sesionCerrada.getTotalDevoluciones())
+          .totalVales(movimientoCajaService.obtenerTotalVales(id))
+          .montoEsperado(montoEsperado)
+          .montoCierre(sesionCerrada.getMontoCierre())
+          .diferencia(diferencia)
+          .cantidadFacturas(sesionCerrada.getCantidadFacturas())
+          .cantidadTiquetes(sesionCerrada.getCantidadTiquetes())
+          .cantidadNotasCredito(sesionCerrada.getCantidadNotasCredito())
+          .totalEfectivo(sesionCerrada.getTotalEfectivo())
+          .totalTarjeta(sesionCerrada.getTotalTarjeta())
+          .totalTransferencia(sesionCerrada.getTotalTransferencia())
+          .observaciones(sesionCerrada.getObservacionesCierre())
+          .build();
+
+      // Log de auditoría
+      log.info("Cierre administrativo de sesión {} por usuario {} - Diferencia: {}",
+          id, usuarioAdminId, diferencia);
+
+      return ResponseEntity.ok(ApiResponse.ok(
+          "Sesión cerrada administrativamente",
+          response
+      ));
+
+    } catch (Exception e) {
+      log.error("Error en cierre administrativo: {}", e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error("Error al cerrar sesión: " + e.getMessage()));
+    }
   }
 }

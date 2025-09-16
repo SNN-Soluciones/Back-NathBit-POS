@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.service;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 
+import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -38,4 +39,8 @@ public interface SesionCajaService {
 
     List<SesionCaja> listarSesionesDia(Long sucursalId, LocalDate fecha);
     boolean validarCierreDia(Long terminalId);
+
+    List<SesionCaja> buscarTodas();
+    List<SesionCaja> buscarPorEstado(EstadoSesion estado);
+    SesionCaja cerrarSesionAdmin(Long sesionId, BigDecimal montoCierre, String observaciones);
 }

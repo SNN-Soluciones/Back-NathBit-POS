@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
+import com.snnsoluciones.backnathbitpos.entity.FacturaMedioPago;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
@@ -370,7 +371,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
                     (f.getCliente() != null ? f.getCliente().getRazonSocial() : "Cliente General"))
                 .total(f.getTotalComprobante())
                 .estado(f.getEstado().toString())
-                .fechaEmision(LocalDateTime.parse(f.getFechaEmision()))
+                .fechaEmision(LocalDateTime.now())
                 .metodoPago(obtenerMetodosPago(f))
                 .build();
 
@@ -420,6 +421,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
                     obtenerNombreUsuario(m.getAutorizadoPorId()) :
                     "No especificado")
                 .fecha(m.getFechaHora())
+                .fecha(m.getFechaHora())
                 .tipo(m.getTipoMovimiento().toString())
                 .build())
             .collect(Collectors.toList());
@@ -449,5 +451,140 @@ public class SesionCajaServiceImpl implements SesionCajaService {
             .map(mp -> mp.getMedioPago().toString())
             .distinct()
             .collect(Collectors.joining(", "));
+    }
+
+    @Override
+    public List<SesionCaja> buscarTodas() {
+        log.info("Obteniendo todas las sesiones de caja");
+        return sesionCajaRepository.findAll();
+    }
+
+    @Override
+    public List<SesionCaja> buscarPorEstado(EstadoSesion estado) {
+        log.info("Buscando sesiones por estado: {}", estado);
+        return sesionCajaRepository.findByEstado(estado);
+    }
+
+    @Override
+    public SesionCaja cerrarSesionAdmin(Long sesionId, BigDecimal montoCierre, String observaciones) {
+        log.info("Cierre administrativo de sesión: {}", sesionId);
+
+        SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+            .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+        if (sesion.getEstado() != EstadoSesion.ABIERTA) {
+            throw new RuntimeException("La sesión no está abierta");
+        }
+
+        // Actualizar totales desde las facturas
+        actualizarTotalesDesdeFacturas(sesion);
+
+        // Cerrar sesión sin validaciones de umbral
+        sesion.setFechaHoraCierre(LocalDateTime.now());
+        sesion.setMontoCierre(montoCierre);
+        sesion.setObservacionesCierre(observaciones);
+        sesion.setEstado(EstadoSesion.CERRADA);
+
+        sesion = sesionCajaRepository.save(sesion);
+
+        log.info("Sesión {} cerrada administrativamente con diferencia de {}",
+            sesionId,
+            montoCierre.subtract(calcularMontoEsperado(sesion)));
+
+        return sesion;
+    }
+
+    // Agregar este método en SesionCajaServiceImpl
+
+    private void actualizarTotalesDesdeFacturas(SesionCaja sesion) {
+        log.info("Actualizando totales desde facturas para sesión: {}", sesion.getId());
+
+        // Obtener todas las facturas de la sesión
+        List<Factura> facturas = facturaRepository.findBySesionCajaId(sesion.getId());
+
+        // Reiniciar contadores
+        int cantFacturas = 0;
+        int cantTiquetes = 0;
+        int cantNC = 0;
+
+        // Reiniciar totales por tipo de pago
+        BigDecimal totalEfectivo = BigDecimal.ZERO;
+        BigDecimal totalTarjeta = BigDecimal.ZERO;
+        BigDecimal totalTransferencia = BigDecimal.ZERO;
+        BigDecimal totalOtros = BigDecimal.ZERO;
+
+        // Totales generales
+        BigDecimal totalVentas = BigDecimal.ZERO;
+        BigDecimal totalDevoluciones = BigDecimal.ZERO;
+
+        for (Factura factura : facturas) {
+            // Solo contar documentos válidos (no anulados ni rechazados)
+            if (factura.getEstado() == EstadoFactura.ANULADA ||
+                factura.getEstado() == EstadoFactura.RECHAZADA) {
+                continue;
+            }
+
+            BigDecimal totalFactura = factura.getTotalComprobante();
+
+            // Contar por tipo de documento
+            switch (factura.getTipoDocumento()) {
+                case FACTURA_ELECTRONICA:
+                case FACTURA_INTERNA:
+                    cantFacturas++;
+                    totalVentas = totalVentas.add(totalFactura);
+                    break;
+
+                case TIQUETE_ELECTRONICO:
+                case TIQUETE_INTERNO:
+                    cantTiquetes++;
+                    totalVentas = totalVentas.add(totalFactura);
+                    break;
+
+                case NOTA_CREDITO:
+                    cantNC++;
+                    totalDevoluciones = totalDevoluciones.add(totalFactura);
+                    break;
+            }
+
+            // Sumar por tipo de pago
+            if (factura.getMediosPago() != null) {
+                for (FacturaMedioPago medioPago : factura.getMediosPago()) {
+                    switch (medioPago.getMedioPago()) {
+                        case EFECTIVO:
+                            totalEfectivo = totalEfectivo.add(medioPago.getMonto());
+                            break;
+
+                        case TARJETA:
+                            totalTarjeta = totalTarjeta.add(medioPago.getMonto());
+                            break;
+
+                        case TRANSFERENCIA:
+                        case SINPE_MOVIL:
+                            totalTransferencia = totalTransferencia.add(medioPago.getMonto());
+                            break;
+
+                        default:
+                            totalOtros = totalOtros.add(medioPago.getMonto());
+                            break;
+                    }
+                }
+            }
+        }
+
+        // Actualizar la sesión con los totales calculados
+        sesion.setCantidadFacturas(cantFacturas);
+        sesion.setCantidadTiquetes(cantTiquetes);
+        sesion.setCantidadNotasCredito(cantNC);
+
+        sesion.setTotalVentas(totalVentas);
+        sesion.setTotalDevoluciones(totalDevoluciones);
+
+        sesion.setTotalEfectivo(totalEfectivo);
+        sesion.setTotalTarjeta(totalTarjeta);
+        sesion.setTotalTransferencia(totalTransferencia);
+        sesion.setTotalOtros(totalOtros);
+
+        log.info("Totales actualizados - Ventas: {}, Devoluciones: {}, Efectivo: {}",
+            totalVentas, totalDevoluciones, totalEfectivo);
     }
 }

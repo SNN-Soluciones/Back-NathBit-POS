@@ -118,4 +118,6 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
     @Query("SELECT s FROM SesionCaja s LEFT JOIN FETCH s.usuario LEFT JOIN FETCH s.terminal " +
         "WHERE s.estado = :estado ORDER BY s.fechaHoraApertura DESC")
     List<SesionCaja> findAllByEstadoWithDetails(@Param("estado") EstadoSesion estado);
+
+    List<SesionCaja> findByEstado(EstadoSesion estado);
 }

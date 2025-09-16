@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.usuarios.CrearUsuarioCompletoRespons
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,7 +40,8 @@ public class UsuarioCreacionService {
         log.info("Iniciando creación de usuario completo: {}", request.getEmail());
 
         // Obtener usuario creador
-        String emailCreador = SecurityContextHolder.getContext().getAuthentication().getName();
+        ContextoUsuario contexto = (ContextoUsuario) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String emailCreador = contexto.getEmail();
         Usuario creador = usuarioRepository.findByEmail(emailCreador)
             .orElseThrow(() -> new RuntimeException("Usuario creador no encontrado"));
 
@@ -68,24 +70,50 @@ public class UsuarioCreacionService {
         nuevoUsuario.setActivo(true);
         nuevoUsuario.setCreatedAt(LocalDateTime.now());
 
-        // Generar contraseña
-        String passwordTemporal = request.getPassword();
-        if (passwordTemporal == null || passwordTemporal.isEmpty()) {
-            passwordTemporal = generarPasswordTemporal();
+        // Username - usar el proporcionado o el email
+        String username = request.getUsername();
+        if (username == null || username.trim().isEmpty()) {
+            username = request.getEmail().toLowerCase();
         }
-        nuevoUsuario.setPassword(passwordEncoder.encode(passwordTemporal));
+        nuevoUsuario.setUsername(username);
+
+        // Generar contraseña y determinar si es temporal
+        String passwordTemporal = null;
+        boolean esPasswordTemporal = false;
+
+        if (request.getPassword() == null || request.getPassword().isEmpty()) {
+            // Generar contraseña temporal
+            passwordTemporal = generarPasswordTemporal();
+            nuevoUsuario.setPassword(passwordEncoder.encode(passwordTemporal));
+            nuevoUsuario.setRequiereCambioPassword(true);  // ← ACTIVAR FLAG
+            esPasswordTemporal = true;
+        } else {
+            // Usar la contraseña proporcionada
+            nuevoUsuario.setPassword(passwordEncoder.encode(request.getPassword()));
+            nuevoUsuario.setRequiereCambioPassword(false);
+        }
 
         // Guardar usuario
         Usuario usuarioGuardado = usuarioRepository.save(nuevoUsuario);
-        log.info("Usuario creado con ID: {}", usuarioGuardado.getId());
+        log.info("Usuario creado con ID: {}, requiere cambio password: {}",
+            usuarioGuardado.getId(), usuarioGuardado.getRequiereCambioPassword());
 
-      usuarioEmailService.enviarCredencialesTemporal(
-          usuarioGuardado.getEmail(),
-          usuarioGuardado.getNombre(),
-          passwordTemporal
-      );
+        // Enviar email SOLO si se generó contraseña temporal
+        if (esPasswordTemporal && passwordTemporal != null) {
+            try {
+                usuarioEmailService.enviarCredencialesTemporal(
+                    usuarioGuardado.getEmail(),
+                    usuarioGuardado.getNombre(),
+                    passwordTemporal
+                );
+                log.info("Email de credenciales enviado a: {}", usuarioGuardado.getEmail());
+            } catch (Exception e) {
+                log.error("Error enviando email, pero usuario fue creado: {}", e.getMessage());
+                // No lanzar excepción para no interrumpir la creación
+            }
+        }
 
-      // Asignar empresas y sucursales según el rol
+        // Asignar empresas y sucursales según el rol
         List<String> empresasAsignadas = new ArrayList<>();
         List<String> sucursalesAsignadas = new ArrayList<>();
 
@@ -129,7 +157,8 @@ public class UsuarioCreacionService {
         response.setNombre(usuarioGuardado.getNombre());
         response.setApellidos(usuarioGuardado.getApellidos());
         response.setRol(usuarioGuardado.getRol());
-        response.setPasswordTemporal(request.getPassword() == null ? passwordTemporal : null);
+        response.setPasswordTemporal(esPasswordTemporal ? passwordTemporal : null);
+        response.setRequiereCambioPassword(esPasswordTemporal); // ← AGREGAR ESTO AL RESPONSE
         response.setEmpresasAsignadas(empresasAsignadas);
         response.setSucursalesAsignadas(sucursalesAsignadas);
         response.setCreatedAt(usuarioGuardado.getCreatedAt());

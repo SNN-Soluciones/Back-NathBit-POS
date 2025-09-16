@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioService;
 import com.snnsoluciones.backnathbitpos.service.auth.AuthService;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -299,18 +300,11 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalStateException("El usuario no requiere cambio de contraseña");
         }
 
-        // Cambiar la contraseña
+        // Cambiar la contraseña (esto ya la encripta Y actualiza el flag)
         usuarioService.cambiarPassword(usuario.getId(), nuevaPassword);
 
-        // Marcar como password definitiva
-        usuario.setRequiereCambioPassword(false);
-        usuarioService.actualizar(usuario.getId(), usuario);
-
-        // Generar nuevo token (opcional, pero recomendado)
-        Authentication auth = new UsernamePasswordAuthenticationToken(
-            email, nuevaPassword);
+        // Generar nuevo token
         String token = tokenProvider.generateToken(usuario.getId(), email, usuario.getRol().name());
-        String refreshToken = tokenProvider.generateRefreshToken(usuario.getId(), email);
 
         return TokenResponse.builder()
             .token(token)

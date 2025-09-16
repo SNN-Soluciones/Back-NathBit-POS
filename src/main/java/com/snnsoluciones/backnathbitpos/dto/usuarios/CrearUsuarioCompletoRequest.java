@@ -40,4 +40,6 @@ public class CrearUsuarioCompletoRequest {
 
     // Opcional - si no se envía, se genera una temporal
     private String password;
+    private Boolean requiereCambioPassword;
+    private String username;
 }

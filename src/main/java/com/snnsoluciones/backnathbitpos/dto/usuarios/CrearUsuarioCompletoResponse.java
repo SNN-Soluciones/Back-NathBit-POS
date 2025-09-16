@@ -32,4 +32,5 @@ public class CrearUsuarioCompletoResponse {
     private String mensaje;
     private LocalDateTime createdAt;
     private String creadoPor;
+    private Boolean requiereCambioPassword;
 }

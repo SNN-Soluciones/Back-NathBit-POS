@@ -139,14 +139,14 @@ public class UsuarioCreacionController {
     try {
       // Obtener el usuario actual del contexto
       ContextoUsuario contexto = (ContextoUsuario) auth.getPrincipal();
-      Long usuarioId = contexto.getUserId();
+      String emailUsuario = contexto.getEmail();
 
-      log.info("Usuario ID del contexto: {}", usuarioId);
+      log.info("Usuario ID del contexto: {}", emailUsuario);
 
-      Usuario usuarioActual = usuarioService.buscarPorId(usuarioId).orElse(null);
+      Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
 
       if (usuarioActual == null) {
-        log.error("Usuario no encontrado con ID: {}", usuarioId);
+        log.error("Usuario no encontrado con ID: {}", emailUsuario);
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
             .body(ApiResponse.error("Usuario no encontrado"));
       }
@@ -204,38 +204,56 @@ public class UsuarioCreacionController {
     }
   }
 
-  @Operation(summary = "Obtener sucursales asignables de una empresa")
   @GetMapping("/sucursales-asignables/{empresaId}")
   @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
   public ResponseEntity<ApiResponse<List<Map<String, Object>>>> obtenerSucursalesAsignables(
       @PathVariable Long empresaId,
       Authentication auth) {
 
-    String emailUsuario = auth.getName();
+    log.info("=== OBTENER SUCURSALES ASIGNABLES ===");
+    log.info("Empresa ID: {}", empresaId);
+
+    // CAMBIO: Obtener el ContextoUsuario correctamente
+    ContextoUsuario contexto = (ContextoUsuario) auth.getPrincipal();
+    String emailUsuario = contexto.getEmail();
+
+    log.info("Usuario solicitante: {}", emailUsuario);
+    log.info("Rol del usuario: {}", contexto.getRol());
+
     Usuario usuarioActual = usuarioService.buscarPorEmail(emailUsuario).orElse(null);
 
     if (usuarioActual == null) {
+      log.error("Usuario no encontrado: {}", emailUsuario);
       return ResponseEntity.status(HttpStatus.FORBIDDEN)
           .body(ApiResponse.error("Usuario no encontrado"));
     }
 
-    List<Sucursal> sucursales = usuarioPermisosService.obtenerSucursalesAsignables(
-        usuarioActual, empresaId);
+    try {
+      List<Sucursal> sucursales = usuarioPermisosService.obtenerSucursalesAsignables(
+          usuarioActual, empresaId);
 
-    // Convertir a formato simple para el frontend
-    List<Map<String, Object>> sucursalesResponse = sucursales.stream()
-        .map(sucursal -> {
-          Map<String, Object> map = new HashMap<>();
-          map.put("id", sucursal.getId());
-          map.put("nombre", sucursal.getNombre());
-          map.put("numeroSucursal", sucursal.getNumeroSucursal());
-          return map;
-        })
-        .toList();
+      log.info("Sucursales encontradas: {}", sucursales.size());
 
-    return ResponseEntity.ok(
-        ApiResponse.ok("Sucursales disponibles", sucursalesResponse)
-    );
+      // Convertir a formato simple para el frontend
+      List<Map<String, Object>> sucursalesResponse = sucursales.stream()
+          .map(sucursal -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", sucursal.getId());
+            map.put("nombre", sucursal.getNombre());
+            map.put("numeroSucursal", sucursal.getNumeroSucursal());
+            return map;
+          })
+          .toList();
+
+      return ResponseEntity.ok(
+          ApiResponse.ok("Sucursales disponibles", sucursalesResponse)
+      );
+
+    } catch (Exception e) {
+      log.error("Error obteniendo sucursales: ", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(ApiResponse.error("Error al obtener sucursales: " + e.getMessage()));
+    }
   }
 
   @Operation(summary = "Listar usuarios con filtros según permisos",

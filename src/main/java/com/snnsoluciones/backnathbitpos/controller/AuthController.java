@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.auth.*;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import com.snnsoluciones.backnathbitpos.service.auth.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -58,8 +59,9 @@ public class AuthController {
                 .body(ApiResponse.error("Las contraseñas no coinciden"));
         }
 
+        ContextoUsuario contexto = (ContextoUsuario) authentication.getPrincipal();
         TokenResponse response = authService.cambiarPasswordTemporal(
-            authentication.getName(),
+            contexto.getEmail(),
             request.getNuevaPassword()
         );
 

@@ -133,7 +133,8 @@ public class UsuarioServiceImpl implements UsuarioService {
 
         // Encriptar y guardar
         usuario.setPassword(passwordEncoder.encode(nuevaPassword));
-        usuario.setCreatedAt(LocalDateTime.now());
+        usuario.setRequiereCambioPassword(false); // ← AGREGAR ESTO
+        usuario.setUpdatedAt(LocalDateTime.now()); // ← CAMBIAR ESTO (era setCreatedAt)
 
         usuarioRepository.save(usuario);
 

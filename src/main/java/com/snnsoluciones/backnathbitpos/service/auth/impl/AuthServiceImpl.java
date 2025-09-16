@@ -72,6 +72,14 @@ public class AuthServiceImpl implements AuthService {
                 .activo(usuario.getActivo())
                 .build());
 
+        responseBuilder.passwordTemporal(usuario.getRequiereCambioPassword());
+
+        if (usuario.getRequiereCambioPassword()) {
+            // Si tiene password temporal, va directo a cambiar contraseña
+            responseBuilder.requiereSeleccion(false);
+            responseBuilder.rutaDestino("/cambiar-password");
+        }
+
         // Manejo según rol
         switch (usuario.getRol()) {
             case ROOT:
@@ -279,5 +287,34 @@ public class AuthServiceImpl implements AuthService {
         }
 
         throw new RuntimeException("No se pudo obtener el usuario actual");
+    }
+
+    @Override
+    public TokenResponse cambiarPasswordTemporal(String email, String nuevaPassword) {
+        Usuario usuario = usuarioService.buscarPorEmail(email)
+            .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+
+        // Verificar que efectivamente tiene password temporal
+        if (!usuario.getRequiereCambioPassword()) {
+            throw new IllegalStateException("El usuario no requiere cambio de contraseña");
+        }
+
+        // Cambiar la contraseña
+        usuarioService.cambiarPassword(usuario.getId(), nuevaPassword);
+
+        // Marcar como password definitiva
+        usuario.setRequiereCambioPassword(false);
+        usuarioService.actualizar(usuario.getId(), usuario);
+
+        // Generar nuevo token (opcional, pero recomendado)
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+            email, nuevaPassword);
+        String token = tokenProvider.generateToken(usuario.getId(), email, usuario.getRol().name());
+        String refreshToken = tokenProvider.generateRefreshToken(usuario.getId(), email);
+
+        return TokenResponse.builder()
+            .token(token)
+            .tipo("Bearer")
+            .build();
     }
 }

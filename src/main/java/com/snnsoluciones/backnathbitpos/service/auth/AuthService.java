@@ -9,4 +9,6 @@ public interface AuthService {
     TokenResponse establecerContexto(ContextoRequest request);
     
     TokenResponse refresh(String refreshToken);
+
+    TokenResponse cambiarPasswordTemporal(String email, String nuevaPassword);
 }

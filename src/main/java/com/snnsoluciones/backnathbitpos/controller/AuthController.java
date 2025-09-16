@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -43,5 +44,27 @@ public class AuthController {
         
         TokenResponse response = authService.refresh(refreshToken);
         return ResponseEntity.ok(ApiResponse.ok("Token actualizado", response));
+    }
+
+    @Operation(summary = "Cambiar contraseña temporal")
+    @PostMapping("/cambiar-password-temporal")
+    public ResponseEntity<ApiResponse<TokenResponse>> cambiarPasswordTemporal(
+        @Valid @RequestBody CambiarPasswordRequest request,
+        Authentication authentication) {
+
+        // Validar que las contraseñas coincidan
+        if (!request.getNuevaPassword().equals(request.getConfirmarPassword())) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Las contraseñas no coinciden"));
+        }
+
+        TokenResponse response = authService.cambiarPasswordTemporal(
+            authentication.getName(),
+            request.getNuevaPassword()
+        );
+
+        return ResponseEntity.ok(
+            ApiResponse.ok("Contraseña actualizada exitosamente", response)
+        );
     }
 }

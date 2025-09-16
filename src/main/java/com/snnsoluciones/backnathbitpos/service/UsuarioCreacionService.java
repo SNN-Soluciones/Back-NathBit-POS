@@ -29,6 +29,7 @@ public class UsuarioCreacionService {
     private final UsuarioSucursalRepository usuarioSucursalRepository;
     private final UsuarioPermisosService usuarioPermisosService;
     private final PasswordEncoder passwordEncoder;
+    private final UsuarioEmailService usuarioEmailService;
 
     /**
      * Crea un usuario completo con todas sus asignaciones en una transacción
@@ -78,7 +79,13 @@ public class UsuarioCreacionService {
         Usuario usuarioGuardado = usuarioRepository.save(nuevoUsuario);
         log.info("Usuario creado con ID: {}", usuarioGuardado.getId());
 
-        // Asignar empresas y sucursales según el rol
+      usuarioEmailService.enviarCredencialesTemporal(
+          usuarioGuardado.getEmail(),
+          usuarioGuardado.getNombre(),
+          passwordTemporal
+      );
+
+      // Asignar empresas y sucursales según el rol
         List<String> empresasAsignadas = new ArrayList<>();
         List<String> sucursalesAsignadas = new ArrayList<>();
 

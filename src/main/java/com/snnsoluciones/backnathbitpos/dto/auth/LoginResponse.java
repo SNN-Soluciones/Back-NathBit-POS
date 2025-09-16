@@ -20,4 +20,6 @@ public class LoginResponse {
     private EmpresaResumen empresa;         // Para ADMIN
     private List<SucursalResumen> sucursales; // Para ADMIN
     private Contexto contexto;              // Para OPERATIVOS
+
+    private Boolean passwordTemporal = false;
 }

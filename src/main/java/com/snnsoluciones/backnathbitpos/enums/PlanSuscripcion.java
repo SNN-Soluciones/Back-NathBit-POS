@@ -9,22 +9,22 @@ import lombok.Getter;
 @Getter
 public enum PlanSuscripcion {
 
-  BASICO(1, "Plan Básico", 50, 2, 5),
+  BASICO(1, "Plan Regimen Simplificado", 100, 10, 3),
   PROFESIONAL(5, "Plan Profesional", 200, 5, 20),
   EMPRESARIAL(0, "Plan Empresarial", 0, 0, 0), // Sin límites
   PERSONALIZADO(0, "Plan Personalizado", 0, 0, 0); // Configuración especial
 
   private final int maxSucursales;
   private final String descripcion;
-  private final int maxProductos;
+  private final int maxDocuentosElectronicos;
   private final int maxMesas;
   private final int maxUsuarios;
 
   PlanSuscripcion(int maxSucursales, String descripcion,
-      int maxProductos, int maxMesas, int maxUsuarios) {
+      int maxDocuentosElectronicos, int maxMesas, int maxUsuarios) {
     this.maxSucursales = maxSucursales;
     this.descripcion = descripcion;
-    this.maxProductos = maxProductos;
+    this.maxDocuentosElectronicos = maxDocuentosElectronicos;
     this.maxMesas = maxMesas;
     this.maxUsuarios = maxUsuarios;
   }
@@ -47,7 +47,7 @@ public enum PlanSuscripcion {
    * Verifica si el plan tiene algún límite
    */
   public boolean tieneLimites() {
-    return maxSucursales > 0 || maxProductos > 0 ||
+    return maxSucursales > 0 || maxDocuentosElectronicos > 0 ||
         maxMesas > 0 || maxUsuarios > 0;
   }
 }

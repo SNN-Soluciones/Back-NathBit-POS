@@ -1,16 +1,22 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
+import com.snnsoluciones.backnathbitpos.entity.Factura;
+import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
+import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
+import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +40,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     private final TerminalRepository terminalRepository;
     private final MovimientoCajaRepository movimientoCajaRepository;
     private final SecurityContextService securityContext;
+    private final FacturaRepository facturaRepository;
 
     @Override
     public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
@@ -242,58 +249,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         );
     }
 
-    @Override
-    public ResumenCajaDetalladoDTO obtenerResumenDetallado(Long sesionId) {
-        SesionCaja sesion = sesionCajaRepository.findById(sesionId)
-            .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
-
-        // Validar acceso
-        if (!puedeVerResumen(sesion)) {
-            throw new RuntimeException("No tiene permisos para ver este resumen");
-        }
-
-        ResumenCajaDetalladoDTO resumen = new ResumenCajaDetalladoDTO();
-        resumen.setSesionId(sesionId);
-        resumen.setTerminal(sesion.getTerminal().getNombre());
-        resumen.setCajero(sesion.getUsuario().getNombre().concat(" ").concat(sesion.getUsuario().getApellidos()));
-        resumen.setFechaApertura(sesion.getFechaHoraApertura());
-        resumen.setFechaCierre(sesion.getFechaHoraCierre());
-
-        // Montos básicos
-        resumen.setMontoInicial(sesion.getMontoInicial());
-        resumen.setVentasEfectivo(sesion.getTotalEfectivo());
-        resumen.setVentasTarjeta(sesion.getTotalTarjeta());
-        resumen.setVentasTransferencia(sesion.getTotalTransferencia());
-        resumen.setVentasOtros(sesion.getTotalOtros());
-
-        // Movimientos
-        resumen.setEntradasAdicionales(
-            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.ENTRADA_ADICIONAL)
-        );
-        resumen.setVales(
-            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_VALE)
-        );
-        resumen.setDepositos(
-            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_DEPOSITO)
-        );
-
-        // 🔥 AQUÍ TAMBIÉN USAS calcularMontoEsperado
-        resumen.setMontoEsperado(calcularMontoEsperado(sesion));
-        resumen.setMontoCierre(sesion.getMontoCierre());
-
-        // Contadores
-        resumen.setCantidadFacturas(sesion.getCantidadFacturas());
-        resumen.setCantidadTiquetes(sesion.getCantidadTiquetes());
-        resumen.setCantidadNotasCredito(sesion.getCantidadNotasCredito());
-
-        // Lista de movimientos
-        resumen.setMovimientos(
-            movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
-        );
-
-        return resumen;
-    }
-
     private boolean puedeVerResumen(SesionCaja sesion) {
         // Supervisores pueden ver todo
         if (securityContext.isSupervisor()) {
@@ -344,5 +299,155 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         montoEsperado = montoEsperado.subtract(salidas);
 
         return montoEsperado;
+    }
+
+    @Override
+    public ResumenCajaDetalladoDTO obtenerResumenDetallado(Long sesionId) {
+        log.info("Obteniendo resumen detallado de sesión: {}", sesionId);
+
+        SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+            .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+        // Validar permisos
+        if (!puedeVerResumen(sesion)) {
+            throw new RuntimeException("No tiene permisos para ver esta sesión");
+        }
+
+        // Construir resumen básico
+        ResumenCajaDetalladoDTO resumen = new ResumenCajaDetalladoDTO();
+        resumen.setSesionId(sesion.getId());
+        resumen.setTerminal(sesion.getTerminal().getNombre());
+        resumen.setCajero(sesion.getUsuario().getNombre().concat(" ").concat(sesion.getUsuario().getApellidos()));
+        resumen.setFechaApertura(sesion.getFechaHoraApertura());
+        resumen.setFechaCierre(sesion.getFechaHoraCierre());
+
+        // Montos básicos
+        resumen.setMontoInicial(sesion.getMontoInicial());
+        resumen.setVentasEfectivo(sesion.getTotalEfectivo());
+        resumen.setVentasTarjeta(sesion.getTotalTarjeta());
+        resumen.setVentasTransferencia(sesion.getTotalTransferencia());
+        resumen.setVentasOtros(sesion.getTotalOtros());
+
+        // Movimientos
+        resumen.setEntradasAdicionales(
+            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.ENTRADA_ADICIONAL)
+        );
+        resumen.setVales(
+            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_VALE)
+        );
+        resumen.setDepositos(
+            movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_DEPOSITO)
+        );
+
+        // Monto esperado
+        resumen.setMontoEsperado(calcularMontoEsperado(sesion));
+        resumen.setMontoCierre(sesion.getMontoCierre());
+
+        // NUEVO: Obtener facturas detalladas
+        List<Factura> facturas = facturaRepository.findBySesionCajaId(sesionId);
+
+        // Contadores y totales por tipo
+        int cantFacturas = 0, cantTiquetes = 0, cantNC = 0;
+        BigDecimal totalFacturas = BigDecimal.ZERO;
+        BigDecimal totalTiquetes = BigDecimal.ZERO;
+        BigDecimal totalNC = BigDecimal.ZERO;
+
+        // Lista de documentos para el detalle
+        List<ResumenCajaDetalladoDTO.DocumentoResumenDTO> documentos = new ArrayList<>();
+
+        for (Factura f : facturas) {
+            // Solo contar documentos válidos
+            if (f.getEstado() == EstadoFactura.ANULADA || f.getEstado() == EstadoFactura.RECHAZADA) {
+                continue;
+            }
+
+            // Construir DTO de documento
+            ResumenCajaDetalladoDTO.DocumentoResumenDTO doc = ResumenCajaDetalladoDTO.DocumentoResumenDTO.builder()
+                .id(f.getId())
+                .consecutivo(f.getConsecutivo())
+                .tipoDocumento(f.getTipoDocumento().getDescripcion())
+                .clienteNombre(f.getNombreReceptor() != null ? f.getNombreReceptor() :
+                    (f.getCliente() != null ? f.getCliente().getRazonSocial() : "Cliente General"))
+                .total(f.getTotalComprobante())
+                .estado(f.getEstado().toString())
+                .fechaEmision(LocalDateTime.parse(f.getFechaEmision()))
+                .metodoPago(obtenerMetodosPago(f))
+                .build();
+
+            documentos.add(doc);
+
+            // Sumar por tipo
+            switch (f.getTipoDocumento()) {
+                case FACTURA_ELECTRONICA:
+                case FACTURA_INTERNA:
+                    cantFacturas++;
+                    totalFacturas = totalFacturas.add(f.getTotalComprobante());
+                    break;
+                case TIQUETE_ELECTRONICO:
+                case TIQUETE_INTERNO:
+                    cantTiquetes++;
+                    totalTiquetes = totalTiquetes.add(f.getTotalComprobante());
+                    break;
+                case NOTA_CREDITO:
+                    cantNC++;
+                    totalNC = totalNC.add(f.getTotalComprobante());
+                    break;
+            }
+        }
+
+        // Establecer contadores
+        resumen.setCantidadFacturas(cantFacturas);
+        resumen.setCantidadTiquetes(cantTiquetes);
+        resumen.setCantidadNotasCredito(cantNC);
+
+        // Establecer totales
+        resumen.setTotalFacturas(totalFacturas);
+        resumen.setTotalTiquetes(totalTiquetes);
+        resumen.setTotalNotasCredito(totalNC);
+
+        // Establecer lista de documentos
+        resumen.setDocumentos(documentos);
+
+        List<MovimientoCaja> valesMovimientos = movimientoCajaRepository
+            .findBySesionCajaIdAndTipoMovimiento(sesionId, TipoMovimientoCaja.SALIDA_VALE);
+
+        List<ResumenCajaDetalladoDTO.ValeResumenDTO> valesDetalle = valesMovimientos.stream()
+            .map(m -> ResumenCajaDetalladoDTO.ValeResumenDTO.builder()
+                .id(m.getId())
+                .monto(m.getMonto())
+                .concepto(m.getConcepto())
+                .autorizadoPor(m.getAutorizadoPorId() != null ?
+                    obtenerNombreUsuario(m.getAutorizadoPorId()) :
+                    "No especificado")
+                .fecha(m.getFechaHora())
+                .tipo(m.getTipoMovimiento().toString())
+                .build())
+            .collect(Collectors.toList());
+
+        resumen.setValesDetalle(valesDetalle);
+
+        // Lista de todos los movimientos
+        resumen.setMovimientos(
+            movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
+        );
+
+        return resumen;
+    }
+
+    private String obtenerNombreUsuario(Long usuarioId) {
+        return usuarioRepository.findById(usuarioId)
+            .map(u -> u.getNombre() + " " + u.getApellidos())
+            .orElse("Usuario no encontrado");
+    }
+
+    private String obtenerMetodosPago(Factura factura) {
+        if (factura.getMediosPago() == null || factura.getMediosPago().isEmpty()) {
+            return "No especificado";
+        }
+
+        return factura.getMediosPago().stream()
+            .map(mp -> mp.getMedioPago().toString())
+            .distinct()
+            .collect(Collectors.joining(", "));
     }
 }

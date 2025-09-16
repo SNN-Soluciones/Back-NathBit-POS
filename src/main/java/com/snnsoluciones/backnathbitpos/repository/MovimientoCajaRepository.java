@@ -45,4 +45,6 @@ public interface MovimientoCajaRepository extends JpaRepository<MovimientoCaja, 
       "GROUP BY m.tipoMovimiento")
   List<Object[]> getResumenMovimientosPorSesion(@Param("sesionId") Long sesionId);
 
+  List<MovimientoCaja> findBySesionCajaIdAndTipoMovimiento(Long sesionCajaId, TipoMovimientoCaja tipo);
+
 }

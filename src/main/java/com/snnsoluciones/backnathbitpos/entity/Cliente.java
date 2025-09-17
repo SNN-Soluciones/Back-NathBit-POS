@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.Optional;
 import lombok.*;
@@ -88,6 +89,24 @@ public class Cliente {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "dias_credito")
+    private Integer diasCredito = 30; // Por defecto 30 días
+
+    @Column(name = "estado_credito", length = 50)
+    private String estadoCredito;
+
+    @Column(name = "saldo_actual", precision = 18, scale = 5)
+    private BigDecimal saldoActual = BigDecimal.ZERO;
+
+    @Column(name = "bloqueado_por_mora")
+    private Boolean bloqueadoPorMora = false;
+
+    @Column(name = "fecha_ultimo_pago")
+    private LocalDateTime fechaUltimoPago;
+
+    @Column(name = "limite_credito", precision = 18, scale = 5)
+    private BigDecimal limiteCredito = BigDecimal.ZERO; // 0 = sin límite
     
     // Relaciones
 // reemplaza el mappedBy

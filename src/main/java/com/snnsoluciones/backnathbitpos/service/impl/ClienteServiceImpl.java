@@ -21,6 +21,7 @@ import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Provincia;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
+import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionCabysRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
@@ -296,10 +297,20 @@ public class ClienteServiceImpl implements ClienteService {
   }
 
   @Override
+  public Optional<Cliente> findById(Long id) {
+    return clienteRepository.findById(id);
+  }
+
+  @Override
   public void eliminar(Long id) {
     log.info("Eliminando cliente ID: {}", id);
     Cliente cliente = obtenerPorId(id);
     clienteRepository.delete(cliente);
+  }
+
+  @Override
+  public void save(Cliente cliente) {
+    this.clienteRepository.save(cliente);
   }
 
   @Override
@@ -1094,5 +1105,61 @@ public class ClienteServiceImpl implements ClienteService {
           ce.registrarUso();
           clienteRepository.save(cliente);
         });
+  }
+
+  // En ClienteService.java agregar:
+
+  /**
+   * Validar si cliente puede comprar a crédito
+   */
+  @Override
+  public boolean puedeComprarACredito(Long clienteId, BigDecimal montoNuevaVenta) {
+    Cliente cliente = obtenerPorId(clienteId);
+
+    // No permite crédito
+    if (!Boolean.TRUE.equals(cliente.getPermiteCredito())) {
+      return false;
+    }
+
+    // Está bloqueado por mora
+    if (Boolean.TRUE.equals(cliente.getBloqueadoPorMora())) {
+      return false;
+    }
+
+    // Verificar límite de crédito (0 = sin límite)
+    if (cliente.getLimiteCredito() != null &&
+        cliente.getLimiteCredito().compareTo(BigDecimal.ZERO) > 0) {
+
+      BigDecimal saldoActual = cliente.getSaldoActual() != null ?
+          cliente.getSaldoActual() : BigDecimal.ZERO;
+
+      BigDecimal saldoProyectado = saldoActual.add(montoNuevaVenta);
+
+      if (saldoProyectado.compareTo(cliente.getLimiteCredito()) > 0) {
+        log.warn("Cliente {} excede límite de crédito. Límite: {}, Proyectado: {}",
+            clienteId, cliente.getLimiteCredito(), saldoProyectado);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  @Override
+  @Transactional
+  public void desbloquearCredito(Long clienteId, String motivo) {
+    Cliente cliente = obtenerPorId(clienteId);
+
+    if (!Boolean.TRUE.equals(cliente.getBloqueadoPorMora())) {
+      throw new BadRequestException("Cliente no está bloqueado por mora");
+    }
+
+    cliente.setBloqueadoPorMora(false);
+    cliente.setEstadoCredito("ACTIVO");
+
+    clienteRepository.save(cliente);
+
+    log.warn("Cliente {} desbloqueado manualmente. Motivo: {}",
+        cliente.getRazonSocial(), motivo);
   }
 }

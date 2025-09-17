@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
+import java.math.BigDecimal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -73,5 +74,27 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
 
     // Contar clientes por empresa
     long countByEmpresaIdAndActivoTrue(Long empresaId);
+
+    /**
+     * Extra: Si también quieres por empresa
+     */
+    long countByEmpresaIdAndBloqueadoPorMora(Long empresaId, Boolean bloqueadoPorMora);
+
+    /**
+     * Extra: Buscar clientes bloqueados
+     */
+    Page<Cliente> findByBloqueadoPorMora(Boolean bloqueadoPorMora, Pageable pageable);
+
+    // En ClienteRepository.java agregar:
+
+    /**
+     * Buscar clientes con saldo mayor a un monto
+     */
+    Page<Cliente> findBySaldoActualGreaterThan(BigDecimal monto, Pageable pageable);
+
+    /**
+     * Buscar clientes por permiso de crédito
+     */
+    Page<Cliente> findByPermiteCredito(Boolean permiteCredito, Pageable pageable);
 
 }

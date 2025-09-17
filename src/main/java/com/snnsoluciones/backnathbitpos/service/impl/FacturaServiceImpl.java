@@ -4,8 +4,10 @@ import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
+import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
+import com.snnsoluciones.backnathbitpos.service.CuentaPorCobrarService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import io.hypersistence.utils.common.StringUtils;
@@ -47,6 +49,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final UsuarioRepository usuarioRepository;
   private final FacturaBitacoraRepository bitacoraRepository;
   private final ClienteService clienteService;
+  private final CuentaPorCobrarService cuentaPorCobrarService;
 
   @Override
   @Transactional
@@ -236,6 +239,20 @@ public class FacturaServiceImpl implements FacturaService {
         log.error("Error creando bitácora para factura {}: {}",
             facturaGuardada.getClave(), e.getMessage());
       }
+    }
+
+    if (factura.getCondicionVenta() == CondicionVenta.CREDITO &&
+        factura.getCliente() != null) {
+
+      // Validar que cliente pueda comprar a crédito
+      if (!clienteService.puedeComprarACredito(
+          factura.getCliente().getId(),
+          factura.getTotalComprobante())) {
+        throw new BusinessException("Cliente no puede comprar a crédito");
+      }
+
+      // Crear la cuenta por cobrar
+      cuentaPorCobrarService.crearDesdeFactura(factura);
     }
 
     // PASO 24: Retornar la factura creada

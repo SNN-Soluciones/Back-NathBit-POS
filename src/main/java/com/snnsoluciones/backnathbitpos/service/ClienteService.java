@@ -4,6 +4,8 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
+import java.math.BigDecimal;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -17,8 +19,11 @@ public interface ClienteService {
     Cliente actualizar(Long id, ClientePOSDto cliente);
     
     Cliente obtenerPorId(Long id);
+    Optional<Cliente> findById(Long id);
     
     void eliminar(Long id);
+
+    void save (Cliente cliente);
     
     void activarDesactivar(Long id, boolean activo);
 
@@ -73,4 +78,7 @@ public interface ClienteService {
     List<String> obtenerEmails(Long clienteId);
     String obtenerEmailSugerido(Long clienteId);
     void registrarUsoEmail(Long clienteId, String email);
+    boolean puedeComprarACredito(Long clienteId, BigDecimal montoNuevaVenta);
+
+    void desbloquearCredito(Long clienteId, String motivo);
 }

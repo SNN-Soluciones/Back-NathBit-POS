@@ -1,12 +1,14 @@
 package com.snnsoluciones.backnathbitpos.enums;
 
-public enum EstadoPago {
-    APLICADO("Aplicado"),
-    ANULADO("Anulado");
+public enum EstadoCuenta {
+    VIGENTE("Vigente"),
+    VENCIDA("Vencida"), 
+    PAGADA("Pagada"),
+    PARCIAL("Parcialmente Pagada");
     
     private final String descripcion;
     
-    EstadoPago(String descripcion) {
+    EstadoCuenta(String descripcion) {
         this.descripcion = descripcion;
     }
     

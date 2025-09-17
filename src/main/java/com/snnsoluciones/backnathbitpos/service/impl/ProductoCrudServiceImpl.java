@@ -5,7 +5,9 @@ import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.ImpuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
+import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
+import com.snnsoluciones.backnathbitpos.enums.mh.RegimenTributario;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -19,8 +21,10 @@ import com.snnsoluciones.backnathbitpos.service.ProductoImpuestoService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -85,6 +89,9 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
         .unidadMedida(dto.getUnidadMedida())
         .moneda(dto.getMoneda())
         .precioVenta(dto.getPrecioVenta())
+        .tipo(TipoProducto.valueOf(dto.getTipo()))
+        .requiereInventario(dto.getRequiereInventario() != null ? dto.getRequiereInventario() : true)
+        .requiereReceta(dto.getRequiereReceta() != null ? dto.getRequiereReceta() : false)
         .aplicaServicio(dto.getAplicaServicio() != null ? dto.getAplicaServicio() : false)
         .incluyeIVA(dto.getIncluyeIVA() != null ? dto.getIncluyeIVA() : true)
         .activo(dto.getActivo() != null ? dto.getActivo() : true)
@@ -93,7 +100,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     // Asignar CABYS
     if (dto.getEmpresaCabysId() != null) {
       EmpresaCAByS cabys = empresaCABySRepository.findById(dto.getEmpresaCabysId())
-              .orElse(null);
+          .orElse(null);
       producto.setEmpresaCabys(cabys);
     }
 
@@ -444,7 +451,8 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
 
   @Override
   public Optional<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId) {
-    return productoRepository.findAllByEmpresaIdAndEmpresaCabys_CodigoCabys_Codigo(empresaId, codigoCabysId);
+    return productoRepository.findAllByEmpresaIdAndEmpresaCabys_CodigoCabys_Codigo(empresaId,
+        codigoCabysId);
   }
 
   private String limpiarNombreParaRuta(String nombre) {
@@ -464,40 +472,37 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     return nombreArchivo.substring(nombreArchivo.lastIndexOf("."));
   }
 
-  /**
-   * KISS: Crear producto validando régimen simplificado
-   * Si la sucursal no requiere factura electrónica, solo permite TARIFA_EXENTA
-   */
   @Override
   @Transactional
   public ProductoDto crearProductoSimplificado(Long empresaId, Long sucursalId,
       ProductoCreateDto dto, MultipartFile imagen) {
+    log.info("Creando producto simplificado para empresa {} y sucursal {}", empresaId, sucursalId);
 
-    log.info("Creando producto simplificado - Empresa: {}, Sucursal: {}", empresaId, sucursalId);
+    try {
+      // Verificar que la sucursal pertenezca a la empresa
+      Sucursal sucursal = sucursalRepository.findById(sucursalId)
+          .orElseThrow(
+              () -> new ResourceNotFoundException("Sucursal no encontrada: " + sucursalId));
 
-    // Validar empresa y sucursal
-    Sucursal sucursal = sucursalRepository.findById(sucursalId)
-        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada: " + sucursalId));
+      if (!sucursal.getEmpresa().getId().equals(empresaId)) {
+        throw new BusinessException("La sucursal no pertenece a la empresa especificada");
+      }
 
-    if (!sucursal.getEmpresa().getId().equals(empresaId)) {
-      throw new IllegalArgumentException("La sucursal no pertenece a la empresa especificada");
-    }
+      // Verificar el modo de facturación
+      boolean requiereFacturaElectronica =
+          sucursal.getModoFacturacion() == ModoFacturacion.ELECTRONICO;
+      RegimenTributario regimen = sucursal.getEmpresa().getRegimenTributario();
 
-    Empresa empresa = sucursal.getEmpresa();
+      // Si es régimen simplificado sin factura electrónica, forzar tarifa exenta
+      if (regimen == RegimenTributario.REGIMEN_SIMPLIFICADO && !requiereFacturaElectronica) {
+        log.info("Régimen simplificado sin factura electrónica detectado. Forzando tarifa exenta.");
 
-    // KISS: Validar si requiere factura electrónica
-    boolean requiereFacturaElectronica = empresa.getRequiereHacienda() &&
-        sucursal.getModoFacturacion() == ModoFacturacion.ELECTRONICO;
-
-    log.info("Modo facturación - Requiere FE: {}, Régimen: {}",
-        requiereFacturaElectronica, empresa.getRegimenTributario());
-
-    // Si NO requiere factura electrónica, ajustar el DTO
-    if (!requiereFacturaElectronica) {
-      log.info("Aplicando validación régimen simplificado - Solo TARIFA_EXENTA");
-
-      // Limpiar impuestos del DTO
-      dto.setImpuestos(new ArrayList<>());
+        // Limpiar impuestos y forzar tarifa exenta
+        if (dto.getImpuestos() != null) {
+          dto.getImpuestos().clear();
+        } else {
+          dto.setImpuestos(new ArrayList<>());
+        }
 
       // Si viene con código de tarifa TARIFA_EXENTA, crear impuesto exento
       if ("TARIFA_EXENTA".equals(dto.getImpuestos().get(0).getTipoImpuesto().name())) {
@@ -512,6 +517,35 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       }
     }
 
-    return crear(empresaId, dto, imagen);
+      // Delegar la creación al método normal
+      return crear(empresaId, dto, imagen);
+
+    } catch (Exception e) {
+      log.error("Error creando producto simplificado", e);
+      throw new BusinessException("Error al crear el producto: " + e.getMessage());
+    }
+  }
+
+  @Override
+  public Map<String, Object> obtenerModoFacturacion(Long sucursalId) {
+    try {
+      Sucursal sucursal = sucursalRepository.findById(sucursalId)
+          .orElseThrow(
+              () -> new ResourceNotFoundException("Sucursal no encontrada: " + sucursalId));
+      Empresa empresa = sucursal.getEmpresa();
+
+      Map<String, Object> info = new HashMap<>();
+      info.put("sucursalId", sucursalId);
+      info.put("empresaId", empresa.getId());
+      info.put("requiereFacturaElectronica",
+          sucursal.getModoFacturacion() == ModoFacturacion.ELECTRONICO);
+      info.put("modoFacturacion", sucursal.getModoFacturacion().toString());
+      info.put("regimenTributario", empresa.getRegimenTributario().toString());
+
+      return info;
+    } catch (Exception e) {
+      log.error("Error obteniendo modo de facturación", e);
+      throw new BusinessException("Error al obtener información de facturación");
+    }
   }
 }

@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -165,19 +166,13 @@ public class ProductoController {
   public ResponseEntity<ApiResponse<ProductoDto>> crearProductoSimplificado(
       @PathVariable Long empresaId,
       @PathVariable Long sucursalId,
-      @Valid @RequestBody ProductoCreateDto productoDto,
+      @RequestPart("producto") @Valid ProductoCreateDto productoDto,
       @RequestPart(value = "imagen", required = false) MultipartFile imagen) {
 
-    log.info("POST /api/productos/simplificado/{}/{} - Creando producto régimen simplificado",
-        empresaId, sucursalId);
+    log.info("POST /api/productos/simplificado/{}/{} - Creando producto régimen simplificado con imagen: {}",
+        empresaId, sucursalId, imagen != null ? imagen.getOriginalFilename() : "sin imagen");
 
     try {
-      // Validar contexto del usuario
-//      if (!validarContextoUsuario(empresaId)) {
-//        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-//            .body(ApiResponse.error("No tienes permisos para esta empresa"));
-//      }
-
       ProductoDto productoCreado = productoCrudService.crearProductoSimplificado(
           empresaId, sucursalId, productoDto, imagen);
 
@@ -194,7 +189,7 @@ public class ProductoController {
     } catch (Exception e) {
       log.error("Error creando producto simplificado", e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(ApiResponse.error("Error al crear el producto"));
+          .body(ApiResponse.error("Error al crear el producto: " + e.getMessage()));
     }
   }
 
@@ -204,30 +199,21 @@ public class ProductoController {
   @GetMapping("/sucursal/{sucursalId}/modo-facturacion")
   @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
   @Operation(summary = "Obtener modo de facturación de sucursal")
-  public ResponseEntity<ApiResponse<ModoFacturacionResponse>> obtenerModoFacturacion(
+  public ResponseEntity<ApiResponse<Map<String, Object>>> obtenerModoFacturacion(
       @PathVariable Long sucursalId) {
 
     try {
-      Sucursal sucursal = sucursalService.finById(sucursalId).orElseThrow();
-      Empresa empresa = sucursal.getEmpresa();
+      Map<String, Object> modoInfo = productoCrudService.obtenerModoFacturacion(sucursalId);
 
-      boolean requiereFacturaElectronica = empresa.getRequiereHacienda() &&
-          sucursal.getModoFacturacion() == ModoFacturacion.ELECTRONICO;
-
-      ModoFacturacionResponse response = ModoFacturacionResponse.builder()
-          .sucursalId(sucursalId)
-          .empresaId(empresa.getId())
-          .requiereFacturaElectronica(requiereFacturaElectronica)
-          .modoFacturacion(sucursal.getModoFacturacion())
-          .regimenTributario(empresa.getRegimenTributario())
-          .build();
-
-      return ResponseEntity.ok(ApiResponse.ok(
-          "Información de facturación obtenida", response));
-
+      return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+          .success(true)
+          .message("Información de facturación obtenida")
+          .data(modoInfo)
+          .build());
     } catch (Exception e) {
+      log.error("Error obteniendo modo de facturación", e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(ApiResponse.error("Error al obtener información"));
+          .body(ApiResponse.error("Error al obtener información de facturación"));
     }
   }
 

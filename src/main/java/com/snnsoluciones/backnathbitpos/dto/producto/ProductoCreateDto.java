@@ -58,8 +58,13 @@ public class ProductoCreateDto {
 
     private Boolean incluyeIVA;
 
+    private String tipo;
+
     @Builder.Default
     private Boolean activo = true;
+
+    private Boolean requiereInventario = true;
+    private Boolean requiereReceta = false;
 
     private List<ProductoImpuestoCreateDto> impuestos;
 }

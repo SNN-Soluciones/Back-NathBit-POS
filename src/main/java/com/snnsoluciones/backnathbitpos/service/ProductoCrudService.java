@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.service;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.Producto;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,4 +25,5 @@ public interface ProductoCrudService {
     void save(Producto producto);
     Optional<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId);
     ProductoDto crearProductoSimplificado(Long empresaId, Long sucursalId, ProductoCreateDto dto, MultipartFile imagen);
+    Map<String, Object> obtenerModoFacturacion(Long sucursalId);
 }

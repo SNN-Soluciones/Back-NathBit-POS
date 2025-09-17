@@ -1,7 +1,10 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.beust.ah.A;
+import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.ImpuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
@@ -14,6 +17,8 @@ import com.snnsoluciones.backnathbitpos.service.ProductoValidacionService;
 import com.snnsoluciones.backnathbitpos.service.ProductoCategoriaService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImpuestoService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -43,6 +48,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
   private final StorageService storageService;
   private final ProductoCategoriaService productoCategoriaService;
   private final ModelMapper modelMapper;
+  private final SucursalRepository sucursalRepository;
 
   @Override
   @Transactional
@@ -456,5 +462,56 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       return "";
     }
     return nombreArchivo.substring(nombreArchivo.lastIndexOf("."));
+  }
+
+  /**
+   * KISS: Crear producto validando régimen simplificado
+   * Si la sucursal no requiere factura electrónica, solo permite TARIFA_EXENTA
+   */
+  @Override
+  @Transactional
+  public ProductoDto crearProductoSimplificado(Long empresaId, Long sucursalId,
+      ProductoCreateDto dto, MultipartFile imagen) {
+
+    log.info("Creando producto simplificado - Empresa: {}, Sucursal: {}", empresaId, sucursalId);
+
+    // Validar empresa y sucursal
+    Sucursal sucursal = sucursalRepository.findById(sucursalId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada: " + sucursalId));
+
+    if (!sucursal.getEmpresa().getId().equals(empresaId)) {
+      throw new IllegalArgumentException("La sucursal no pertenece a la empresa especificada");
+    }
+
+    Empresa empresa = sucursal.getEmpresa();
+
+    // KISS: Validar si requiere factura electrónica
+    boolean requiereFacturaElectronica = empresa.getRequiereHacienda() &&
+        sucursal.getModoFacturacion() == ModoFacturacion.ELECTRONICO;
+
+    log.info("Modo facturación - Requiere FE: {}, Régimen: {}",
+        requiereFacturaElectronica, empresa.getRegimenTributario());
+
+    // Si NO requiere factura electrónica, ajustar el DTO
+    if (!requiereFacturaElectronica) {
+      log.info("Aplicando validación régimen simplificado - Solo TARIFA_EXENTA");
+
+      // Limpiar impuestos del DTO
+      dto.setImpuestos(new ArrayList<>());
+
+      // Si viene con código de tarifa TARIFA_EXENTA, crear impuesto exento
+      if ("TARIFA_EXENTA".equals(dto.getImpuestos().get(0).getTipoImpuesto().name())) {
+        ProductoImpuestoCreateDto impuestoExento = new ProductoImpuestoCreateDto();
+        impuestoExento.setTipoImpuesto(TipoImpuesto.IVA); // IVA
+        impuestoExento.setCodigoTarifaIVA(CodigoTarifaIVA.TARIFA_0_EXENTO); // Código MH para exento
+        impuestoExento.setPorcentaje(BigDecimal.ZERO);
+
+        List<ProductoImpuestoCreateDto> impuestos = new ArrayList<>();
+        impuestos.add(impuestoExento);
+        dto.setImpuestos(impuestos);
+      }
+    }
+
+    return crear(empresaId, dto, imagen);
   }
 }

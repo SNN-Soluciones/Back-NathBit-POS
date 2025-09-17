@@ -2,12 +2,20 @@ package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
+import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
+import com.snnsoluciones.backnathbitpos.enums.mh.RegimenTributario;
+import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.service.ProductoCrudService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImagenService;
+import com.snnsoluciones.backnathbitpos.service.SucursalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import lombok.Builder;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -26,6 +34,7 @@ public class ProductoController {
 
   private final ProductoCrudService productoCrudService;
   private final ProductoImagenService productoImagenService;
+  private final SucursalService sucursalService;
 
     @PostMapping(value = "/{empresaId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'SOPORTE')")
@@ -147,5 +156,88 @@ public class ProductoController {
         .message("Código generado")
         .data(codigo)
         .build());
+  }
+
+  @PostMapping(value = "/simplificado/{empresaId}/{sucursalId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+  @Operation(summary = "Crear producto para régimen simplificado",
+      description = "Crea un producto validando el régimen tributario de la sucursal")
+  public ResponseEntity<ApiResponse<ProductoDto>> crearProductoSimplificado(
+      @PathVariable Long empresaId,
+      @PathVariable Long sucursalId,
+      @Valid @RequestBody ProductoCreateDto productoDto,
+      @RequestPart(value = "imagen", required = false) MultipartFile imagen) {
+
+    log.info("POST /api/productos/simplificado/{}/{} - Creando producto régimen simplificado",
+        empresaId, sucursalId);
+
+    try {
+      // Validar contexto del usuario
+//      if (!validarContextoUsuario(empresaId)) {
+//        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+//            .body(ApiResponse.error("No tienes permisos para esta empresa"));
+//      }
+
+      ProductoDto productoCreado = productoCrudService.crearProductoSimplificado(
+          empresaId, sucursalId, productoDto, imagen);
+
+      return ResponseEntity.status(HttpStatus.CREATED)
+          .body(ApiResponse.<ProductoDto>builder()
+              .success(true)
+              .message("Producto creado exitosamente")
+              .data(productoCreado)
+              .build());
+
+    } catch (ResourceNotFoundException e) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND)
+          .body(ApiResponse.error(e.getMessage()));
+    } catch (Exception e) {
+      log.error("Error creando producto simplificado", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(ApiResponse.error("Error al crear el producto"));
+    }
+  }
+
+  /**
+   * Helper para obtener información de facturación de la sucursal
+   */
+  @GetMapping("/sucursal/{sucursalId}/modo-facturacion")
+  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+  @Operation(summary = "Obtener modo de facturación de sucursal")
+  public ResponseEntity<ApiResponse<ModoFacturacionResponse>> obtenerModoFacturacion(
+      @PathVariable Long sucursalId) {
+
+    try {
+      Sucursal sucursal = sucursalService.finById(sucursalId).orElseThrow();
+      Empresa empresa = sucursal.getEmpresa();
+
+      boolean requiereFacturaElectronica = empresa.getRequiereHacienda() &&
+          sucursal.getModoFacturacion() == ModoFacturacion.ELECTRONICO;
+
+      ModoFacturacionResponse response = ModoFacturacionResponse.builder()
+          .sucursalId(sucursalId)
+          .empresaId(empresa.getId())
+          .requiereFacturaElectronica(requiereFacturaElectronica)
+          .modoFacturacion(sucursal.getModoFacturacion())
+          .regimenTributario(empresa.getRegimenTributario())
+          .build();
+
+      return ResponseEntity.ok(ApiResponse.ok(
+          "Información de facturación obtenida", response));
+
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(ApiResponse.error("Error al obtener información"));
+    }
+  }
+
+  @Data
+  @Builder
+  public static class ModoFacturacionResponse {
+    private Long sucursalId;
+    private Long empresaId;
+    private boolean requiereFacturaElectronica;
+    private ModoFacturacion modoFacturacion;
+    private RegimenTributario regimenTributario;
   }
 }

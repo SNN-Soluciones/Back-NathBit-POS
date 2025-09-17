@@ -88,6 +88,8 @@ public class ClientePOSController {
   }
 
   @GetMapping("/listar-pos")
+  @Operation(summary = "Listar clientes activos (para punto de venta)")
+  @PreAuthorize("hasAnyRole('CAJERO', 'MESERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'SOPORTE', 'ROOT')")
   public ResponseEntity<ApiResponse<Page<ClientePOSDto>>> listarPorPos(
       @RequestParam Long empresaId,
       @RequestParam(defaultValue = "0") int page,

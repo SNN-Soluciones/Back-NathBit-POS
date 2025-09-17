@@ -28,19 +28,8 @@ public class VentaPausadaService {
 
     private static final int MAX_VENTAS_PAUSADAS_POR_USUARIO = 10;
 
-    public VentaPausadaListDTO crear(CrearVentaPausadaRequest request) {
-        // Obtener contexto del usuario actual
+    public VentaPausadaListDTO crear(CrearVentaPausadaRequest request, Long sucursalId, Long terminalId) {
         Long usuarioId = securityContext.getCurrentUserId();
-        Long sucursalId = securityContext.getCurrentSucursalId();
-        Long terminalId = securityContext.getCurrentTerminalId();
-
-        // Validar que tengamos el contexto necesario
-        if (sucursalId == null) {
-            throw new BusinessException("No se pudo determinar la sucursal actual");
-        }
-        if (terminalId == null) {
-            throw new BusinessException("No se pudo determinar el terminal actual");
-        }
 
         // Validar límite de ventas pausadas
         long ventasActuales = repository.countByUsuarioIdAndSucursalIdAndFechaExpiracionAfter(
@@ -55,8 +44,8 @@ public class VentaPausadaService {
         // Crear la venta pausada
         VentaPausada ventaPausada = new VentaPausada();
         ventaPausada.setUsuarioId(usuarioId);
-        ventaPausada.setSucursalId(sucursalId);
-        ventaPausada.setTerminalId(terminalId);
+        ventaPausada.setSucursalId(sucursalId); // Usar el parámetro recibido
+        ventaPausada.setTerminalId(terminalId); // Usar el parámetro recibido
         ventaPausada.setDatosFactura(request.getDatosFactura());
 
         // Generar descripción automática si no viene
@@ -70,13 +59,8 @@ public class VentaPausadaService {
         return mapToListDTO(saved);
     }
 
-    public List<VentaPausadaListDTO> listarActivas() {
+    public List<VentaPausadaListDTO> listarActivas(Long sucursalId) {
         Long usuarioId = securityContext.getCurrentUserId();
-        Long sucursalId = securityContext.getCurrentSucursalId();
-
-        if (sucursalId == null) {
-            throw new BusinessException("No se pudo determinar la sucursal actual");
-        }
 
         List<VentaPausada> ventas = repository
             .findByUsuarioIdAndSucursalIdAndFechaExpiracionAfterOrderByFechaCreacionDesc(
@@ -88,13 +72,8 @@ public class VentaPausadaService {
             .collect(Collectors.toList());
     }
 
-    public VentaPausadaDetalleDTO obtenerDetalle(Long id) {
+    public VentaPausadaDetalleDTO obtenerDetalle(Long id, Long sucursalId) {
         Long usuarioId = securityContext.getCurrentUserId();
-        Long sucursalId = securityContext.getCurrentSucursalId();
-
-        if (sucursalId == null) {
-            throw new BusinessException("No se pudo determinar la sucursal actual");
-        }
 
         VentaPausada venta = repository
             .findByIdAndUsuarioIdAndSucursalId(id, usuarioId, sucursalId)
@@ -109,13 +88,8 @@ public class VentaPausadaService {
         return dto;
     }
 
-    public void eliminar(Long id) {
+    public void eliminar(Long id, Long sucursalId) {
         Long usuarioId = securityContext.getCurrentUserId();
-        Long sucursalId = securityContext.getCurrentSucursalId();
-
-        if (sucursalId == null) {
-            throw new BusinessException("No se pudo determinar la sucursal actual");
-        }
 
         VentaPausada venta = repository
             .findByIdAndUsuarioIdAndSucursalId(id, usuarioId, sucursalId)
@@ -124,13 +98,8 @@ public class VentaPausadaService {
         repository.delete(venta);
     }
 
-    public long contarActivas() {
+    public long contarActivas(Long sucursalId) {
         Long usuarioId = securityContext.getCurrentUserId();
-        Long sucursalId = securityContext.getCurrentSucursalId();
-
-        if (sucursalId == null) {
-            return 0; // Si no hay contexto, no hay ventas pausadas
-        }
 
         return repository.countByUsuarioIdAndSucursalIdAndFechaExpiracionAfter(
             usuarioId, sucursalId, LocalDateTime.now()
@@ -138,26 +107,17 @@ public class VentaPausadaService {
     }
 
     // Método para supervisores - ver todas las de la sucursal
-    public List<VentaPausadaListDTO> listarTodasSucursal() {
-        Long sucursalId = securityContext.getCurrentSucursalId();
-
-        if (sucursalId == null) {
-            throw new BusinessException("No se pudo determinar la sucursal actual");
-        }
-
-        // Verificar si es supervisor
-        if (!securityContext.hasAnyRole("JEFE_CAJAS", "ADMIN", "SUPER_ADMIN", "ROOT", "SOPORTE")) {
-            throw new BusinessException("No tienes permisos para ver todas las ventas pausadas");
-        }
-
-        List<VentaPausada> ventas = repository.findAllBySucursalActivas(
-            sucursalId, LocalDateTime.now()
-        );
+    public List<VentaPausadaListDTO> listarTodasSucursal(Long sucursalId) {
+        List<VentaPausada> ventas = repository
+            .findAllBySucursalActivas(
+                sucursalId, LocalDateTime.now()
+            );
 
         return ventas.stream()
             .map(this::mapToListDTO)
             .collect(Collectors.toList());
     }
+
 
     // Helpers privados
     private VentaPausadaListDTO mapToListDTO(VentaPausada venta) {

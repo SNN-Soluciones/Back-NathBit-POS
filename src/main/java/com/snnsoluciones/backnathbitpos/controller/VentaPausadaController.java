@@ -24,14 +24,16 @@ import java.util.List;
 public class VentaPausadaController {
     
     private final VentaPausadaService service;
-    
+
     @PostMapping
     @Operation(summary = "Pausar una venta", description = "Guarda el estado actual de una venta para retomarla después")
     public ResponseEntity<ApiResponse<VentaPausadaListDTO>> pausarVenta(
-            @Valid @RequestBody CrearVentaPausadaRequest request) {
-        
-        VentaPausadaListDTO venta = service.crear(request);
-        
+        @Valid @RequestBody CrearVentaPausadaRequest request,
+        @RequestParam Long sucursalId,
+        @RequestParam(required = false) Long terminalId) {
+
+        VentaPausadaListDTO venta = service.crear(request, sucursalId, terminalId);
+
         return ResponseEntity.status(HttpStatus.CREATED).body(
             ApiResponse.<VentaPausadaListDTO>builder()
                 .success(true)
@@ -40,13 +42,14 @@ public class VentaPausadaController {
                 .build()
         );
     }
-    
+
     @GetMapping
     @Operation(summary = "Listar ventas pausadas", description = "Lista las ventas pausadas activas del usuario actual")
-    public ResponseEntity<ApiResponse<List<VentaPausadaListDTO>>> listarVentasPausadas() {
-        
-        List<VentaPausadaListDTO> ventas = service.listarActivas();
-        
+    public ResponseEntity<ApiResponse<List<VentaPausadaListDTO>>> listarVentasPausadas(
+        @RequestParam Long sucursalId) {
+
+        List<VentaPausadaListDTO> ventas = service.listarActivas(sucursalId);
+
         return ResponseEntity.ok(
             ApiResponse.<List<VentaPausadaListDTO>>builder()
                 .success(true)
@@ -55,14 +58,15 @@ public class VentaPausadaController {
                 .build()
         );
     }
-    
+
     @GetMapping("/todas")
     @Operation(summary = "Listar todas las ventas de la sucursal", description = "Solo para supervisores")
     @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<List<VentaPausadaListDTO>>> listarTodasSucursal() {
-        
-        List<VentaPausadaListDTO> ventas = service.listarTodasSucursal();
-        
+    public ResponseEntity<ApiResponse<List<VentaPausadaListDTO>>> listarTodasSucursal(
+        @RequestParam Long sucursalId) {
+
+        List<VentaPausadaListDTO> ventas = service.listarTodasSucursal(sucursalId);
+
         return ResponseEntity.ok(
             ApiResponse.<List<VentaPausadaListDTO>>builder()
                 .success(true)
@@ -71,13 +75,15 @@ public class VentaPausadaController {
                 .build()
         );
     }
-    
+
     @GetMapping("/{id}")
     @Operation(summary = "Obtener detalle de venta pausada", description = "Obtiene los datos completos para retomar la venta")
-    public ResponseEntity<ApiResponse<VentaPausadaDetalleDTO>> obtenerDetalle(@PathVariable Long id) {
-        
-        VentaPausadaDetalleDTO venta = service.obtenerDetalle(id);
-        
+    public ResponseEntity<ApiResponse<VentaPausadaDetalleDTO>> obtenerDetalle(
+        @PathVariable Long id,
+        @RequestParam Long sucursalId) {
+
+        VentaPausadaDetalleDTO venta = service.obtenerDetalle(id, sucursalId);
+
         return ResponseEntity.ok(
             ApiResponse.<VentaPausadaDetalleDTO>builder()
                 .success(true)
@@ -86,13 +92,15 @@ public class VentaPausadaController {
                 .build()
         );
     }
-    
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar venta pausada", description = "Elimina permanentemente una venta pausada")
-    public ResponseEntity<ApiResponse<Void>> eliminarVenta(@PathVariable Long id) {
-        
-        service.eliminar(id);
-        
+    public ResponseEntity<ApiResponse<Void>> eliminarVenta(
+        @PathVariable Long id,
+        @RequestParam Long sucursalId) {
+
+        service.eliminar(id, sucursalId);
+
         return ResponseEntity.ok(
             ApiResponse.<Void>builder()
                 .success(true)
@@ -100,13 +108,14 @@ public class VentaPausadaController {
                 .build()
         );
     }
-    
+
     @GetMapping("/contador")
     @Operation(summary = "Contar ventas pausadas activas", description = "Obtiene el número de ventas pausadas para el badge")
-    public ResponseEntity<ApiResponse<Long>> contarVentasPausadas() {
-        
-        long count = service.contarActivas();
-        
+    public ResponseEntity<ApiResponse<Long>> contarVentasPausadas(
+        @RequestParam Long sucursalId) {
+
+        long count = service.contarActivas(sucursalId);
+
         return ResponseEntity.ok(
             ApiResponse.<Long>builder()
                 .success(true)

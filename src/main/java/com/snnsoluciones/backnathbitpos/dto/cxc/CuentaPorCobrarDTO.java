@@ -8,13 +8,15 @@ import java.time.LocalDate;
 public class CuentaPorCobrarDTO {
     private Long id;
     private Long facturaId;
-    private String facturaConsecutivo;
+    private String numeroFactura;
     private Long clienteId;
     private String clienteNombre;
+    private String clienteIdentificacion;
     private LocalDate fechaEmision;
     private LocalDate fechaVencimiento;
     private BigDecimal montoOriginal;
     private BigDecimal saldo;
-    private String estado;
+    private String estado; // VIGENTE, VENCIDA, PAGADA, PARCIAL
     private Integer diasMora;
+    private BigDecimal montoAbonado;
 }

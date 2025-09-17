@@ -35,7 +35,6 @@ public class ProductoCreateDto {
 
     private String descripcion;
 
-    @NotNull(message = "Código CAByS es requerido")
     private Long empresaCabysId;
 
     private Set<CategoriaProductoDto> categoriaProductoDtos;

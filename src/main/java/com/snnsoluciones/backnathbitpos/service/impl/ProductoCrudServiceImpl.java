@@ -87,8 +87,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     // Asignar CABYS
     if (dto.getEmpresaCabysId() != null) {
       EmpresaCAByS cabys = empresaCABySRepository.findById(dto.getEmpresaCabysId())
-          .orElseThrow(() -> new ResourceNotFoundException(
-              "Código CABYS no encontrado: " + dto.getEmpresaCabysId()));
+              .orElse(null);
       producto.setEmpresaCabys(cabys);
     }
 
@@ -255,8 +254,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     // Actualizar categorías si vienen
     if (dto.getEmpresaCabysId() != null) {
       EmpresaCAByS cabys = empresaCABySRepository.findById(dto.getEmpresaCabysId())
-          .orElseThrow(() -> new ResourceNotFoundException(
-              "Código CABYS no encontrado: " + dto.getEmpresaCabysId()));
+          .orElse(null);
       producto.setEmpresaCabys(cabys);
     }
 

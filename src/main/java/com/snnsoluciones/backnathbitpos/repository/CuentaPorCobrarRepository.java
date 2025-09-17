@@ -1,10 +1,12 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.CuentaPorCobrar;
+import com.snnsoluciones.backnathbitpos.entity.FacturaBitacora;
 import com.snnsoluciones.backnathbitpos.enums.EstadoCuenta;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,7 +17,8 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface CuentaPorCobrarRepository extends JpaRepository<CuentaPorCobrar, Long> {
+public interface CuentaPorCobrarRepository extends JpaRepository<CuentaPorCobrar, Long>,
+    JpaSpecificationExecutor<CuentaPorCobrar> {
     
     // Buscar por factura
     Optional<CuentaPorCobrar> findByFacturaId(Long facturaId);

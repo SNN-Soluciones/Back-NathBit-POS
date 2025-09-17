@@ -55,7 +55,7 @@ public class Producto {
   private String descripcion;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "empresa_cabys_id", nullable = false)
+  @JoinColumn(name = "empresa_cabys_id")
   private EmpresaCAByS empresaCabys;
 
   @ManyToMany(fetch = FetchType.LAZY)

@@ -28,7 +28,7 @@ public class ProductoController {
   private final ProductoImagenService productoImagenService;
 
     @PostMapping(value = "/{empresaId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'SOPORTE')")
     @Operation(summary = "Crear producto con imagen", description = "Crea un nuevo producto con imagen opcional")
     public ResponseEntity<ApiResponse<ProductoDto>> crearConImagen(
         @PathVariable Long empresaId,

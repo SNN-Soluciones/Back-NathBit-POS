@@ -123,30 +123,6 @@ public class ProductoBusquedaServiceImpl implements ProductoBusquedaService {
         return estadisticas;
     }
     
-    @Override
-    @Transactional(readOnly = true)
-    public Long contarProductosActivos(Long empresaId) {
-        return productoRepository.countByEmpresaIdAndActivoTrue(empresaId);
-    }
-    
-    // Método auxiliar para convertir a DTO de lista (más ligero)
-//    private ProductoListDto convertirAListDto(Producto producto) {
-//        ProductoListDto dto = modelMapper.map(producto, ProductoListDto.class);
-//        dto.setEmpresaId(producto.getEmpresa().getId());
-//
-//        Set<CategoriaProducto> categoriasProducto = producto.getCategorias();
-//        if (categoriasProducto != null && !categoriasProducto.isEmpty()) {
-//            Set<CategoriaProductoDto> categoriaProductoDtos = categoriasProducto.stream()
-//                .map((element) -> modelMapper.map(element, CategoriaProductoDto.class))
-//                .collect(Collectors.toSet());
-//            dto.setCategoriasNombres(categoriaProductoDtos);
-//        }
-//
-//        // Categorías (solo nombres)
-//
-//        return dto;
-//    }
-    
     private ProductoDto convertirADto(Producto producto) {
         ProductoDto dto = modelMapper.map(producto, ProductoDto.class);
         dto.setEmpresaId(producto.getEmpresa().getId());

@@ -49,11 +49,6 @@ public class UsuarioEmpresaServiceImpl implements UsuarioEmpresaService {
     }
     
     @Override
-    public void desasignar(Long id) {
-        usuarioEmpresaRepository.deleteById(id);
-    }
-    
-    @Override
     @Transactional(readOnly = true)
     public List<UsuarioEmpresa> listarPorUsuario(Long usuarioId) {
         return usuarioEmpresaRepository.findByUsuarioId(usuarioId);
@@ -63,12 +58,6 @@ public class UsuarioEmpresaServiceImpl implements UsuarioEmpresaService {
     @Transactional(readOnly = true)
     public List<UsuarioEmpresa> listarPorEmpresa(Long empresaId) {
         return usuarioEmpresaRepository.findByEmpresaId(empresaId);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public List<UsuarioEmpresa> listarPorSucursal(Long sucursalId) {
-        return usuarioEmpresaRepository.findBySucursalId(sucursalId);
     }
     
     @Override

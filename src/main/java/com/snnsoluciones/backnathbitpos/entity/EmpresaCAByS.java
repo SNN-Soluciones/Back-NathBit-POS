@@ -29,6 +29,10 @@ public class EmpresaCAByS {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "codigo_cabys_id", nullable = false)
     private CodigoCAByS codigoCabys;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id")
+    private Sucursal sucursal;
     
     @Column(nullable = false)
     @Builder.Default

@@ -20,5 +20,4 @@ public interface ProductoBusquedaService {
     
     // Estadísticas
     ProductoEstadisticasDto obtenerEstadisticas(Long empresaId);
-    Long contarProductosActivos(Long empresaId);
 }

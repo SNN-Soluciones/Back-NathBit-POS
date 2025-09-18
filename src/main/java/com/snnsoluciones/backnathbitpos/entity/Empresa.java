@@ -107,6 +107,18 @@ public class Empresa {
     @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Set<EmpresaActividad> actividades = new HashSet<>();
 
+    @Column(name = "productos_por_sucursal", nullable = false)
+    private Boolean productosPorSucursal = false;
+
+    @Column(name = "clientes_por_sucursal", nullable = false)
+    private Boolean clientesPorSucursal = false;
+
+    @Column(name = "categorias_por_sucursal", nullable = false)
+    private Boolean categoriasPorSucursal = false;
+
+    @Column(name = "inventario_por_sucursal", nullable = false)
+    private Boolean inventarioPorSucursal = true;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

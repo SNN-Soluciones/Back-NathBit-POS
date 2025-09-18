@@ -20,7 +20,6 @@ public interface ProductoCrudService {
     // Generación de código
     String generarCodigoInterno(Long empresaId);
     ProductoDto actualizarPrecio(Long empresaId, Long productoId, ActualizarPrecioDto dto);
-    Optional<Producto> buscarPorCodigoInterno(Long empresaId, String codigoInterno);
     Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras);
     void save(Producto producto);
     Optional<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId);

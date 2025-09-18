@@ -42,6 +42,10 @@ public class Producto {
   @JoinColumn(name = "empresa_id", nullable = false)
   private Empresa empresa;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "sucursal_id", nullable = true)
+  private Sucursal sucursal;
+
   @Column(name = "codigo_interno", nullable = false, length = 20)
   private String codigoInterno;
 

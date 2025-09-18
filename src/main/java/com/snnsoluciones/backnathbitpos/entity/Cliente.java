@@ -96,6 +96,10 @@ public class Cliente {
     @Column(name = "estado_credito", length = 50)
     private String estadoCredito;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id", nullable = true)
+    private Sucursal sucursal;
+
     @Column(name = "saldo_actual", precision = 18, scale = 5)
     private BigDecimal saldoActual = BigDecimal.ZERO;
 

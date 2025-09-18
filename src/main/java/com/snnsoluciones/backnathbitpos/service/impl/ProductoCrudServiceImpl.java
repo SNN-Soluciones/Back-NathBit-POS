@@ -435,11 +435,6 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
   }
 
   @Override
-  public Optional<Producto> buscarPorCodigoInterno(Long empresaId, String codigoInterno) {
-    return productoRepository.findByCodigoInternoAndEmpresaId(codigoInterno, empresaId);
-  }
-
-  @Override
   public Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras) {
     return productoRepository.findByCodigoBarrasAndEmpresaId(codigoBarras, empresaId);
   }

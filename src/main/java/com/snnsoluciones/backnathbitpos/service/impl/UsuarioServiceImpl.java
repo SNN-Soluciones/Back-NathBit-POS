@@ -51,11 +51,6 @@ public class UsuarioServiceImpl implements UsuarioService {
         usuarioRepository.deleteById(id);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existeEmail(String email) {
-        return usuarioRepository.existsByEmail(email);
-    }
 
     @Override
     public Optional<Usuario> buscarPorUsername(String username) {

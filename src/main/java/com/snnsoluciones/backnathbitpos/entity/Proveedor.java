@@ -31,6 +31,10 @@ public class Proveedor {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id", nullable = true)
+    private Sucursal sucursal;
     
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_identificacion", nullable = false)

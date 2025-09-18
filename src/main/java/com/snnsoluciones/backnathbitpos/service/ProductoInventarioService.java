@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimiento;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoCompra;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
+import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.ProductoInventarioRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoMovimientoRepository;
@@ -53,6 +54,13 @@ public class ProductoInventarioService {
         
         Sucursal sucursal = sucursalRepository.findById(sucursalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+
+        if (producto.getSucursal() != null && !producto.getSucursal().getId().equals(sucursalId)) {
+            throw new BusinessException(
+                "Este producto es local de la sucursal " + producto.getSucursal().getNombre() +
+                    " y no puede tener inventario en otras sucursales"
+            );
+        }
         
         ProductoInventario inventario = new ProductoInventario();
         inventario.setProducto(producto);

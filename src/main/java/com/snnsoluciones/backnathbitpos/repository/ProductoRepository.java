@@ -83,4 +83,55 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
     Optional<Producto> findByNombreAndEmpresaId(String nombre, Long empresaId);
 
     Optional<Producto> findAllByEmpresaIdAndEmpresaCabys_CodigoCabys_Codigo(Long empresaId, String codigoCabysId);
+
+    /**
+     * Buscar productos GLOBALES de una empresa (sin sucursal asignada)
+     */
+    List<Producto> findByEmpresaIdAndSucursalIdIsNullAndActivoTrue(Long empresaId);
+
+    /**
+     * Buscar productos LOCALES de una sucursal específica
+     */
+    List<Producto> findByEmpresaIdAndSucursalIdAndActivoTrue(Long empresaId, Long sucursalId);
+
+    /**
+     * Buscar productos globales con término de búsqueda
+     */
+    @Query("""
+        SELECT p FROM Producto p
+        WHERE p.empresa.id = :empresaId
+          AND p.sucursal.id IS NULL
+          AND p.activo = true
+          AND (LOWER(p.codigoInterno) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(p.codigoBarras) LIKE LOWER(CONCAT('%', :termino, '%')))
+        """)
+    List<Producto> buscarGlobalesPorTermino(@Param("empresaId") Long empresaId,
+        @Param("termino") String termino);
+
+    /**
+     * Buscar productos locales con término de búsqueda
+     */
+    @Query("""
+        SELECT p FROM Producto p
+        WHERE p.empresa.id = :empresaId
+          AND p.sucursal.id = :sucursalId
+          AND p.activo = true
+          AND (LOWER(p.codigoInterno) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(p.codigoBarras) LIKE LOWER(CONCAT('%', :termino, '%')))
+        """)
+    List<Producto> buscarLocalesPorTermino(@Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("termino") String termino);
+
+    /**
+     * Contar productos activos globales
+     */
+    long countByEmpresaIdAndSucursalIdIsNullAndActivoTrue(Long empresaId);
+
+    /**
+     * Contar productos activos por sucursal
+     */
+    long countByEmpresaIdAndSucursalIdAndActivoTrue(Long empresaId, Long sucursalId);
 }

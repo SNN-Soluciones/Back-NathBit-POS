@@ -119,6 +119,9 @@ public class Empresa {
     @Column(name = "inventario_por_sucursal", nullable = false)
     private Boolean inventarioPorSucursal = true;
 
+    @Column(name = "proveedores_por_sucursal", nullable = false)
+    private Boolean proveedoresPorSucursal = false;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

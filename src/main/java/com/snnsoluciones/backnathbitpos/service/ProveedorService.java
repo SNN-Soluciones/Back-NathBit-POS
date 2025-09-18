@@ -12,4 +12,5 @@ public interface ProveedorService {
     ProveedorDto actualizar(Long id, ProveedorRequest request);
     ProveedorDto toggleActivo(Long id);
     void eliminar(Long id);
+    List<ProveedorDto> listarPorEmpresaConContexto(Long empresaId, String busqueda);
 }

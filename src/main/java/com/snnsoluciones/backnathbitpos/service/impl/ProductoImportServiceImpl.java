@@ -30,6 +30,8 @@ public class ProductoImportServiceImpl implements ProductoImportService {
     private final EmpresaCABySRepository empresaCABySRepository;
     private final CodigoCABySRepository codigoCABySRepository;
     private final ProductoImpuestoRepository productoImpuestoRepository;
+    private final ModularHelperService modularHelper;
+    private final SecurityContextService securityContextService;
 
     @Override
     @Transactional
@@ -106,6 +108,8 @@ public class ProductoImportServiceImpl implements ProductoImportService {
         // PASO 2: Crear productos con sus respectivos EmpresaCAByS
         log.info("PASO 2: Creando productos");
 
+        Sucursal sucursalImportacion = modularHelper.determinarSucursalParaEntidad(empresaId, "producto");
+
         for (int i = 0; i < productos.size(); i++) {
             ProductoImportDto productoImport = productos.get(i);
             EmpresaCAByS empresaCabysAsignado = listaEmpresaCabys.get(i);
@@ -154,6 +158,7 @@ public class ProductoImportServiceImpl implements ProductoImportService {
                     // Crear nuevo producto
                     producto = Producto.builder()
                         .empresa(empresa)
+                        .sucursal(sucursalImportacion)
                         .empresaCabys(empresaCabysAsignado)
                         .codigoInterno(productoImport.getCodigo())
                         .codigoBarras(productoImport.getCodigoBarras())

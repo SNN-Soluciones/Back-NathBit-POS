@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import java.math.BigDecimal;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -97,4 +98,93 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
      */
     Page<Cliente> findByPermiteCredito(Boolean permiteCredito, Pageable pageable);
 
+    /**
+     * Buscar clientes GLOBALES de una empresa
+     */
+    List<Cliente> findByEmpresaIdAndSucursalIdIsNullAndActivoTrueOrderByNombreComercialAsc(
+        Long empresaId);
+
+    /**
+     * Buscar clientes LOCALES de una sucursal
+     */
+    List<Cliente> findByEmpresaIdAndSucursalIdAndActivoTrueOrderByNombreComercialAsc(Long empresaId,
+        Long sucursalId);
+
+    /**
+     * Verificar si existe cliente global por identificación
+     */
+    boolean existsByEmpresaIdAndNumeroIdentificacionAndSucursalIdIsNull(Long empresaId,
+        String numeroIdentificacion);
+
+    /**
+     * Verificar si existe cliente local por identificación
+     */
+    boolean existsByEmpresaIdAndNumeroIdentificacionAndSucursalId(Long empresaId,
+        String numeroIdentificacion, Long sucursalId);
+
+    /**
+     * Buscar cliente global por identificación
+     */
+    Optional<Cliente> findByEmpresaIdAndNumeroIdentificacionAndSucursalIdIsNull(Long empresaId,
+        String numeroIdentificacion);
+
+    /**
+     * Buscar cliente local por identificación
+     */
+    Optional<Cliente> findByEmpresaIdAndNumeroIdentificacionAndSucursalId(Long empresaId,
+        String numeroIdentificacion, Long sucursalId);
+
+    /**
+     * Búsqueda global por término (CORREGIDA para emails)
+     */
+    @Query("""
+        SELECT DISTINCT c FROM Cliente c
+        LEFT JOIN c.clienteEmails e
+        WHERE c.empresa.id = :empresaId
+          AND c.sucursal.id IS NULL
+          AND c.activo = true
+          AND (LOWER(c.numeroIdentificacion) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(e.email) LIKE LOWER(CONCAT('%', :termino, '%')))
+        ORDER BY c.razonSocial
+        """)
+    List<Cliente> buscarGlobalesPorTermino(@Param("empresaId") Long empresaId,
+        @Param("termino") String termino);
+
+    /**
+     * Búsqueda local por término (CORREGIDA para emails)
+     */
+    @Query("""
+        SELECT DISTINCT c FROM Cliente c
+        LEFT JOIN c.clienteEmails e
+        WHERE c.empresa.id = :empresaId
+          AND c.sucursal.id = :sucursalId
+          AND c.activo = true
+          AND (LOWER(c.numeroIdentificacion) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(e.email) LIKE LOWER(CONCAT('%', :termino, '%')))
+        ORDER BY c.razonSocial
+        """)
+    List<Cliente> buscarLocalesPorTermino(@Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("termino") String termino);
+
+    /**
+     * Para el método que ya existe en tu código también hay que corregirlo
+     */
+    @Query("""
+        SELECT DISTINCT c FROM Cliente c
+        LEFT JOIN c.clienteEmails e
+        WHERE c.empresa.id = :empresaId
+          AND c.activo = true
+          AND (LOWER(c.numeroIdentificacion) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(c.razonSocial) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(e.email) LIKE LOWER(CONCAT('%', :termino, '%')))
+        ORDER BY c.razonSocial
+        """)
+    List<Cliente> buscarPorEmpresaYTermino(@Param("empresaId") Long empresaId,
+        @Param("termino") String termino);
 }

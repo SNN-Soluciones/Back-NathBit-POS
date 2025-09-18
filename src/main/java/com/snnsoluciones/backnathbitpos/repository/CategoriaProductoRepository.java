@@ -56,4 +56,57 @@ public interface CategoriaProductoRepository extends JpaRepository<CategoriaProd
            WHERE c.empresa.id = :empresaId
            """)
     Integer obtenerSiguienteOrden(@Param("empresaId") Long empresaId);
+
+    /**
+     * Buscar categorías GLOBALES de una empresa
+     */
+    List<CategoriaProducto> findByEmpresaIdAndSucursalIdIsNullAndActivoTrueOrderByOrdenAsc(Long empresaId);
+
+    /**
+     * Buscar categorías LOCALES de una sucursal
+     */
+    List<CategoriaProducto> findByEmpresaIdAndSucursalIdAndActivoTrueOrderByOrdenAsc(Long empresaId, Long sucursalId);
+
+    /**
+     * Verificar si existe categoría global con nombre
+     */
+    boolean existsByNombreAndEmpresaIdAndSucursalIdIsNull(String nombre, Long empresaId);
+
+    /**
+     * Verificar si existe categoría local con nombre
+     */
+    boolean existsByNombreAndEmpresaIdAndSucursalId(String nombre, Long empresaId, Long sucursalId);
+
+    /**
+     * Buscar categoría global por nombre
+     */
+    Optional<CategoriaProducto> findByNombreAndEmpresaIdAndSucursalIdIsNull(String nombre, Long empresaId);
+
+    /**
+     * Buscar categoría local por nombre
+     */
+    Optional<CategoriaProducto> findByNombreAndEmpresaIdAndSucursalId(String nombre, Long empresaId, Long sucursalId);
+
+    /**
+     * Siguiente orden para categorías globales
+     */
+    @Query("""
+        SELECT COALESCE(MAX(c.orden), 0) + 1
+        FROM CategoriaProducto c
+        WHERE c.empresa.id = :empresaId
+          AND c.sucursal.id IS NULL
+        """)
+    Integer obtenerSiguienteOrdenGlobal(@Param("empresaId") Long empresaId);
+
+    /**
+     * Siguiente orden para categorías locales
+     */
+    @Query("""
+        SELECT COALESCE(MAX(c.orden), 0) + 1
+        FROM CategoriaProducto c
+        WHERE c.empresa.id = :empresaId
+          AND c.sucursal.id = :sucursalId
+        """)
+    Integer obtenerSiguienteOrdenLocal(@Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId);
 }

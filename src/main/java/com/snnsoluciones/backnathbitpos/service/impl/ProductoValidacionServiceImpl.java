@@ -94,28 +94,48 @@ public class ProductoValidacionServiceImpl implements ProductoValidacionService 
             throw new BusinessException("El producto requiere configuración de impuestos para facturación electrónica");
         }
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public void validarCambioCategoria(Long productoId, Long categoriaId) {
         log.debug("Validando cambio de categoría para producto {} a categoría {}", productoId, categoriaId);
-        
+
         if (!productoRepository.existsById(productoId)) {
             throw new ResourceNotFoundException("Producto no encontrado: " + productoId);
         }
-        
+
         if (!categoriaRepository.existsById(categoriaId)) {
             throw new ResourceNotFoundException("Categoría no encontrada: " + categoriaId);
         }
-        
+
         // Validar que la categoría y el producto pertenezcan a la misma empresa
         Producto producto = productoRepository.findById(productoId).orElseThrow();
         CategoriaProducto categoria = categoriaRepository.findById(categoriaId).orElseThrow();
-        
+
         if (!producto.getEmpresa().getId().equals(categoria.getEmpresa().getId())) {
             throw new BusinessException("La categoría no pertenece a la misma empresa del producto");
         }
-        
+
+        // AGREGAR VALIDACIÓN DE CONTEXTO
+        boolean productoEsGlobal = (producto.getSucursal() == null);
+        boolean categoriaEsGlobal = (categoria.getSucursal() == null);
+
+        if (productoEsGlobal != categoriaEsGlobal) {
+            throw new BusinessException(
+                "No se puede asignar una categoría " +
+                    (categoriaEsGlobal ? "global" : "local") +
+                    " a un producto " +
+                    (productoEsGlobal ? "global" : "local")
+            );
+        }
+
+        // Si ambos son locales, deben ser de la misma sucursal
+        if (!productoEsGlobal && !producto.getSucursal().getId().equals(categoria.getSucursal().getId())) {
+            throw new BusinessException(
+                "La categoría y el producto deben pertenecer a la misma sucursal"
+            );
+        }
+
         if (!categoria.getActivo()) {
             throw new BusinessException("La categoría está inactiva");
         }

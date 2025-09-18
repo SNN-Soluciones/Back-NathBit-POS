@@ -73,7 +73,10 @@ public class ProductoCategoriaServiceImpl implements ProductoCategoriaService {
         if (!categoria.getEmpresa().getId().equals(producto.getEmpresa().getId())) {
             throw new BusinessException("La categoría no pertenece a la misma empresa");
         }
-        
+
+        validarMismoAlcance(producto, categoria);
+
+
         if (!categoria.getActivo()) {
             throw new BusinessException("La categoría está inactiva");
         }
@@ -129,5 +132,26 @@ public class ProductoCategoriaServiceImpl implements ProductoCategoriaService {
         return producto.getCategorias().stream()
             .map(CategoriaProducto::getId)
             .collect(Collectors.toSet());
+    }
+
+    private void validarMismoAlcance(Producto producto, CategoriaProducto categoria) {
+        boolean productoEsGlobal = (producto.getSucursal() == null);
+        boolean categoriaEsGlobal = (categoria.getSucursal() == null);
+
+        if (productoEsGlobal != categoriaEsGlobal) {
+            throw new BusinessException(
+                "No se puede asignar una categoría " +
+                    (categoriaEsGlobal ? "global" : "local") +
+                    " a un producto " +
+                    (productoEsGlobal ? "global" : "local")
+            );
+        }
+
+        // Si ambos son locales, deben ser de la misma sucursal
+        if (!productoEsGlobal && !producto.getSucursal().getId().equals(categoria.getSucursal().getId())) {
+            throw new BusinessException(
+                "La categoría y el producto deben pertenecer a la misma sucursal"
+            );
+        }
     }
 }

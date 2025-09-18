@@ -1,14 +1,10 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.cliente.ActividadEconomicaDto;
-import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreateDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteEmailDTO;
-import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteExoneracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ExoneracionClienteDto;
-import com.snnsoluciones.backnathbitpos.entity.Barrio;
-import com.snnsoluciones.backnathbitpos.entity.Canton;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteActividad;
 import com.snnsoluciones.backnathbitpos.entity.ClienteEmail;
@@ -16,9 +12,8 @@ import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracionCabys;
 import com.snnsoluciones.backnathbitpos.entity.ClienteUbicacion;
 import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
-import com.snnsoluciones.backnathbitpos.entity.Distrito;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
-import com.snnsoluciones.backnathbitpos.entity.Provincia;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
@@ -41,7 +36,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -64,6 +58,7 @@ public class ClienteServiceImpl implements ClienteService {
   private final CodigoCABySRepository codigoCabysRepository;
   private final UbicacionService ubicacionService;
   private final EmpresaService empresaService;
+  private final ModularHelperService modularHelper;
 
   private static final Pattern EMAIL_PATTERN = Pattern.compile(
       "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$"
@@ -87,6 +82,8 @@ public class ClienteServiceImpl implements ClienteService {
       throw new IllegalArgumentException("empresaId es requerido");
     }
 
+    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, "cliente");
+
     // =========================
     // 1) Empresa
     // =========================
@@ -97,6 +94,7 @@ public class ClienteServiceImpl implements ClienteService {
     // =========================
     final Cliente cliente = new Cliente();
     cliente.setEmpresa(empresa);
+    cliente.setSucursal(sucursal);
     cliente.setTipoIdentificacion(tipo);
     cliente.setNumeroIdentificacion(numeroId);
     cliente.setRazonSocial(StringUtils.trimToEmpty(dto.getRazonSocial()));     // primer email o CSV

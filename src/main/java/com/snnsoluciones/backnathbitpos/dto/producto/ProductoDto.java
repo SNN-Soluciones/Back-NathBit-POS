@@ -15,6 +15,8 @@ import java.util.List;
 public class ProductoDto {
     private Long id;
     private Long empresaId;
+    private Long sucursalId;
+    private String sucursalNombre;
     private String codigoInterno;
     private String codigoBarras;
     private String nombre;

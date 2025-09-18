@@ -19,6 +19,7 @@ import com.snnsoluciones.backnathbitpos.service.ProductoValidacionService;
 import com.snnsoluciones.backnathbitpos.service.ProductoCategoriaService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImpuestoService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
+import com.snnsoluciones.backnathbitpos.service.impl.ModularHelperService.QueryParams;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,6 +54,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
   private final ProductoCategoriaService productoCategoriaService;
   private final ModelMapper modelMapper;
   private final SucursalRepository sucursalRepository;
+  private final ModularHelperService modularHelper;
 
   @Override
   @Transactional
@@ -78,9 +80,12 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       throw new BusinessException("Ya existe un producto con el nombre: " + dto.getNombre());
     }
 
+    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, "producto");
+
     // Crear producto
     Producto producto = Producto.builder()
         .empresa(empresa)
+        .sucursal(sucursal)
         .codigoInterno(dto.getCodigoInterno() != null ?
             dto.getCodigoInterno() : generarCodigoInterno(empresaId))
         .codigoBarras(dto.getCodigoBarras())
@@ -353,6 +358,11 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     // Mapeos adicionales que ModelMapper no puede hacer automáticamente
     dto.setEmpresaId(producto.getEmpresa().getId());
 
+    if (producto.getSucursal() != null) {
+      dto.setSucursalId(producto.getSucursal().getId());
+      dto.setSucursalNombre(producto.getSucursal().getNombre());
+    }
+
     // Cargar categorías
     Set<CategoriaProductoDto> categorias = producto.getCategorias().stream()
         .map(cat -> modelMapper.map(cat, CategoriaProductoDto.class))
@@ -542,5 +552,23 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       log.error("Error obteniendo modo de facturación", e);
       throw new BusinessException("Error al obtener información de facturación");
     }
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProductoDto> listarPorEmpresaConContexto(Long empresaId) {
+    QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "producto");
+
+    List<Producto> productos;
+    if (params.esGlobal()) {
+      productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrue(empresaId);
+    } else {
+      productos = productoRepository.findByEmpresaIdAndSucursalIdAndActivoTrue(
+          empresaId, params.getSucursalId()
+      );
+    }
+
+    return productos.stream()
+        .map(this::convertirADto)
+        .collect(Collectors.toList());
   }
 }

@@ -4,9 +4,11 @@ import com.snnsoluciones.backnathbitpos.dto.proveedor.ProveedorDto;
 import com.snnsoluciones.backnathbitpos.dto.proveedor.ProveedorRequest;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Proveedor;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProveedorRepository;
 import com.snnsoluciones.backnathbitpos.service.ProveedorService;
+import com.snnsoluciones.backnathbitpos.service.impl.ModularHelperService.QueryParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -23,7 +26,8 @@ public class ProveedorServiceImpl implements ProveedorService {
     
     private final ProveedorRepository proveedorRepository;
     private final EmpresaRepository empresaRepository;
-    
+    private final ModularHelperService modularHelper;
+
     @Override
     @Transactional(readOnly = true)
     public List<ProveedorDto> listarPorEmpresa(Long empresaId, String busqueda) {
@@ -66,9 +70,12 @@ public class ProveedorServiceImpl implements ProveedorService {
         
         Empresa empresa = empresaRepository.findById(request.getEmpresaId())
                 .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
-        
+
+        Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresa.getId(), "proveedor");
+
         Proveedor proveedor = Proveedor.builder()
                 .empresa(empresa)
+                .sucursal(sucursal)
                 .tipoIdentificacion(request.getTipoIdentificacion())
                 .numeroIdentificacion(request.getNumeroIdentificacion())
                 .nombreComercial(request.getNombreComercial())
@@ -87,6 +94,35 @@ public class ProveedorServiceImpl implements ProveedorService {
         log.info("Proveedor creado: {} - {}", proveedor.getId(), proveedor.getNombreComercial());
         
         return convertirADto(proveedor);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProveedorDto> listarPorEmpresaConContexto(Long empresaId, String busqueda) {
+        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "proveedor");
+
+        List<Proveedor> proveedores;
+        if (StringUtils.hasText(busqueda)) {
+            if (params.esGlobal()) {
+                proveedores = proveedorRepository.buscarGlobalesPorTermino(empresaId, busqueda);
+            } else {
+                proveedores = proveedorRepository.buscarLocalesPorTermino(
+                    empresaId, params.getSucursalId(), busqueda
+                );
+            }
+        } else {
+            if (params.esGlobal()) {
+                proveedores = proveedorRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrueOrderByNombreComercialAsc(empresaId);
+            } else {
+                proveedores = proveedorRepository.findByEmpresaIdAndSucursalIdAndActivoTrueOrderByNombreComercialAsc(
+                    empresaId, params.getSucursalId()
+                );
+            }
+        }
+
+        return proveedores.stream()
+            .map(this::convertirADto)
+            .collect(Collectors.toList());
     }
     
     @Override

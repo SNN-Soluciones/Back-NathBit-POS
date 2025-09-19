@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.entity.ProductoImpuesto;
 
 import java.util.List;
 
+@Deprecated(since = "2.0", forRemoval = true)
 public interface ProductoImpuestoService {
     
     // Gestión de impuestos

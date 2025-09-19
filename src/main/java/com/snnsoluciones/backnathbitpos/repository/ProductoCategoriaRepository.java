@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Deprecated(since = "2.0", forRemoval = true)
 @Repository
 public interface ProductoCategoriaRepository {
 

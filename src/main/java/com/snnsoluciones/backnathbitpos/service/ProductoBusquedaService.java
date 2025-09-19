@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
+@Deprecated(since = "2.0", forRemoval = true)
 public interface ProductoBusquedaService {
     
     // Búsquedas paginadas

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+@Deprecated(since = "2.0", forRemoval = true)
 @Repository
 public interface ProductoCodigoProveedorRepository extends JpaRepository<ProductoCodigoProveedor, Long> {
     

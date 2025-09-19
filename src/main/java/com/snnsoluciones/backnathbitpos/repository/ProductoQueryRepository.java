@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Deprecated(since = "2.0", forRemoval = true)
 @Repository
 public class ProductoQueryRepository {
 

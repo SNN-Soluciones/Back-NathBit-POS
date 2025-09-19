@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service;
 
+@Deprecated(since = "2.0", forRemoval = true)
 public interface ProductoValidacionService {
     
     // Validaciones de unicidad

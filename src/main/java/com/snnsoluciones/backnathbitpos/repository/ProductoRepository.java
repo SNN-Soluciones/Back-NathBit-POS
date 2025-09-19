@@ -26,6 +26,8 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
     // Productos de una empresa (solo activos)
     Page<Producto> findByEmpresaId(Long empresaId, Pageable pageable);
+    Page<Producto> findByEmpresaIdAndActivoTrue(Long empresaId, Pageable pageable);
+    Page<Producto> findBySucursalId(Long empresaId, Pageable pageable);
 
     // Búsqueda general
     @Query("""

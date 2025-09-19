@@ -1,6 +1,7 @@
-package com.snnsoluciones.backnathbitpos.entity;
+package com.snnsoluciones.backnathbitpos.mappers;
 
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCreateDto;
+import com.snnsoluciones.backnathbitpos.entity.Producto;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants.ComponentModel;
 import org.mapstruct.ReportingPolicy;

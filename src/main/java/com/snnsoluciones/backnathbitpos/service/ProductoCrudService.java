@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.springframework.web.multipart.MultipartFile;
 
+@Deprecated(since = "2.0", forRemoval = true)
 public interface ProductoCrudService {
 
     // CRUD básico con soporte para imágenes

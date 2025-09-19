@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import jakarta.validation.constraints.DecimalMin;
@@ -65,6 +66,9 @@ public class ProductoCreateDto {
 
     private Boolean requiereInventario = true;
     private Boolean requiereReceta = false;
+
+    private TipoInventario tipoInventario = TipoInventario.SIMPLE;
+    private Long sucursal;
 
     private List<ProductoImpuestoCreateDto> impuestos;
 }

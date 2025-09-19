@@ -1,6 +1,8 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Producto;
+import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -136,4 +138,6 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
      * Contar productos activos por sucursal
      */
     long countByEmpresaIdAndSucursalIdAndActivoTrue(Long empresaId, Long sucursalId);
+
+    List<Producto> findByEmpresaIdAndTipoAndActivoTrue(Long empresaId, TipoProducto tipoProducto);
 }

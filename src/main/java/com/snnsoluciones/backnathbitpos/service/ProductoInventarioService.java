@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.entity.Producto;
 import com.snnsoluciones.backnathbitpos.entity.ProductoInventario;
 import com.snnsoluciones.backnathbitpos.entity.ProductoMovimiento;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
+import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimiento;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoCompra;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
@@ -87,11 +88,11 @@ public class ProductoInventarioService {
     // Descontar inventario (para ventas)
     public void descontarInventario(Long productoId, Long sucursalId, BigDecimal cantidad) {
         ProductoInventario inventario = obtenerInventario(productoId, sucursalId);
-        
+
         if (inventario.getCantidadActual().compareTo(cantidad) < 0) {
             throw new IllegalStateException("Stock insuficiente. Disponible: " + inventario.getCantidadActual());
         }
-        
+
         inventario.ajustarCantidad(cantidad.negate());
         inventarioRepository.save(inventario);
     }
@@ -147,8 +148,8 @@ public class ProductoInventarioService {
             Producto producto = detalle.getProducto();
 
             // Solo procesar productos que manejan inventario
-            if (Boolean.TRUE.equals(producto.getEsServicio()) ||
-                !Boolean.TRUE.equals(producto.getRequiereInventario())) {
+            if (Boolean.TRUE.equals(producto.getAplicaServicio()) ||
+                !producto.requiereControlInventario()) {
                 log.debug("Producto {} no maneja inventario", producto.getId());
                 continue;
             }
@@ -223,8 +224,8 @@ public class ProductoInventarioService {
 
         for (CompraDetalle detalle : compra.getDetalles()) {
             if (detalle.getProducto() == null ||
-                Boolean.TRUE.equals(detalle.getProducto().getEsServicio()) ||
-                !Boolean.TRUE.equals(detalle.getProducto().getRequiereInventario())) {
+                Boolean.TRUE.equals(detalle.getProducto().getAplicaServicio()) ||
+                !detalle.getProducto().requiereControlInventario()) {
                 continue;
             }
 

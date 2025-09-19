@@ -6,6 +6,8 @@ import com.snnsoluciones.backnathbitpos.entity.CompraDetalle;
 import com.snnsoluciones.backnathbitpos.entity.Producto;
 import com.snnsoluciones.backnathbitpos.entity.ProductoInventario;
 import com.snnsoluciones.backnathbitpos.entity.ProductoMovimiento;
+import com.snnsoluciones.backnathbitpos.entity.ProductoReceta;
+import com.snnsoluciones.backnathbitpos.entity.RecetaIngrediente;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimiento;
@@ -15,6 +17,7 @@ import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.ProductoInventarioRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoMovimientoRepository;
+import com.snnsoluciones.backnathbitpos.repository.ProductoRecetaRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
@@ -41,6 +44,8 @@ public class ProductoInventarioService {
     private final ProductoRepository productoRepository;
     private final SucursalRepository sucursalRepository;
     private final UsuarioService usuarioService;
+    private final ProductoRecetaRepository recetaRepository;
+    private final ProductoInventarioService inventarioService;
 
     // Obtener inventario de un producto en una sucursal
     public ProductoInventario obtenerInventario(Long productoId, Long sucursalId) {
@@ -461,5 +466,110 @@ public class ProductoInventarioService {
 
         return usuarioService.buscarPorEmail(email)
             .orElseThrow(() -> new BusinessException("Usuario no encontrado: " + email));
+    }
+
+    /**
+     * Consumir inventario (alias de reducirInventario para mantener consistencia con ProductoRecetaService)
+     */
+    @Transactional
+    public void consumirInventario(Long productoId, Long sucursalId, BigDecimal cantidad, String motivo) {
+        reducirInventario(productoId, sucursalId, cantidad, motivo);
+    }
+
+    /**
+     * Verificar si se puede producir cantidad de producto
+     */
+    @Transactional(readOnly = true)
+    public boolean puedeProducir(Long empresaId, Long productoId, Long sucursalId, BigDecimal cantidad) {
+        // 1. Buscar receta
+        ProductoReceta receta = recetaRepository
+            .findByProductoIdAndEmpresaId(productoId, empresaId)
+            .orElse(null);
+
+        // Si no tiene receta, se puede producir (producto sin receta)
+        if (receta == null) {
+            return true;
+        }
+
+        // 2. Verificar cada ingrediente
+        for (RecetaIngrediente ingrediente : receta.getIngredientes()) {
+            BigDecimal cantidadNecesaria = ingrediente.getCantidad().multiply(cantidad);
+
+            // Obtener el inventario completo
+            ProductoInventario inventario = inventarioService.obtenerInventario(
+                ingrediente.getProducto().getId(),
+                sucursalId
+            );
+
+            // Verificar si existe inventario
+            if (inventario == null) {
+                log.warn("No existe inventario para ingrediente {}",
+                    ingrediente.getProducto().getNombre());
+                return false;
+            }
+
+            // Obtener cantidad disponible (actual - bloqueada)
+            BigDecimal cantidadDisponible = inventario.getCantidadActual()
+                .subtract(inventario.getCantidadBloqueada() != null ?
+                    inventario.getCantidadBloqueada() : BigDecimal.ZERO);
+
+            if (cantidadDisponible.compareTo(cantidadNecesaria) < 0) {
+                log.warn("Ingrediente {} insuficiente. Necesario: {}, Disponible: {}",
+                    ingrediente.getProducto().getNombre(),
+                    cantidadNecesaria,
+                    cantidadDisponible);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Descontar ingredientes al producir
+     */
+    @Transactional
+    public void descontarIngredientes(Long empresaId, Long productoId, Long sucursalId, BigDecimal cantidad) {
+        log.info("Descontando ingredientes para producir {} unidades de producto {}", cantidad, productoId);
+
+        // 1. Obtener receta
+        ProductoReceta receta = recetaRepository
+            .findByProductoIdAndEmpresaId(productoId, empresaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Receta no encontrada"));
+
+        // 2. Descontar cada ingrediente
+        for (RecetaIngrediente ingrediente : receta.getIngredientes()) {
+            BigDecimal cantidadADescontar = ingrediente.getCantidad().multiply(cantidad);
+
+            // Obtener inventario actual
+            ProductoInventario inventario = inventarioService.obtenerInventario(
+                ingrediente.getProducto().getId(),
+                sucursalId
+            );
+
+            if (inventario == null) {
+                throw new BusinessException("No existe inventario para ingrediente " +
+                    ingrediente.getProducto().getNombre());
+            }
+
+            // Actualizar cantidad
+            BigDecimal nuevaCantidad = inventario.getCantidadActual().subtract(cantidadADescontar);
+
+            if (nuevaCantidad.compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException("Stock insuficiente para " +
+                    ingrediente.getProducto().getNombre());
+            }
+
+            inventario.setCantidadActual(nuevaCantidad);
+
+            // Si el ProductoInventarioService tiene un método para actualizar, úsalo
+            // Si no, necesitarás inyectar el repositorio directamente
+            inventarioRepository.actualizarInventario(inventario);
+
+            log.info("Descontado {} de {}, nuevo stock: {}",
+                cantidadADescontar,
+                ingrediente.getProducto().getNombre(),
+                nuevaCantidad);
+        }
     }
 }

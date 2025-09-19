@@ -168,7 +168,6 @@ public class ProductoImportServiceImpl implements ProductoImportService {
                         .moneda(Moneda.CRC)
                         .precioVenta(productoImport.getPrecio())
                         .aplicaServicio(false)
-                        .esServicio(false)
                         .incluyeIVA(true)
                         .activo(mapearEstadoActivo(productoImport.getEstadoProducto()))
                         .build();

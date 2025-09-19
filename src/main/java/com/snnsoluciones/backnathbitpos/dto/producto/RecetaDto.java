@@ -7,6 +7,7 @@ import java.util.List;
 
 @Data
 public class RecetaDto {
+    private Long id;
     private Long productoId;
     private String productoNombre;
     private List<RecetaIngredienteDto> ingredientes;

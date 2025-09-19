@@ -12,8 +12,6 @@ import java.util.Optional;
 @Repository
 public interface ProductoRecetaRepository extends JpaRepository<ProductoReceta, Long> {
 
-  Optional<ProductoReceta> findByEmpresaIdAndProductoId(Long empresaId, Long productoId);
-
   List<ProductoReceta> findByEmpresaIdAndEstadoTrue(Long empresaId);
 
   @Query("SELECT pr FROM ProductoReceta pr JOIN FETCH pr.ingredientes " +
@@ -22,9 +20,11 @@ public interface ProductoRecetaRepository extends JpaRepository<ProductoReceta, 
       @Param("empresaId") Long empresaId,
       @Param("productoId") Long productoId);
 
-  boolean existsByEmpresaIdAndProductoId(Long empresaId, Long productoId);
-
-  boolean existsByIngredientesExists();
-
   boolean existsByIngredientesProductoId(Long id);
+
+  boolean existsByProductoIdAndEmpresaId(Long productoId, Long empresaId);
+
+  Optional<ProductoReceta> findByIdAndEmpresaId(Long recetaId, Long empresaId);
+
+  Optional<ProductoReceta> findByProductoIdAndEmpresaId(Long productoId, Long empresaId);
 }

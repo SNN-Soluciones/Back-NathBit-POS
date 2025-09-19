@@ -34,6 +34,9 @@ public class RecetaIngrediente {
     @Column(nullable = false, precision = 10, scale = 3)
     private BigDecimal cantidad;
 
+    @Column(name = "costo_unitario")
+    private BigDecimal costoUnitario;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 

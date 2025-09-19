@@ -16,8 +16,10 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import org.hibernate.proxy.HibernateProxy;
@@ -28,9 +30,9 @@ import org.hibernate.proxy.HibernateProxy;
 @Entity
 @Table(name = "producto_movimientos")
 @Data
-@ToString(exclude = {"producto", "sucursal", "usuario"})
 @Builder
-@RequiredArgsConstructor
+@NoArgsConstructor
+@AllArgsConstructor
 public class ProductoMovimiento {
     
     @Id

@@ -12,6 +12,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.hibernate.proxy.HibernateProxy;
 @Builder
 @Data
 @Entity
+@AllArgsConstructor
 @RequiredArgsConstructor
 @Table(name = "productos_inventarios",
     uniqueConstraints = {

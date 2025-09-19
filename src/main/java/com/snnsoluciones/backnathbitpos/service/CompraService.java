@@ -390,7 +390,7 @@ public class CompraService {
             // Crear producto nuevo
             Producto nuevoProducto = crearProductoDesdeLinea(lineaXml, empresa);
             detalle.setProducto(nuevoProducto);
-            nuevoProducto.setRequiereInventario(false);
+            nuevoProducto.requiereControlInventario();
           }
         }
 
@@ -560,10 +560,10 @@ public class CompraService {
         detalle.setProducto(producto);
 
         // Actualizar precio de compra
-        producto.setPrecioCompra(detalleReq.getPrecioUnitario());
-        producto.setUltimoPrecioCompra(detalleReq.getPrecioUnitario());
-        producto.setFechaUltimaCompra(LocalDateTime.now());
-        productoService.save(producto);
+//        producto.setPrecioCompra(detalleReq.getPrecioUnitario());
+//        producto.setUltimoPrecioCompra(detalleReq.getPrecioUnitario());
+//        producto.setFechaUltimaCompra(LocalDateTime.now());
+//        productoService.save(producto);
       }
 
       // Acumular totales

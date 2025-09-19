@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.controller;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.DescontarIngredientesDTO;
 import com.snnsoluciones.backnathbitpos.dto.producto.RecetaCreateDTO;
+import com.snnsoluciones.backnathbitpos.dto.producto.RecetaDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.RecetaUpdateDTO;
 import com.snnsoluciones.backnathbitpos.dto.producto.VerificarProduccionDTO;
 import com.snnsoluciones.backnathbitpos.entity.ProductoReceta;
@@ -27,7 +28,7 @@ public class ProductoRecetaController {
     @PostMapping
     public ResponseEntity<ApiResponse<ProductoReceta>> crearReceta(@Valid @RequestBody RecetaCreateDTO dto) {
         try {
-            ProductoReceta receta = recetaService.crearReceta(dto.getEmpresaId(), dto);
+            ProductoReceta receta = recetaService.crearReceta(dto.getEmpresaId(), dto.getProductoId(), dto);
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Receta creada exitosamente", receta));
         } catch (IllegalStateException e) {
@@ -61,11 +62,11 @@ public class ProductoRecetaController {
 
     // Obtener receta de un producto
     @GetMapping("/empresa/{empresaId}/producto/{productoId}")
-    public ResponseEntity<ApiResponse<ProductoReceta>> obtenerReceta(
+    public ResponseEntity<ApiResponse<RecetaDto>> obtenerReceta(
         @PathVariable Long empresaId,
         @PathVariable Long productoId) {
         try {
-            ProductoReceta receta = recetaService.obtenerReceta(empresaId, productoId);
+            RecetaDto receta = recetaService.obtenerReceta(empresaId, productoId);
             return ResponseEntity.ok(ApiResponse.ok("Receta encontrada", receta));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -75,9 +76,9 @@ public class ProductoRecetaController {
 
     // Listar recetas de una empresa
     @GetMapping("/empresa/{empresaId}")
-    public ResponseEntity<ApiResponse<List<ProductoReceta>>> listarRecetas(@PathVariable Long empresaId) {
+    public ResponseEntity<ApiResponse<List<RecetaDto>>> listarRecetas(@PathVariable Long empresaId) {
         try {
-            List<ProductoReceta> recetas = recetaService.listarRecetas(empresaId);
+            List<RecetaDto> recetas = recetaService.listarRecetas(empresaId);
             return ResponseEntity.ok(ApiResponse.ok("Recetas obtenidas", recetas));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

@@ -6,6 +6,8 @@ import com.snnsoluciones.backnathbitpos.enums.ZonaPreparacion;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import jakarta.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -132,6 +134,8 @@ public class Producto {
   @Builder.Default
   private Boolean incluyeIVA = true;
 
+  private Boolean requiereInventario = false;
+
   // Impuestos
   @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL,
       orphanRemoval = true, fetch = FetchType.LAZY)
@@ -160,6 +164,25 @@ public class Producto {
 
   @Column(name = "precio_compra", precision = 10, scale = 2)
   private BigDecimal precioCompra;
+
+  @Column(name = "factor_conversion", precision = 10, scale = 4)
+  private BigDecimal factorConversion;
+
+  @Column(name = "unidad_medida_uso", length = 50)
+  private String unidadMedidaUso;
+
+  @Column(name = "requiere_receta", nullable = false)
+  private Boolean requiereReceta = false;     // ¿Necesita receta para producirse?
+
+  @Column(name = "ultimo_precio_compra")
+  private BigDecimal ultimoPrecioCompra;
+
+  @Column(name = "fecha_ultima_compra")
+  private LocalDateTime fechaUltimaCompra;
+
+  @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL, orphanRemoval = true)
+  private List<ProductoCodigoProveedor> codigosProveedor = new ArrayList<>();
+
 
   // MÉTODOS HELPER
 

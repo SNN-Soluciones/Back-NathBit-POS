@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import jakarta.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -57,9 +59,37 @@ public class Sucursal {
     @Builder.Default
     private Boolean esMatriz = false;
 
+    // Número para formar el consecutivo (001, 002, etc.)
+    @Column(name = "numero_sucursal", length = 3, nullable = false)
+    private String numeroSucursal;
+
     @Column(name = "modo_facturacion", nullable = false)
     @Enumerated(EnumType.STRING)
     private ModoFacturacion modoFacturacion = ModoFacturacion.ELECTRONICO;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "provincia_id")
+    private Provincia provincia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "canton_id")
+    private Canton canton;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "distrito_id")
+    private Distrito distrito;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "barrio_id")
+    private Barrio barrio;
+
+    @Column(name = "otras_senas", length = 500)
+    private String otrasSenas;
+
+    @OneToMany(mappedBy = "sucursal", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Terminal> terminales = new ArrayList<>();
+
+    private Boolean activa;
 
     // NUEVOS CAMPOS PARA FASE 2
 

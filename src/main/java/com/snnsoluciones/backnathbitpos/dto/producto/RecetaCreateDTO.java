@@ -7,5 +7,5 @@ import java.util.List;
 public class RecetaCreateDTO {
     private Long empresaId;
     private Long productoId;
-    private List<IngredienteDTO> ingredientes;
+    private List<RecetaIngredienteDto> ingredientes;
 }

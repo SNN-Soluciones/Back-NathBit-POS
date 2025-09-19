@@ -11,6 +11,8 @@ import com.snnsoluciones.backnathbitpos.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -211,5 +213,69 @@ public class EmpresaController extends BaseController{
         empresa.setTelefono(request.getTelefono());
         empresa.setActiva(request.getActiva());
         return empresa;
+    }
+
+    @PatchMapping("/{id}/configuracion")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> actualizarConfiguracion(
+        @PathVariable Long id,
+        @RequestBody Map<String, Boolean> configuracion) {
+
+        try {
+            // Buscar empresa
+            Empresa empresa = empresaService.buscarPorId(id);
+            if (empresa == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("Empresa no encontrada"));
+            }
+
+            // Validar acceso
+            if (!validarAccesoEmpresa(empresa)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("No tiene acceso a esta empresa"));
+            }
+
+            // Actualizar configuración
+            if (configuracion.containsKey("requiereHacienda")) {
+                empresa.setRequiereHacienda(configuracion.get("requiereHacienda"));
+            }
+            if (configuracion.containsKey("productosPorSucursal")) {
+                empresa.setProductosPorSucursal(configuracion.get("productosPorSucursal"));
+            }
+            if (configuracion.containsKey("clientesPorSucursal")) {
+                empresa.setClientesPorSucursal(configuracion.get("clientesPorSucursal"));
+            }
+            if (configuracion.containsKey("categoriasPorSucursal")) {
+                empresa.setCategoriasPorSucursal(configuracion.get("categoriasPorSucursal"));
+            }
+            if (configuracion.containsKey("proveedoresPorSucursal")) {
+                empresa.setProveedoresPorSucursal(configuracion.get("proveedoresPorSucursal"));
+            }
+            if (configuracion.containsKey("inventarioPorSucursal")) {
+                empresa.setInventarioPorSucursal(configuracion.get("inventarioPorSucursal"));
+            }
+
+            // Guardar cambios
+            empresaService.actualizar(id, empresa);
+
+            // Retornar configuración actualizada
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("requiereHacienda", empresa.getRequiereHacienda());
+            resultado.put("productosPorSucursal", empresa.getProductosPorSucursal());
+            resultado.put("clientesPorSucursal", empresa.getClientesPorSucursal());
+            resultado.put("categoriasPorSucursal", empresa.getCategoriasPorSucursal());
+            resultado.put("proveedoresPorSucursal", empresa.getProveedoresPorSucursal());
+            resultado.put("inventarioPorSucursal", empresa.getInventarioPorSucursal());
+
+            return ResponseEntity.ok(ApiResponse.ok(
+                "Configuración actualizada correctamente",
+                resultado
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("Error al actualizar configuración: " + e.getMessage())
+            );
+        }
     }
 }

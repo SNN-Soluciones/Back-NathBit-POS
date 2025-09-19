@@ -45,7 +45,6 @@ public class ProductoInventarioService {
     private final SucursalRepository sucursalRepository;
     private final UsuarioService usuarioService;
     private final ProductoRecetaRepository recetaRepository;
-    private final ProductoInventarioService inventarioService;
 
     // Obtener inventario de un producto en una sucursal
     public ProductoInventario obtenerInventario(Long productoId, Long sucursalId) {
@@ -496,7 +495,7 @@ public class ProductoInventarioService {
             BigDecimal cantidadNecesaria = ingrediente.getCantidad().multiply(cantidad);
 
             // Obtener el inventario completo
-            ProductoInventario inventario = inventarioService.obtenerInventario(
+            ProductoInventario inventario = obtenerInventario(
                 ingrediente.getProducto().getId(),
                 sucursalId
             );
@@ -542,7 +541,7 @@ public class ProductoInventarioService {
             BigDecimal cantidadADescontar = ingrediente.getCantidad().multiply(cantidad);
 
             // Obtener inventario actual
-            ProductoInventario inventario = inventarioService.obtenerInventario(
+            ProductoInventario inventario = obtenerInventario(
                 ingrediente.getProducto().getId(),
                 sucursalId
             );
@@ -564,7 +563,7 @@ public class ProductoInventarioService {
 
             // Si el ProductoInventarioService tiene un método para actualizar, úsalo
             // Si no, necesitarás inyectar el repositorio directamente
-            inventarioRepository.actualizarInventario(inventario);
+//            inventarioRepository.actualizarInventario(inventario);
 
             log.info("Descontado {} de {}, nuevo stock: {}",
                 cantidadADescontar,

@@ -36,5 +36,11 @@ public interface EmailAuditLogRepository extends JpaRepository<EmailAuditLog, Lo
      */
     List<EmailAuditLog> findByEstadoInAndIntentosLessThan(List<EstadoEmail> estados, Integer maxIntentos);
 
-    Optional<EmailAuditLog> findByFacturaIdAndEstado(Long facturaId, EstadoEmail estado);
+//    Optional<EmailAuditLog> findByFacturaIdAndEstado(Long facturaId, EstadoEmail estado);
+
+    Optional<EmailAuditLog> findFirstByFacturaIdAndEstadoOrderByCreatedAtDesc(Long facturaId, EstadoEmail estado);
+
+    // O si necesitas todos los registros:
+    List<EmailAuditLog> findAllByFacturaIdAndEstadoOrderByCreatedAtDesc(Long facturaId, EstadoEmail estado);
+
 }

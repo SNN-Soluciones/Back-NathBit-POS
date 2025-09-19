@@ -69,6 +69,23 @@ public class FacturaBitacoraController {
         }
     }
 
+    @PostMapping("/{id}/reenviar-correo")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE', 'CAJERO')")
+    public ResponseEntity<ApiResponse<String>> reenviarCorreo(
+        @PathVariable Long id,
+        @RequestParam(required = false) String emailDestino) {
+
+        try {
+            String mensaje = bitacoraService.reenviarCorreo(id, emailDestino);
+            return ResponseEntity.ok(
+                ApiResponse.ok(mensaje)
+            );
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error al reenviar: " + e.getMessage()));
+        }
+    }
+
     @Operation(summary = "Buscar bitácora por clave",
         description = "Busca una bitácora específica por clave de documento")
     @GetMapping("/clave/{clave}")

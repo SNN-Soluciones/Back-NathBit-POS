@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaBitacoraFilterReques
 import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaBitacoraListResponse;
 import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaResumenDto;
 import com.snnsoluciones.backnathbitpos.dto.bitacora.ReintentarProcesamientoRequest;
+import com.snnsoluciones.backnathbitpos.dto.email.EmailFacturaDto;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
@@ -14,13 +15,18 @@ import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.service.EmailService;
 import com.snnsoluciones.backnathbitpos.service.FacturaBitacoraService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import com.snnsoluciones.backnathbitpos.service.pdf.FacturaPdfService;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.text.DecimalFormat;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -54,6 +60,7 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
     private final StorageService storageService;
     private final FacturaPdfService facturaPdfService;
     private final EmailAuditLogRepository emailAuditLogRepository;
+    private final EmailService emailService;
 
     @Override
     public Page<FacturaBitacoraListResponse> buscarConFiltros(FacturaBitacoraFilterRequest filtros) {
@@ -330,6 +337,140 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
             .build();
     }
 
+    @Transactional
+    public String reenviarCorreo(Long bitacoraId, String emailOverride) {
+        log.info("Reenviando correo para bitácora ID: {}", bitacoraId);
+
+        FacturaBitacora bitacora = bitacoraRepository.findById(bitacoraId)
+            .orElseThrow(() -> new EntityNotFoundException("Bitácora no encontrada"));
+
+        // Validar que esté aceptada
+        if (bitacora.getEstado() != EstadoBitacora.ACEPTADA) {
+            throw new IllegalStateException("Solo se pueden reenviar facturas aceptadas");
+        }
+
+        Factura factura = facturaRepository.findById(bitacora.getFacturaId())
+            .orElseThrow(() -> new EntityNotFoundException("Factura no encontrada"));
+
+        try {
+            // 1. Determinar email destino
+            String emailDestino = emailOverride != null && !emailOverride.trim().isEmpty()
+                ? emailOverride.trim()
+                : factura.getEmailReceptor();
+
+            if (emailDestino == null || emailDestino.isEmpty()) {
+                throw new IllegalArgumentException("No hay email de destino disponible");
+            }
+
+            // 3. Descargar archivos de S3
+            byte[] pdfBytes = facturaPdfService.generarFactura(bitacora.getClave(), "carta");
+
+            byte[] xmlFirmadoBytes = null;
+            if (bitacora.getXmlFirmadoPath() != null) {
+                xmlFirmadoBytes = storageService.downloadFileAsBytes(bitacora.getXmlFirmadoPath());
+            }
+
+            byte[] respuestaHaciendaBytes = null;
+            if (bitacora.getXmlRespuestaPath() != null) {
+                respuestaHaciendaBytes = storageService.downloadFileAsBytes(bitacora.getXmlRespuestaPath());
+            }
+
+            // 4. Armar el DTO para el EmailService (igual que en el Job)
+            EmailFacturaDto dto = EmailFacturaDto.builder()
+                // Identificadores
+                .facturaId(factura.getId())
+                .clave(factura.getClave())
+                .consecutivo(factura.getConsecutivo())
+
+                // Destinatario
+                .emailDestino(emailDestino)
+
+                // Datos para asunto/cuerpo
+                .tipoDocumento(factura.getTipoDocumento().getDescripcion())
+                .nombreComercial(factura.getSucursal().getEmpresa().getNombreComercial())
+                .razonSocial(factura.getSucursal().getEmpresa().getNombreRazonSocial())
+                .cedulaJuridica(factura.getSucursal().getEmpresa().getIdentificacion())
+                .fechaEmision(formatearFecha(factura.getFechaEmision()))
+
+                // Cliente
+                .nombreComercial(factura.getCliente() != null
+                    ? factura.getCliente().getRazonSocial()
+                    : factura.getNombreReceptor())
+                .cedulaJuridica(factura.getCliente() != null
+                    ? factura.getCliente().getNumeroIdentificacion()
+                    : null)
+
+                // Montos
+
+                // Archivos adjuntos
+                .pdfBytes(pdfBytes)
+                .xmlFirmadoBytes(xmlFirmadoBytes)
+                .respuestaHaciendaBytes(respuestaHaciendaBytes)
+
+                .build();
+
+            // 5. Enviar email
+            emailService.enviarFacturaElectronica(dto);
+
+            // 6. Registrar en log de emails (si tienes tabla de auditoría)
+//            EmailAuditLog emailLog = EmailAuditLog.builder()
+//                .facturaId(factura.getId())
+//                .emailDestino(emailDestino)
+//                .estado(EstadoEmail.ENVIADO)
+//                .fechaEnvio(LocalDateTime.now())
+//                .build();
+//
+//            emailAuditLogRepository.save(emailLog);
+
+            log.info("Correo reenviado exitosamente a: {} para factura: {}",
+                emailDestino, factura.getConsecutivo());
+
+            return "Correo reenviado exitosamente a: " + emailDestino;
+
+        } catch (Exception e) {
+            log.error("Error al reenviar correo para factura: {}", factura.getConsecutivo(), e);
+
+            // Registrar el fallo si tienes auditoría
+//            EmailAuditLog emailLog = EmailAuditLog.builder()
+//                .facturaId(factura.getId())
+//                .emailDestino(emailOverride != null ? emailOverride : factura.getEmailReceptor())
+//                .estado(EstadoEmail.ERROR)
+//                .errorMensaje(e.getMessage())
+//                .fechaEnvio(LocalDateTime.now())
+//                .build();
+//
+//            emailAuditLogRepository.save(emailLog);
+
+            throw new RuntimeException("Error al reenviar correo: " + e.getMessage(), e);
+        }
+    }
+
+    // Método auxiliar para formatear fecha
+    private String formatearFecha(String fechaStr) {
+        try {
+            if (fechaStr == null || fechaStr.isEmpty()) {
+                return LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+            }
+
+            // Parsear y formatear según tu formato
+            ZonedDateTime zdt = ZonedDateTime.parse(fechaStr);
+            return zdt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+
+        } catch (DateTimeParseException e) {
+            log.warn("No se pudo parsear la fecha: {}. Usando fecha actual.", fechaStr);
+            return LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+        }
+    }
+
+    // Obtener usuario actual del contexto
+    private Long getCurrentUserId() {
+        // Implementar según tu lógica de seguridad
+        // Por ejemplo:
+        // Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        // return ((UserPrincipal) auth.getPrincipal()).getId();
+        return 1L; // Placeholder
+    }
+
     // ========== MÉTODOS AUXILIARES ==========
 
     /**
@@ -470,7 +611,7 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
             }
         }
 
-      emailAuditLogRepository.findByFacturaIdAndEstado(
+      emailAuditLogRepository.findFirstByFacturaIdAndEstadoOrderByCreatedAtDesc(
           bitacora.getFacturaId(),
           EstadoEmail.ENVIADO
       ).ifPresent(emailLog -> builder.fechaEnvioEmail(emailLog.getFechaEnvio()));

@@ -39,25 +39,11 @@ public class Sucursal {
     @Column(nullable = false, length = 100)
     private String nombre;
 
-    @Column(name = "codigo_sucursal", nullable = false, length = 10)
-    private String codigoSucursal;
-
-    @Column(length = 200)
-    private String direccion;
-
     @Column(length = 20)
     private String telefono;
 
     @Column(length = 100)
     private String email;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean activo = true;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean esMatriz = false;
 
     // Número para formar el consecutivo (001, 002, etc.)
     @Column(name = "numero_sucursal", length = 3, nullable = false)
@@ -89,6 +75,8 @@ public class Sucursal {
     @OneToMany(mappedBy = "sucursal", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Terminal> terminales = new ArrayList<>();
 
+
+    @Column(name = "activa", nullable = false)
     private Boolean activa;
 
     // NUEVOS CAMPOS PARA FASE 2

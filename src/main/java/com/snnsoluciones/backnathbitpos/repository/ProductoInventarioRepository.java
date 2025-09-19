@@ -29,5 +29,4 @@ public interface ProductoInventarioRepository extends JpaRepository<ProductoInve
 
   boolean existsByProductoIdAndCantidadActualGreaterThan(Long id, BigDecimal zero);
 
-  void actualizarInventario(ProductoInventario inventario);
 }

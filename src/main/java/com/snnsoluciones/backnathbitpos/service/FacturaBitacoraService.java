@@ -82,4 +82,6 @@ public interface FacturaBitacoraService {
      * @return Respuesta de la acción
      */
     FacturaBitacoraActionResponse marcarComoCompletada(Long bitacoraId, String observacion);
+
+    String reenviarCorreo(Long bitacoraId, String emailOverride);
 }

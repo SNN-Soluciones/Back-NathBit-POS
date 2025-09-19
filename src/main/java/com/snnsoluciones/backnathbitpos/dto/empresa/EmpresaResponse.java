@@ -20,4 +20,9 @@ public class EmpresaResponse {
     private Boolean requiereHacienda;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean productosPorSucursal;
+    private Boolean clientesPorSucursal;
+    private Boolean categoriasPorSucursal;
+    private Boolean proveedoresPorSucursal;
+    private Boolean inventarioPorSucursal;
 }

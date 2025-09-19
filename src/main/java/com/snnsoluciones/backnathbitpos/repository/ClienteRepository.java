@@ -99,18 +99,6 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     Page<Cliente> findByPermiteCredito(Boolean permiteCredito, Pageable pageable);
 
     /**
-     * Buscar clientes GLOBALES de una empresa
-     */
-    List<Cliente> findByEmpresaIdAndSucursalIdIsNullAndActivoTrueOrderByNombreComercialAsc(
-        Long empresaId);
-
-    /**
-     * Buscar clientes LOCALES de una sucursal
-     */
-    List<Cliente> findByEmpresaIdAndSucursalIdAndActivoTrueOrderByNombreComercialAsc(Long empresaId,
-        Long sucursalId);
-
-    /**
      * Verificar si existe cliente global por identificación
      */
     boolean existsByEmpresaIdAndNumeroIdentificacionAndSucursalIdIsNull(Long empresaId,

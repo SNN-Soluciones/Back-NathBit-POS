@@ -193,6 +193,11 @@ public class EmpresaController extends BaseController{
             .activa(empresa.getActiva())
             .createdAt(empresa.getCreatedAt())
             .updatedAt(empresa.getUpdatedAt())
+            .clientesPorSucursal(empresa.getClientesPorSucursal())
+            .categoriasPorSucursal(empresa.getCategoriasPorSucursal())
+            .proveedoresPorSucursal(empresa.getProveedoresPorSucursal())
+            .inventarioPorSucursal(empresa.getInventarioPorSucursal())
+            .productosPorSucursal(empresa.getProductosPorSucursal())
             .build();
     }
 

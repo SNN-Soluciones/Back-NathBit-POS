@@ -16,7 +16,9 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import lombok.Builder;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import org.hibernate.proxy.HibernateProxy;
 
@@ -27,6 +29,8 @@ import org.hibernate.proxy.HibernateProxy;
 @Table(name = "producto_movimientos")
 @Data
 @ToString(exclude = {"producto", "sucursal", "usuario"})
+@Builder
+@RequiredArgsConstructor
 public class ProductoMovimiento {
     
     @Id

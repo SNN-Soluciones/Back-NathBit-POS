@@ -17,9 +17,13 @@ import com.snnsoluciones.backnathbitpos.repository.ProductoInventarioRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoMovimientoRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tomcat.util.descriptor.web.ContextService;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +40,8 @@ public class ProductoInventarioService {
     private final ProductoMovimientoRepository productoMovimientoRepository;
     private final ProductoRepository productoRepository;
     private final SucursalRepository sucursalRepository;
-    
+    private final UsuarioService usuarioService;
+
     // Obtener inventario de un producto en una sucursal
     public ProductoInventario obtenerInventario(Long productoId, Long sucursalId) {
         return inventarioRepository.findByProductoIdAndSucursalId(productoId, sucursalId)
@@ -286,5 +291,175 @@ public class ProductoInventarioService {
         }
 
         log.info("Compra {} reversada exitosamente", compra.getId());
+    }
+
+    /**
+     * Reducir inventario de un producto
+     *
+     * @param productoId ID del producto
+     * @param sucursalId ID de la sucursal
+     * @param cantidad   Cantidad a reducir
+     * @param motivo     Motivo de la reducción (venta, merma, etc)
+     */
+    @Transactional
+    public void reducirInventario(Long productoId, Long sucursalId, BigDecimal cantidad, String motivo) {
+        log.info("Reduciendo inventario - Producto: {}, Sucursal: {}, Cantidad: {}", productoId, sucursalId, cantidad);
+
+        // Validar cantidad
+        if (cantidad == null || cantidad.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("La cantidad a reducir debe ser mayor a cero");
+        }
+
+        // Obtener inventario actual
+        ProductoInventario inventario = obtenerInventario(productoId, sucursalId);
+
+        // Verificar stock disponible
+        if (inventario.getCantidadActual().compareTo(cantidad) < 0) {
+            throw new BusinessException(
+                String.format("Stock insuficiente. Disponible: %s, Solicitado: %s",
+                    inventario.getCantidadActual(), cantidad)
+            );
+        }
+
+        // Reducir cantidad
+        BigDecimal nuevaCantidad = inventario.getCantidadActual().subtract(cantidad);
+        inventario.setCantidadActual(nuevaCantidad);
+
+        // Guardar inventario actualizado
+        inventario = inventarioRepository.save(inventario);
+
+        // Registrar movimiento
+        ProductoMovimiento movimiento = new ProductoMovimiento();
+        movimiento.setProducto(inventario.getProducto());
+        movimiento.setSucursal(inventario.getSucursal());
+        movimiento.setTipoMovimiento(TipoMovimiento.SALIDA_VENTA);
+        movimiento.setCantidad(cantidad.negate()); // Negativo para salida
+        movimiento.setSaldoAnterior(inventario.getCantidadActual().add(cantidad));
+        movimiento.setSaldoNuevo(inventario.getCantidadActual());
+        movimiento.setObservaciones(motivo != null ? motivo : "Reducción de inventario");
+        movimiento.setFechaMovimiento(LocalDateTime.now());
+        movimiento.setUsuario(obtenerUsuarioActual());
+
+        productoMovimientoRepository.save(movimiento);
+
+        log.info("Inventario reducido exitosamente. Nueva cantidad: {}", nuevaCantidad);
+
+    }
+
+    /**
+     * Bloquear cantidad de inventario temporalmente
+     */
+    @Transactional
+    public void bloquearInventario(Long productoId, Long sucursalId, BigDecimal cantidad) {
+        log.info("Bloqueando inventario - Producto: {}, Sucursal: {}, Cantidad: {}",
+            productoId, sucursalId, cantidad);
+
+        ProductoInventario inventario = obtenerInventario(productoId, sucursalId);
+
+        // Verificar disponibilidad real
+        BigDecimal disponibleReal = inventario.getCantidadActual()
+            .subtract(inventario.getCantidadBloqueada());
+
+        if (disponibleReal.compareTo(cantidad) < 0) {
+            throw new BusinessException(
+                String.format("Stock insuficiente. Disponible: %s, Solicitado: %s",
+                    disponibleReal, cantidad)
+            );
+        }
+
+        // Actualizar cantidad bloqueada
+        inventario.setCantidadBloqueada(
+            inventario.getCantidadBloqueada().add(cantidad)
+        );
+        inventario.setUltimaActualizacionBloqueada(LocalDateTime.now());
+
+        inventarioRepository.save(inventario);
+    }
+
+    /**
+     * Liberar inventario bloqueado
+     */
+    @Transactional
+    public void liberarInventario(Long productoId, Long sucursalId, BigDecimal cantidad) {
+        log.info("Liberando inventario - Producto: {}, Sucursal: {}, Cantidad: {}",
+            productoId, sucursalId, cantidad);
+
+        ProductoInventario inventario = obtenerInventario(productoId, sucursalId);
+
+        // Actualizar cantidad bloqueada
+        BigDecimal nuevoBloqueado = inventario.getCantidadBloqueada().subtract(cantidad);
+        if (nuevoBloqueado.compareTo(BigDecimal.ZERO) < 0) {
+            nuevoBloqueado = BigDecimal.ZERO;
+        }
+
+        inventario.setCantidadBloqueada(nuevoBloqueado);
+        inventario.setUltimaActualizacionBloqueada(LocalDateTime.now());
+
+        inventarioRepository.save(inventario);
+    }
+
+    /**
+     * Confirmar inventario bloqueado (convertir a consumido)
+     */
+    @Transactional
+    public void confirmarBloqueo(Long productoId, Long sucursalId, BigDecimal cantidad, String motivo) {
+        log.info("Confirmando bloqueo - Producto: {}, Sucursal: {}, Cantidad: {}",
+            productoId, sucursalId, cantidad);
+
+        ProductoInventario inventario = obtenerInventario(productoId, sucursalId);
+
+        // Validar que hay suficiente cantidad bloqueada
+        if (inventario.getCantidadBloqueada().compareTo(cantidad) < 0) {
+            throw new BusinessException(
+                String.format("Cantidad bloqueada insuficiente. Bloqueado: %s, Solicitado: %s",
+                    inventario.getCantidadBloqueada(), cantidad)
+            );
+        }
+
+        // Reducir de bloqueado
+        BigDecimal nuevoBloqueado = inventario.getCantidadBloqueada().subtract(cantidad);
+        inventario.setCantidadBloqueada(nuevoBloqueado);
+        inventario.setUltimaActualizacionBloqueada(LocalDateTime.now());
+
+        // Reducir de disponible
+        BigDecimal nuevaDisponible = inventario.getCantidadActual().subtract(cantidad);
+        inventario.setCantidadActual(nuevaDisponible);
+
+        // Guardar cambios
+        inventario = inventarioRepository.save(inventario);
+
+        // Registrar movimiento
+        ProductoMovimiento movimiento = new ProductoMovimiento();
+        movimiento.setProducto(inventario.getProducto());
+        movimiento.setSucursal(inventario.getSucursal());
+        movimiento.setTipoMovimiento(TipoMovimiento.SALIDA_VENTA);
+        movimiento.setCantidad(cantidad.negate()); // Negativo para salida
+        movimiento.setSaldoAnterior(inventario.getCantidadActual().add(cantidad));
+        movimiento.setSaldoNuevo(inventario.getCantidadActual());
+        movimiento.setObservaciones(motivo != null ? motivo : "Confirmación de inventario bloqueado");
+        movimiento.setFechaMovimiento(LocalDateTime.now());
+        movimiento.setUsuario(obtenerUsuarioActual());
+
+        productoMovimientoRepository.save(movimiento);
+
+        log.info("Bloqueo confirmado. Nueva cantidad disponible: {}, Bloqueada: {}",
+            nuevaDisponible, nuevoBloqueado);
+    }
+
+    /**
+     * Obtiene el usuario autenticado del contexto de seguridad
+     */
+    private Usuario obtenerUsuarioActual() {
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
+            throw new BusinessException("No hay usuario autenticado");
+        }
+
+        String email = auth.getName(); // El email es el principal en tu sistema
+
+        return usuarioService.buscarPorEmail(email)
+            .orElseThrow(() -> new BusinessException("Usuario no encontrado: " + email));
     }
 }

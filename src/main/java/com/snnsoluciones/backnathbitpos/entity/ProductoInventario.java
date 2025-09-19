@@ -12,11 +12,15 @@ import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import lombok.Builder;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import org.hibernate.proxy.HibernateProxy;
 
+@Builder
 @Data
 @Entity
+@RequiredArgsConstructor
 @Table(name = "productos_inventarios",
     uniqueConstraints = {
         @UniqueConstraint(columnNames = {"producto_id", "sucursal_id"})
@@ -50,6 +54,13 @@ public class ProductoInventario {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @Column(name = "cantidad_bloqueada", precision = 18, scale = 5, nullable = false)
+    @Builder.Default
+    private BigDecimal cantidadBloqueada = BigDecimal.ZERO;
+
+    @Column(name = "ultima_actualizacion_bloqueada")
+    private LocalDateTime ultimaActualizacionBloqueada;
     
     @Column(nullable = false)
     private Boolean estado = true;

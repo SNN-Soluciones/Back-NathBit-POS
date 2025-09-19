@@ -1,11 +1,11 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
+import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
+import com.snnsoluciones.backnathbitpos.enums.ZonaPreparacion;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import jakarta.persistence.*;
-import java.util.ArrayList;
-import java.util.List;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -14,7 +14,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
-import org.mapstruct.Mapper;
 
 @Entity
 @Table(name = "productos",
@@ -24,8 +23,10 @@ import org.mapstruct.Mapper;
     },
     indexes = {
         @Index(name = "idx_producto_empresa", columnList = "empresa_id"),
-        @Index(name = "idx_producto_categoria", columnList = "categoria_id"),
-        @Index(name = "idx_producto_codigo_barras", columnList = "codigo_barras")
+        @Index(name = "idx_producto_sucursal", columnList = "sucursal_id"),
+        @Index(name = "idx_producto_codigo_barras", columnList = "codigo_barras"),
+        @Index(name = "idx_producto_tipo", columnList = "tipo"),
+        @Index(name = "idx_producto_tipo_inventario", columnList = "tipo_inventario")
     })
 @Getter
 @Setter
@@ -58,10 +59,12 @@ public class Producto {
   @Column(columnDefinition = "TEXT")
   private String descripcion;
 
+  // Relación con CABYS
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "empresa_cabys_id")
   private EmpresaCAByS empresaCabys;
 
+  // Categorías
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
       name = "producto_categoria",
@@ -75,12 +78,43 @@ public class Producto {
   @Builder.Default
   private Set<CategoriaProducto> categorias = new HashSet<>();
 
+  // CAMPOS ACTUALIZADOS PARA FASE 2
+
   @Enumerated(EnumType.STRING)
-  @Column(name = "unidad_medida", nullable = false)  // ✅ CORREGIDO
+  @Column(name = "tipo", nullable = false, length = 20)
+  @Builder.Default
+  private TipoProducto tipo = TipoProducto.VENTA;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "tipo_inventario", nullable = false, length = 20)
+  @Builder.Default
+  private TipoInventario tipoInventario = TipoInventario.SIMPLE;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "zona_preparacion", nullable = false, length = 20)
+  @Builder.Default
+  private ZonaPreparacion zonaPreparacion = ZonaPreparacion.NINGUNA;
+
+  @Column(name = "factor_conversion_receta", precision = 10, scale = 4)
+  @Builder.Default
+  private BigDecimal factorConversionReceta = BigDecimal.ONE;
+
+  @Column(name = "requiere_personalizacion", nullable = false)
+  @Builder.Default
+  private Boolean requierePersonalizacion = false;
+
+  @Column(name = "precio_base", precision = 18, scale = 5)
+  private BigDecimal precioBase; // Para productos compuestos
+
+  // Campos existentes
+  @Enumerated(EnumType.STRING)
+  @Column(name = "unidad_medida", nullable = false)
+  @Builder.Default
   private UnidadMedida unidadMedida = UnidadMedida.UNIDAD;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "moneda", nullable = false)  // ✅ CORREGIDO
+  @Column(name = "moneda", nullable = false)
+  @Builder.Default
   private Moneda moneda = Moneda.CRC;
 
   @Column(name = "precio_venta", nullable = false, precision = 18, scale = 5)
@@ -90,10 +124,6 @@ public class Producto {
   @Builder.Default
   private Boolean aplicaServicio = false;
 
-  @Column(name = "es_servicio", nullable = false)
-  @Builder.Default
-  private Boolean esServicio = false;
-
   @Column(nullable = false)
   @Builder.Default
   private Boolean activo = true;
@@ -102,11 +132,13 @@ public class Producto {
   @Builder.Default
   private Boolean incluyeIVA = true;
 
+  // Impuestos
   @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL,
       orphanRemoval = true, fetch = FetchType.LAZY)
   @Builder.Default
   private Set<ProductoImpuesto> impuestos = new HashSet<>();
 
+  // Campos de auditoría
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
@@ -115,81 +147,65 @@ public class Producto {
   @Column(name = "updated_at", nullable = false)
   private LocalDateTime updatedAt;
 
+  // Campos de imagen
   @Column(name = "imagen_url", length = 500)
   private String imagenUrl;
 
   @Column(name = "imagen_key", length = 255)
   private String imagenKey;
 
-  @Enumerated(EnumType.STRING)
-  @Column(nullable = false, length = 20)
-  private TipoProducto tipo = TipoProducto.VENTA;
-
+  // Campos de compra (para materia prima y mixtos)
   @Column(name = "unidad_medida_compra", length = 50)
   private String unidadMedidaCompra;
 
   @Column(name = "precio_compra", precision = 10, scale = 2)
   private BigDecimal precioCompra;
 
-  @Column(name = "factor_conversion", precision = 10, scale = 4)
-  private BigDecimal factorConversion;
+  // MÉTODOS HELPER
 
-  @Column(name = "unidad_medida_uso", length = 50)
-  private String unidadMedidaUso;
-
-  @Column(name = "requiere_inventario", nullable = false)
-  private Boolean requiereInventario = true;  // ¿Se controla stock?
-
-  @Column(name = "requiere_receta", nullable = false)
-  private Boolean requiereReceta = false;     // ¿Necesita receta para producirse?
-
-  @Column(name = "ultimo_precio_compra")
-  private BigDecimal ultimoPrecioCompra;
-
-  @Column(name = "fecha_ultima_compra")
-  private LocalDateTime fechaUltimaCompra;
-
-  @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL, orphanRemoval = true)
-  private List<ProductoCodigoProveedor> codigosProveedor = new ArrayList<>();
-
-  // Métodos helper
-  public void agregarImpuesto(ProductoImpuesto impuesto) {
-    impuestos.add(impuesto);
-    impuesto.setProducto(this);
-  }
-
-  public void removerImpuesto(ProductoImpuesto impuesto) {
-    impuestos.remove(impuesto);
-    impuesto.setProducto(null);
-  }
-
-  // Métodos auxiliares para manejar la relación:
-  public void addCodigoProveedor(ProductoCodigoProveedor codigoProveedor) {
-    codigosProveedor.add(codigoProveedor);
-    codigoProveedor.setProducto(this);
-  }
-
-  public void removeCodigoProveedor(ProductoCodigoProveedor codigoProveedor) {
-    codigosProveedor.remove(codigoProveedor);
-    codigoProveedor.setProducto(null);
+  /**
+   * Verifica si el producto puede venderse directamente
+   */
+  public boolean esVendible() {
+    return tipo == TipoProducto.VENTA ||
+        tipo == TipoProducto.MIXTO ||
+        tipo == TipoProducto.COMBO ||
+        tipo == TipoProducto.COMPUESTO;
   }
 
   /**
-   * Busca el código del producto para un proveedor específico
+   * Verifica si el producto puede usarse como ingrediente
    */
-  public String getCodigoByProveedor(Long proveedorId) {
-    return codigosProveedor.stream()
-        .filter(cp -> cp.getProveedor().getId().equals(proveedorId) && cp.getActivo())
-        .map(ProductoCodigoProveedor::getCodigo)
-        .findFirst()
-        .orElse(null);
+  public boolean esIngrediente() {
+    return tipo == TipoProducto.MATERIA_PRIMA ||
+        tipo == TipoProducto.MIXTO;
   }
 
   /**
-   * Verifica si el producto tiene código para un proveedor
+   * Verifica si requiere control de inventario
    */
-  public boolean tieneCodigoProveedor(Long proveedorId) {
-    return codigosProveedor.stream()
-        .anyMatch(cp -> cp.getProveedor().getId().equals(proveedorId) && cp.getActivo());
+  public boolean requiereControlInventario() {
+    return tipoInventario != TipoInventario.NINGUNO;
+  }
+
+  /**
+   * Verifica si se produce con receta
+   */
+  public boolean seProduceConReceta() {
+    return tipoInventario == TipoInventario.RECETA;
+  }
+
+  /**
+   * Verifica si es un combo
+   */
+  public boolean esCombo() {
+    return tipo == TipoProducto.COMBO;
+  }
+
+  /**
+   * Verifica si es un producto compuesto personalizable
+   */
+  public boolean esCompuesto() {
+    return tipo == TipoProducto.COMPUESTO;
   }
 }

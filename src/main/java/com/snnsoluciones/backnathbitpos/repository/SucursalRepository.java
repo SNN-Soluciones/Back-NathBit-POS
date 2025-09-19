@@ -97,4 +97,6 @@ public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
   boolean existsByNumeroSucursalAndEmpresaId(String numeroSucursal, Long empresaId);
 
   List<Sucursal> findAllByEmpresaIdAndActivaTrue(Long empresaId);
+
+  Optional<Sucursal> findByIdAndEmpresaId(Long id, Long empresa_id);
 }

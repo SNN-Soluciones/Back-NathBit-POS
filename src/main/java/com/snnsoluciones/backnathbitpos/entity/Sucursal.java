@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -55,6 +56,10 @@ public class Sucursal {
     @Column(nullable = false)
     @Builder.Default
     private Boolean esMatriz = false;
+
+    @Column(name = "modo_facturacion", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private ModoFacturacion modoFacturacion = ModoFacturacion.ELECTRONICO;
 
     // NUEVOS CAMPOS PARA FASE 2
 

@@ -1,8 +1,9 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.producto.RecetaCreateDTO;
-import com.snnsoluciones.backnathbitpos.dto.producto.RecetaDTO;
+import com.snnsoluciones.backnathbitpos.dto.producto.RecetaDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.IngredienteDTO;
+import com.snnsoluciones.backnathbitpos.dto.producto.RecetaIngredienteDto;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -42,7 +43,7 @@ public class ProductoRecetaService {
 
         // Validar tipo de producto
         if (producto.getTipo() != TipoProducto.VENTA &&
-            producto.getTipo() != TipoProducto.AMBOS &&
+            producto.getTipo() != TipoProducto.MIXTO &&
             producto.getTipo() != TipoProducto.COMBO) {
             throw new IllegalStateException("Solo productos de venta, combo o ambos pueden tener receta");
         }
@@ -65,7 +66,7 @@ public class ProductoRecetaService {
     }
 
     // Actualizar receta
-    public ProductoReceta actualizarReceta(Long empresaId, Long recetaId, RecetaDTO dto) {
+    public ProductoReceta actualizarReceta(Long empresaId, Long recetaId, RecetaDto dto) {
         ProductoReceta receta = recetaRepository.findById(recetaId)
             .orElseThrow(() -> new ResourceNotFoundException("Receta no encontrada"));
 
@@ -78,7 +79,7 @@ public class ProductoRecetaService {
         receta.getIngredientes().clear();
 
         // Agregar nuevos ingredientes
-        for (IngredienteDTO ing : dto.getIngredientes()) {
+        for (RecetaIngredienteDto ing : dto.getIngredientes()) {
             agregarIngrediente(receta, ing);
         }
 
@@ -165,13 +166,13 @@ public class ProductoRecetaService {
     }
 
     // Método helper privado
-    private void agregarIngrediente(ProductoReceta receta, IngredienteDTO dto) {
+    private void agregarIngrediente(ProductoReceta receta, RecetaIngredienteDto dto) {
         Producto ingrediente = productoRepository.findById(dto.getProductoId())
             .orElseThrow(() -> new ResourceNotFoundException("Ingrediente no encontrado"));
 
         // Validar que sea materia prima
         if (ingrediente.getTipo() != TipoProducto.MATERIA_PRIMA &&
-            ingrediente.getTipo() != TipoProducto.AMBOS) {
+            ingrediente.getTipo() != TipoProducto.MIXTO) {
             throw new IllegalStateException("El producto " + ingrediente.getNombre() +
                 " no puede usarse como ingrediente");
         }
@@ -184,6 +185,7 @@ public class ProductoRecetaService {
         RecetaIngrediente recetaIngrediente = new RecetaIngrediente();
         recetaIngrediente.setProducto(ingrediente);
         recetaIngrediente.setCantidad(dto.getCantidad());
+        recetaIngrediente
 
         receta.agregarIngrediente(recetaIngrediente);
     }

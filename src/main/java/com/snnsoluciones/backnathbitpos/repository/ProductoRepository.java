@@ -140,4 +140,6 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
     long countByEmpresaIdAndSucursalIdAndActivoTrue(Long empresaId, Long sucursalId);
 
     List<Producto> findByEmpresaIdAndTipoAndActivoTrue(Long empresaId, TipoProducto tipoProducto);
+
+    Optional<Producto> findByIdAndEmpresaId(Long productoId, Long empresaId);
 }

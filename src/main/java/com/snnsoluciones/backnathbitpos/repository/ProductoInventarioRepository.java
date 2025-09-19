@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.ProductoInventario;
+import java.math.BigDecimal;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,4 +26,6 @@ public interface ProductoInventarioRepository extends JpaRepository<ProductoInve
     @Query("SELECT pi FROM ProductoInventario pi WHERE pi.sucursal.empresa.id = :empresaId " +
            "AND pi.cantidadActual < pi.cantidadMinima AND pi.estado = true")
     List<ProductoInventario> findBajoMinimosByEmpresa(@Param("empresaId") Long empresaId);
+
+  boolean existsByProductoIdAndCantidadActualGreaterThan(Long id, BigDecimal zero);
 }

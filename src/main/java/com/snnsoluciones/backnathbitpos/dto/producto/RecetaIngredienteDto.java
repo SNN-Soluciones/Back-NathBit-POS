@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 public class RecetaIngredienteDto {
     private Long id;
     private Long ingredienteId;
+    private Long productoId;
     private String ingredienteNombre;
     private String ingredienteCodigo;
     private BigDecimal cantidad;

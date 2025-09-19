@@ -69,6 +69,9 @@ public class ProductoCreateDto {
 
     private TipoInventario tipoInventario = TipoInventario.SIMPLE;
     private Long sucursal;
+    private BigDecimal precioCompra;
 
     private List<ProductoImpuestoCreateDto> impuestos;
+    private BigDecimal factorConversionReceta;
+
 }

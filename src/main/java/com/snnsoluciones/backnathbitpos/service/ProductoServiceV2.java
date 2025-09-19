@@ -11,15 +11,11 @@ import java.util.List;
 public interface ProductoServiceV2 {
 
     // ========== CRUD BÁSICO ==========
-    ProductoDto crear(Long empresaId, ProductoCreateDto dto);
+    ProductoDto crear(Long empresaId, ProductoCreateDto dto, MultipartFile imagen);
 
     ProductoDto crearConImagen(Long empresaId, ProductoCreateDto dto, MultipartFile imagen);
 
-    ProductoDto actualizar(Long empresaId, Long productoId, ProductoUpdateDto dto);
-
-    ProductoDto actualizarConImagen(Long empresaId, Long productoId, ProductoUpdateDto dto, MultipartFile imagen);
-
-    void actualizarImagen(Long empresaId, Long productoId, MultipartFile imagen);
+    ProductoDto actualizar(Long empresaId, Long productoId, ProductoUpdateDto dto, MultipartFile imagen);
 
     void eliminarImagen(Long empresaId, Long productoId);
 

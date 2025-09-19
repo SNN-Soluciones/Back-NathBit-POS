@@ -1,13 +1,17 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
+import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -53,4 +57,18 @@ public class ProductoUpdateDto {
     
     @Builder.Default
     private Boolean activo = true;
+
+    private TipoProducto tipo;
+
+    private BigDecimal precioCompra;
+
+    @Schema(description = "Indica si se debe actualizar la configuración tributaria (CABYS, impuestos, unidad medida)")
+    private Boolean actualizarConfigTributaria = false;
+
+    // Campos tributarios (solo se usan si actualizarConfigTributaria = true)
+    private List<ProductoImpuestoCreateDto> impuestos;
+
+    private TipoInventario tipoInventario;
+
+    private BigDecimal factorConversionReceta;
 }

@@ -43,24 +43,24 @@ public class RecetaIngrediente {
     // Método helper para obtener la unidad de medida
     public String getUnidadMedida() {
         // Si el producto tiene unidad de uso, usar esa
-        if (producto.getUnidadMedidaUso() != null) {
-            return producto.getUnidadMedidaUso();
+        if (producto.getUnidadMedida() != null) {
+            return producto.getUnidadMedida().getCodigo();
         }
         // Si no, usar la de compra
         return producto.getUnidadMedidaCompra();
     }
     
-    // Método para calcular cantidad en unidad de compra
-    public BigDecimal getCantidadEnUnidadCompra() {
-        if (producto.getFactorConversion() != null) {
-            return cantidad.divide(
-                producto.getFactorConversion(), 
-                4, 
-                BigDecimal.ROUND_HALF_UP
-            );
-        }
-        return cantidad;
-    }
+//    // Método para calcular cantidad en unidad de compra
+//    public BigDecimal getCantidadEnUnidadCompra() {
+//        if (producto.getFactorConversion() != null) {
+//            return cantidad.divide(
+//                producto.getFactorConversion(),
+//                4,
+//                BigDecimal.ROUND_HALF_UP
+//            );
+//        }
+//        return cantidad;
+//    }
 
     @Override
     public final boolean equals(Object o) {

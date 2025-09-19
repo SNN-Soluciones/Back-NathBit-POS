@@ -144,6 +144,6 @@ public class ProductoImagenServiceImpl implements ProductoImagenService {
         return nombre.trim()
             .replaceAll("\\s+", "_")
             .replaceAll("[^a-zA-Z0-9_-]", "")
-            .toLowerCase();
+            .toUpperCase();
     }
 }

@@ -75,13 +75,13 @@ public class ProductoReceta  {
                 if (precioUnitario == null) return BigDecimal.ZERO;
                 
                 // Si hay factor de conversión, ajustar el precio
-                if (ing.getProducto().getFactorConversion() != null) {
-                    precioUnitario = precioUnitario.divide(
-                        ing.getProducto().getFactorConversion(), 
-                        4, 
-                        BigDecimal.ROUND_HALF_UP
-                    );
-                }
+//                if (ing.getProducto().getFactorConversion() != null) {
+//                    precioUnitario = precioUnitario.divide(
+//                        ing.getProducto().getFactorConversion(),
+//                        4,
+//                        BigDecimal.ROUND_HALF_UP
+//                    );
+//                }
                 
                 return precioUnitario.multiply(ing.getCantidad());
             })

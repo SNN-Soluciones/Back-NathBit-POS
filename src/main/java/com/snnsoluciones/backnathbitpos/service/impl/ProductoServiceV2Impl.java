@@ -3,14 +3,27 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
+import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
+import com.snnsoluciones.backnathbitpos.enums.mh.RegimenTributario;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
+import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.service.ProductoImagenService;
+import com.snnsoluciones.backnathbitpos.service.ProductoInventarioService;
 import com.snnsoluciones.backnathbitpos.service.ProductoServiceV2;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.core5.http.ContentType;
@@ -35,13 +48,484 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   private final S3PathBuilder s3PathService;
   private final ModelMapper modelMapper;
   private final StorageService storageService;
+  private final EmpresaCABySRepository empresaCAbySRepository;
+  private final CodigoCABySRepository codigoCAbySRepository;
+  private final ProductoImagenService productoImagenService;
+  private final ProductoInventarioRepository inventarioRepository;
+  private final ProductoRecetaRepository recetaRepository;
+  private final FacturaDetalleRepository facturaDetalleRepository;
 
   // ========== CRUD CON IMÁGENES ==========
 
   @Override
   @Transactional
-  public ProductoDto crear(Long empresaId, ProductoCreateDto dto) {
-    return crearProductoInterno(empresaId, dto, null);
+  public ProductoDto crear(Long empresaId, ProductoCreateDto dto, MultipartFile imagen) {
+    log.info("Creando producto tipo: {} para empresa: {}", dto.getTipo(), empresaId);
+
+    try {
+      // 1. Validar empresa existe y obtener información
+      Empresa empresa = empresaRepository.findById(empresaId)
+          .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada: " + empresaId));
+
+      Sucursal sucursal = null;
+      if (dto.getSucursal() != null) {
+        sucursal = sucursalRepository.findByIdAndEmpresaId(dto.getSucursal(), empresaId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Sucursal no encontrada: " + dto.getSucursal()));
+      }
+
+      boolean esSimplificadoSinFactura;
+      // 2. Determinar si es régimen simplificado sin factura electrónica
+      if (sucursal != null && sucursal.getModoFacturacion() != null) {
+        esSimplificadoSinFactura = sucursal.getModoFacturacion()
+            .equals(ModoFacturacion.SOLO_INTERNO);
+      } else {
+        esSimplificadoSinFactura =
+            empresa.getRegimenTributario() == RegimenTributario.REGIMEN_SIMPLIFICADO
+                && !empresa.getRequiereHacienda();
+      }
+
+      // 3. Crear entidad producto
+      Producto producto = new Producto();
+      producto.setEmpresa(empresa);
+      producto.setSucursal(sucursal);
+      producto.setCodigoInterno(generarCodigoProducto(empresaId, dto));
+      producto.setNombre(dto.getNombre());
+      producto.setDescripcion(dto.getDescripcion());
+      producto.setTipo(TipoProducto.valueOf(dto.getTipo()));
+      producto.setActivo(true);
+      producto.setCreatedAt(LocalDateTime.now());
+      producto.setUpdatedAt(LocalDateTime.now());
+
+      // 4. Configurar según régimen tributario
+      if (esSimplificadoSinFactura) {
+        log.info("Aplicando configuración para régimen simplificado sin factura electrónica");
+
+        EmpresaCAByS empresaCAByS = empresaCAbySRepository.findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(
+            empresaId, "9960199999999").orElse(
+            EmpresaCAByS.builder()
+                .empresa(empresa)
+                .sucursal(sucursal)
+                .codigoCabys(codigoCAbySRepository.findByCodigo("9960199999999")
+                    .orElseThrow(
+                        () -> new BusinessException("CABYS genérico no configurado en el sistema")))
+                .activo(true)
+                .createdAt(LocalDateTime.now())
+                .build()
+        );
+
+        // Forzar CABYS genérico
+        producto.setEmpresaCabys(empresaCAByS);
+
+        // Crear automáticamente IVA exento
+        ProductoImpuesto impuestoExento = new ProductoImpuesto();
+        impuestoExento.setProducto(producto);
+        impuestoExento.setTipoImpuesto(TipoImpuesto.IVA);
+        impuestoExento.setCodigoTarifaIVA(CodigoTarifaIVA.TARIFA_EXENTA);
+        impuestoExento.setPorcentaje(BigDecimal.ZERO);
+        impuestoExento.setActivo(true);
+
+        producto.setImpuestos(Set.of(impuestoExento));
+
+        // Unidad de medida por defecto
+        producto.setUnidadMedida(UnidadMedida.SERVICIOS_PROFESIONALES);
+
+      } else {
+        log.info("Aplicando configuración para régimen tradicional");
+
+        // Validar campos requeridos para factura electrónica
+        if (dto.getEmpresaCabysId() == null) {
+          throw new BusinessException("Régimen tradicional requiere código CABYS");
+        }
+
+        if (dto.getImpuestos() == null || dto.getImpuestos().isEmpty()) {
+          throw new BusinessException("Régimen tradicional requiere configuración de impuestos");
+        }
+
+        // Buscar y asignar CABYS
+        EmpresaCAByS empresaCabys = empresaCAbySRepository
+            .findById(dto.getEmpresaCabysId())
+            .orElseThrow(() -> new BusinessException("CABYS no autorizado para esta empresa"));
+
+        producto.setEmpresaCabys(empresaCabys);
+
+        // Configurar impuestos
+        Set<ProductoImpuesto> impuestos = new HashSet<>();
+        for (ProductoImpuestoCreateDto impDto : dto.getImpuestos()) {
+          ProductoImpuesto impuesto = new ProductoImpuesto();
+          impuesto.setTipoImpuesto(impDto.getTipoImpuesto());
+          impuesto.setCodigoTarifaIVA(impDto.getCodigoTarifaIVA());
+          impuesto.setPorcentaje(impDto.getCodigoTarifaIVA().getPorcentaje());
+          impuesto.setProducto(producto);
+          impuesto.setActivo(true);
+          impuestos.add(impuesto);
+        }
+        producto.setImpuestos(impuestos);
+
+        // Unidad de medida del DTO
+        producto.setUnidadMedida(dto.getUnidadMedida());
+      }
+
+      // 5. Configurar precios
+      producto.setPrecioVenta(dto.getPrecioVenta());
+      producto.setPrecioCompra(
+          dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
+
+      if (dto.getTipo().equals("COMBO") &&
+          dto.getTipoInventario() != null &&
+          !Arrays.asList(TipoInventario.PROPIO, TipoInventario.REFERENCIA)
+              .contains(dto.getTipoInventario())) {
+        throw new BusinessException("Combo solo acepta inventario PROPIO o REFERENCIA");
+      }
+
+// Validar materia prima
+      if (dto.getTipo().equals("MATERIA_PRIMA") &&
+          dto.getPrecioVenta() != null &&
+          dto.getPrecioVenta().compareTo(BigDecimal.ZERO) > 0) {
+        log.warn("Materia prima con precio de venta: {}", dto.getNombre());
+      }
+
+// Validar imagen
+      if (imagen != null && !imagen.isEmpty()) {
+        if (!imagen.getContentType().startsWith("image/")) {
+          throw new BusinessException("El archivo debe ser una imagen");
+        }
+        if (imagen.getSize() > 5 * 1024 * 1024) {
+          throw new BusinessException("Imagen muy grande, máximo 5MB");
+        }
+      }
+
+      // 6. Configurar según tipo de producto
+      configurarSegunTipo(producto, dto);
+
+      // 7. Guardar producto primero (necesitamos el ID)
+      producto = productoRepository.save(producto);
+
+      // 8. Manejar imagen si existe
+      if (imagen != null && !imagen.isEmpty()) {
+        try {
+          String urlImagen = productoImagenService.subirImagen(
+              empresaId,
+              empresa.getNombreComercial() != null ? empresa.getNombreComercial()
+                  : empresa.getNombreRazonSocial(),
+              producto.getCodigoInterno(),
+              imagen
+          );
+
+          // Construir la key para S3
+          String nombreComercialLimpio = null;
+          if (sucursal != null) {
+            nombreComercialLimpio = sucursal.getNombre();
+          } else {
+            nombreComercialLimpio =
+                empresa.getNombreComercial() != null ? empresa.getNombreComercial()
+                    : empresa.getNombreRazonSocial();
+          }
+          String extension = obtenerExtension(imagen.getOriginalFilename());
+          String imagenKey = String.format("NathBit-POS/%s/productos/%s%s",
+              limpiarNombreParaRuta(nombreComercialLimpio), producto.getCodigoInterno(), extension);
+
+          producto.setImagenUrl(urlImagen);
+          producto.setImagenKey(imagenKey);
+
+        } catch (Exception e) {
+          log.error("Error al subir imagen, continuando sin imagen: {}", e.getMessage());
+        }
+      }
+
+      log.info("Producto creado exitosamente con ID: {}", producto.getId());
+
+      // 10. Convertir a DTO y retornar
+      return (modelMapper.map(producto, ProductoDto.class));
+
+    } catch (BusinessException | ResourceNotFoundException e) {
+      log.error("Error de negocio creando producto: {}", e.getMessage());
+      throw e;
+    } catch (Exception e) {
+      log.error("Error inesperado creando producto", e);
+      throw new BusinessException("Error al crear producto: " + e.getMessage());
+    }
+  }
+
+  @Override
+  @Transactional
+  public ProductoDto actualizar(Long empresaId, Long productoId, ProductoUpdateDto dto,
+      MultipartFile imagen) {
+    log.info("Actualizando producto ID: {} para empresa: {}", productoId, empresaId);
+
+    try {
+      // 1. Buscar y validar producto existe y pertenece a la empresa
+      Producto producto = productoRepository.findByIdAndEmpresaId(productoId, empresaId)
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Producto no encontrado o no pertenece a la empresa"));
+
+      // 2. Validar si se puede cambiar el tipo
+      if (dto.getTipo() != null) {
+        // Validar que no tenga relaciones que impidan el cambio
+        if (productoTieneRelaciones(producto)) {
+          throw new BusinessException(
+              "No se puede cambiar el tipo de un producto con inventario, recetas o ventas asociadas");
+        }
+        producto.setTipo(TipoProducto.valueOf(String.valueOf(dto.getTipo())));
+      }
+
+      // 3. Determinar si cambió el régimen o modo facturación
+      Sucursal sucursal = producto.getSucursal();
+      boolean esSimplificadoSinFactura;
+
+      if (sucursal != null && sucursal.getModoFacturacion() != null) {
+        esSimplificadoSinFactura = sucursal.getModoFacturacion()
+            .equals(ModoFacturacion.SOLO_INTERNO);
+      } else {
+        Empresa empresa = producto.getEmpresa();
+        esSimplificadoSinFactura =
+            empresa.getRegimenTributario() == RegimenTributario.REGIMEN_SIMPLIFICADO
+                && !empresa.getRequiereHacienda();
+      }
+
+      // 4. Actualizar campos básicos
+      if (dto.getNombre() != null) {
+        producto.setNombre(dto.getNombre());
+      }
+      if (dto.getDescripcion() != null) {
+        producto.setDescripcion(dto.getDescripcion());
+      }
+      if (dto.getActivo() != null) {
+        producto.setActivo(dto.getActivo());
+      }
+
+      // 5. Actualizar precios
+      if (dto.getPrecioVenta() != null) {
+        // Validar precio para materia prima
+        if (producto.getTipo() == TipoProducto.MATERIA_PRIMA &&
+            dto.getPrecioVenta().compareTo(BigDecimal.ZERO) > 0) {
+          log.warn("Actualizando materia prima {} con precio de venta", producto.getNombre());
+        }
+        producto.setPrecioVenta(dto.getPrecioVenta());
+      }
+      if (dto.getPrecioCompra() != null) {
+        producto.setPrecioCompra(dto.getPrecioCompra());
+      }
+
+      // 6. Actualizar configuración tributaria solo si cambió
+      if (dto.getActualizarConfigTributaria() != null && dto.getActualizarConfigTributaria()) {
+
+        if (esSimplificadoSinFactura) {
+          log.info("Manteniendo configuración simplificada para producto {}", productoId);
+          // En simplificado no se puede cambiar CABYS ni impuestos
+
+        } else {
+          log.info("Actualizando configuración tributaria tradicional");
+
+          // Actualizar CABYS si viene
+          if (dto.getEmpresaCabysId() != null) {
+            EmpresaCAByS nuevoCabys = empresaCAbySRepository
+                .findById(dto.getEmpresaCabysId())
+                .orElseThrow(() -> new BusinessException(
+                    "CABYS no autorizado para esta empresa"));
+            producto.setEmpresaCabys(nuevoCabys);
+          }
+
+          // Actualizar impuestos si vienen
+          if (dto.getImpuestos() != null && !dto.getImpuestos().isEmpty()) {
+            // Eliminar impuestos antiguos
+            producto.getImpuestos().clear();
+
+            // Crear nuevos impuestos
+            Set<ProductoImpuesto> nuevosImpuestos = new HashSet<>();
+            for (ProductoImpuestoCreateDto impDto : dto.getImpuestos()) {
+              ProductoImpuesto impuesto = new ProductoImpuesto();
+              impuesto.setTipoImpuesto(impDto.getTipoImpuesto());
+              impuesto.setCodigoTarifaIVA(impDto.getCodigoTarifaIVA());
+              impuesto.setPorcentaje(impDto.getCodigoTarifaIVA().getPorcentaje());
+              impuesto.setProducto(producto);
+              impuesto.setActivo(true);
+              nuevosImpuestos.add(impuesto);
+            }
+            producto.setImpuestos(nuevosImpuestos);
+          }
+
+          // Actualizar unidad medida
+          if (dto.getUnidadMedida() != null) {
+            producto.setUnidadMedida(dto.getUnidadMedida());
+          }
+        }
+      }
+
+      // 7. Actualizar configuración según tipo (si cambió el tipo)
+      if (dto.getTipo() != null) {
+        configurarSegunTipoUpdate(producto, dto);
+      }
+
+      // 8. Actualizar timestamp
+      producto.setUpdatedAt(LocalDateTime.now());
+
+      // 9. Guardar cambios
+      producto = productoRepository.save(producto);
+
+      // 10. Actualizar imagen si viene nueva
+      if (imagen != null && !imagen.isEmpty()) {
+        // Validar imagen
+        if (!imagen.getContentType().startsWith("image/")) {
+          throw new BusinessException("El archivo debe ser una imagen");
+        }
+        if (imagen.getSize() > 5 * 1024 * 1024) {
+          throw new BusinessException("Imagen muy grande, máximo 5MB");
+        }
+
+        try {
+          // Eliminar imagen anterior de S3 si existe
+          if (producto.getImagenKey() != null) {
+            productoImagenService.eliminarImagen(empresaId, productoId);
+          }
+
+          // Subir nueva imagen
+          String urlImagen = productoImagenService.subirImagen(
+              empresaId,
+              producto.getEmpresa().getNombreComercial() != null ?
+                  producto.getEmpresa().getNombreComercial() :
+                  producto.getEmpresa().getNombreRazonSocial(),
+              producto.getCodigoInterno(),
+              imagen
+          );
+
+          // Construir nueva key
+          String nombreComercialLimpio;
+          if (producto.getSucursal() != null) {
+            nombreComercialLimpio = producto.getSucursal().getNombre();
+          } else {
+            nombreComercialLimpio = producto.getEmpresa().getNombreComercial() != null ?
+                producto.getEmpresa().getNombreComercial() :
+                producto.getEmpresa().getNombreRazonSocial();
+          }
+          String extension = obtenerExtension(imagen.getOriginalFilename());
+          String imagenKey = String.format("NathBit-POS/%s/productos/%s%s",
+              limpiarNombreParaRuta(nombreComercialLimpio),
+              producto.getCodigoInterno(),
+              extension);
+
+          producto.setImagenUrl(urlImagen);
+          producto.setImagenKey(imagenKey);
+          producto = productoRepository.save(producto);
+
+          log.info("Imagen actualizada exitosamente para producto {}", productoId);
+
+        } catch (Exception e) {
+          log.error("Error actualizando imagen, manteniendo imagen anterior: {}", e.getMessage());
+          // No fallar la actualización por la imagen
+        }
+      }
+
+      log.info("Producto {} actualizado exitosamente", productoId);
+
+      // 11. Convertir y retornar
+      return modelMapper.map(producto, ProductoDto.class);
+
+    } catch (BusinessException | ResourceNotFoundException e) {
+      log.error("Error de negocio actualizando producto: {}", e.getMessage());
+      throw e;
+    } catch (Exception e) {
+      log.error("Error inesperado actualizando producto", e);
+      throw new BusinessException("Error al actualizar producto: " + e.getMessage());
+    }
+  }
+
+  private boolean productoTieneRelaciones(Producto producto) {
+    // 1. Verificar si tiene inventario con cantidad > 0
+    if (inventarioRepository.existsByProductoIdAndCantidadActualGreaterThan(
+        producto.getId(), BigDecimal.ZERO)) {
+      log.info("Producto {} tiene inventario, no se puede cambiar tipo", producto.getId());
+      return true;
+    }
+
+    // 2. Verificar si está como ingrediente en alguna receta
+    if (recetaRepository.existsByIngredientesProductoId(producto.getId())) {
+      log.info("Producto {} es ingrediente en recetas, no se puede cambiar tipo", producto.getId());
+      return true;
+    }
+
+    // 3. Verificar si tiene ventas
+    if (facturaDetalleRepository.existsByProductoId(producto.getId())) {
+      log.info("Producto {} tiene ventas registradas, no se puede cambiar tipo", producto.getId());
+      return true;
+    }
+
+    return false;
+  }
+
+  // Configurar según tipo en actualización
+  private void configurarSegunTipoUpdate(Producto producto, ProductoUpdateDto dto) {
+    // Similar a configurarSegunTipo pero para update
+    switch (producto.getTipo()) {
+      case MIXTO:
+        if (dto.getFactorConversionReceta() != null) {
+          producto.setFactorConversionReceta(dto.getFactorConversionReceta());
+        }
+        break;
+      case VENTA:
+        if (dto.getTipoInventario() != null) {
+          // Validar que sea SIMPLE o RECETA
+          if (!Arrays.asList(TipoInventario.SIMPLE, TipoInventario.RECETA)
+              .contains(dto.getTipoInventario())) {
+            throw new BusinessException("Producto de venta solo acepta inventario SIMPLE o RECETA");
+          }
+          producto.setTipoInventario(dto.getTipoInventario());
+        }
+        break;
+      case COMBO:
+        if (dto.getTipoInventario() != null) {
+          // Validar que sea PROPIO o REFERENCIA
+          if (!Arrays.asList(TipoInventario.PROPIO, TipoInventario.REFERENCIA)
+              .contains(dto.getTipoInventario())) {
+            throw new BusinessException("Combo solo acepta inventario PROPIO o REFERENCIA");
+          }
+          producto.setTipoInventario(dto.getTipoInventario());
+        }
+        break;
+      // MATERIA_PRIMA y COMPUESTO no tienen opciones adicionales en update
+    }
+  }
+
+  // Método auxiliar para generar código único
+  private String generarCodigoProducto(Long empresaId, ProductoCreateDto dto) {
+    String prefix = dto.getTipo().substring(0, 3);
+    String timestamp = String.valueOf(System.currentTimeMillis()).substring(8);
+    return String.format("%s-%d-%s", prefix, empresaId, timestamp);
+  }
+
+  // Método auxiliar para configurar según tipo
+  private void configurarSegunTipo(Producto producto, ProductoCreateDto dto) {
+    switch (TipoProducto.valueOf(dto.getTipo())) {
+      case MIXTO:
+        producto.setTipoInventario(TipoInventario.SIMPLE);
+        producto.setFactorConversionReceta(dto.getFactorConversionReceta() != null ?
+            dto.getFactorConversionReceta() : BigDecimal.ONE);
+        break;
+
+      case MATERIA_PRIMA:
+        producto.setTipoInventario(TipoInventario.SIMPLE);
+        producto.setTipo(TipoProducto.MATERIA_PRIMA);
+        break;
+
+      case VENTA:
+        producto.setTipoInventario(dto.getTipoInventario() != null ?
+            dto.getTipoInventario() : TipoInventario.SIMPLE);
+        producto.setTipo(TipoProducto.VENTA);
+        break;
+
+      case COMBO:
+        producto.setTipoInventario(dto.getTipoInventario() != null ?
+            dto.getTipoInventario() : TipoInventario.REFERENCIA);
+        producto.setTipo(TipoProducto.COMBO);
+        break;
+
+      case COMPUESTO:
+        producto.setTipoInventario(TipoInventario.NINGUNO);
+        producto.setRequierePersonalizacion(true);
+        producto.setTipo(TipoProducto.COMPUESTO);
+        producto.setPrecioBase(dto.getPrecioVenta());
+        break;
+    }
   }
 
   @Override
@@ -100,74 +584,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
     }
 
     return convertirADto(producto);
-  }
-
-  @Override
-  @Transactional
-  public ProductoDto actualizar(Long empresaId, Long productoId, ProductoUpdateDto dto) {
-    return actualizarProductoInterno(empresaId, productoId, dto, null);
-  }
-
-  @Override
-  @Transactional
-  public ProductoDto actualizarConImagen(Long empresaId, Long productoId, ProductoUpdateDto dto,
-      MultipartFile imagen) {
-    return actualizarProductoInterno(empresaId, productoId, dto, imagen);
-  }
-
-  private ProductoDto actualizarProductoInterno(Long empresaId, Long productoId,
-      ProductoUpdateDto dto, MultipartFile imagen) {
-    log.info("Actualizando producto: {} de empresa: {}", productoId, empresaId);
-
-    Producto producto = buscarProductoValidado(empresaId, productoId);
-
-    // Actualizar campos básicos
-    if (dto.getNombre() != null) {
-      producto.setNombre(dto.getNombre());
-    }
-
-    if (dto.getDescripcion() != null) {
-      producto.setDescripcion(dto.getDescripcion());
-    }
-
-    if (dto.getPrecioVenta() != null) {
-      producto.setPrecioBase(dto.getPrecioVenta());
-    }
-
-    // Validar códigos si cambian
-    if (dto.getCodigoInterno() != null && !dto.getCodigoInterno()
-        .equals(producto.getCodigoInterno())) {
-      if (existeCodigoInterno(empresaId, dto.getCodigoInterno())) {
-        throw new BusinessException("El código interno ya existe");
-      }
-      producto.setCodigoInterno(dto.getCodigoInterno());
-    }
-
-    if (dto.getCodigoBarras() != null && !dto.getCodigoBarras()
-        .equals(producto.getCodigoBarras())) {
-      if (existeCodigoBarras(dto.getCodigoBarras(), productoId)) {
-        throw new BusinessException("El código de barras ya existe");
-      }
-      producto.setCodigoBarras(dto.getCodigoBarras());
-    }
-
-    producto = productoRepository.save(producto);
-
-    // Actualizar imagen si se proporciona
-    if (imagen != null && !imagen.isEmpty()) {
-      guardarImagen(producto, imagen);
-    }
-
-    return convertirADto(producto);
-  }
-
-  @Override
-  @Transactional
-  public void actualizarImagen(Long empresaId, Long productoId, MultipartFile imagen) {
-    log.info("Actualizando imagen de producto: {}", productoId);
-
-    Producto producto = buscarProductoValidado(empresaId, productoId);
-    guardarImagen(producto, imagen);
   }
 
   @Override
@@ -323,7 +739,7 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
   @Override
   public boolean existeCodigoBarras(String codigoBarras, Long empresaId) {
-      return productoRepository.existsByCodigoBarrasAndEmpresaId(codigoBarras, empresaId);
+    return productoRepository.existsByCodigoBarrasAndEmpresaId(codigoBarras, empresaId);
   }
 
   // ========== MÉTODOS PRIVADOS ==========
@@ -375,7 +791,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         }
       }
 
-      String imagenPath = s3PathService.buildArchivoPath(producto.getEmpresa().getNombreComercial(), producto.getNombre());
+      String imagenPath = s3PathService.buildArchivoPath(producto.getEmpresa().getNombreComercial(),
+          producto.getNombre());
 
       // Subir nueva imagen
       String imagenUrl = storageService.subirArchivo(
@@ -410,5 +827,22 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
     }
 
     return dto;
+  }
+
+  private String obtenerExtension(String nombreArchivo) {
+    if (nombreArchivo == null || !nombreArchivo.contains(".")) {
+      return "";
+    }
+    return nombreArchivo.substring(nombreArchivo.lastIndexOf("."));
+  }
+
+  private String limpiarNombreParaRuta(String nombre) {
+    if (nombre == null) {
+      return "sin_nombre";
+    }
+    return nombre.trim()
+        .replaceAll("\\s+", "_")
+        .replaceAll("[^a-zA-Z0-9_-]", "")
+        .toUpperCase();
   }
 }

@@ -2,32 +2,21 @@
 FROM gradle:7.6-jdk17-alpine AS build
 WORKDIR /app
 
-# Copiar archivos de configuración de Gradle
-COPY --chown=gradle:gradle build.gradle settings.gradle ./
-COPY --chown=gradle:gradle gradle ./gradle
+# Copiar todo el proyecto
+COPY --chown=gradle:gradle . .
 
-# Descargar dependencias
-RUN gradle dependencies --no-daemon || true
+# Construir usando el wrapper de Spring Boot
+RUN gradle clean bootJar --no-daemon
 
-# Copiar el código fuente
-COPY --chown=gradle:gradle src ./src
-
-# Construir la aplicación
-RUN gradle bootJar -x test --no-daemon
+# Listar para debug
+RUN ls -la build/libs/
 
 # Runtime stage
 FROM openjdk:17-jdk-slim
 WORKDIR /app
 
-# Crear usuario no root
-RUN groupadd -r spring && useradd -r -g spring spring
-
-# Copiar el JAR - con el nombre correcto según tu build.gradle
-# archiveBaseName = 'nathbit-pos' + version = '0.0.1-SNAPSHOT'
-COPY --from=build /app/build/libs/nathbit-pos-0.0.1-SNAPSHOT.jar app.jar
-
-# Cambiar al usuario spring
-USER spring:spring
+# Copiar el JAR ejecutable de Spring Boot (termina en .jar, no -plain.jar)
+COPY --from=build /app/build/libs/*[!plain].jar app.jar
 
 # Variables de entorno
 ENV JAVA_OPTS="-Xmx512m -Xms256m" \
@@ -36,6 +25,9 @@ ENV JAVA_OPTS="-Xmx512m -Xms256m" \
 
 # Exponer puerto
 EXPOSE 8080
+
+# Usuario root por ahora para evitar problemas de permisos
+USER root
 
 # Comando de inicio
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

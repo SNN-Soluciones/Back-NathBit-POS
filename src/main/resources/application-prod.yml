@@ -1,0 +1,96 @@
+# Configuración de producción para DigitalOcean
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+spring:
+  # Nombre de la aplicación
+  application:
+    name: nathbit-pos-backend
+
+  # Configuración de base de datos
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nathbitpos}?sslmode=require&prepareThreshold=0
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:password}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      idle-timeout: 300000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        jdbc:
+          lob:
+            non_contextual_creation: true
+        temp:
+          use_jdbc_metadata_defaults: false
+    show-sql: false
+    open-in-view: false
+
+  # Security
+  security:
+    jwt:
+      secret: ${JWT_SECRET:your-secret-key-here-minimum-32-characters-long}
+      expiration: ${JWT_EXPIRATION:86400000} # 24 horas
+
+  # Jackson Configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: America/Costa_Rica
+
+  # Actuator
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,metrics
+    endpoint:
+      health:
+        show-details: always
+
+# CORS Configuration
+cors:
+  allowed-origins: ${CORS_ORIGINS:http://localhost:4200,https://nathbit.com}
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: "*"
+  exposed-headers: Authorization
+  allow-credentials: true
+  max-age: 3600
+
+# Logging
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.snnsoluciones: ${APP_LOG_LEVEL:INFO}
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:ERROR}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Application specific
+app:
+  name: NathBit POS
+  version: 1.0.0
+  description: Sistema POS Multi-empresa
+
+# File upload limits
+spring.servlet.multipart:
+  max-file-size: 10MB
+  max-request-size: 10MB

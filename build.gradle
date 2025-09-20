@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'war'
+    id 'jar'
     id 'org.springframework.boot' version '3.5.4'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -162,11 +162,6 @@ tasks.named('test') {
 }
 
 // ================== Packaging Configuration ==================
-war {
-    enabled = true
-    archiveBaseName = 'nathbit-pos'
-    archiveVersion = version
-}
 
 jar {
     enabled = true

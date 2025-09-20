@@ -13,10 +13,7 @@ RUN gradle dependencies --no-daemon || true
 COPY --chown=gradle:gradle src ./src
 
 # Construir la aplicación
-RUN gradle build -x test --no-daemon
-
-# Verificar qué archivos se generaron (para debug)
-RUN ls -la /app/build/libs/
+RUN gradle bootJar -x test --no-daemon
 
 # Runtime stage
 FROM openjdk:17-jdk-slim
@@ -25,8 +22,9 @@ WORKDIR /app
 # Crear usuario no root
 RUN groupadd -r spring && useradd -r -g spring spring
 
-# Copiar TODOS los JARs y renombrar (más seguro)
-COPY --from=build /app/build/libs/*.jar app.jar
+# Copiar el JAR - con el nombre correcto según tu build.gradle
+# archiveBaseName = 'nathbit-pos' + version = '0.0.1-SNAPSHOT'
+COPY --from=build /app/build/libs/nathbit-pos-0.0.1-SNAPSHOT.jar app.jar
 
 # Cambiar al usuario spring
 USER spring:spring
@@ -38,10 +36,6 @@ ENV JAVA_OPTS="-Xmx512m -Xms256m" \
 
 # Exponer puerto
 EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 # Comando de inicio
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

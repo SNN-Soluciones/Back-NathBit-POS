@@ -13,6 +13,13 @@ import java.util.Optional;
 @Repository
 public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
 
+  @Query("""
+    SELECT s FROM Sucursal s
+    JOIN FETCH s.empresa
+    WHERE s.empresa.id = :empresaId
+    AND s.activa = true
+    ORDER BY s.numeroSucursal, s.nombre
+    """)
   List<Sucursal> findByEmpresaId(Long empresaId);
 
   @Query("""

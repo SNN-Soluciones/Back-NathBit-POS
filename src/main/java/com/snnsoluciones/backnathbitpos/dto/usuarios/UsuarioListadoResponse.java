@@ -1,6 +1,9 @@
 package com.snnsoluciones.backnathbitpos.dto.usuarios;
 
+import com.snnsoluciones.backnathbitpos.dto.auth.EmpresaResumen;
+import com.snnsoluciones.backnathbitpos.dto.auth.SucursalResumen;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
+import java.util.ArrayList;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -19,7 +22,7 @@ public class UsuarioListadoResponse {
     private LocalDateTime updatedAt;
 
     // Asignaciones
-    private List<String> empresas;
-    private List<String> sucursales;
+    private List<EmpresaResumen> empresas = new ArrayList<>();
+    private List<SucursalResumen> sucursales = new ArrayList<>();
     private Boolean tieneAsignacion;
 }

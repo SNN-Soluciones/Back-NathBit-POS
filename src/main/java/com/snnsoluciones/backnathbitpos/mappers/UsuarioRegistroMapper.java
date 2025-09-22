@@ -1,5 +1,7 @@
 package com.snnsoluciones.backnathbitpos.mappers;
 
+import com.snnsoluciones.backnathbitpos.dto.auth.EmpresaResumen;
+import com.snnsoluciones.backnathbitpos.dto.auth.SucursalResumen;
 import com.snnsoluciones.backnathbitpos.dto.usuarios.UsuarioListadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresa;
@@ -68,17 +70,32 @@ public abstract class UsuarioRegistroMapper {
     }
 
     private void loadRelacionesFromUsuario(UsuarioListadoResponse response, Usuario usuario) {
-        // Cargar empresas asignadas
+        // Cargar empresas asignadas usando EmpresaResumen
         List<UsuarioEmpresa> asignacionesEmpresa = usuarioEmpresaRepository.findByUsuarioId(usuario.getId());
-        List<String> empresas = asignacionesEmpresa.stream()
-            .map(ue -> ue.getEmpresa().getNombreComercial())
+        List<EmpresaResumen> empresas = asignacionesEmpresa.stream()
+            .map(ue -> EmpresaResumen.builder()
+                .id(ue.getEmpresa().getId())
+                .nombre(ue.getEmpresa().getNombreRazonSocial())
+                .nombreComercial(ue.getEmpresa().getNombreComercial())
+                .email(ue.getEmpresa().getEmail())
+                .identificacion(ue.getEmpresa().getIdentificacion())
+                .logo(ue.getEmpresa().getLogoUrl())
+                .requiereHacienda(ue.getEmpresa().getRequiereHacienda())
+                .activa(ue.getEmpresa().getActiva())
+                .build())
             .collect(Collectors.toList());
         response.setEmpresas(empresas);
 
-        // Cargar sucursales asignadas
+        // Cargar sucursales asignadas usando SucursalResumen
         List<UsuarioSucursal> asignacionesSucursal = usuarioSucursalRepository.findByUsuarioId(usuario.getId());
-        List<String> sucursales = asignacionesSucursal.stream()
-            .map(us -> us.getSucursal().getNombre())
+        List<SucursalResumen> sucursales = asignacionesSucursal.stream()
+            .map(us -> new SucursalResumen(
+                us.getSucursal().getId(),
+                us.getSucursal().getNombre(),
+                us.getSucursal().getNumeroSucursal(),
+                us.getSucursal().getModoFacturacion(),
+                us.getSucursal().getActiva()
+            ))
             .collect(Collectors.toList());
         response.setSucursales(sucursales);
 

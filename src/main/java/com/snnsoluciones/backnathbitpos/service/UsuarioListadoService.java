@@ -1,5 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service;
 
+import com.snnsoluciones.backnathbitpos.dto.auth.EmpresaResumen;
+import com.snnsoluciones.backnathbitpos.dto.auth.SucursalResumen;
 import com.snnsoluciones.backnathbitpos.dto.usuarios.UsuarioListadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
@@ -144,16 +146,31 @@ public class UsuarioListadoService {
         response.setCreatedAt(usuario.getCreatedAt());
         response.setUpdatedAt(usuario.getUpdatedAt());
 
-        // Agregar empresas asignadas
+        // Convertir a EmpresaResumen (REUTILIZANDO EL DTO EXISTENTE)
         List<UsuarioEmpresa> asignacionesEmpresa = usuarioEmpresaRepository.findByUsuarioId(usuario.getId());
         response.setEmpresas(asignacionesEmpresa.stream()
-            .map(ue -> ue.getEmpresa().getNombreComercial())
+            .map(ue -> EmpresaResumen.builder()
+                .id(ue.getEmpresa().getId())
+                .nombre(ue.getEmpresa().getNombreRazonSocial())
+                .nombreComercial(ue.getEmpresa().getNombreComercial())
+                .email(ue.getEmpresa().getEmail())
+                .identificacion(ue.getEmpresa().getIdentificacion())
+                .logo(ue.getEmpresa().getLogoUrl())
+                .requiereHacienda(ue.getEmpresa().getRequiereHacienda())
+                .activa(ue.getEmpresa().getActiva())
+                .build())
             .collect(Collectors.toList()));
 
-        // Agregar sucursales asignadas
+        // Convertir a SucursalResumen (REUTILIZANDO EL DTO EXISTENTE)
         List<UsuarioSucursal> asignacionesSucursal = usuarioSucursalRepository.findByUsuarioId(usuario.getId());
         response.setSucursales(asignacionesSucursal.stream()
-            .map(us -> us.getSucursal().getNombre())
+            .map(us -> new SucursalResumen(
+                us.getSucursal().getId(),
+                us.getSucursal().getNombre(),
+                us.getSucursal().getNumeroSucursal(),
+                us.getSucursal().getModoFacturacion(),
+                us.getSucursal().getActiva()
+            ))
             .collect(Collectors.toList()));
 
         // Indicar si tiene asignaciones

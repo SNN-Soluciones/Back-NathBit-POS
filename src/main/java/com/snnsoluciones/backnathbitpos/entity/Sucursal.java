@@ -6,9 +6,11 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcType;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import org.hibernate.dialect.PostgreSQLEnumJdbcType;
 
 @Entity
 @Table(name = "sucursales",
@@ -49,8 +51,9 @@ public class Sucursal {
     @Column(name = "numero_sucursal", length = 3, nullable = false)
     private String numeroSucursal;
 
-    @Column(name = "modo_facturacion", nullable = false)
+    @Column(name = "modo_facturacion", nullable = false, columnDefinition = "modo_facturacion_enum")
     @Enumerated(EnumType.STRING)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
     private ModoFacturacion modoFacturacion = ModoFacturacion.ELECTRONICO;
 
     @ManyToOne(fetch = FetchType.LAZY)

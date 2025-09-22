@@ -38,6 +38,9 @@ public class ProductoCreateDto {
 
     private Long empresaCabysId;
 
+    @NotNull
+    private Long empresaId;
+
     private Long sucursalId;
 
     private Set<CategoriaProductoDto> categoriaProductoDtos;

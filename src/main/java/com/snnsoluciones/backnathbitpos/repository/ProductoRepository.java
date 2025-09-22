@@ -152,4 +152,21 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       "LEFT JOIN FETCH p.empresaCabys ec " +
       "LEFT JOIN FETCH ec.codigoCabys")
   List<Producto> findAllWithRelaciones();
+
+  // En ProductoRepository.java
+
+  // Validar código único por sucursal
+  boolean existsByCodigoInternoAndSucursalId(String codigoInterno, Long sucursalId);
+
+  // Validar código único para productos globales (sin sucursal)
+  boolean existsByCodigoInternoAndEmpresaIdAndSucursalIdIsNull(String codigoInterno, Long empresaId);
+
+  // Para contar productos (usado en generarCodigoInterno)
+  long countBySucursalIdAndActivoTrue(Long sucursalId);
+  // Opcional: Para buscar por sucursal si ya no existe
+  Page<Producto> findBySucursalIdAndActivoTrue(Long sucursalId, Pageable pageable);
+
+  // Opcional: Para buscar productos globales de una empresa
+  @Query("SELECT p FROM Producto p WHERE p.empresa.id = :empresaId AND p.sucursal IS NULL AND p.activo = true")
+  Page<Producto> findGlobalProductsByEmpresa(@Param("empresaId") Long empresaId, Pageable pageable);
 }

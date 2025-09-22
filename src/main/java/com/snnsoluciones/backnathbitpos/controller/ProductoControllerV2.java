@@ -36,16 +36,20 @@ public class ProductoControllerV2 {
   @Operation(summary = "Crear un nuevo producto con imagen")
   @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
   public ResponseEntity<ApiResponse<ProductoDto>> crear(
-      @PathVariable Long empresaId,
       @RequestPart("producto") @Valid ProductoCreateDto dto,
       @RequestPart(value = "imagen", required = false) MultipartFile imagen) {
 
-    log.info("REST V2 - Creando producto tipo: {} - nombre: {} - empresaId: {}",
-        dto.getTipo(), dto.getNombre(), empresaId);
+    log.info("REST V2 - Creando producto tipo: {} - nombre: {} - empresaId: {} - sucursalId: {}",
+        dto.getTipo(), dto.getNombre(), dto.getEmpresaId(), dto.getSucursalId());
 
     try {
-      // Opción 1: Pasar la imagen al servicio
-      ProductoDto producto = productoServiceV2.crear(empresaId, dto, imagen);
+      // Validar que venga empresaId en el DTO
+      if (dto.getEmpresaId() == null) {
+        throw new BusinessException("EmpresaId es requerido");
+      }
+
+      // Llamar al servicio con empresaId del DTO
+      ProductoDto producto = productoServiceV2.crear(dto.getEmpresaId(), dto, imagen);
 
       return ResponseEntity.status(HttpStatus.CREATED)
           .body(ApiResponse.<ProductoDto>builder()
@@ -54,9 +58,16 @@ public class ProductoControllerV2 {
               .data(producto)
               .build());
 
+    } catch (BusinessException e) {
+      log.error("Error de negocio creando producto: {}", e.getMessage());
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+          .body(ApiResponse.<ProductoDto>builder()
+              .success(false)
+              .message(e.getMessage())
+              .build());
     } catch (Exception e) {
       log.error("Error creando producto: {}", e.getMessage());
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(ApiResponse.<ProductoDto>builder()
               .success(false)
               .message("Error al crear producto: " + e.getMessage())

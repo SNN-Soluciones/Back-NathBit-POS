@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
+import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.RegimenTributario;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
@@ -60,36 +61,53 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   @Override
   @Transactional
   public ProductoDto crear(Long empresaId, ProductoCreateDto dto, MultipartFile imagen) {
-    log.info("Creando producto tipo: {} para empresa: {}", dto.getTipo(), empresaId);
+    log.info("Creando producto tipo: {} para empresa: {} - sucursal: {}",
+        dto.getTipo(), empresaId, dto.getSucursalId());
 
+    Sucursal sucursal = null;
     try {
-      // 1. Validar empresa existe y obtener información
+      // 1. VALIDACIONES DE ENTRADA
+      if (empresaId == null) {
+        throw new BusinessException("EmpresaId es requerido");
+      }
+
+      // 2. OBTENER EMPRESA
       Empresa empresa = empresaRepository.findById(empresaId)
           .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada: " + empresaId));
 
-      Sucursal sucursal = null;
-      if (dto.getSucursal() != null) {
-        sucursal = sucursalRepository.findByIdAndEmpresaId(dto.getSucursal(), empresaId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Sucursal no encontrada: " + dto.getSucursal()));
-      }
+      // 3. OBTENER SUCURSAL SI VIENE
+      if (dto.getSucursalId() != null) {
+        sucursal = sucursalRepository.findById(dto.getSucursalId())
+            .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada: " + dto.getSucursalId()));
 
-      boolean esSimplificadoSinFactura;
-      // 2. Determinar si es régimen simplificado sin factura electrónica
-      if (sucursal != null && sucursal.getModoFacturacion() != null) {
-        esSimplificadoSinFactura = sucursal.getModoFacturacion()
-            .equals(ModoFacturacion.SOLO_INTERNO);
+        // Validar que la sucursal pertenezca a la empresa
+        if (!sucursal.getEmpresa().getId().equals(empresaId)) {
+          throw new BusinessException("La sucursal no pertenece a la empresa especificada");
+        }
+        log.info("Producto será local para sucursal: {}", sucursal.getNombre());
       } else {
-        esSimplificadoSinFactura =
-            empresa.getRegimenTributario() == RegimenTributario.REGIMEN_SIMPLIFICADO
-                && !empresa.getRequiereHacienda();
+        log.info("Producto será global para toda la empresa");
       }
 
-      // 3. Crear entidad producto
+      // 4. DETERMINAR MODO DE FACTURACIÓN
+      boolean esRegimenSimplificado = empresa.getRegimenTributario() == RegimenTributario.REGIMEN_SIMPLIFICADO;
+      boolean esFacturacionElectronica = empresa.getRequiereHacienda();
+
+      // Para sucursal específica, usar su configuración
+      if (sucursal != null && sucursal.getModoFacturacion() == ModoFacturacion.SOLO_INTERNO) {
+        esFacturacionElectronica = false;
+      }
+
+      // 5. VALIDAR CÓDIGOS ÚNICOS
+      validarCodigosUnicos(empresaId, dto.getSucursalId(), dto.getCodigoInterno(), dto.getCodigoBarras());
+
+      // 6. CREAR PRODUCTO
       Producto producto = new Producto();
       producto.setEmpresa(empresa);
-      producto.setSucursal(sucursal);
-      producto.setCodigoInterno(generarCodigoProducto(empresaId, dto));
+      producto.setSucursal(sucursal); // Puede ser null para productos globales
+      producto.setCodigoInterno(dto.getCodigoInterno() != null ?
+          dto.getCodigoInterno() : generarCodigoInterno(empresaId, dto.getSucursalId()));
+      producto.setCodigoBarras(dto.getCodigoBarras());
       producto.setNombre(dto.getNombre());
       producto.setDescripcion(dto.getDescripcion());
       producto.setTipo(TipoProducto.valueOf(dto.getTipo()));
@@ -97,43 +115,46 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       producto.setCreatedAt(LocalDateTime.now());
       producto.setUpdatedAt(LocalDateTime.now());
 
-      // 4. Configurar según régimen tributario
-      if (esSimplificadoSinFactura) {
-        log.info("Aplicando configuración para régimen simplificado sin factura electrónica");
+      // 7. CONFIGURAR SEGÚN RÉGIMEN TRIBUTARIO
+      if (esRegimenSimplificado || !esFacturacionElectronica) {
+        log.info("Aplicando configuración para régimen simplificado o sin factura electrónica");
 
-        EmpresaCAByS empresaCAByS = empresaCAbySRepository.findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(
-            empresaId, "9960199999999").orElse(
-            EmpresaCAByS.builder()
-                .empresa(empresa)
-                .sucursal(sucursal)
-                .codigoCabys(codigoCAbySRepository.findByCodigo("9960199999999")
-                    .orElseThrow(
-                        () -> new BusinessException("CABYS genérico no configurado en el sistema")))
-                .activo(true)
-                .createdAt(LocalDateTime.now())
-                .build()
-        );
+        // Buscar o crear CABYS genérico
+        Sucursal finalSucursal = sucursal;
+        EmpresaCAByS cabysSinMesa = empresaCAbySRepository
+            .findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(empresaId, "9960199999999")
+            .orElseGet(() -> {
+              CodigoCAByS codigoGenerico = codigoCAbySRepository.findByCodigo("9960199999999")
+                  .orElseThrow(() -> new BusinessException("CABYS genérico no configurado en el sistema"));
 
-        // Forzar CABYS genérico
-        producto.setEmpresaCabys(empresaCAByS);
+              EmpresaCAByS nuevo = EmpresaCAByS.builder()
+                  .empresa(empresa)
+                  .sucursal(finalSucursal)
+                  .codigoCabys(codigoGenerico)
+                  .activo(true)
+                  .createdAt(LocalDateTime.now())
+                  .build();
+              return empresaCAbySRepository.save(nuevo);
+            });
 
-        // Crear automáticamente IVA exento
+        producto.setEmpresaCabys(cabysSinMesa);
+
+        // Crear IVA 0% exonerado
         ProductoImpuesto impuestoExento = new ProductoImpuesto();
         impuestoExento.setProducto(producto);
         impuestoExento.setTipoImpuesto(TipoImpuesto.IVA);
         impuestoExento.setCodigoTarifaIVA(CodigoTarifaIVA.TARIFA_EXENTA);
         impuestoExento.setPorcentaje(BigDecimal.ZERO);
         impuestoExento.setActivo(true);
-
         producto.setImpuestos(Set.of(impuestoExento));
 
-        // Unidad de medida por defecto
+        // Unidad por defecto
         producto.setUnidadMedida(UnidadMedida.SERVICIOS_PROFESIONALES);
 
       } else {
-        log.info("Aplicando configuración para régimen tradicional");
+        log.info("Aplicando configuración para régimen tradicional con factura electrónica");
 
-        // Validar campos requeridos para factura electrónica
+        // VALIDAR CAMPOS REQUERIDOS
         if (dto.getEmpresaCabysId() == null) {
           throw new BusinessException("Régimen tradicional requiere código CABYS");
         }
@@ -142,11 +163,9 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
           throw new BusinessException("Régimen tradicional requiere configuración de impuestos");
         }
 
-        // Buscar y asignar CABYS
-        EmpresaCAByS empresaCabys = empresaCAbySRepository
-            .findById(dto.getEmpresaCabysId())
+        // Asignar CABYS
+        EmpresaCAByS empresaCabys = empresaCAbySRepository.findById(dto.getEmpresaCabysId())
             .orElseThrow(() -> new BusinessException("CABYS no autorizado para esta empresa"));
-
         producto.setEmpresaCabys(empresaCabys);
 
         // Configurar impuestos
@@ -166,77 +185,90 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         producto.setUnidadMedida(dto.getUnidadMedida());
       }
 
-      // 5. Configurar precios
+      // 8. CONFIGURAR PRECIOS
       producto.setPrecioVenta(dto.getPrecioVenta());
-      producto.setPrecioCompra(
-          dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
+      producto.setPrecioCompra(dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
+      producto.setMoneda(dto.getMoneda() != null ? dto.getMoneda() : Moneda.CRC);
 
-      if (dto.getTipo().equals("COMBO") &&
-          dto.getTipoInventario() != null &&
-          !Arrays.asList(TipoInventario.PROPIO, TipoInventario.REFERENCIA)
-              .contains(dto.getTipoInventario())) {
-        throw new BusinessException("Combo solo acepta inventario PROPIO o REFERENCIA");
+      // 9. CONFIGURAR INVENTARIO SEGÚN EMPRESA/SUCURSAL
+      boolean manejaInventario = false;
+      if (sucursal != null && sucursal.getManejaInventario() != null) {
+        manejaInventario = sucursal.getManejaInventario();
       }
 
-// Validar materia prima
-      if (dto.getTipo().equals("MATERIA_PRIMA") &&
-          dto.getPrecioVenta() != null &&
-          dto.getPrecioVenta().compareTo(BigDecimal.ZERO) > 0) {
-        log.warn("Materia prima con precio de venta: {}", dto.getNombre());
+      producto.setRequiereInventario(manejaInventario);
+
+      if (sucursal != null && sucursal.getManejaInventario() != null) {
+        manejaInventario = sucursal.getManejaInventario();
       }
 
-// Validar imagen
-      if (imagen != null && !imagen.isEmpty()) {
-        if (!imagen.getContentType().startsWith("image/")) {
-          throw new BusinessException("El archivo debe ser una imagen");
-        }
-        if (imagen.getSize() > 5 * 1024 * 1024) {
-          throw new BusinessException("Imagen muy grande, máximo 5MB");
-        }
-      }
+      producto.setRequiereInventario(manejaInventario);
 
-      // 6. Configurar según tipo de producto
+      // 10. CONFIGURAR SEGÚN TIPO DE PRODUCTO
       configurarSegunTipo(producto, dto);
 
-      // 7. Guardar producto primero (necesitamos el ID)
-      producto = productoRepository.save(producto);
+      // Validaciones específicas por tipo
+      if (producto.getTipo() == TipoProducto.MATERIA_PRIMA) {
+        producto.setPrecioVenta(BigDecimal.ZERO); // Forzar precio 0
+        producto.setRequiereInventario(true); // Siempre requiere inventario
+      }
 
-      // 8. Manejar imagen si existe
+      // 11. GUARDAR PRODUCTO
+      producto = productoRepository.save(producto);
+      log.info("Producto creado con ID: {} - Alcance: {}",
+          producto.getId(),
+          sucursal != null ? "Sucursal " + sucursal.getNombre() : "Global empresa");
+
+      // 12. MANEJAR IMAGEN SI EXISTE
       if (imagen != null && !imagen.isEmpty()) {
         try {
+          validarImagen(imagen);
+
           String urlImagen = productoImagenService.subirImagen(
               empresaId,
-              empresa.getNombreComercial() != null ? empresa.getNombreComercial()
-                  : empresa.getNombreRazonSocial(),
+              empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombreRazonSocial(),
               producto.getCodigoInterno(),
               imagen
           );
 
-          // Construir la key para S3
-          String nombreComercialLimpio = null;
-          if (sucursal != null) {
-            nombreComercialLimpio = sucursal.getNombre();
-          } else {
-            nombreComercialLimpio =
-                empresa.getNombreComercial() != null ? empresa.getNombreComercial()
-                    : empresa.getNombreRazonSocial();
-          }
+          // Construir key para S3
+          String carpeta = sucursal != null ?
+              limpiarNombreParaRuta(sucursal.getNombre()) :
+              limpiarNombreParaRuta(empresa.getNombreComercial());
           String extension = obtenerExtension(imagen.getOriginalFilename());
           String imagenKey = String.format("NathBit-POS/%s/productos/%s%s",
-              limpiarNombreParaRuta(nombreComercialLimpio), producto.getCodigoInterno(), extension);
+              carpeta, producto.getCodigoInterno(), extension);
 
           producto.setImagenUrl(urlImagen);
           producto.setImagenKey(imagenKey);
+          producto = productoRepository.save(producto);
 
         } catch (Exception e) {
           log.error("Error al subir imagen, continuando sin imagen: {}", e.getMessage());
+          // No fallar la creación por la imagen
         }
       }
 
-      log.info("Producto creado exitosamente con ID: {}", producto.getId());
+      // 13. CREAR INVENTARIO INICIAL SI ES MATERIA PRIMA Y ES LOCAL
+      if (producto.getTipo() == TipoProducto.MATERIA_PRIMA &&
+          producto.getRequiereInventario() &&
+          sucursal != null) {
 
-      // 10. Convertir a DTO y retornar
-      return (modelMapper.map(producto, ProductoDto.class));
+        ProductoInventario inventario = ProductoInventario.builder()
+            .producto(producto)
+            .sucursal(sucursal)
+            .cantidadActual(BigDecimal.ZERO)
+            .cantidadMinima(BigDecimal.ZERO)
+            // cantidadMaxima NO existe en ProductoInventario
+            .estado(true)
+            .build();
+
+        inventarioRepository.save(inventario);
+        log.info("Inventario inicial creado para materia prima en sucursal: {}", sucursal.getNombre());
+      }
+
+      // 14. CONVERTIR Y RETORNAR
+      return convertirADto(producto);
 
     } catch (BusinessException | ResourceNotFoundException e) {
       log.error("Error de negocio creando producto: {}", e.getMessage());
@@ -245,6 +277,95 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       log.error("Error inesperado creando producto", e);
       throw new BusinessException("Error al crear producto: " + e.getMessage());
     }
+  }
+
+// MÉTODOS AUXILIARES
+
+  private void validarCodigosUnicos(Long empresaId, Long sucursalId, String codigoInterno, String codigoBarras) {
+    if (codigoInterno != null) {
+      boolean existeCodigo;
+
+      if (sucursalId != null) {
+        // Validar unicidad en la sucursal
+        existeCodigo = productoRepository.existsByCodigoInternoAndSucursalId(codigoInterno, sucursalId);
+      } else {
+        // Validar unicidad en productos globales de la empresa
+        existeCodigo = productoRepository
+            .existsByCodigoInternoAndEmpresaIdAndSucursalIdIsNull(codigoInterno, empresaId);
+      }
+
+      if (existeCodigo) {
+        throw new BusinessException("El código interno ya existe en este alcance");
+      }
+    }
+
+    if (codigoBarras != null && !codigoBarras.isEmpty()) {
+      if (productoRepository.existsByCodigoBarrasAndEmpresaId(codigoBarras, empresaId)) {
+        throw new BusinessException("El código de barras ya existe");
+      }
+    }
+  }
+
+  private void validarImagen(MultipartFile imagen) {
+    if (!Objects.requireNonNull(imagen.getContentType()).startsWith("image/")) {
+      throw new BusinessException("El archivo debe ser una imagen");
+    }
+    if (imagen.getSize() > 5 * 1024 * 1024) {
+      throw new BusinessException("Imagen muy grande, máximo 5MB");
+    }
+  }
+
+  private String generarCodigoInterno(Long empresaId, Long sucursalId) {
+    long count;
+    String prefix;
+
+    if (sucursalId != null) {
+      // Código para producto de sucursal
+      count = productoRepository.countBySucursalIdAndActivoTrue(sucursalId);
+      Sucursal sucursal = sucursalRepository.findById(sucursalId).orElse(null);
+      prefix = sucursal != null && sucursal.getNumeroSucursal() != null ?
+          sucursal.getNumeroSucursal() + "-" : "SUC" + sucursalId + "-";
+    } else {
+      // Código para producto global
+      count = productoRepository.countByEmpresaIdAndSucursalIdIsNullAndActivoTrue(empresaId);
+      prefix = "GLOB-";
+    }
+
+    String codigo;
+    int intentos = 0;
+
+    do {
+      codigo = String.format("%sPROD%05d", prefix, count + 1 + intentos);
+      intentos++;
+    } while ((sucursalId != null ?
+        productoRepository.existsByCodigoInternoAndSucursalId(codigo, sucursalId) :
+        productoRepository.existsByCodigoInternoAndEmpresaIdAndSucursalIdIsNull(codigo, empresaId))
+        && intentos < 100);
+
+    if (intentos >= 100) {
+      throw new BusinessException("No se pudo generar un código único");
+    }
+
+    return codigo;
+  }
+
+  private ProductoDto convertirADto(Producto producto) {
+    ProductoDto dto = modelMapper.map(producto, ProductoDto.class);
+
+    // Información adicional
+    dto.setEmpresaId(producto.getEmpresa().getId());
+
+    if (producto.getSucursal() != null) {
+      dto.setSucursalId(producto.getSucursal().getId());
+      dto.setSucursalNombre(producto.getSucursal().getNombre());
+    }
+
+    // URL de imagen
+    if (producto.getImagenUrl() != null) {
+      dto.setImagenUrl(producto.getImagenUrl());
+    }
+
+    return dto;
   }
 
   @Override
@@ -809,24 +930,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       log.error("Error al guardar imagen: ", e);
       throw new BusinessException("Error al guardar la imagen: " + e.getMessage());
     }
-  }
-
-  private ProductoDto convertirADto(Producto producto) {
-    ProductoDto dto = modelMapper.map(producto, ProductoDto.class);
-
-    dto.setEmpresaId(producto.getEmpresa().getId());
-
-    if (producto.getSucursal() != null) {
-      dto.setSucursalId(producto.getSucursal().getId());
-      dto.setSucursalNombre(producto.getSucursal().getNombre());
-    }
-
-    // URL de imagen desde S3
-    if (producto.getImagenUrl() != null) {
-      dto.setImagenUrl(producto.getImagenUrl());
-    }
-
-    return dto;
   }
 
   private String obtenerExtension(String nombreArchivo) {

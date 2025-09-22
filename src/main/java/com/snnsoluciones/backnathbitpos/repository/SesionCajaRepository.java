@@ -16,9 +16,12 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
     
     // Buscar sesión abierta por usuario
     @Query("""
-    SELECT sc FROM SesionCaja sc
+    SELECT sc 
+    FROM SesionCaja sc
+    JOIN FETCH sc.terminal t
+    JOIN FETCH sc.usuario u
     WHERE sc.usuario.id = :usuarioId
-    AND sc.estado = 'ABIERTA'
+      AND sc.estado = 'ABIERTA'
     """)
     Optional<SesionCaja> findSesionAbiertaByUsuarioId(@Param("usuarioId") Long usuarioId);
     

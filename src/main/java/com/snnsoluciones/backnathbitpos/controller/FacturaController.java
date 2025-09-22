@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 @Tag(name = "Facturas", description = "Gestión de facturas y documentos electrónicos")
 public class FacturaController {
 
+
     private final FacturaService facturaService;
     private final FacturaResponseBuilder responseBuilder;
 

@@ -92,7 +92,7 @@ public class ProductoQueryRepository {
         stats.put("totalProductos", total);
 
         // Total servicios
-        String serviciosQuery = "SELECT COUNT(p) FROM Producto p WHERE p.empresa.id = :empresaId AND p.aplicaServicio = true AND p.activo = true";
+        String serviciosQuery = "SELECT COUNT(p) FROM Producto p WHERE p.empresa.id = :empresaId AND p.esServicio = true AND p.activo = true";
         Long servicios = entityManager.createQuery(serviciosQuery, Long.class)
             .setParameter("empresaId", empresaId)
             .getSingleResult();

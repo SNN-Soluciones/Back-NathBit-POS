@@ -20,11 +20,9 @@ import com.snnsoluciones.backnathbitpos.repository.ProductoMovimientoRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRecetaRepository;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
-import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tomcat.util.descriptor.web.ContextService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -157,7 +155,7 @@ public class ProductoInventarioService {
             Producto producto = detalle.getProducto();
 
             // Solo procesar productos que manejan inventario
-            if (Boolean.TRUE.equals(producto.getAplicaServicio()) ||
+            if (Boolean.TRUE.equals(producto.getEsServicio()) ||
                 !producto.requiereControlInventario()) {
                 log.debug("Producto {} no maneja inventario", producto.getId());
                 continue;
@@ -233,7 +231,7 @@ public class ProductoInventarioService {
 
         for (CompraDetalle detalle : compra.getDetalles()) {
             if (detalle.getProducto() == null ||
-                Boolean.TRUE.equals(detalle.getProducto().getAplicaServicio()) ||
+                Boolean.TRUE.equals(detalle.getProducto().getEsServicio()) ||
                 !detalle.getProducto().requiereControlInventario()) {
                 continue;
             }

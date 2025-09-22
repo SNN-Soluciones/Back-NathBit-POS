@@ -60,7 +60,7 @@ public class ProductoCreateDto {
     private BigDecimal precioVenta;
 
     @Builder.Default
-    private Boolean aplicaServicio = false;
+    private Boolean esServicio = false;
 
     private Boolean incluyeIVA;
 

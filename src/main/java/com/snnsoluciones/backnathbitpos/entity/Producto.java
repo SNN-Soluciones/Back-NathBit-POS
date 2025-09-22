@@ -10,12 +10,14 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcType;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import org.hibernate.dialect.PostgreSQLEnumJdbcType;
 
 @Entity
 @Table(name = "productos",
@@ -83,18 +85,21 @@ public class Producto {
   // CAMPOS ACTUALIZADOS PARA FASE 2
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "tipo", nullable = false, length = 20)
+  @Column(name = "tipo", nullable = false, columnDefinition = "tipo_producto")
+  @JdbcType(PostgreSQLEnumJdbcType.class)
   @Builder.Default
   private TipoProducto tipo = TipoProducto.VENTA;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "tipo_inventario", nullable = false, length = 20)
   @Builder.Default
+  @JdbcType(PostgreSQLEnumJdbcType.class)
   private TipoInventario tipoInventario = TipoInventario.SIMPLE;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "zona_preparacion", nullable = false, length = 20)
   @Builder.Default
+  @JdbcType(PostgreSQLEnumJdbcType.class)
   private ZonaPreparacion zonaPreparacion = ZonaPreparacion.NINGUNA;
 
   @Column(name = "factor_conversion_receta", precision = 10, scale = 4)
@@ -122,9 +127,9 @@ public class Producto {
   @Column(name = "precio_venta", nullable = false, precision = 18, scale = 5)
   private BigDecimal precioVenta;
 
-  @Column(name = "aplica_servicio", nullable = false)
+  @Column(name = "es_servicio", nullable = false)
   @Builder.Default
-  private Boolean aplicaServicio = false;
+  private Boolean esServicio = false;
 
   @Column(nullable = false)
   @Builder.Default

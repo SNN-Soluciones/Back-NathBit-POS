@@ -72,7 +72,6 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
   List<Producto> findProductosSinCategoria(@Param("empresaId") Long empresaId);
 
   // Productos con servicio aplicable
-  List<Producto> findByEmpresaIdAndAplicaServicioTrueAndActivoTrue(Long empresaId);
 
   // Contar productos activos por empresa
   long countByEmpresaIdAndActivoTrue(Long empresaId);

@@ -122,9 +122,9 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         // Buscar o crear CABYS genérico
         Sucursal finalSucursal = sucursal;
         EmpresaCAByS cabysSinMesa = empresaCAbySRepository
-            .findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(empresaId, "9960199999999")
+            .findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(empresaId, "6332000000000")
             .orElseGet(() -> {
-              CodigoCAByS codigoGenerico = codigoCAbySRepository.findByCodigo("9960199999999")
+              CodigoCAByS codigoGenerico = codigoCAbySRepository.findByCodigo("6332000000000")
                   .orElseThrow(() -> new BusinessException("CABYS genérico no configurado en el sistema"));
 
               EmpresaCAByS nuevo = EmpresaCAByS.builder()
@@ -261,6 +261,7 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
             .cantidadMinima(BigDecimal.ZERO)
             // cantidadMaxima NO existe en ProductoInventario
             .estado(true)
+            .ultimaActualizacion(LocalDateTime.now())
             .build();
 
         inventarioRepository.save(inventario);

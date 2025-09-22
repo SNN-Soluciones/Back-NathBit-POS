@@ -1,7 +1,5 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
-import com.beust.ah.A;
-import com.snnsoluciones.backnathbitpos.dto.compra.FacturaXmlDto.ImpuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
@@ -19,14 +17,11 @@ import com.snnsoluciones.backnathbitpos.service.ProductoValidacionService;
 import com.snnsoluciones.backnathbitpos.service.ProductoCategoriaService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImpuestoService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
-import com.snnsoluciones.backnathbitpos.service.impl.ModularHelperService.QueryParams;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -99,7 +94,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
         .tipo(TipoProducto.valueOf(dto.getTipo()))
         .requiereInventario(dto.getRequiereInventario() != null ? dto.getRequiereInventario() : true)
         .requiereReceta(dto.getRequiereReceta() != null ? dto.getRequiereReceta() : false)
-        .aplicaServicio(dto.getAplicaServicio() != null ? dto.getAplicaServicio() : false)
+        .esServicio(dto.getEsServicio() != null ? dto.getEsServicio() : false)
         .incluyeIVA(dto.getIncluyeIVA() != null ? dto.getIncluyeIVA() : true)
         .activo(dto.getActivo() != null ? dto.getActivo() : true)
         .build();
@@ -215,7 +210,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     producto.setUnidadMedida(dto.getUnidadMedida());
     producto.setMoneda(dto.getMoneda());
     producto.setPrecioVenta(dto.getPrecioVenta());
-    producto.setAplicaServicio(dto.getAplicaServicio());
+    producto.setEsServicio(dto.getAplicaServicio());
     producto.setActivo(dto.getActivo());
 
     // Actualizar CABYS si cambió
@@ -400,7 +395,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
 
     // Actualizar aplica servicio si viene en el DTO
     if (dto.getAplicaServicio() != null) {
-      producto.setAplicaServicio(dto.getAplicaServicio());
+      producto.setEsServicio(dto.getAplicaServicio());
     }
 
     // Actualizar impuesto IVA si viene en el DTO

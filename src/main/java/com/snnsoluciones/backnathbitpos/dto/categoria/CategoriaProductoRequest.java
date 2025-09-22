@@ -31,4 +31,6 @@ public class CategoriaProductoRequest {
     private String icono; // Nombre del icono o emoji
     
     private Integer orden;
+
+    private Long sucursalId;
 }

@@ -24,7 +24,6 @@ import java.util.Optional;
 public class CategoriaProductoServiceImpl implements CategoriaProductoService {
 
     private final CategoriaProductoRepository categoriaRepository;
-    private final EmpresaRepository empresaRepository;
     private final ModularHelperService modularHelper;
 
     @Override
@@ -35,11 +34,11 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CategoriaProducto> listarPorEmpresa(Long empresaId, String busqueda) {
+    public List<CategoriaProducto> listarPorEmpresa(Long empresaId, Long sucursalId, String busqueda) {
         log.debug("Listando categorías para empresa: {}", empresaId);
 
         // Obtener parámetros de búsqueda según configuración
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "categoria");
+        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId,"categoria");
 
         if (params.esGlobal()) {
             log.debug("Buscando categorías GLOBALES de empresa: {}", empresaId);
@@ -55,9 +54,9 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean existePorNombreYEmpresa(String nombre, Long empresaId) {
+    public boolean existePorNombreYEmpresa(String nombre, Long sucursalId, Long empresaId) {
         // Obtener parámetros según configuración
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "categoria");
+        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId,  "categoria");
 
         if (params.esGlobal()) {
             return categoriaRepository.existsByNombreAndEmpresaIdAndSucursalIdIsNull(nombre, empresaId);
@@ -75,19 +74,20 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
             categoria.getNombre(), categoria.getEmpresa().getId());
 
         Long empresaId = categoria.getEmpresa().getId();
+        Long sucursalId = categoria.getSucursal() != null ? categoria.getSucursal().getId() : null;
 
         // Determinar si asignar sucursal según configuración
-        Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, "categoria");
+        Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, sucursalId, "categoria");
         categoria.setSucursal(sucursal);
 
         // Validar nombre duplicado en el contexto correcto
-        if (existePorNombreYEmpresa(categoria.getNombre(), empresaId)) {
+        if (existePorNombreYEmpresa(categoria.getNombre(), categoria.getSucursal().getId(), empresaId)) {
             throw new BusinessException("Ya existe una categoría con el nombre: " + categoria.getNombre());
         }
 
         // Si no tiene orden, asignar el siguiente
         if (categoria.getOrden() == null || categoria.getOrden() == 0) {
-            Integer siguienteOrden = obtenerSiguienteOrden(empresaId);
+            Integer siguienteOrden = obtenerSiguienteOrden(empresaId, categoria.getSucursal().getId());
             categoria.setOrden(siguienteOrden);
         }
 
@@ -114,7 +114,7 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
 
         // Validar nombre si cambió
         if (!existente.getNombre().equals(categoria.getNombre())) {
-            if (existePorNombreYEmpresa(categoria.getNombre(), existente.getEmpresa().getId())) {
+            if (existePorNombreYEmpresa(categoria.getNombre(), categoria.getSucursal().getId(), existente.getEmpresa().getId())) {
                 throw new BusinessException("Ya existe una categoría con el nombre: " + categoria.getNombre());
             }
         }
@@ -144,9 +144,9 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
 
     @Override
     @Transactional(readOnly = true)
-    public Integer obtenerSiguienteOrden(Long empresaId) {
+    public Integer obtenerSiguienteOrden(Long empresaId, Long sucursalId) {
         // Obtener parámetros según configuración
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "categoria");
+        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId, "categoria");
 
         if (params.esGlobal()) {
             return categoriaRepository.obtenerSiguienteOrdenGlobal(empresaId);

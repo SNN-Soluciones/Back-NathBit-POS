@@ -82,7 +82,9 @@ public class ClienteServiceImpl implements ClienteService {
       throw new IllegalArgumentException("empresaId es requerido");
     }
 
-    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, "cliente");
+    Long sucursalId = dto.getSucursalId() != null ? dto.getSucursalId() : null;
+
+    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, sucursalId, "cliente");
 
     // =========================
     // 1) Empresa

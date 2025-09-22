@@ -35,6 +35,7 @@ public class ProductoImportDto {
 
     // Campos calculados o por defecto
     private Long empresaId;
+    private Long sucursalId;
     private Long categoriaId;
     private String cabysId;     // ID del código CABYS
 

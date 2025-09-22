@@ -32,7 +32,7 @@ public class ModularHelperService {
      * @return Sucursal a asignar o null si es global
      */
     @Transactional(readOnly = true)
-    public Sucursal determinarSucursalParaEntidad(Long empresaId, String tipoEntidad) {
+    public Sucursal determinarSucursalParaEntidad(Long empresaId, Long sucursalId, String tipoEntidad) {
         // Obtener configuración de empresa
         Empresa empresa = empresaRepository.findById(empresaId)
             .orElseThrow(() -> new BusinessException("Empresa no encontrada: " + empresaId));
@@ -46,7 +46,6 @@ public class ModularHelperService {
         }
 
         // Entidad por sucursal - obtener sucursal del contexto
-        Long sucursalId = securityContextService.getCurrentSucursalId();
         if (sucursalId == null) {
             throw new BusinessException(
                 "Se requiere contexto de sucursal para crear " + tipoEntidad + " en esta empresa"
@@ -72,18 +71,13 @@ public class ModularHelperService {
      * @return true si es por sucursal, false si es global
      */
     public boolean verificarConfiguracionPorSucursal(Empresa empresa, String tipoEntidad) {
-        switch (tipoEntidad.toLowerCase()) {
-            case "producto":
-                return Boolean.TRUE.equals(empresa.getProductosPorSucursal());
-            case "categoria":
-                return Boolean.TRUE.equals(empresa.getCategoriasPorSucursal());
-            case "cliente":
-                return Boolean.TRUE.equals(empresa.getClientesPorSucursal());
-            case "proveedor":
-                return Boolean.TRUE.equals(empresa.getProveedoresPorSucursal());
-            default:
-                throw new BusinessException("Tipo de entidad no válido: " + tipoEntidad);
-        }
+      return switch (tipoEntidad.toLowerCase()) {
+        case "producto" -> Boolean.TRUE.equals(empresa.getProductosPorSucursal());
+        case "categoria" -> Boolean.TRUE.equals(empresa.getCategoriasPorSucursal());
+        case "cliente" -> Boolean.TRUE.equals(empresa.getClientesPorSucursal());
+        case "proveedor" -> Boolean.TRUE.equals(empresa.getProveedoresPorSucursal());
+        default -> throw new BusinessException("Tipo de entidad no válido: " + tipoEntidad);
+      };
     }
 
     /**
@@ -94,7 +88,7 @@ public class ModularHelperService {
      * @return QueryParams con empresaId y sucursalId (puede ser null)
      */
     @Transactional(readOnly = true)
-    public QueryParams construirParametrosBusqueda(Long empresaId, String tipoEntidad) {
+    public QueryParams construirParametrosBusqueda(Long empresaId, Long sucursalId, String tipoEntidad) {
         Empresa empresa = empresaRepository.findById(empresaId)
             .orElseThrow(() -> new BusinessException("Empresa no encontrada: " + empresaId));
 
@@ -105,8 +99,6 @@ public class ModularHelperService {
             return new QueryParams(empresaId, null, false);
         }
 
-        // Búsqueda por sucursal
-        Long sucursalId = securityContextService.getCurrentSucursalId();
         if (sucursalId == null) {
             log.warn("No hay contexto de sucursal para búsqueda de {} por sucursal", tipoEntidad);
             // Podríamos retornar lista vacía o lanzar excepción según el caso

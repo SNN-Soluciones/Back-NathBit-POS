@@ -16,6 +16,8 @@ public class ProveedorRequest {
     
     @NotNull(message = "La empresa es requerida")
     private Long empresaId;
+
+    private Long sucursalId;
     
     @NotNull(message = "El tipo de identificación es requerido")
     private TipoIdentificacion tipoIdentificacion;

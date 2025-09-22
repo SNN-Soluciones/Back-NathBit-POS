@@ -92,7 +92,7 @@ public class ProductoQueryRepository {
         stats.put("totalProductos", total);
 
         // Total servicios
-        String serviciosQuery = "SELECT COUNT(p) FROM Producto p WHERE p.empresa.id = :empresaId AND p.esServicio = true AND p.activo = true";
+        String serviciosQuery = "SELECT COUNT(p) FROM Producto p WHERE p.empresa.id = :empresaId AND p.aplicaServicio = true AND p.activo = true";
         Long servicios = entityManager.createQuery(serviciosQuery, Long.class)
             .setParameter("empresaId", empresaId)
             .getSingleResult();
@@ -100,7 +100,7 @@ public class ProductoQueryRepository {
 
         // Productos por categoría
         String categoriaQuery = "SELECT c.nombre, COUNT(p) FROM Producto p " +
-            "JOIN p.categoria c " +
+            "JOIN p.categorias c " +
             "WHERE p.empresa.id = :empresaId AND p.activo = true " +
             "GROUP BY c.id, c.nombre " +
             "ORDER BY COUNT(p) DESC";
@@ -111,7 +111,7 @@ public class ProductoQueryRepository {
         stats.put("productosPorCategoria", porCategoria);
 
         // Productos sin categoría
-        String sinCategoriaQuery = "SELECT COUNT(p) FROM Producto p WHERE p.empresa.id = :empresaId AND p.categoria IS NULL AND p.activo = true";
+        String sinCategoriaQuery = "SELECT COUNT(p) FROM Producto p WHERE p.empresa.id = :empresaId AND p.categorias.size IS NULL AND p.activo = true";
         Long sinCategoria = entityManager.createQuery(sinCategoriaQuery, Long.class)
             .setParameter("empresaId", empresaId)
             .getSingleResult();

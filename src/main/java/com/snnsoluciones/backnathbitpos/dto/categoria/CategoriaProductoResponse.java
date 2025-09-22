@@ -15,6 +15,7 @@ public class CategoriaProductoResponse {
     
     private Long id;
     private Long empresaId;
+    private Long sucursalId;
     private String empresaNombre;
     private String nombre;
     private String descripcion;

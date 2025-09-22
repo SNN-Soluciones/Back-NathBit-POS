@@ -38,6 +38,8 @@ public class ProductoCreateDto {
 
     private Long empresaCabysId;
 
+    private Long sucursalId;
+
     private Set<CategoriaProductoDto> categoriaProductoDtos;
 
     @JsonProperty("categoriaIds")

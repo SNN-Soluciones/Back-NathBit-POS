@@ -71,7 +71,9 @@ public class ProveedorServiceImpl implements ProveedorService {
         Empresa empresa = empresaRepository.findById(request.getEmpresaId())
                 .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
 
-        Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresa.getId(), "proveedor");
+        Long sucursalId = request.getSucursalId() != null ? request.getSucursalId() : null;
+
+        Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresa.getId(), sucursalId, "proveedor");
 
         Proveedor proveedor = Proveedor.builder()
                 .empresa(empresa)
@@ -94,35 +96,6 @@ public class ProveedorServiceImpl implements ProveedorService {
         log.info("Proveedor creado: {} - {}", proveedor.getId(), proveedor.getNombreComercial());
         
         return convertirADto(proveedor);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<ProveedorDto> listarPorEmpresaConContexto(Long empresaId, String busqueda) {
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "proveedor");
-
-        List<Proveedor> proveedores;
-        if (StringUtils.hasText(busqueda)) {
-            if (params.esGlobal()) {
-                proveedores = proveedorRepository.buscarGlobalesPorTermino(empresaId, busqueda);
-            } else {
-                proveedores = proveedorRepository.buscarLocalesPorTermino(
-                    empresaId, params.getSucursalId(), busqueda
-                );
-            }
-        } else {
-            if (params.esGlobal()) {
-                proveedores = proveedorRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrueOrderByNombreComercialAsc(empresaId);
-            } else {
-                proveedores = proveedorRepository.findByEmpresaIdAndSucursalIdAndActivoTrueOrderByNombreComercialAsc(
-                    empresaId, params.getSucursalId()
-                );
-            }
-        }
-
-        return proveedores.stream()
-            .map(this::convertirADto)
-            .collect(Collectors.toList());
     }
     
     @Override

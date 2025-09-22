@@ -32,28 +32,7 @@ public class ProductoBusquedaServiceImpl implements ProductoBusquedaService {
     private final ModelMapper modelMapper;
     private final ModularHelperService modularHelper;
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<ProductoDto> buscarPorTerminoConContexto(Long empresaId, String termino) {
-        log.debug("Buscando productos con término: {} y contexto", termino);
 
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "producto");
-
-        List<Producto> productos;
-        if (params.esGlobal()) {
-            productos = productoRepository.buscarGlobalesPorTermino(empresaId, termino);
-        } else {
-            productos = productoRepository.buscarLocalesPorTermino(
-                empresaId, params.getSucursalId(), termino
-            );
-        }
-
-        return productos.stream()
-            .map(this::convertirADto)
-            .collect(Collectors.toList());
-    }
-
-    
     @Override
     @Transactional(readOnly = true)
     public Page<ProductoListDto> listarPorEmpresa(Long empresaId, Pageable pageable) {

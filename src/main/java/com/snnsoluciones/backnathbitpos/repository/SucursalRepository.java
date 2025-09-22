@@ -20,7 +20,7 @@ public interface SucursalRepository extends JpaRepository<Sucursal, Long> {
     AND s.activa = true
     ORDER BY s.numeroSucursal, s.nombre
     """)
-  List<Sucursal> findByEmpresaId(Long empresaId);
+  List<Sucursal> findByEmpresaId(@Param("empresaId") Long empresaId);
 
   @Query("""
       SELECT DISTINCT s FROM Sucursal s

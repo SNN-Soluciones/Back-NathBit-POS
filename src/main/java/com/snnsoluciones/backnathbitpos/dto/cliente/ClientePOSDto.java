@@ -15,6 +15,7 @@ import java.io.Serializable;
 public class ClientePOSDto implements Serializable {
     private Long id;
     private TipoIdentificacion tipoIdentificacion;
+    private Long sucursalId;
     private String numeroIdentificacion;
     private String razonSocial;
     private Set<ClienteEmailDTO> clienteEmails = new HashSet<>();

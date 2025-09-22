@@ -10,7 +10,6 @@ import java.util.List;
 public interface ProductoBusquedaService {
     
     // Búsquedas paginadas
-    List<ProductoDto> buscarPorTerminoConContexto(Long empresaId, String termino);
     Page<ProductoListDto> listarPorEmpresa(Long empresaId, Pageable pageable);
     Page<ProductoListDto> buscar(Long empresaId, String busqueda, Pageable pageable);
     Page<ProductoListDto> listarPorCategoria(Long categoriaId, Pageable pageable);

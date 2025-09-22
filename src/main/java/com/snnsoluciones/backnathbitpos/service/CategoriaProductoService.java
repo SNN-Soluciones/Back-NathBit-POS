@@ -8,9 +8,9 @@ public interface CategoriaProductoService {
     
     Optional<CategoriaProducto> buscarPorId(Long id);
     
-    List<CategoriaProducto> listarPorEmpresa(Long empresaId, String busqueda);
+    List<CategoriaProducto> listarPorEmpresa(Long empresaId, Long sucursalId, String busqueda);
     
-    boolean existePorNombreYEmpresa(String nombre, Long empresaId);
+    boolean existePorNombreYEmpresa(String nombre, Long sucursalId, Long empresaId);
     
     CategoriaProducto crear(CategoriaProducto categoria);
     
@@ -20,5 +20,5 @@ public interface CategoriaProductoService {
     
     long contarProductosActivos(Long categoriaId);
     
-    Integer obtenerSiguienteOrden(Long empresaId);
+    Integer obtenerSiguienteOrden(Long empresaId, Long sucursalId);
 }

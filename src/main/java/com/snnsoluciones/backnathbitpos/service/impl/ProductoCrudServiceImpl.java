@@ -80,7 +80,9 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       throw new BusinessException("Ya existe un producto con el nombre: " + dto.getNombre());
     }
 
-    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, "producto");
+    Long sucursalId = dto.getSucursalId() != null ? dto.getSucursalId() : null;
+
+    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, sucursalId, "producto");
 
     // Crear producto
     Producto producto = Producto.builder()
@@ -552,23 +554,5 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
       log.error("Error obteniendo modo de facturación", e);
       throw new BusinessException("Error al obtener información de facturación");
     }
-  }
-
-  @Transactional(readOnly = true)
-  public List<ProductoDto> listarPorEmpresaConContexto(Long empresaId) {
-    QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, "producto");
-
-    List<Producto> productos;
-    if (params.esGlobal()) {
-      productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrue(empresaId);
-    } else {
-      productos = productoRepository.findByEmpresaIdAndSucursalIdAndActivoTrue(
-          empresaId, params.getSucursalId()
-      );
-    }
-
-    return productos.stream()
-        .map(this::convertirADto)
-        .collect(Collectors.toList());
   }
 }

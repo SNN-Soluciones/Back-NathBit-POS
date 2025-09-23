@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'war'
     id 'org.springframework.boot' version '3.5.4'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -136,6 +137,9 @@ dependencies {
     // ================== Development ==================
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
+    // ================== WAR Deployment ==================
+    providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
+
     // ================== Testing ==================
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
@@ -158,6 +162,11 @@ tasks.named('test') {
 }
 
 // ================== Packaging Configuration ==================
+war {
+    enabled = true
+    archiveBaseName = 'nathbit-pos'
+    archiveVersion = version
+}
 
 jar {
     enabled = true

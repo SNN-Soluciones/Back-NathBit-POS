@@ -40,24 +40,38 @@ public class FacturaInternaService {
     private final EmpresaService empresaService;
     private final SucursalService sucursalService;
     private final ClienteService clienteService;
-    
+
     private final ProductoRepository productoRepository;
     private final UsuarioService usuarioService;
     
     @Transactional
     public FacturaInternaResponse crear(FacturaInternaRequest request) {
         log.info("Creando factura interna para sucursal: {}", request.getSucursalId());
-        
+
+        Cliente cliente = new Cliente();
+        if(request.getClienteId() != null) {
+            cliente = clienteService.findById(request.getClienteId()).orElse(null);
+        }
+
+        Usuario usuario = new Usuario();
+        if(request.getCajeroId() != null) {
+            usuario = usuarioService.buscarPorId(request.getCajeroId()).orElse(null);
+        }
         // Crear factura
         FacturaInterna factura = new FacturaInterna();
         factura.setEmpresa(empresaService.buscarPorId(request.getEmpresaId()));
         factura.setSucursal(sucursalService.finById(request.getSucursalId()).orElse(null));
-        factura.setCliente(clienteService.obtenerPorId(request.getClienteId()));
-        factura.setNombreCliente(request.getNombreCliente());
-        factura.setUsuario(usuarioService.buscarPorId(request.getClienteId()).orElse(null));
+        factura.setCliente(cliente);
+        factura.setUsuario(usuario);
+        factura.setNombreCliente(request.getNombreCliente() != null? request.getNombreCliente() : "");
         factura.setFechaEmision(LocalDateTime.now());
         factura.setNotas(request.getNotas());
-        
+        factura.setSubtotal(BigDecimal.ZERO);
+        factura.setTotalDescuentos(BigDecimal.ZERO);
+        factura.setTotalOtrosCargos(BigDecimal.ZERO);
+        factura.setTotalVenta(BigDecimal.ZERO);
+        factura.setTotalVenta(factura.getTotalVenta().add(factura.getTotalDescuentos()));
+
         // Generar número de factura
         factura.setNumeroFactura(generarNumeroFactura(request.getSucursalId()));
         

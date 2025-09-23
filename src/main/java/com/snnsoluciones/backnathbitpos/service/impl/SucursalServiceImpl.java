@@ -83,30 +83,12 @@ public class SucursalServiceImpl implements SucursalService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<Sucursal> listarTodas() {
-        return sucursalRepository.findAll();
-    }
-
-    @Override
     public void eliminar(Long id) {
         // Verificar que no tenga terminales activas
         if (terminalRepository.countActivasBySucursalId(id) > 0) {
             throw new RuntimeException("No se puede eliminar una sucursal con terminales activas");
         }
         sucursalRepository.deleteById(id);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existeCodigo(Long codigo) {
-        return sucursalRepository.findById(codigo).orElse(null) != null;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Sucursal> listarPorUsuario(Long usuarioId) {
-        return sucursalRepository.findByUsuarioId(usuarioId);
     }
 
     @Override
@@ -142,17 +124,5 @@ public class SucursalServiceImpl implements SucursalService {
 
         terminal.setSucursal(sucursal);
         return terminalRepository.save(terminal);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Terminal> listarTerminales(Long sucursalId) {
-        return terminalRepository.findBySucursalId(sucursalId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Terminal> listarTerminalesActivas(Long sucursalId) {
-        return terminalRepository.findBySucursalIdAndActivaTrue(sucursalId);
     }
 }

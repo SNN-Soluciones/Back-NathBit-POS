@@ -207,5 +207,41 @@ public class ProductoControllerV2 {
     }
   }
 
-  // Continuamos con más métodos...
+  /**
+   * Listar productos por empresa (sin búsqueda)
+   */
+  @GetMapping("/empresa/{empresaId}")
+  public ResponseEntity<ApiResponse<Page<ProductoDto>>> listarPorEmpresa(
+      @PathVariable Long empresaId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+
+    Pageable pageable = PageRequest.of(page, size, Sort.by("nombre").ascending());
+    Page<ProductoDto> productos = productoServiceV2.listarPorEmpresa(empresaId, pageable);
+
+    return ResponseEntity.ok(ApiResponse.<Page<ProductoDto>>builder()
+        .success(true)
+        .message("Productos obtenidos correctamente")
+        .data(productos)
+        .build());
+  }
+
+  /**
+   * Listar productos por sucursal
+   */
+  @GetMapping("/sucursal/{sucursalId}")
+  public ResponseEntity<ApiResponse<Page<ProductoDto>>> listarPorSucursal(
+      @PathVariable Long sucursalId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+
+    Pageable pageable = PageRequest.of(page, size, Sort.by("nombre").ascending());
+    Page<ProductoDto> productos = productoServiceV2.listarPorSucursal(sucursalId, pageable);
+
+    return ResponseEntity.ok(ApiResponse.<Page<ProductoDto>>builder()
+        .success(true)
+        .message("Productos obtenidos correctamente")
+        .data(productos)
+        .build());
+  }
 }

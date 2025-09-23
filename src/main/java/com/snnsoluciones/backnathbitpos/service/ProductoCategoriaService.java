@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.service;
 import java.util.Set;
 
 
+@Deprecated(since = "2.0", forRemoval = true)
 public interface ProductoCategoriaService {
     
     // Gestión de categorías

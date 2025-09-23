@@ -13,11 +13,7 @@ public interface ProductoServiceV2 {
     // ========== CRUD BÁSICO ==========
     ProductoDto crear(Long empresaId, ProductoCreateDto dto, MultipartFile imagen);
 
-    ProductoDto crearConImagen(Long empresaId, ProductoCreateDto dto, MultipartFile imagen);
-
     ProductoDto actualizar(Long empresaId, Long productoId, ProductoUpdateDto dto, MultipartFile imagen);
-
-    void eliminarImagen(Long empresaId, Long productoId);
 
     void desactivar(Long empresaId, Long productoId);
 
@@ -32,14 +28,6 @@ public interface ProductoServiceV2 {
 
     Page<ProductoDto> buscarPorSucursal(Long sucursalId, Pageable pageable);
 
-    ProductoDto buscarPorCodigo(Long empresaId, String codigoInterno);
-
-    ProductoDto buscarPorCodigoBarras(String codigoBarras, Long empresaId);
-
-    Page<ProductoDto> buscarActivos(Long empresaId, Pageable pageable);
-
-    // ========== BÚSQUEDA CON PAGINACIÓN ==========
-    Page<ProductoDto> buscarPaginado(Long empresaId, String termino, Pageable pageable);
 
     // ========== UTILIDADES ==========
     String generarCodigoInterno(Long empresaId);
@@ -47,4 +35,8 @@ public interface ProductoServiceV2 {
     boolean existeCodigoInterno(Long empresaId, String codigo);
 
     boolean existeCodigoBarras(String codigoBarras, Long empresaId);
+
+    Page<ProductoDto> listarPorEmpresa(Long empresaId, Pageable pageable);
+
+    Page<ProductoDto> listarPorSucursal(Long sucursalId, Pageable pageable);
 }

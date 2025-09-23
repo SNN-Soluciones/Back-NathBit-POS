@@ -15,7 +15,6 @@ import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.CategoriaProductoService;
-import com.snnsoluciones.backnathbitpos.service.ProductoCategoriaService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImagenService;
 import com.snnsoluciones.backnathbitpos.service.ProductoInventarioService;
 import com.snnsoluciones.backnathbitpos.service.ProductoServiceV2;
@@ -58,7 +57,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   private final ProductoRecetaRepository recetaRepository;
   private final FacturaDetalleRepository facturaDetalleRepository;
   private final CategoriaProductoService categoriaService;
-  private final ProductoCategoriaService productoCategoriaService;
 
   // ========== CRUD CON IMÁGENES ==========
 
@@ -118,6 +116,35 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       producto.setActivo(true);
       producto.setCreatedAt(LocalDateTime.now());
       producto.setUpdatedAt(LocalDateTime.now());
+
+      Set<CategoriaProducto> categorias = new HashSet<>();
+      if (dto.getCategoriaIds() != null && !dto.getCategoriaIds().isEmpty()) {
+        for (Long categoriaId : dto.getCategoriaIds()) {
+          CategoriaProducto categoria = categoriaService.buscarPorId(categoriaId)
+              .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
+
+          // Validar que pertenezca a la misma empresa
+          if (!categoria.getEmpresa().getId().equals(empresa.getId())) {
+            throw new BusinessException("La categoría " + categoriaId + " no pertenece a la misma empresa");
+          }
+
+          if (!categoria.getActivo()) {
+            throw new BusinessException("La categoría " + categoria.getNombre() + " está inactiva");
+          }
+
+          // Validar alcance si aplica
+          if (sucursal != null && categoria.getSucursal() != null &&
+              !categoria.getSucursal().getId().equals(sucursal.getId())) {
+            throw new BusinessException("La categoría " + categoria.getNombre() +
+                " no está disponible para esta sucursal");
+          }
+
+          categorias.add(categoria);
+        }
+      }
+
+      // Asignar categorías antes de guardar
+      producto.setCategorias(categorias);
 
       // 7. CONFIGURAR SEGÚN RÉGIMEN TRIBUTARIO
       if (esRegimenSimplificado || !esFacturacionElectronica) {
@@ -270,26 +297,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
         inventarioRepository.save(inventario);
         log.info("Inventario inicial creado para materia prima en sucursal: {}", sucursal.getNombre());
-      }
-
-      if (dto.getCategoriaIds() != null && !dto.getCategoriaIds().isEmpty()) {
-        for (Long categoriaId : dto.getCategoriaIds()) {
-          CategoriaProducto categoria = categoriaService.buscarPorId(categoriaId)
-              .orElseThrow(
-                  () -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
-
-          // Validar que pertenezca a la misma empresa
-          if (!categoria.getEmpresa().getId().equals(empresa.getId())) {
-            throw new BusinessException(
-                "La categoría " + categoriaId + " no pertenece a la misma empresa");
-          }
-
-          if (!categoria.getActivo()) {
-            throw new BusinessException("La categoría " + categoria.getNombre() + " está inactiva");
-          }
-
-          productoCategoriaService.agregarCategoria(producto.getId(), categoria.getId());
-        }
       }
 
       // 14. CONVERTIR Y RETORNAR
@@ -632,14 +639,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
     }
   }
 
-  // Método auxiliar para generar código único
-  private String generarCodigoProducto(Long empresaId, ProductoCreateDto dto) {
-    String prefix = dto.getTipo().substring(0, 3);
-    String timestamp = String.valueOf(System.currentTimeMillis()).substring(8);
-    return String.format("%s-%d-%s", prefix, empresaId, timestamp);
-  }
-
-  // Método auxiliar para configurar según tipo
   private void configurarSegunTipo(Producto producto, ProductoCreateDto dto) {
     switch (TipoProducto.valueOf(dto.getTipo())) {
       case MIXTO:
@@ -672,12 +671,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         producto.setPrecioBase(dto.getPrecioVenta());
         break;
     }
-  }
-
-  @Override
-  @Transactional
-  public ProductoDto crearConImagen(Long empresaId, ProductoCreateDto dto, MultipartFile imagen) {
-    return crearProductoInterno(empresaId, dto, imagen);
   }
 
   private ProductoDto crearProductoInterno(Long empresaId, ProductoCreateDto dto,
@@ -730,25 +723,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
     }
 
     return convertirADto(producto);
-  }
-
-  @Override
-  @Transactional
-  public void eliminarImagen(Long empresaId, Long productoId) {
-    log.info("Eliminando imagen de producto: {}", productoId);
-
-    Producto producto = buscarProductoValidado(empresaId, productoId);
-
-    if (producto.getImagenUrl() != null) {
-      try {
-//                s3PathService.eliminarArchivo(producto.getImagenUrl());
-        producto.setImagenUrl(null);
-        productoRepository.save(producto);
-      } catch (Exception e) {
-        log.error("Error al eliminar imagen: ", e);
-        throw new BusinessException("Error al eliminar la imagen");
-      }
-    }
   }
 
   // ========== MÉTODOS CRUD ANTERIORES (sin cambios) ==========
@@ -813,49 +787,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   public Page<ProductoDto> buscarPorSucursal(Long sucursalId, Pageable pageable) {
     return productoRepository.findBySucursalId(sucursalId, pageable)
         .map((element) -> modelMapper.map(element, ProductoDto.class));
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public ProductoDto buscarPorCodigo(Long empresaId, String codigoInterno) {
-    Producto producto = productoRepository
-        .findByCodigoInternoAndEmpresaId(codigoInterno, empresaId)
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "Producto no encontrado con código: " + codigoInterno));
-
-    return convertirADto(producto);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public ProductoDto buscarPorCodigoBarras(String codigoBarras, Long empresaId) {
-    Producto producto = productoRepository
-        .findByCodigoBarrasAndEmpresaId(codigoBarras, empresaId)
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "Producto no encontrado con código de barras: " + codigoBarras));
-
-    return convertirADto(producto);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public Page<ProductoDto> buscarActivos(Long empresaId, Pageable pageable) {
-    return productoRepository.findByEmpresaIdAndActivoTrue(empresaId,
-        pageable).map((element) -> modelMapper.map(element, ProductoDto.class));
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public Page<ProductoDto> buscarPaginado(Long empresaId, String termino, Pageable pageable) {
-    Page<Producto> productos;
-
-    if (termino != null && !termino.trim().isEmpty()) {
-      productos = productoRepository.buscarPorEmpresa(empresaId, termino.trim(), pageable);
-    } else {
-      productos = productoRepository.findByEmpresaIdAndActivoTrue(empresaId, pageable);
-    }
-
-    return productos.map(this::convertirADto);
   }
 
   // ========== UTILIDADES ==========
@@ -972,5 +903,43 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         .replaceAll("\\s+", "_")
         .replaceAll("[^a-zA-Z0-9_-]", "")
         .toUpperCase();
+  }
+
+  /**
+   * Listar productos por empresa (sin búsqueda)
+   */
+  @Transactional(readOnly = true)
+  @Override
+  public Page<ProductoDto> listarPorEmpresa(Long empresaId, Pageable pageable) {
+    // Verificar que la empresa existe
+    empresaRepository.findById(empresaId)
+        .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada con ID: " + empresaId));
+
+    // Buscar productos activos de la empresa
+    Page<Producto> productos = productoRepository.findByEmpresaIdAndActivoTrue(empresaId, pageable);
+
+    // Convertir a DTO
+    return productos.map(producto -> modelMapper.map(producto, ProductoDto.class));
+  }
+
+  /**
+   * Listar productos por sucursal
+   */
+  @Transactional(readOnly = true)
+  @Override
+  public Page<ProductoDto> listarPorSucursal(Long sucursalId, Pageable pageable) {
+    // Verificar que la sucursal existe y obtener la empresa
+    Sucursal sucursal = sucursalRepository.findById(sucursalId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada con ID: " + sucursalId));
+
+    // Por ahora, listar todos los productos de la empresa de la sucursal
+    // En el futuro podrías filtrar por productos específicos de la sucursal
+    Page<Producto> productos = productoRepository.findByEmpresaIdAndActivoTrue(
+        sucursal.getEmpresa().getId(),
+        pageable
+    );
+
+    // Convertir a DTO
+    return productos.map(producto -> modelMapper.map(producto, ProductoDto.class));
   }
 }

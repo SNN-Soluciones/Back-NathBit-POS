@@ -163,58 +163,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<SesionCaja> listarPorUsuarioYFecha(Long usuarioId, LocalDateTime fechaInicio,
-      LocalDateTime fechaFin) {
-    // TODO: Implementar query en repository si es necesario
-    return List.of();
-  }
-
-  @Override
-  public void actualizarTotalVentas(Long sesionId, BigDecimal monto) {
-    SesionCaja sesion = buscarPorId(sesionId)
-        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
-
-    sesion.setTotalVentas(sesion.getTotalVentas().add(monto));
-
-    // Actualizar total por medio de pago (asumiendo efectivo por defecto)
-    // TODO: Recibir el medio de pago como parámetro
-    sesion.setTotalEfectivo(sesion.getTotalEfectivo().add(monto));
-
-    sesionCajaRepository.save(sesion);
-  }
-
-  @Override
-  public void actualizarTotalDevoluciones(Long sesionId, BigDecimal monto) {
-    SesionCaja sesion = buscarPorId(sesionId)
-        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
-
-    sesion.setTotalDevoluciones(sesion.getTotalDevoluciones().add(monto));
-    sesionCajaRepository.save(sesion);
-  }
-
-  @Override
-  public void incrementarContadorDocumento(Long sesionId, String tipoDocumento) {
-    SesionCaja sesion = buscarPorId(sesionId)
-        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
-
-    switch (tipoDocumento) {
-      case "FE":
-      case "FEE":
-        sesion.setCantidadFacturas(sesion.getCantidadFacturas() + 1);
-        break;
-      case "TE":
-        sesion.setCantidadTiquetes(sesion.getCantidadTiquetes() + 1);
-        break;
-      case "NC":
-        sesion.setCantidadNotasCredito(sesion.getCantidadNotasCredito() + 1);
-        break;
-    }
-
-    sesionCajaRepository.save(sesion);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
   public boolean usuarioTieneSesionAbierta(Long usuarioId) {
     return sesionCajaRepository.existsSesionAbiertaByUsuarioId(usuarioId);
   }
@@ -228,28 +176,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   @Override
   public Optional<SesionCaja> buscarSesionActivaPorTerminal(Long terminalId) {
     return sesionCajaRepository.findByTerminalIdAndEstado(terminalId, EstadoSesion.ABIERTA);
-  }
-
-  @Override
-  public List<SesionCaja> listarSesionesDia(Long sucursalId, LocalDate fecha) {
-    LocalDateTime inicio = fecha.atStartOfDay();
-    LocalDateTime fin = fecha.atTime(LocalTime.MAX);
-
-    return sesionCajaRepository.findBySucursalIdAndFechaBetween(
-        sucursalId, inicio, fin
-    );
-  }
-
-  @Override
-  public boolean validarCierreDia(Long terminalId) {
-    // Verificar si hay sesiones del día anterior sin cerrar
-    LocalDate ayer = LocalDate.now().minusDays(1);
-    LocalDateTime inicioAyer = ayer.atStartOfDay();
-    LocalDateTime finAyer = ayer.atTime(LocalTime.MAX);
-
-    return !sesionCajaRepository.existsByTerminalIdAndEstadoAndFechaBetween(
-        terminalId, EstadoSesion.ABIERTA, inicioAyer, finAyer
-    );
   }
 
   private boolean puedeVerResumen(SesionCaja sesion) {
@@ -275,13 +201,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     SesionCaja sesion = sesionCajaRepository.findById(sesionId).orElse(null);
     return sesion != null &&
         sesion.getUsuario().getId().equals(securityContext.getCurrentUserId());
-  }
-
-  @Override
-  public BigDecimal obtenerTotalVales(Long sesionId) {
-    // Implementar query para sumar vales/salidas
-    return movimientoCajaRepository
-        .sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_VALE);
   }
 
   @Override

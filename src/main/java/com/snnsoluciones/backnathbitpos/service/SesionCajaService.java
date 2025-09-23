@@ -20,25 +20,17 @@ public interface SesionCajaService {
 
     ResumenCajaDetalladoDTO obtenerResumenDetallado(Long sesionId);
     BigDecimal calcularMontoEsperado(SesionCaja sesion);
-    BigDecimal obtenerTotalVales(Long sesionId);
-    
+
     // Consultas
     Optional<SesionCaja> buscarPorId(Long id);
     List<SesionCaja> listarPorFecha(LocalDate fecha);
     List<SesionCaja> listarPorTerminalYFecha(Long terminalId, LocalDate fecha);
-    List<SesionCaja> listarPorUsuarioYFecha(Long usuarioId, LocalDateTime fechaInicio, LocalDateTime fechaFin);
-    
+
     // Actualización de totales
-    void actualizarTotalVentas(Long sesionId, BigDecimal monto);
-    void actualizarTotalDevoluciones(Long sesionId, BigDecimal monto);
-    void incrementarContadorDocumento(Long sesionId, String tipoDocumento);
-    
+
     // Validaciones
     boolean usuarioTieneSesionAbierta(Long usuarioId);
     boolean terminalTieneSesionAbierta(Long terminalId);
-
-    List<SesionCaja> listarSesionesDia(Long sucursalId, LocalDate fecha);
-    boolean validarCierreDia(Long terminalId);
 
     List<SesionCaja> buscarTodas();
     List<SesionCaja> buscarPorEstado(EstadoSesion estado);

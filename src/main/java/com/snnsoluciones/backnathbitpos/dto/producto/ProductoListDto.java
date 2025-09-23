@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import java.util.List;
@@ -22,6 +23,7 @@ public class ProductoListDto {
     private BigDecimal precioVenta;
     private EmpresaCABySSelectDto empresaCabys;
     private UnidadMedida unidadMedida;
+    private TipoProducto tipo;
     private Moneda moneda;
     private Long empresaId;
     private Boolean activo;

@@ -23,135 +23,149 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class CategoriaProductoServiceImpl implements CategoriaProductoService {
 
-    private final CategoriaProductoRepository categoriaRepository;
-    private final ModularHelperService modularHelper;
+  private final CategoriaProductoRepository categoriaRepository;
+  private final ModularHelperService modularHelper;
 
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<CategoriaProducto> buscarPorId(Long id) {
-        return categoriaRepository.findById(id);
+  @Override
+  @Transactional(readOnly = true)
+  public Optional<CategoriaProducto> buscarPorId(Long id) {
+    return categoriaRepository.findById(id);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<CategoriaProducto> listarPorEmpresa(Long empresaId, Long sucursalId,
+      String busqueda) {
+    log.debug("Listando categorías para empresa: {}", empresaId);
+
+    // Obtener parámetros de búsqueda según configuración
+    QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId,
+        "categoria");
+
+    if (params.esGlobal()) {
+      log.debug("Buscando categorías GLOBALES de empresa: {}", empresaId);
+      return categoriaRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrueOrderByOrdenAsc(
+          empresaId);
+    } else {
+      log.debug("Buscando categorías LOCALES de empresa: {} y sucursal: {}",
+          empresaId, params.getSucursalId());
+      return categoriaRepository.findByEmpresaIdAndSucursalIdAndActivoTrueOrderByOrdenAsc(
+          empresaId, params.getSucursalId()
+      );
+    }
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public boolean existePorNombreYEmpresa(String nombre, Long sucursalId, Long empresaId) {
+    // Obtener parámetros según configuración
+    QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId,
+        "categoria");
+
+    if (params.esGlobal()) {
+      return categoriaRepository.existsByNombreAndEmpresaIdAndSucursalIdIsNull(nombre, empresaId);
+    } else {
+      return categoriaRepository.existsByNombreAndEmpresaIdAndSucursalId(
+          nombre, empresaId, params.getSucursalId()
+      );
+    }
+  }
+
+  @Override
+  @Transactional
+  public CategoriaProducto crear(CategoriaProducto categoria) {
+    log.info("Creando categoría: {} para empresa: {}",
+        categoria.getNombre(), categoria.getEmpresa().getId());
+
+    Long empresaId = categoria.getEmpresa().getId();
+    Long sucursalId = categoria.getSucursal() != null ? categoria.getSucursal().getId() : null;
+
+    // Determinar si asignar sucursal según configuración
+    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, sucursalId,
+        "categoria");
+    categoria.setSucursal(sucursal);
+
+    // Validar nombre duplicado en el contexto correcto
+    if (sucursalId != null) {
+
+      if (existePorNombreYEmpresa(categoria.getNombre(), categoria.getSucursal().getId(),
+          empresaId)) {
+        throw new BusinessException(
+            "Ya existe una categoría con el nombre: " + categoria.getNombre());
+      }
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<CategoriaProducto> listarPorEmpresa(Long empresaId, Long sucursalId, String busqueda) {
-        log.debug("Listando categorías para empresa: {}", empresaId);
-
-        // Obtener parámetros de búsqueda según configuración
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId,"categoria");
-
-        if (params.esGlobal()) {
-            log.debug("Buscando categorías GLOBALES de empresa: {}", empresaId);
-            return categoriaRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrueOrderByOrdenAsc(empresaId);
-        } else {
-            log.debug("Buscando categorías LOCALES de empresa: {} y sucursal: {}",
-                empresaId, params.getSucursalId());
-            return categoriaRepository.findByEmpresaIdAndSucursalIdAndActivoTrueOrderByOrdenAsc(
-                empresaId, params.getSucursalId()
-            );
-        }
+    // Si no tiene orden, asignar el siguiente
+    if (categoria.getOrden() == null || categoria.getOrden() == 0) {
+      Integer siguienteOrden = obtenerSiguienteOrden(empresaId, categoria.getSucursal().getId());
+      categoria.setOrden(siguienteOrden);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existePorNombreYEmpresa(String nombre, Long sucursalId, Long empresaId) {
-        // Obtener parámetros según configuración
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId,  "categoria");
+    CategoriaProducto saved = categoriaRepository.save(categoria);
+    log.info("Categoría creada exitosamente con ID: {} ({})",
+        saved.getId(), sucursal == null ? "GLOBAL" : "LOCAL - Sucursal: " + sucursal.getId());
 
-        if (params.esGlobal()) {
-            return categoriaRepository.existsByNombreAndEmpresaIdAndSucursalIdIsNull(nombre, empresaId);
-        } else {
-            return categoriaRepository.existsByNombreAndEmpresaIdAndSucursalId(
-                nombre, empresaId, params.getSucursalId()
-            );
-        }
+    return saved;
+  }
+
+  @Override
+  @Transactional
+  public CategoriaProducto actualizar(Long id, CategoriaProducto categoria) {
+    log.info("Actualizando categoría con ID: {}", id);
+
+    CategoriaProducto existente = categoriaRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con ID: " + id));
+
+    // Validar que no se cambie el alcance (global <-> local)
+    Long sucursalActualId =
+        existente.getSucursal() != null ? existente.getSucursal().getId() : null;
+    Long sucursalNuevaId = categoria.getSucursal() != null ? categoria.getSucursal().getId() : null;
+
+    modularHelper.validarCambioAlcance(sucursalActualId, sucursalNuevaId, "categoría");
+
+    // Validar nombre si cambió
+    if (!existente.getNombre().equals(categoria.getNombre())) {
+      if (existePorNombreYEmpresa(categoria.getNombre(), categoria.getSucursal().getId(),
+          existente.getEmpresa().getId())) {
+        throw new BusinessException(
+            "Ya existe una categoría con el nombre: " + categoria.getNombre());
+      }
     }
 
-    @Override
-    @Transactional
-    public CategoriaProducto crear(CategoriaProducto categoria) {
-        log.info("Creando categoría: {} para empresa: {}",
-            categoria.getNombre(), categoria.getEmpresa().getId());
+    // Actualizar campos permitidos
+    existente.setNombre(categoria.getNombre());
+    existente.setDescripcion(categoria.getDescripcion());
+    existente.setColor(categoria.getColor());
+    existente.setIcono(categoria.getIcono());
+    existente.setOrden(categoria.getOrden());
+    existente.setActivo(categoria.getActivo());
 
-        Long empresaId = categoria.getEmpresa().getId();
-        Long sucursalId = categoria.getSucursal() != null ? categoria.getSucursal().getId() : null;
+    return categoriaRepository.save(existente);
+  }
 
-        // Determinar si asignar sucursal según configuración
-        Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, sucursalId, "categoria");
-        categoria.setSucursal(sucursal);
+  @Override
+  @Transactional(readOnly = true)
+  public boolean tieneProductosActivos(Long categoriaId) {
+    return contarProductosActivos(categoriaId) > 0;
+  }
 
-        // Validar nombre duplicado en el contexto correcto
-        if (existePorNombreYEmpresa(categoria.getNombre(), categoria.getSucursal().getId(), empresaId)) {
-            throw new BusinessException("Ya existe una categoría con el nombre: " + categoria.getNombre());
-        }
+  @Override
+  @Transactional(readOnly = true)
+  public long contarProductosActivos(Long categoriaId) {
+    return categoriaRepository.contarProductosActivos(categoriaId);
+  }
 
-        // Si no tiene orden, asignar el siguiente
-        if (categoria.getOrden() == null || categoria.getOrden() == 0) {
-            Integer siguienteOrden = obtenerSiguienteOrden(empresaId, categoria.getSucursal().getId());
-            categoria.setOrden(siguienteOrden);
-        }
+  @Override
+  @Transactional(readOnly = true)
+  public Integer obtenerSiguienteOrden(Long empresaId, Long sucursalId) {
+    // Obtener parámetros según configuración
+    QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId,
+        "categoria");
 
-        CategoriaProducto saved = categoriaRepository.save(categoria);
-        log.info("Categoría creada exitosamente con ID: {} ({})",
-            saved.getId(), sucursal == null ? "GLOBAL" : "LOCAL - Sucursal: " + sucursal.getId());
-
-        return saved;
+    if (params.esGlobal()) {
+      return categoriaRepository.obtenerSiguienteOrdenGlobal(empresaId);
+    } else {
+      return categoriaRepository.obtenerSiguienteOrdenLocal(empresaId, params.getSucursalId());
     }
-
-    @Override
-    @Transactional
-    public CategoriaProducto actualizar(Long id, CategoriaProducto categoria) {
-        log.info("Actualizando categoría con ID: {}", id);
-
-        CategoriaProducto existente = categoriaRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con ID: " + id));
-
-        // Validar que no se cambie el alcance (global <-> local)
-        Long sucursalActualId = existente.getSucursal() != null ? existente.getSucursal().getId() : null;
-        Long sucursalNuevaId = categoria.getSucursal() != null ? categoria.getSucursal().getId() : null;
-
-        modularHelper.validarCambioAlcance(sucursalActualId, sucursalNuevaId, "categoría");
-
-        // Validar nombre si cambió
-        if (!existente.getNombre().equals(categoria.getNombre())) {
-            if (existePorNombreYEmpresa(categoria.getNombre(), categoria.getSucursal().getId(), existente.getEmpresa().getId())) {
-                throw new BusinessException("Ya existe una categoría con el nombre: " + categoria.getNombre());
-            }
-        }
-
-        // Actualizar campos permitidos
-        existente.setNombre(categoria.getNombre());
-        existente.setDescripcion(categoria.getDescripcion());
-        existente.setColor(categoria.getColor());
-        existente.setIcono(categoria.getIcono());
-        existente.setOrden(categoria.getOrden());
-        existente.setActivo(categoria.getActivo());
-
-        return categoriaRepository.save(existente);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean tieneProductosActivos(Long categoriaId) {
-        return contarProductosActivos(categoriaId) > 0;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public long contarProductosActivos(Long categoriaId) {
-        return categoriaRepository.contarProductosActivos(categoriaId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Integer obtenerSiguienteOrden(Long empresaId, Long sucursalId) {
-        // Obtener parámetros según configuración
-        QueryParams params = modularHelper.construirParametrosBusqueda(empresaId, sucursalId, "categoria");
-
-        if (params.esGlobal()) {
-            return categoriaRepository.obtenerSiguienteOrdenGlobal(empresaId);
-        } else {
-            return categoriaRepository.obtenerSiguienteOrdenLocal(empresaId, params.getSucursalId());
-        }
-    }
+  }
 }

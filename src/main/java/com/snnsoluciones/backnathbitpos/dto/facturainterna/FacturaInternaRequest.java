@@ -16,6 +16,8 @@ public class FacturaInternaRequest {
     private Long sucursalId;
     
     private Long clienteId; // Opcional
+
+    private Long cajeroId;
     private String nombreCliente; // Si no hay cliente registrado
     
     @NotEmpty(message = "Debe incluir al menos un detalle")

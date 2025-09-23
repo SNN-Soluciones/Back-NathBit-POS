@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.categoria;
 
+import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

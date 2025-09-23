@@ -85,7 +85,7 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
                 // Crear opciones del slot
                 if (slotRequest.getOpciones() != null) {
                     int ordenOpcion = 0;
-                    for (var opcionRequest : slotRequest.getOpciones()) {
+                    for (ProductoCompuestoRequest.OpcionRequest opcionRequest : slotRequest.getOpciones()) {
                         agregarOpcionASlot(slot, opcionRequest, empresaId, ordenOpcion++);
                     }
                 }
@@ -207,11 +207,32 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         
         return opcion;
     }
-    
-    private void agregarOpcionASlot(ProductoCompuestoSlot slot, Object opcionRequest, Long empresaId, int orden) {
-        // Este método necesitaría el DTO OpcionRequest que no está en la interfaz actual
-        // Por ahora lo dejamos como placeholder
-        // TODO: Implementar cuando se tenga el DTO OpcionRequest
+
+    private void agregarOpcionASlot(ProductoCompuestoSlot slot, ProductoCompuestoRequest.OpcionRequest opcionRequest, Long empresaId, int orden) {
+        // Validar y obtener el producto que será la opción
+        Producto productoOpcion = productoRepository.findById(opcionRequest.getProductoId())
+            .orElseThrow(() -> new ResourceNotFoundException("Producto opción no encontrado: " + opcionRequest.getProductoId()));
+
+        // Validar que el producto pertenezca a la misma empresa
+        if (!productoOpcion.getEmpresa().getId().equals(empresaId)) {
+            throw new BusinessException("El producto opción no pertenece a la empresa");
+        }
+
+        // Validar tipo de producto - solo MIXTO, MATERIA_PRIMA o VENTA pueden ser opciones
+        if (productoOpcion.getTipo() == TipoProducto.COMPUESTO || productoOpcion.getTipo() == TipoProducto.COMBO) {
+            throw new BusinessException("Un producto compuesto o combo fijo no puede ser opción de otro compuesto");
+        }
+
+        // Crear la opción
+        ProductoCompuestoOpcion opcion = new ProductoCompuestoOpcion();
+        opcion.setSlot(slot);
+        opcion.setProducto(productoOpcion); // ⚠️ AQUÍ ESTABA EL ERROR - No se asignaba el producto
+        opcion.setPrecioAdicional(opcionRequest.getPrecioAdicional());
+        opcion.setEsDefault(opcionRequest.getEsDefault() != null ? opcionRequest.getEsDefault() : false);
+        opcion.setDisponible(opcionRequest.getDisponible() != null ? opcionRequest.getDisponible() : true);
+        opcion.setOrden(opcionRequest.getOrden() != null ? opcionRequest.getOrden() : orden);
+
+        opcionRepository.save(opcion);
     }
     
     private ProductoCompuestoDto convertirADto(ProductoCompuesto compuesto) {
@@ -233,7 +254,7 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
                     opcionDto.setProductoId(opcion.getProducto().getId());
                     opcionDto.setProductoNombre(opcion.getProducto().getNombre());
                     opcionDto.setProductoCodigo(opcion.getProducto().getCodigoInterno());
-                    opcionDto.setPrecioAdicional(opcion.getProducto().getPrecioBase());
+                    opcionDto.setPrecioAdicional(opcion.getPrecioAdicional() != null ? opcion.getPrecioAdicional() : BigDecimal.ZERO);
                     return opcionDto;
                 })
                 .collect(Collectors.toList());

@@ -13,7 +13,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -78,7 +80,8 @@ public class ProductoControllerV2 {
   @GetMapping("/{id}/{empresaId}")
   @Operation(summary = "Obtener producto por ID")
   @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO')")
-  public ResponseEntity<ApiResponse<ProductoDto>> obtenerPorId(@PathVariable Long id, @PathVariable Long empresaId) {
+  public ResponseEntity<ApiResponse<ProductoDto>> obtenerPorId(@PathVariable Long id,
+      @PathVariable Long empresaId) {
 
     log.info("REST V2 - Buscando producto con ID: {}", id);
 
@@ -99,6 +102,32 @@ public class ProductoControllerV2 {
               .message("Producto no encontrado")
               .build());
     }
+  }
+
+  @Operation
+  @GetMapping("/empresa-o-sucursal/{parametro}/id/{id}")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
+  public ResponseEntity<ApiResponse<Page<ProductoDto>>> obtenerPorParametro(
+      @PathVariable String parametro,
+      @PathVariable Long id,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(defaultValue = "id") String sortBy,
+      @RequestParam(defaultValue = "ASC") String sortDirection) {
+
+    log.info("REST V2 - Buscando producto por parametro: {} y ID: {}", parametro, id);
+
+    Sort.Direction direction = sortDirection.equalsIgnoreCase("DESC") ? Sort.Direction.DESC : Sort.Direction.ASC;
+    Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+    if (parametro.equals("empresa")) {
+      return ResponseEntity.ok().body(ApiResponse.ok(productoServiceV2.buscarPorEmpresa(id, pageable)));
+    }
+    if(parametro.equals("sucursal")) {
+      return ResponseEntity.ok().body(ApiResponse.ok(productoServiceV2.buscarPorSucursal(id, pageable)));
+    }
+
+    return ResponseEntity.badRequest().body(ApiResponse.error("Parametro incorrecto"));
   }
 
   @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

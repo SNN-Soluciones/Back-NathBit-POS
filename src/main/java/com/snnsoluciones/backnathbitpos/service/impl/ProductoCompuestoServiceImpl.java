@@ -1,10 +1,13 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.producto.CalculoPrecioResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoSlotDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoOpcionDto;
+import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -14,6 +17,9 @@ import com.snnsoluciones.backnathbitpos.service.ProductoInventarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.BeanUtils;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +38,8 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     private final ProductoCompuestoOpcionRepository opcionRepository;
     private final ProductoInventarioService inventarioService;
     private final ModelMapper modelMapper;
+    private final SucursalRepository sucursalRepository;
+    private final ProductoInventarioService productoInventarioService;
     
     @Override
     @Transactional
@@ -176,165 +184,6 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
             .collect(Collectors.toList());
     }
     
-    @Override
-    @Transactional(readOnly = true)
-    public boolean esCompuesto(Long productoId) {
-        return compuestoRepository.existsByProductoId(productoId);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public void validarSeleccion(Long productoId, Map<Long, List<Long>> seleccionPorSlot) {
-        ProductoCompuesto compuesto = compuestoRepository.findByProductoId(productoId)
-            .orElseThrow(() -> new ResourceNotFoundException("Configuración de compuesto no encontrada"));
-        
-        List<ProductoCompuestoSlot> slots = slotRepository.findByCompuestoIdOrderByOrden(compuesto.getId());
-        
-        for (ProductoCompuestoSlot slot : slots) {
-            List<Long> opcionesSeleccionadas = seleccionPorSlot.get(slot.getId());
-            
-            // Validar slot requerido
-            if (slot.getEsRequerido() && (opcionesSeleccionadas == null || opcionesSeleccionadas.isEmpty())) {
-                throw new BusinessException("El slot '" + slot.getNombre() + "' es requerido");
-            }
-            
-            // Validar cantidad mínima y máxima
-            if (opcionesSeleccionadas != null) {
-                if (opcionesSeleccionadas.size() < slot.getCantidadMinima()) {
-                    throw new BusinessException(
-                        String.format("El slot '%s' requiere mínimo %d opciones", 
-                            slot.getNombre(), slot.getCantidadMinima())
-                    );
-                }
-                
-                if (opcionesSeleccionadas.size() > slot.getCantidadMaxima()) {
-                    throw new BusinessException(
-                        String.format("El slot '%s' permite máximo %d opciones", 
-                            slot.getNombre(), slot.getCantidadMaxima())
-                    );
-                }
-                
-                // Validar que las opciones pertenezcan al slot
-                List<Long> opcionesDelSlot = opcionRepository.findBySlotId(slot.getId())
-                    .stream()
-                    .map(ProductoCompuestoOpcion::getId)
-                    .collect(Collectors.toList());
-                
-                for (Long opcionId : opcionesSeleccionadas) {
-                    if (!opcionesDelSlot.contains(opcionId)) {
-                        throw new BusinessException("Opción inválida para el slot: " + slot.getNombre());
-                    }
-                }
-            }
-        }
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public BigDecimal calcularPrecioTotal(Long productoId, Map<Long, List<Long>> seleccionPorSlot) {
-        Producto producto = productoRepository.findById(productoId)
-            .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
-        
-        BigDecimal precioTotal = producto.getPrecioBase() != null ? producto.getPrecioBase() : BigDecimal.ZERO;
-        
-        // Sumar precios adicionales de las opciones seleccionadas
-        for (Map.Entry<Long, List<Long>> entry : seleccionPorSlot.entrySet()) {
-            for (Long opcionId : entry.getValue()) {
-                ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada"));
-                
-                if (opcion.getPrecioAdicional() != null && opcion.getPrecioAdicional().compareTo(BigDecimal.ZERO) > 0) {
-                    precioTotal = precioTotal.add(opcion.getPrecioAdicional());
-                }
-            }
-        }
-        
-        return precioTotal;
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public void validarDisponibilidad(Long productoId, Long sucursalId, Map<Long, List<Long>> seleccionPorSlot) {
-        for (List<Long> opcionIds : seleccionPorSlot.values()) {
-            for (Long opcionId : opcionIds) {
-                ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada"));
-                
-                if (opcion.getDisponible() != null && !opcion.getDisponible()) {
-                    throw new BusinessException("Opción no disponible: " + opcion.getProducto().getNombre());
-                }
-                
-                // Verificar inventario del producto de la opción
-                try {
-                    BigDecimal stock = inventarioService.obtenerInventario(opcion.getProducto().getId(), sucursalId)
-                        .getCantidadActual();
-                    
-                    if (stock.compareTo(BigDecimal.ONE) < 0) {
-                        throw new BusinessException("Sin stock: " + opcion.getProducto().getNombre());
-                    }
-                } catch (ResourceNotFoundException e) {
-                    // Si no hay inventario, asumimos que no requiere control
-                    log.debug("Producto sin control de inventario: {}", opcion.getProducto().getId());
-                }
-            }
-        }
-    }
-    
-    @Override
-    @Transactional
-    public void descontarInventario(Long productoId, Long sucursalId, Map<Long, List<Long>> seleccionPorSlot) {
-        for (List<Long> opcionIds : seleccionPorSlot.values()) {
-            for (Long opcionId : opcionIds) {
-                ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada"));
-                
-                // Descontar inventario del producto asociado
-                try {
-                    inventarioService.reducirInventario(
-                        opcion.getProducto().getId(),
-                        sucursalId,
-                        BigDecimal.ONE,
-                        "Usado en compuesto personalizado"
-                    );
-                } catch (Exception e) {
-                    log.warn("No se pudo descontar inventario para: {}", opcion.getProducto().getNombre());
-                }
-            }
-        }
-    }
-    
-    @Override
-    @Transactional
-    public void habilitarOpcion(Long slotId, Long opcionId) {
-        ProductoCompuestoOpcion opcion = validarOpcion(slotId, opcionId);
-        opcion.setDisponible(true);
-        opcionRepository.save(opcion);
-    }
-    
-    @Override
-    @Transactional
-    public void deshabilitarOpcion(Long slotId, Long opcionId) {
-        ProductoCompuestoOpcion opcion = validarOpcion(slotId, opcionId);
-        opcion.setDisponible(false);
-        opcionRepository.save(opcion);
-    }
-    
-    @Override
-    @Transactional
-    public void establecerOpcionPorDefecto(Long slotId, Long opcionId) {
-        ProductoCompuestoOpcion opcion = validarOpcion(slotId, opcionId);
-        
-        // Quitar default de otras opciones del slot
-        List<ProductoCompuestoOpcion> opcionesDelSlot = opcionRepository.findBySlotId(slotId);
-        for (ProductoCompuestoOpcion op : opcionesDelSlot) {
-            op.setEsDefault(false);
-        }
-        
-        // Establecer nueva opción por defecto
-        opcion.setEsDefault(true);
-        opcionRepository.saveAll(opcionesDelSlot);
-    }
-    
     // ========== MÉTODOS PRIVADOS ==========
     
     private Producto validarProducto(Long empresaId, Long productoId) {
@@ -395,5 +244,326 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         
         dto.setSlots(slotDtos);
         return dto;
+    }
+
+    // En ProductoCompuestoServiceImpl.java, agregar estos métodos:
+
+    @Override
+    @Transactional(readOnly = true)
+    public CalculoPrecioResponse calcularPrecio(Long productoId, Long sucursalId, List<Long> opcionesSeleccionadas) {
+        log.info("Calculando precio para producto {} con {} opciones", productoId, opcionesSeleccionadas.size());
+
+        // Obtener producto y validar
+        Producto producto = productoRepository.findById(productoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+
+        if (producto.getTipo() != TipoProducto.COMPUESTO) {
+            throw new BusinessException("El producto no es de tipo COMPUESTO");
+        }
+
+        BigDecimal precioBase = producto.getPrecioBase() != null ? producto.getPrecioBase() : producto.getPrecioVenta();
+        BigDecimal totalAdicionales = BigDecimal.ZERO;
+        List<CalculoPrecioResponse.DetalleOpcion> detalles = new ArrayList<>();
+
+        // Procesar cada opción seleccionada
+        for (Long opcionId : opcionesSeleccionadas) {
+            ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada: " + opcionId));
+
+            // Verificar disponibilidad en sucursal
+            boolean disponibleEnSucursal = verificarDisponibilidadEnSucursal(opcion, sucursalId);
+
+            totalAdicionales = totalAdicionales.add(opcion.getPrecioAdicional());
+
+            detalles.add(CalculoPrecioResponse.DetalleOpcion.builder()
+                .opcionId(opcionId)
+                .productoNombre(opcion.getProducto().getNombre())
+                .slotNombre(opcion.getSlot().getNombre())
+                .precioAdicional(opcion.getPrecioAdicional())
+                .disponibleEnSucursal(disponibleEnSucursal)
+                .build());
+        }
+
+        BigDecimal precioFinal = precioBase.add(totalAdicionales);
+
+        return CalculoPrecioResponse.builder()
+            .precioBase(precioBase)
+            .totalAdicionales(totalAdicionales)
+            .precioFinal(precioFinal)
+            .detalleOpciones(detalles)
+            .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ValidacionSeleccionResponse validarSeleccion(Long productoId, Long sucursalId, List<Long> opcionesSeleccionadas) {
+        log.info("Validando selección para producto {} en sucursal {}", productoId, sucursalId);
+
+        ProductoCompuesto compuesto = compuestoRepository.findByProductoId(productoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Configuración de compuesto no encontrada"));
+
+        List<ValidacionSeleccionResponse.ErrorValidacion> errores = new ArrayList<>();
+        List<ValidacionSeleccionResponse.SlotValidacion> validacionesSlot = new ArrayList<>();
+        boolean todasDisponibles = true;
+
+        // Agrupar opciones seleccionadas por slot
+        Map<Long, List<ProductoCompuestoOpcion>> opcionesPorSlot = new HashMap<>();
+        for (Long opcionId : opcionesSeleccionadas) {
+            ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId).orElse(null);
+            if (opcion != null) {
+                opcionesPorSlot.computeIfAbsent(opcion.getSlot().getId(), k -> new ArrayList<>()).add(opcion);
+            }
+        }
+
+        // Validar cada slot
+        List<ProductoCompuestoSlot> slots = slotRepository.findByCompuestoIdOrderByOrden(compuesto.getId());
+        for (ProductoCompuestoSlot slot : slots) {
+            List<ProductoCompuestoOpcion> opcionesEnSlot = opcionesPorSlot.getOrDefault(slot.getId(), new ArrayList<>());
+            int cantidadSeleccionada = opcionesEnSlot.size();
+            boolean cumpleRequisitos = true;
+
+            // Validar cantidad mínima
+            if (slot.getEsRequerido() && cantidadSeleccionada < slot.getCantidadMinima()) {
+                errores.add(ValidacionSeleccionResponse.ErrorValidacion.builder()
+                    .campo("slot_" + slot.getId())
+                    .mensaje(String.format("%s requiere mínimo %d opción(es)", slot.getNombre(), slot.getCantidadMinima()))
+                    .tipoError("FALTA_REQUERIDO")
+                    .build());
+                cumpleRequisitos = false;
+            }
+
+            // Validar cantidad máxima
+            if (cantidadSeleccionada > slot.getCantidadMaxima()) {
+                errores.add(ValidacionSeleccionResponse.ErrorValidacion.builder()
+                    .campo("slot_" + slot.getId())
+                    .mensaje(String.format("%s permite máximo %d opción(es)", slot.getNombre(), slot.getCantidadMaxima()))
+                    .tipoError("EXCEDE_MAXIMO")
+                    .build());
+                cumpleRequisitos = false;
+            }
+
+            // Validar stock de cada opción
+            List<ValidacionSeleccionResponse.OpcionValidada> opcionesValidadas = new ArrayList<>();
+            for (ProductoCompuestoOpcion opcion : opcionesEnSlot) {
+                boolean tieneStock = verificarStockOpcion(opcion, sucursalId);
+                if (!tieneStock) {
+                    todasDisponibles = false;
+                    errores.add(ValidacionSeleccionResponse.ErrorValidacion.builder()
+                        .campo("opcion_" + opcion.getId())
+                        .mensaje(String.format("%s no tiene stock suficiente", opcion.getProducto().getNombre()))
+                        .tipoError("SIN_STOCK")
+                        .build());
+                }
+
+                opcionesValidadas.add(ValidacionSeleccionResponse.OpcionValidada.builder()
+                    .opcionId(opcion.getId())
+                    .productoNombre(opcion.getProducto().getNombre())
+                    .tieneStockSuficiente(tieneStock)
+                    .mensajeStock(tieneStock ? "Disponible" : "Sin stock")
+                    .build());
+            }
+
+            validacionesSlot.add(ValidacionSeleccionResponse.SlotValidacion.builder()
+                .slotId(slot.getId())
+                .slotNombre(slot.getNombre())
+                .esRequerido(slot.getEsRequerido())
+                .cantidadMinima(slot.getCantidadMinima())
+                .cantidadMaxima(slot.getCantidadMaxima())
+                .cantidadSeleccionada(cantidadSeleccionada)
+                .cumpleRequisitos(cumpleRequisitos)
+                .opcionesSeleccionadas(opcionesValidadas)
+                .build());
+        }
+
+        return ValidacionSeleccionResponse.builder()
+            .esValida(errores.isEmpty())
+            .todasDisponiblesEnSucursal(todasDisponibles)
+            .errores(errores)
+            .validacionPorSlot(validacionesSlot)
+            .build();
+    }
+
+    // Agregar estos métodos privados en ProductoCompuestoServiceImpl:
+
+    private boolean verificarDisponibilidadEnSucursal(ProductoCompuestoOpcion opcion, Long sucursalId) {
+        // Primero verificar si la opción está marcada como disponible globalmente
+        if (!opcion.getDisponible()) {
+            return false;
+        }
+
+        Producto producto = opcion.getProducto();
+
+        // Si el producto no maneja inventario, siempre está disponible
+        if (producto.getTipoInventario() == TipoInventario.NINGUNO) {
+            return true;
+        }
+
+        // Verificar si la sucursal maneja inventario
+        Sucursal sucursal = sucursalRepository.findById(sucursalId)
+            .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+
+        if (!sucursal.getManejaInventario()) {
+            // Si la sucursal no maneja inventario, todo está disponible
+            return true;
+        }
+
+        // Para productos MATERIA_PRIMA o MIXTO, verificar existencia en inventario
+        if (producto.getTipo() == TipoProducto.MATERIA_PRIMA ||
+            producto.getTipo() == TipoProducto.MIXTO ||
+            producto.getTipo() == TipoProducto.VENTA) {
+
+            try {
+                ProductoInventario inventario = productoInventarioService
+                    .obtenerInventario(producto.getId(), sucursalId);
+
+                // Si no hay registro de inventario, no está disponible
+                if (inventario == null) {
+                    return false;
+                }
+
+                // Verificar que haya al menos algo de stock
+                BigDecimal disponible = inventario.getCantidadActual()
+                    .subtract(inventario.getCantidadBloqueada());
+
+                return disponible.compareTo(BigDecimal.ZERO) > 0;
+
+            } catch (Exception e) {
+                log.warn("Error verificando disponibilidad para producto {} en sucursal {}: {}",
+                    producto.getId(), sucursalId, e.getMessage());
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean verificarStockOpcion(ProductoCompuestoOpcion opcion, Long sucursalId) {
+        Producto producto = opcion.getProducto();
+
+        // Si no maneja inventario, siempre tiene "stock"
+        if (producto.getTipoInventario() == TipoInventario.NINGUNO) {
+            return true;
+        }
+
+        // Verificar configuración de sucursal
+        Sucursal sucursal = sucursalRepository.findById(sucursalId)
+            .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+
+        // Si la sucursal no maneja inventario o permite negativos
+        if (!sucursal.getManejaInventario() || sucursal.getPermiteNegativos()) {
+            return true;
+        }
+
+        try {
+            // Para productos con inventario SIMPLE
+            if (producto.getTipoInventario() == TipoInventario.SIMPLE) {
+                BigDecimal stockDisponible = obtenerCantidadDisponible(producto.getId(), sucursalId);
+
+                // Asumimos que necesitamos al menos 1 unidad
+                // Aquí podrías ajustar según la cantidad típica usada en el compuesto
+                return stockDisponible.compareTo(BigDecimal.ONE) >= 0;
+            }
+
+            // Para productos con RECETA, verificar si se puede producir
+            if (producto.getTipoInventario() == TipoInventario.RECETA) {
+                return inventarioService.puedeProducir(
+                    producto.getEmpresa().getId(),
+                    producto.getId(),
+                    sucursalId,
+                    BigDecimal.ONE
+                );
+            }
+
+        } catch (Exception e) {
+            log.warn("Error verificando stock para opción {}: {}", opcion.getId(), e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+    // Método helper adicional que podrías necesitar en ProductoInventarioService
+    public BigDecimal obtenerCantidadDisponible(Long productoId, Long sucursalId) {
+        ProductoInventario inventario = productoInventarioService
+            .obtenerInventario(productoId, sucursalId);
+
+        if (inventario == null) {
+            return BigDecimal.ZERO;
+        }
+
+        return inventario.getCantidadActual()
+            .subtract(inventario.getCantidadBloqueada());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductoCompuestoDto> filtrarPorDisponibilidadSucursal(List<ProductoCompuestoDto> compuestos, Long sucursalId) {
+        log.info("Filtrando {} compuestos por disponibilidad en sucursal {}", compuestos.size(), sucursalId);
+
+        List<ProductoCompuestoDto> compuestosFiltrados = new ArrayList<>();
+
+        for (ProductoCompuestoDto compuesto : compuestos) {
+            ProductoCompuestoDto compuestoFiltrado = new ProductoCompuestoDto();
+            // Copiar datos básicos
+            BeanUtils.copyProperties(compuesto, compuestoFiltrado);
+            compuestoFiltrado.setSlots(new ArrayList<>());
+
+            boolean tieneOpcionesDisponibles = false;
+
+            // Filtrar slots y opciones
+            for (ProductoCompuestoSlotDto slot : compuesto.getSlots()) {
+                ProductoCompuestoSlotDto slotFiltrado = new ProductoCompuestoSlotDto();
+                BeanUtils.copyProperties(slot, slotFiltrado);
+                slotFiltrado.setOpciones(new ArrayList<>());
+
+                // Filtrar solo opciones disponibles en la sucursal
+                for (ProductoCompuestoOpcionDto opcion : slot.getOpciones()) {
+                    if (opcion.getDisponible()) {
+                        ProductoCompuestoOpcion opcionEntity = opcionRepository.findById(opcion.getId())
+                            .orElse(null);
+
+                        if (opcionEntity != null && verificarDisponibilidadEnSucursal(opcionEntity, sucursalId)) {
+                            slotFiltrado.getOpciones().add(opcion);
+                            tieneOpcionesDisponibles = true;
+                        }
+                    }
+                }
+
+                // Solo agregar el slot si tiene opciones disponibles o es opcional
+                if (!slotFiltrado.getOpciones().isEmpty() || !slot.getEsRequerido()) {
+                    compuestoFiltrado.getSlots().add(slotFiltrado);
+                }
+            }
+
+            // Solo incluir el compuesto si tiene opciones disponibles
+            if (tieneOpcionesDisponibles) {
+                compuestosFiltrados.add(compuestoFiltrado);
+            }
+        }
+
+        log.info("Filtrados {} compuestos con disponibilidad", compuestosFiltrados.size());
+        return compuestosFiltrados;
+    }
+
+    @Override
+    @Transactional
+    public void actualizarDisponibilidadGlobal(Long opcionId, Boolean disponible) {
+        log.info("Actualizando disponibilidad global de opción {} a {}", opcionId, disponible);
+
+        ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId)
+            .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada"));
+
+        // Actualizar disponibilidad de la opción
+        opcion.setDisponible(disponible);
+        opcionRepository.save(opcion);
+
+        // Si se está desactivando, opcionalmente notificar a las sucursales
+        if (!disponible) {
+            log.warn("Opción {} desactivada globalmente. Producto: {}",
+                opcionId, opcion.getProducto().getNombre());
+
+            // Aquí podrías implementar notificaciones o eventos
+            // eventPublisher.publishEvent(new OpcionDesactivadaEvent(opcion));
+        }
     }
 }

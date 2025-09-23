@@ -1,4 +1,3 @@
-// ProductoCompuestoOpcionDto.java
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
 import lombok.Data;
@@ -10,7 +9,8 @@ public class ProductoCompuestoOpcionDto {
     private Long productoId;
     private String productoNombre;
     private String productoCodigo;
-    private BigDecimal precioAdicional;
+    private BigDecimal precioAdicional; // Puede ser positivo o negativo
     private Boolean esDefault;
     private Boolean disponible;
+    private Integer orden;
 }

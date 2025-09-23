@@ -1,4 +1,3 @@
-// ProductoCompuestoRequest.java - Para crear/actualizar compuestos
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
 import lombok.Data;
@@ -8,42 +7,50 @@ import java.util.List;
 
 @Data
 public class ProductoCompuestoRequest {
-    
+
+    @Size(max = 500, message = "Las instrucciones no pueden exceder 500 caracteres")
     private String instruccionesPersonalizacion;
+
+    @Min(value = 0, message = "El tiempo extra no puede ser negativo")
     private Integer tiempoPreparacionExtra;
-    
-    @NotEmpty(message = "Debe definir al menos una categoría de personalización")
-    private List<CompuestoSlotRequest> slots;
-    
+
+    @NotEmpty(message = "Debe incluir al menos un slot de personalización")
+    private List<SlotRequest> slots;
+
     @Data
-    public static class CompuestoSlotRequest {
-        @NotBlank
+    public static class SlotRequest {
+        @NotBlank(message = "El nombre del slot es requerido")
+        @Size(max = 100)
         private String nombre;
-        
+
         private String descripcion;
-        
-        @Min(0)
-        private Integer cantidadMinima = 1;
-        
-        @Min(1)
-        private Integer cantidadMaxima = 1;
-        
-        private Boolean esRequerido = true;
-        private Integer orden;
-        
-        @NotEmpty(message = "Debe incluir al menos una opción")
-        private List<CompuestoOpcionRequest> opciones;
-    }
-    
-    @Data
-    public static class CompuestoOpcionRequest {
+
         @NotNull
+        @Min(0)
+        private Integer cantidadMinima;
+
+        @NotNull
+        @Min(1)
+        private Integer cantidadMaxima;
+
+        @NotNull
+        private Boolean esRequerido;
+
+        private Integer orden;
+
+        private List<OpcionRequest> opciones;
+    }
+
+    @Data
+    public static class OpcionRequest {
+        @NotNull(message = "El producto es requerido")
         private Long productoId;
-        
-        @DecimalMin(value = "0.0")
-        private BigDecimal precioAdicional = BigDecimal.ZERO;
-        
+
+        @NotNull(message = "El precio adicional es requerido")
+        private BigDecimal precioAdicional; // Puede ser negativo!
+
         private Boolean esDefault = false;
         private Boolean disponible = true;
+        private Integer orden;
     }
 }

@@ -14,6 +14,8 @@ import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.service.CategoriaProductoService;
+import com.snnsoluciones.backnathbitpos.service.ProductoCategoriaService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImagenService;
 import com.snnsoluciones.backnathbitpos.service.ProductoInventarioService;
 import com.snnsoluciones.backnathbitpos.service.ProductoServiceV2;
@@ -55,6 +57,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   private final ProductoInventarioRepository inventarioRepository;
   private final ProductoRecetaRepository recetaRepository;
   private final FacturaDetalleRepository facturaDetalleRepository;
+  private final CategoriaProductoService categoriaService;
+  private final ProductoCategoriaService productoCategoriaService;
 
   // ========== CRUD CON IMÁGENES ==========
 
@@ -266,6 +270,26 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
         inventarioRepository.save(inventario);
         log.info("Inventario inicial creado para materia prima en sucursal: {}", sucursal.getNombre());
+      }
+
+      if (dto.getCategoriaIds() != null && !dto.getCategoriaIds().isEmpty()) {
+        for (Long categoriaId : dto.getCategoriaIds()) {
+          CategoriaProducto categoria = categoriaService.buscarPorId(categoriaId)
+              .orElseThrow(
+                  () -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
+
+          // Validar que pertenezca a la misma empresa
+          if (!categoria.getEmpresa().getId().equals(empresa.getId())) {
+            throw new BusinessException(
+                "La categoría " + categoriaId + " no pertenece a la misma empresa");
+          }
+
+          if (!categoria.getActivo()) {
+            throw new BusinessException("La categoría " + categoria.getNombre() + " está inactiva");
+          }
+
+          productoCategoriaService.agregarCategoria(producto.getId(), categoria.getId());
+        }
       }
 
       // 14. CONVERTIR Y RETORNAR

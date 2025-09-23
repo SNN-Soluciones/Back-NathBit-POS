@@ -9,42 +9,66 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-@Deprecated(since = "2.0", forRemoval = true)
 @Repository
 public interface ProductoCodigoProveedorRepository extends JpaRepository<ProductoCodigoProveedor, Long> {
-    
-    /**
-     * Busca un producto por código y proveedor
-     */
+
+    // Buscar por producto
     @Query("SELECT pcp FROM ProductoCodigoProveedor pcp " +
-           "WHERE pcp.proveedor.id = :proveedorId " +
-           "AND pcp.codigo = :codigo " +
-           "AND pcp.activo = true")
-    Optional<ProductoCodigoProveedor> findByProveedorAndCodigo(
-        @Param("proveedorId") Long proveedorId, 
-        @Param("codigo") String codigo
-    );
-    
-    /**
-     * Busca todos los códigos de un producto
-     */
-    List<ProductoCodigoProveedor> findByProductoIdAndActivoTrue(Long productoId);
-    
-    /**
-     * Busca todos los productos de un proveedor
-     */
-    List<ProductoCodigoProveedor> findByProveedorIdAndActivoTrue(Long proveedorId);
-    
-    /**
-     * Verifica si existe un código para un proveedor
-     */
-    boolean existsByProveedorIdAndCodigoAndActivoTrue(Long proveedorId, String codigo);
-    
-    /**
-     * Busca productos por código (sin importar el proveedor)
-     */
+        "JOIN FETCH pcp.producto p " +
+        "JOIN FETCH pcp.proveedor pr " +
+        "WHERE pcp.producto.id = :productoId " +
+        "ORDER BY pcp.activo DESC, pr.nombreComercial")
+    List<ProductoCodigoProveedor> findByProductoId(@Param("productoId") Long productoId);
+
+    // Buscar por proveedor y activos
     @Query("SELECT pcp FROM ProductoCodigoProveedor pcp " +
-           "WHERE pcp.codigo = :codigo " +
-           "AND pcp.activo = true")
-    List<ProductoCodigoProveedor> findByCodigo(@Param("codigo") String codigo);
+        "JOIN FETCH pcp.producto p " +
+        "JOIN FETCH pcp.proveedor pr " +
+        "WHERE pcp.proveedor.id = :proveedorId AND pcp.activo = :activo " +
+        "ORDER BY p.nombre")
+    List<ProductoCodigoProveedor> findByProveedorIdAndActivo(
+        @Param("proveedorId") Long proveedorId,
+        @Param("activo") Boolean activo);
+
+    // Buscar por código y proveedor
+    @Query("SELECT pcp FROM ProductoCodigoProveedor pcp " +
+        "JOIN FETCH pcp.producto p " +
+        "JOIN FETCH pcp.proveedor pr " +
+        "WHERE pcp.proveedor.id = :proveedorId AND pcp.codigo = :codigo")
+    Optional<ProductoCodigoProveedor> findByProveedorIdAndCodigo(
+        @Param("proveedorId") Long proveedorId,
+        @Param("codigo") String codigo);
+
+    // Verificar si existe por producto y proveedor activo
+    boolean existsByProductoIdAndProveedorIdAndActivo(
+        Long productoId, Long proveedorId, Boolean activo);
+
+    // Verificar si existe código para proveedor
+    boolean existsByProveedorIdAndCodigo(Long proveedorId, String codigo);
+
+    // Verificar si existe código para proveedor excluyendo un ID
+    @Query("SELECT COUNT(pcp) > 0 FROM ProductoCodigoProveedor pcp " +
+        "WHERE pcp.proveedor.id = :proveedorId " +
+        "AND pcp.codigo = :codigo " +
+        "AND pcp.id <> :id")
+    boolean existsByProveedorIdAndCodigoAndIdNot(
+        @Param("proveedorId") Long proveedorId,
+        @Param("codigo") String codigo,
+        @Param("id") Long id);
+
+    // Buscar activos por producto
+    @Query("SELECT pcp FROM ProductoCodigoProveedor pcp " +
+        "JOIN FETCH pcp.proveedor pr " +
+        "WHERE pcp.producto.id = :productoId AND pcp.activo = true " +
+        "ORDER BY pr.nombreComercial")
+    List<ProductoCodigoProveedor> findActivosByProductoId(@Param("productoId") Long productoId);
+
+    // Buscar por producto y empresa del proveedor
+    @Query("SELECT pcp FROM ProductoCodigoProveedor pcp " +
+        "JOIN FETCH pcp.producto p " +
+        "JOIN FETCH pcp.proveedor pr " +
+        "WHERE p.empresa.id = :empresaId " +
+        "AND pr.empresa.id = :empresaId " +
+        "AND pcp.activo = true")
+    List<ProductoCodigoProveedor> findByEmpresaId(@Param("empresaId") Long empresaId);
 }

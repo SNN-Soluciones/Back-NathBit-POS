@@ -1,513 +1,271 @@
 package com.snnsoluciones.backnathbitpos.service;
 
-import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.MedioPagoDto;
 import com.snnsoluciones.backnathbitpos.dto.facturainterna.*;
-import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.DescuentoRequest;
-import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.DetalleRequest;
-import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.MedioPagoRequest;
-import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.OtroCargoRequest;
-import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaResponse.DetalleResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
-import com.snnsoluciones.backnathbitpos.enums.mh.MedioPago;
-import com.snnsoluciones.backnathbitpos.exception.BusinessException;
+import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
+import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
-import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Year;
-import java.util.ArrayList;
 import java.util.List;
-import org.springframework.util.StringUtils;
+import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FacturaInternaService {
-    
-    private final FacturaInternaRepository facturaRepository;
-    private final FacturaInternaDetalleRepository detalleRepository;
-    private final FacturaInternaMediosPagoRepository mediosPagoRepository;
-    private final FacturaInternaOtrosCargosRepository otrosCargosRepository;
-    private final FacturaInternaDescuentosRepository descuentosRepository;
-    private final FacturaInternaBitacoraRepository bitacoraRepository;
-    private final EmpresaService empresaService;
-    private final SucursalService sucursalService;
-    private final ClienteService clienteService;
 
+    private final FacturaInternaRepository facturaInternaRepository;
     private final ProductoRepository productoRepository;
-    private final UsuarioService usuarioService;
-    
+    private final ClienteRepository clienteRepository;
+    private final EmpresaRepository empresaRepository;
+    private final SucursalRepository sucursalRepository;
+    private final UsuarioRepository usuarioRepository;
+
+    /**
+     * Crear una nueva factura interna
+     */
     @Transactional
-    public FacturaInternaResponse crear(FacturaInternaRequest request) {
-        log.info("Creando factura interna para sucursal: {}", request.getSucursalId());
+    public FacturaInternaResponse crear(CrearFacturaInternaRequest request) {
+        log.info("Creando factura interna para empresa: {}", request.getEmpresaId());
 
-        Cliente cliente = new Cliente();
-        if(request.getClienteId() != null) {
-            cliente = clienteService.findById(request.getClienteId()).orElse(null);
-        }
+        // Obtener entidades desde el request
+        Empresa empresa = empresaRepository.findById(request.getEmpresaId())
+            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
 
-        Usuario usuario = new Usuario();
-        if(request.getCajeroId() != null) {
-            usuario = usuarioService.buscarPorId(request.getCajeroId()).orElse(null);
-        }
+        Sucursal sucursal = sucursalRepository.findById(request.getSucursalId())
+            .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+
+        Usuario cajero = usuarioRepository.findById(request.getUsuarioId())
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
         // Crear factura
-        FacturaInterna factura = new FacturaInterna();
-        factura.setEmpresa(empresaService.buscarPorId(request.getEmpresaId()));
-        factura.setSucursal(sucursalService.finById(request.getSucursalId()).orElse(null));
-        factura.setCliente(cliente == null ? null : cliente);
-        factura.setUsuario(usuario);
-        factura.setNombreCliente(request.getNombreCliente() != null? request.getNombreCliente() : "");
-        factura.setFechaEmision(LocalDateTime.now());
-        factura.setNotas(request.getNotas());
-        factura.setSubtotal(BigDecimal.ZERO);
-        factura.setTotalDescuentos(BigDecimal.ZERO);
-        factura.setTotalOtrosCargos(BigDecimal.ZERO);
-        factura.setTotalVenta(BigDecimal.ZERO);
-        factura.setTotalVenta(factura.getTotalVenta().add(factura.getTotalDescuentos()));
+        FacturaInterna factura = FacturaInterna.builder()
+            .numero(generarNumeroFactura(request.getEmpresaId()))
+            .empresa(empresa)
+            .sucursal(sucursal)
+            .cajero(cajero)
+            .fecha(LocalDateTime.now())
+            .estado("PAGADA")
+            .notas(request.getNotas())
+            .build();
 
-        // Generar número de factura
-        factura.setNumeroFactura(generarNumeroFactura(request.getSucursalId()));
+        // Cliente opcional
+        if (request.getClienteId() != null) {
+            Cliente cliente = clienteRepository.findById(request.getClienteId())
+                .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
+            factura.setCliente(cliente);
+            factura.setNombreCliente(cliente.getRazonSocial());
+        } else if (request.getNombreCliente() != null) {
+            factura.setNombreCliente(request.getNombreCliente());
+        }
+
+        // Procesar detalles
+        BigDecimal subtotal = BigDecimal.ZERO;
+
+        for (DetalleFacturaInternaRequest detalleReq : request.getDetalles()) {
+            Producto producto = productoRepository.findById(detalleReq.getProductoId())
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + detalleReq.getProductoId()));
+
+            FacturaInternaDetalle detalle = FacturaInternaDetalle.builder()
+                .cantidad(detalleReq.getCantidad())
+                .descuento(detalleReq.getDescuento() != null ? detalleReq.getDescuento() : BigDecimal.ZERO)
+                .notas(detalleReq.getNotas())
+                .build();
+
+            detalle.setearDatosProducto(producto);
+            detalle.calcularTotales();
+
+            factura.agregarDetalle(detalle);
+            subtotal = subtotal.add(detalle.getTotal());
+        }
 
         // Calcular totales
-        BigDecimal subtotal = BigDecimal.ZERO;
-        BigDecimal totalDescuentos = BigDecimal.ZERO;
-        BigDecimal totalOtrosCargos = BigDecimal.ZERO;
-        
-        // Guardar factura primero
-        factura = facturaRepository.save(factura);
-        
-        // Procesar detalles
-        FacturaInternaDetalle detalle;
-        List<FacturaInternaDetalle> detalles = new ArrayList<>();
-        int numeroLinea = 1;
-        for (DetalleRequest detalleReq : request.getDetalles()) {
-            detalle = procesarDetalle(factura, detalleReq, numeroLinea++);
-            subtotal = subtotal.add(detalle.getSubtotal());
-            totalOtrosCargos = totalOtrosCargos.add(detalle.getMontoImpuestoServicio());
-            detalles.add(detalle);
-        }
-
-        factura.setFacturaInternaDetalles(detalles);
-        // Procesar descuentos
-        List<FacturaInternaDescuentos> facturaInternaDescuentos = new ArrayList<>();
-        FacturaInternaDescuentos descuento;
-        if (request.getDescuentos() != null) {
-            for (DescuentoRequest descuentoReq : request.getDescuentos()) {
-                descuento = procesarDescuento(factura, descuentoReq);
-                totalDescuentos = totalDescuentos.add(descuento.getMonto());
-                facturaInternaDescuentos.add(descuento);
-            }
-        }
-        factura.setFacturaInternaDescuentos(facturaInternaDescuentos);
-
-        List<FacturaInternaOtrosCargos> facturaInternaOtrosCargos = new ArrayList<>();
-        // Procesar otros cargos
-        if (request.getOtrosCargos() != null) {
-            for (OtroCargoRequest cargoReq : request.getOtrosCargos()) {
-                FacturaInternaOtrosCargos cargo = procesarOtroCargo(factura, cargoReq);
-                totalOtrosCargos = totalOtrosCargos.add(cargo.getMonto());
-                facturaInternaOtrosCargos.add(cargo);
-            }
-        }
-
-        factura.setFacturaInternaOtrosCargos(facturaInternaOtrosCargos);
-        
-        // Actualizar totales
         factura.setSubtotal(subtotal);
-        factura.setTotalDescuentos(totalDescuentos);
-        factura.setTotalOtrosCargos(totalOtrosCargos);
-        factura.setTotalVenta(subtotal.subtract(totalDescuentos).add(totalOtrosCargos));
-        
-        // Procesar pagos
-        procesarPagos(factura, request.getMediosPago());
-        
-        // Guardar actualización
-        factura = facturaRepository.save(factura);
-        
-        // Registrar en bitácora
-        registrarBitacora(factura, "CREADA", "Factura interna creada");
-        
+        factura.setDescuento(request.getDescuento() != null ? request.getDescuento() : BigDecimal.ZERO);
+        factura.calcularTotal();
+
+        // Procesar medios de pago
+        BigDecimal totalPagos = BigDecimal.ZERO;
+
+        for (MedioPagoInternoRequest medioPagoReq : request.getMediosPago()) {
+            FacturaInternaMedioPago medioPago = FacturaInternaMedioPago.builder()
+                .tipo(medioPagoReq.getTipo())
+                .monto(medioPagoReq.getMonto())
+                .referencia(medioPagoReq.getReferencia())
+                .banco(medioPagoReq.getBanco())
+                .notas(medioPagoReq.getNotas())
+                .build();
+
+            factura.agregarMedioPago(medioPago);
+            totalPagos = totalPagos.add(medioPagoReq.getMonto());
+        }
+
+        factura.setPagoRecibido(totalPagos);
+        factura.calcularVuelto();
+
+        // Guardar
+        factura = facturaInternaRepository.save(factura);
+        log.info("Factura interna creada: {}", factura.getNumero());
+
         return mapToResponse(factura);
     }
-    
-    private FacturaInternaDetalle procesarDetalle(FacturaInterna factura, 
-                                                 DetalleRequest request,
-                                                 int numeroLinea) {
-        Producto producto = productoRepository.findById(request.getProductoId())
-            .orElseThrow(() -> new BusinessException("Producto no encontrado"));
-        
-        FacturaInternaDetalle detalle = new FacturaInternaDetalle();
-        detalle.setFactura(factura);
-        detalle.setNumeroLinea(numeroLinea);
-        detalle.setProducto(producto);
-        detalle.setCodigoProducto(producto.getCodigoInterno());
-        detalle.setDescripcion(producto.getNombre());
-        detalle.setCantidad(request.getCantidad());
-        detalle.setPrecioUnitario(request.getPrecioUnitario());
-        detalle.setPorcentajeDescuento(request.getPorcentajeDescuento());
-        detalle.setMontoImpuestoServicio(request.getMontoImpuestoServicio());
-        detalle.setNotas(request.getNotas());
-        
-        // Calcular montos
-        BigDecimal montoLinea = request.getCantidad().multiply(request.getPrecioUnitario());
-        BigDecimal montoDescuento = montoLinea.multiply(request.getPorcentajeDescuento())
-            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-        
-        detalle.setMontoDescuento(montoDescuento);
-        detalle.setSubtotal(montoLinea.subtract(montoDescuento));
-        detalle.setMontoTotalLinea(detalle.getSubtotal().add(request.getMontoImpuestoServicio()));
-        
-        return detalleRepository.save(detalle);
-    }
-    
-    private void procesarPagos(FacturaInterna factura, List<MedioPagoRequest> pagos) {
-        if (pagos == null || pagos.isEmpty()) {
-            throw new BusinessException("Debe especificar al menos un medio de pago");
-        }
-        
-        BigDecimal totalPagado = BigDecimal.ZERO;
-        List<FacturaInternaMediosPago> mediosPago = new ArrayList<>();
-        for (MedioPagoRequest pagoReq : pagos) {
-            FacturaInternaMediosPago pago = new FacturaInternaMediosPago();
-            pago.setFactura(factura);
-            pago.setTipoPago(MedioPago.valueOf(pagoReq.getTipoPago()));
-            pago.setMonto(pagoReq.getMonto());
-            pago.setReferencia(pagoReq.getReferencia());
-            pago.setBanco(pagoReq.getBanco());
-            pago.setNumeroAutorizacion(pagoReq.getNumeroAutorizacion());
-            mediosPago.add(pago);
-            totalPagado = totalPagado.add(pagoReq.getMonto());
-        }
-        factura.setMediosPago(mediosPago);
-        
-        // Calcular vuelto si es efectivo
-        if (totalPagado.compareTo(factura.getTotalVenta()) > 0) {
-            BigDecimal vuelto = totalPagado.subtract(factura.getTotalVenta());
-            // Actualizar el pago en efectivo con el vuelto
-            mediosPagoRepository.findByFacturaIdAndTipoPago(factura.getId(), MedioPago.EFECTIVO)
-                .stream().findFirst().ifPresent(pago -> {
-                    pago.setCambio(vuelto);
-                    mediosPagoRepository.save(pago);
-                });
-        }
-    }
-    
-    private String generarNumeroFactura(Long sucursalId) {
-        String year = String.valueOf(Year.now().getValue());
-        Integer ultimoNumero = facturaRepository.findMaxNumeroFactura(sucursalId, year)
-            .orElse(0);
-        
-        return String.format("FI-%s-%05d", year, ultimoNumero + 1);
-    }
-    
-    private void registrarBitacora(FacturaInterna factura, String accion, String descripcion) {
-        FacturaInternaBitacora bitacora = new FacturaInternaBitacora();
-        bitacora.setFactura(factura);
-        bitacora.setAccion(accion);
-        bitacora.setUsuario((factura.getUsuario()));
-        bitacora.setDescripcion(descripcion);
-        bitacora.setFechaAccion(LocalDateTime.now());
-        
-        bitacoraRepository.save(bitacora);
-    }
-    
+
+    /**
+     * Anular factura
+     */
     @Transactional
-    public void anular(Long facturaId, String motivo) {
-        FacturaInterna factura = facturaRepository.findById(facturaId)
-            .orElseThrow(() -> new BusinessException("Factura no encontrada"));
-        
+    public void anular(Long facturaId, Long usuarioId, AnularFacturaRequest request) {
+        FacturaInterna factura = facturaInternaRepository.findById(facturaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada"));
+
         if ("ANULADA".equals(factura.getEstado())) {
-            throw new BusinessException("La factura ya está anulada");
-        }
-        
-        factura.setEstado("ANULADA");
-        factura.setAnuladaPor(factura.getUsuario().getId());
-        factura.setFechaAnulacion(LocalDateTime.now());
-        factura.setMotivoAnulacion(motivo);
-        
-        facturaRepository.save(factura);
-        
-        registrarBitacora(factura, "ANULADA", "Factura anulada: " + motivo);
-    }
-    
-    // Métodos auxiliares omitidos por brevedad...
-
-    // Continuación de FacturaInternaService.java
-
-    // ========== MÉTODOS AUXILIARES ==========
-
-    private FacturaInternaDescuentos procesarDescuento(FacturaInterna factura,
-        DescuentoRequest request) {
-        FacturaInternaDescuentos descuento = new FacturaInternaDescuentos();
-        descuento.setFactura(factura);
-        descuento.setTipoDescuento(request.getTipoDescuento());
-        descuento.setDescripcion(request.getDescripcion());
-        descuento.setPorcentaje(request.getPorcentaje());
-        descuento.setCodigoPromocion(request.getCodigoPromocion());
-
-        // Calcular monto si viene por porcentaje
-        if (request.getMonto() != null) {
-            descuento.setMonto(request.getMonto());
-        } else if (request.getPorcentaje() != null) {
-            BigDecimal montoDescuento = factura.getSubtotal()
-                .multiply(request.getPorcentaje())
-                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-            descuento.setMonto(montoDescuento);
+            throw new BadRequestException("La factura ya está anulada");
         }
 
-        return descuentosRepository.save(descuento);
+        factura.anular(usuarioId, request.getMotivo());
+
+        facturaInternaRepository.save(factura);
+        log.info("Factura {} anulada por usuario {}", factura.getNumero(), usuarioId);
     }
 
-    private FacturaInternaOtrosCargos procesarOtroCargo(FacturaInterna factura,
-        OtroCargoRequest request) {
-        FacturaInternaOtrosCargos cargo = new FacturaInternaOtrosCargos();
-        cargo.setFactura(factura);
-        cargo.setTipoCargo(request.getTipoCargo());
-        cargo.setDescripcion(request.getDescripcion());
-        cargo.setPorcentaje(request.getPorcentaje());
-        cargo.setAplicadoAutomaticamente(request.getAplicadoAutomaticamente());
+    /**
+     * Buscar factura por ID
+     */
+    @Transactional(readOnly = true)
+    public FacturaInternaResponse buscarPorId(Long id) {
+        FacturaInterna factura = facturaInternaRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada"));
 
-        // Calcular monto si viene por porcentaje
-        if (request.getMonto() != null) {
-            cargo.setMonto(request.getMonto());
-        } else if (request.getPorcentaje() != null) {
-            BigDecimal montoCargo = factura.getSubtotal()
-                .multiply(request.getPorcentaje())
-                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-            cargo.setMonto(montoCargo);
+        return mapToResponse(factura);
+    }
+
+    /**
+     * Buscar facturas con filtros
+     */
+    @Transactional(readOnly = true)
+    public Page<FacturaInternaListResponse> buscar(Long empresaId, Long sucursalId, String estado, Pageable pageable) {
+        Page<FacturaInterna> facturas;
+
+        if (sucursalId != null) {
+            facturas = facturaInternaRepository.findBySucursalId(sucursalId, pageable);
+        } else if (empresaId != null && estado != null) {
+            facturas = facturaInternaRepository.findByEmpresaIdAndEstado(empresaId, estado, pageable);
+        } else if (empresaId != null) {
+            facturas = facturaInternaRepository.findByEmpresaId(empresaId, pageable);
+        } else {
+            facturas = facturaInternaRepository.findAll(pageable);
         }
 
-        return otrosCargosRepository.save(cargo);
+        return facturas.map(this::mapToListResponse);
     }
 
+    /**
+     * Obtener siguiente número de factura
+     */
+    public String obtenerSiguienteNumero(Long empresaId) {
+        return generarNumeroFactura(empresaId);
+    }
+
+    /**
+     * Generar número de factura
+     */
+    private String generarNumeroFactura(Long empresaId) {
+        String prefix = "INT-" + LocalDate.now().getYear() + "-";
+
+        List<String> ultimos = facturaInternaRepository.findUltimoNumeroByEmpresaAndPrefix(
+            empresaId, prefix, Pageable.ofSize(1)
+        );
+
+        int siguiente = 1;
+        if (!ultimos.isEmpty()) {
+            String ultimo = ultimos.get(0);
+            String numeroStr = ultimo.replace(prefix, "");
+            siguiente = Integer.parseInt(numeroStr) + 1;
+        }
+
+        return prefix + String.format("%05d", siguiente);
+    }
+
+    /**
+     * Mapear a response completo
+     */
     private FacturaInternaResponse mapToResponse(FacturaInterna factura) {
         return FacturaInternaResponse.builder()
             .id(factura.getId())
-            .numeroFactura(factura.getNumeroFactura())
-            .estado(factura.getEstado())
-            .fechaEmision(factura.getFechaEmision())
-            .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
-            .nombreCliente(factura.getNombreCliente())
-            .subtotal(factura.getSubtotal())
-            .totalDescuentos(factura.getTotalDescuentos())
-            .totalOtrosCargos(factura.getTotalOtrosCargos())
-            .totalVenta(factura.getTotalVenta())
-            .empresaNombre(factura.getEmpresa().getNombreComercial())
+            .numero(factura.getNumero())
+            .fecha(factura.getFecha())
+            .empresaNombre(factura.getEmpresa().getNombreRazonSocial())
             .sucursalNombre(factura.getSucursal().getNombre())
-            .cajeroNombre(factura.getUsuario().getNombre())
+            .cajeroNombre(factura.getCajero().getNombre())
+            .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
+            .clienteNombre(factura.getNombreCliente())
+            .subtotal(factura.getSubtotal())
+            .descuento(factura.getDescuento())
+            .total(factura.getTotal())
+            .pagoRecibido(factura.getPagoRecibido())
+            .vuelto(factura.getVuelto())
+            .estado(factura.getEstado())
             .notas(factura.getNotas())
-            .detalles(mapDetalles(factura.getFacturaInternaDetalles()))
-            .mediosPago(mapMediosPago(factura.getMediosPago()))
-            .otrosCargos(mapOtrosCargos(factura.getFacturaInternaOtrosCargos()))
-            .descuentos(mapDescuentos(factura.getFacturaInternaDescuentos()))
+            .detalles(factura.getDetalles().stream()
+                .map(this::mapDetalleToResponse)
+                .collect(Collectors.toList()))
+            .mediosPago(factura.getMediosPago().stream()
+                .map(this::mapMedioPagoToResponse)
+                .collect(Collectors.toList()))
             .build();
     }
 
-    private List<DetalleResponse> mapDetalles(List<FacturaInternaDetalle> facturaInternaDetalle) {
-        return facturaInternaDetalle
-            .stream()
-            .map(detalle -> DetalleResponse.builder()
-                .id(detalle.getId())
-                .numeroLinea(detalle.getNumeroLinea())
-                .codigoProducto(detalle.getCodigoProducto())
-                .descripcion(detalle.getDescripcion())
-                .cantidad(detalle.getCantidad())
-                .unidadMedida(detalle.getUnidadMedida())
-                .precioUnitario(detalle.getPrecioUnitario())
-                .montoDescuento(detalle.getMontoDescuento())
-                .subtotal(detalle.getSubtotal())
-                .montoImpuestoServicio(detalle.getMontoImpuestoServicio())
-                .montoTotalLinea(detalle.getMontoTotalLinea())
-                .build())
-            .collect(Collectors.toList());
-    }
-
-    private List<MedioPagoResponse> mapMediosPago(List<FacturaInternaMediosPago> medioPagos) {
-        return medioPagos
-            .stream()
-            .map(pago -> MedioPagoResponse.builder()
-                .id(pago.getId())
-                .tipoPago(pago.getTipoPago().name())
-                .descripcionPago(pago.getTipoPago().getDescripcion())
-                .monto(pago.getMonto())
-                .referencia(pago.getReferencia())
-                .cambio(pago.getCambio())
-                .banco(pago.getBanco())
-                .numeroAutorizacion(pago.getNumeroAutorizacion())
-                .build())
-            .collect(Collectors.toList());
-    }
-
-    private List<OtroCargoResponse> mapOtrosCargos(List<FacturaInternaOtrosCargos> facturaInternaOtrosCargos) {
-        return facturaInternaOtrosCargos
-            .stream()
-            .map(cargo -> OtroCargoResponse.builder()
-                .id(cargo.getId())
-                .tipoCargo(cargo.getTipoCargo())
-                .descripcion(cargo.getDescripcion())
-                .porcentaje(cargo.getPorcentaje())
-                .monto(cargo.getMonto())
-                .aplicadoAutomaticamente(cargo.getAplicadoAutomaticamente())
-                .build())
-            .collect(Collectors.toList());
-    }
-
-    private List<DescuentoResponse> mapDescuentos(List<FacturaInternaDescuentos> facturaInternaDescuentos) {
-        return facturaInternaDescuentos
-            .stream()
-            .map(descuento -> DescuentoResponse.builder()
-                .id(descuento.getId())
-                .tipoDescuento(descuento.getTipoDescuento())
-                .descripcion(descuento.getDescripcion())
-                .porcentaje(descuento.getPorcentaje())
-                .monto(descuento.getMonto())
-                .codigoPromocion(descuento.getCodigoPromocion())
-                .build())
-            .collect(Collectors.toList());
-    }
-
-    // ========== MÉTODOS DE CONSULTA ==========
-
-    @Transactional(readOnly = true)
-    public FacturaInternaResponse obtenerPorId(Long id) {
-        FacturaInterna factura = facturaRepository.findById(id)
-            .orElseThrow(() -> new BusinessException("Factura no encontrada"));
-
-        return mapToResponse(factura);
-    }
-
-    @Transactional(readOnly = true)
-    public List<FacturaInternaResponse> obtenerFacturasHoy(Long sucursalId) {
-        return facturaRepository.findFacturasHoy(sucursalId)
-            .stream()
-            .map(this::mapToResponse)
-            .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public Page<FacturaInternaResponse> buscar(FacturaInternaSearchRequest request, Pageable pageable) {
-        Page<FacturaInterna> facturas = facturaRepository.buscarConFiltros(
-            request.getEmpresaId(),
-            request.getSucursalId(),
-            request.getEstado(),
-            request.getNumeroFactura(),
-            request.getFechaInicio(),
-            request.getFechaFin(),
-            pageable
-        );
-
-        return facturas.map(this::mapToResponse);
-    }
-
-    // ========== VALIDACIONES ==========
-
-    private void validarTotales(FacturaInterna factura, List<MedioPagoRequest> pagos) {
-        BigDecimal totalPagos = pagos.stream()
-            .map(MedioPagoRequest::getMonto)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        if (totalPagos.compareTo(factura.getTotalVenta()) < 0) {
-            throw new BusinessException("El total de pagos es menor al total de la factura");
-        }
-    }
-
-    private void validarEstadoFactura(FacturaInterna factura, String operacion) {
-        if ("ANULADA".equals(factura.getEstado())) {
-            throw new BusinessException("No se puede " + operacion + " una factura anulada");
-        }
-    }
-
-    // ========== MÉTODOS DE REPORTE ==========
-
-    @Transactional(readOnly = true)
-    public ResumenDiarioResponse obtenerResumenDiario(Long sucursalId, LocalDate fecha) {
-        LocalDateTime inicio = fecha.atStartOfDay();
-        LocalDateTime fin = fecha.atTime(23, 59, 59);
-
-        List<FacturaInterna> facturas = facturaRepository.findByFechaEmisionBetween(inicio, fin, Pageable.unpaged())
-            .stream()
-            .filter(f -> f.getSucursal().getId().equals(sucursalId))
-            .toList();
-
-        BigDecimal totalVentas = facturas.stream()
-            .filter(f -> !"ANULADA".equals(f.getEstado()))
-            .map(FacturaInterna::getTotalVenta)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long cantidadFacturas = facturas.stream()
-            .filter(f -> !"ANULADA".equals(f.getEstado()))
-            .count();
-
-        long cantidadAnuladas = facturas.stream()
-            .filter(f -> "ANULADA".equals(f.getEstado()))
-            .count();
-
-        // Agrupar por medio de pago
-        Map<String, BigDecimal> totalesPorMedioPago = new HashMap<>();
-        for (FacturaInterna factura : facturas) {
-            if (!"ANULADA".equals(factura.getEstado())) {
-                List<FacturaInternaMediosPago> pagos = mediosPagoRepository.findByFacturaId(factura.getId());
-                for (FacturaInternaMediosPago pago : pagos) {
-                    String tipoPago = pago.getTipoPago().getDescripcion();
-                    totalesPorMedioPago.merge(tipoPago, pago.getMonto(), BigDecimal::add);
-                }
-            }
-        }
-
-        return ResumenDiarioResponse.builder()
-            .fecha(fecha)
-            .sucursalId(sucursalId)
-            .cantidadFacturas(cantidadFacturas)
-            .cantidadAnuladas(cantidadAnuladas)
-            .totalVentas(totalVentas)
-            .totalesPorMedioPago(totalesPorMedioPago)
+    /**
+     * Mapear a response de lista
+     */
+    private FacturaInternaListResponse mapToListResponse(FacturaInterna factura) {
+        return FacturaInternaListResponse.builder()
+            .id(factura.getId())
+            .numero(factura.getNumero())
+            .fecha(factura.getFecha())
+            .clienteNombre(factura.getNombreCliente())
+            .total(factura.getTotal())
+            .estado(factura.getEstado())
             .build();
     }
 
-    // ========== MÉTODOS DE UTILIDAD ==========
-
-    public boolean existeNumeroFactura(String numeroFactura) {
-        return facturaRepository.findByNumeroFactura(numeroFactura).isPresent();
+    /**
+     * Mapear detalle a response
+     */
+    private DetalleFacturaInternaResponse mapDetalleToResponse(FacturaInternaDetalle detalle) {
+        return DetalleFacturaInternaResponse.builder()
+            .id(detalle.getId())
+            .productoId(detalle.getProducto().getId())
+            .codigoProducto(detalle.getCodigoProducto())
+            .nombreProducto(detalle.getNombreProducto())
+            .cantidad(detalle.getCantidad())
+            .precioUnitario(detalle.getPrecioUnitario())
+            .subtotal(detalle.getSubtotal())
+            .descuento(detalle.getDescuento())
+            .total(detalle.getTotal())
+            .notas(detalle.getNotas())
+            .build();
     }
 
-    @Transactional
-    public void actualizarNotas(Long facturaId, String notas) {
-        FacturaInterna factura = facturaRepository.findById(facturaId)
-            .orElseThrow(() -> new BusinessException("Factura no encontrada"));
-
-        validarEstadoFactura(factura, "actualizar");
-
-        String notasAnteriores = factura.getNotas();
-        factura.setNotas(notas);
-        factura.setUpdatedAt(LocalDateTime.now());
-
-        facturaRepository.save(factura);
-
-        registrarBitacora(factura, "MODIFICADA",
-            "Notas actualizadas. Anterior: " + notasAnteriores + ", Nueva: " + notas);
-    }
-
-    @Transactional(readOnly = true)
-    public byte[] generarPDF(Long facturaId) {
-        FacturaInterna factura = facturaRepository.findById(facturaId)
-            .orElseThrow(() -> new BusinessException("Factura no encontrada"));
-
-        // Aquí iría la lógica de generación de PDF
-        // Por ahora retornamos un array vacío
-        log.info("Generando PDF para factura: {}", factura.getNumeroFactura());
-
-        return new byte[0]; // TODO: Implementar generación de PDF
+    /**
+     * Mapear medio pago a response
+     */
+    private MedioPagoResponse mapMedioPagoToResponse(FacturaInternaMedioPago medioPago) {
+        return MedioPagoResponse.builder()
+            .tipoPago(medioPago.getTipo())
+            .monto(medioPago.getMonto())
+            .referencia(medioPago.getReferencia())
+            .banco(medioPago.getBanco())
+            .numeroAutorizacion(medioPago.getNotas())
+            .build();
     }
 }

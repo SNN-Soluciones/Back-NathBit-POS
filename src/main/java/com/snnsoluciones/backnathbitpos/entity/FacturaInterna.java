@@ -1,91 +1,159 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
-import java.util.ArrayList;
-import java.util.List;
-import lombok.Data;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
+/**
+ * Factura interna SIMPLIFICADA - Solo para control interno
+ * Sin requisitos de Hacienda, sin XML, sin claves, sin nada complejo
+ */
 @Entity
 @Table(name = "factura_interna")
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(of = "id")
 public class FacturaInterna {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "numero_factura", nullable = false, unique = true)
-    private String numeroFactura; // Formato: FI-2024-00001
+    // ===== DATOS BÁSICOS =====
+    @Column(name = "numero", nullable = false, unique = true, length = 20)
+    private String numero; // Ej: "INT-2024-0001"
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sucursal_id", nullable = false)
     private Sucursal sucursal;
 
-    @ManyToOne
-    @JoinColumn(name = "cliente_id")
-    private Cliente cliente; // Puede ser null para ventas de mostrador
-
-    @Column(name = "nombre_cliente")
-    private String nombreCliente; // Para cuando no hay cliente registrado
-
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
-    private Usuario usuario; // Cajero que realizó la venta
+    private Usuario cajero;
 
-    @Column(name = "fecha_emision", nullable = false)
-    private LocalDateTime fechaEmision;
+    // ===== CLIENTE (Opcional) =====
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cliente_id")
+    private Cliente cliente;
 
-    // Totales
+    @Column(name = "nombre_cliente", length = 255)
+    private String nombreCliente; // Si no hay cliente registrado
+
+    // ===== FECHAS =====
+    @Column(name = "fecha", nullable = false)
+    private LocalDateTime fecha;
+
+    // ===== MONTOS SIMPLES =====
     @Column(name = "subtotal", nullable = false, precision = 15, scale = 2)
-    private BigDecimal subtotal; // Suma de líneas sin descuentos ni cargos
+    private BigDecimal subtotal; // Suma de líneas
 
-    @Column(name = "total_descuentos", precision = 15, scale = 2)
-    private BigDecimal totalDescuentos = BigDecimal.ZERO;
+    @Column(name = "descuento", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal descuento = BigDecimal.ZERO;
 
-    @Column(name = "total_otros_cargos", precision = 15, scale = 2)
-    private BigDecimal totalOtrosCargos = BigDecimal.ZERO; // Incluye servicio
+    @Column(name = "total", nullable = false, precision = 15, scale = 2)
+    private BigDecimal total; // subtotal - descuento
 
-    @Column(name = "total_venta", nullable = false, precision = 15, scale = 2)
-    private BigDecimal totalVenta; // Total final a pagar
+    // ===== PAGO =====
+    @Column(name = "pago_recibido", precision = 15, scale = 2)
+    private BigDecimal pagoRecibido; // Para calcular vuelto
 
-    // Usando EstadoFactura existente - solo estados básicos
-    @Column(name = "estado", nullable = false)
-    private String estado = "ACTIVA"; // ACTIVA, ANULADA, BORRADOR
+    @Column(name = "vuelto", precision = 15, scale = 2)
+    private BigDecimal vuelto;
 
-    @Column(name = "notas")
-    private String notas;
+    // ===== ESTADO =====
+    @Column(name = "estado", length = 20, nullable = false)
+    @Builder.Default
+    private String estado = "PAGADA"; // PAGADA, ANULADA
 
-    @Column(name = "anulada_por")
-    private Long anuladaPor; // ID del usuario que anuló
+    @Column(name = "anulada_por_id")
+    private Long anuladaPorId; // ID del usuario que anuló
 
     @Column(name = "fecha_anulacion")
     private LocalDateTime fechaAnulacion;
 
-    @Column(name = "motivo_anulacion")
+    @Column(name = "motivo_anulacion", columnDefinition = "TEXT")
     private String motivoAnulacion;
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt = LocalDateTime.now();
+    // ===== NOTAS =====
+    @Column(name = "notas", columnDefinition = "TEXT")
+    private String notas;
 
+    // ===== DETALLES =====
+    @OneToMany(mappedBy = "facturaInterna", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<FacturaInternaDetalle> detalles = new ArrayList<>();
+
+    // ===== MEDIOS DE PAGO =====
+    @OneToMany(mappedBy = "facturaInterna", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<FacturaInternaMedioPago> mediosPago = new ArrayList<>();
+
+    // ===== AUDITORÍA =====
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<FacturaInternaOtrosCargos> facturaInternaOtrosCargos;
+    // ===== MÉTODOS HELPER =====
 
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<FacturaInternaDescuentos> facturaInternaDescuentos;
+    /**
+     * Calcula el total basado en subtotal y descuento
+     */
+    public void calcularTotal() {
+        this.total = this.subtotal.subtract(this.descuento != null ? this.descuento : BigDecimal.ZERO);
+    }
 
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("numeroLinea ASC")
-    private List<FacturaInternaDetalle> facturaInternaDetalles;
+    /**
+     * Calcula el vuelto basado en pago recibido
+     */
+    public void calcularVuelto() {
+        if (this.pagoRecibido != null && this.total != null) {
+            this.vuelto = this.pagoRecibido.subtract(this.total);
+            if (this.vuelto.compareTo(BigDecimal.ZERO) < 0) {
+                this.vuelto = BigDecimal.ZERO;
+            }
+        }
+    }
 
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<FacturaInternaMediosPago> mediosPago = new ArrayList<>();
+    /**
+     * Agrega un detalle a la factura
+     */
+    public void agregarDetalle(FacturaInternaDetalle detalle) {
+        detalles.add(detalle);
+        detalle.setFacturaInterna(this);
+    }
+
+    /**
+     * Agrega un medio de pago a la factura
+     */
+    public void agregarMedioPago(FacturaInternaMedioPago medioPago) {
+        mediosPago.add(medioPago);
+        medioPago.setFacturaInterna(this);
+    }
+
+    /**
+     * Anula la factura
+     */
+    public void anular(Long usuarioId, String motivo) {
+        this.estado = "ANULADA";
+        this.anuladaPorId = usuarioId;
+        this.fechaAnulacion = LocalDateTime.now();
+        this.motivoAnulacion = motivo;
+    }
 }

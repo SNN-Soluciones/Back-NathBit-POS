@@ -1,57 +1,44 @@
 package com.snnsoluciones.backnathbitpos.dto.facturainterna;
 
-import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.MedioPagoDto;
-import lombok.Data;
-import lombok.Builder;
+import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class FacturaInternaResponse {
     private Long id;
-    private String numeroFactura;
-    private String estado;
-    private LocalDateTime fechaEmision;
-    
-    // Cliente
-    private Long clienteId;
-    private String nombreCliente;
-    
-    // Totales
-    private BigDecimal subtotal;
-    private BigDecimal totalDescuentos;
-    private BigDecimal totalOtrosCargos;
-    private BigDecimal totalVenta;
-    
-    // Detalles
-    private List<DetalleResponse> detalles;
-    private List<MedioPagoResponse> mediosPago;
-    private List<OtroCargoResponse> otrosCargos;
-    private List<DescuentoResponse> descuentos;
-    
-    // Info adicional
+    private String numero;
+    private LocalDateTime fecha;
+
+    // Empresa y sucursal
     private String empresaNombre;
     private String sucursalNombre;
     private String cajeroNombre;
+
+    // Cliente
+    private Long clienteId;
+    private String clienteNombre;
+
+    // Totales
+    private BigDecimal subtotal;
+    private BigDecimal descuento;
+    private BigDecimal total;
+
+    // Pago
+    private BigDecimal pagoRecibido;
+    private BigDecimal vuelto;
+
+    // Estado
+    private String estado;
     private String notas;
-    
-    @Data
-    @Builder
-    public static class DetalleResponse {
-        private Long id;
-        private Integer numeroLinea;
-        private String codigoProducto;
-        private String descripcion;
-        private BigDecimal cantidad;
-        private String unidadMedida;
-        private BigDecimal precioUnitario;
-        private BigDecimal montoDescuento;
-        private BigDecimal subtotal;
-        private BigDecimal montoImpuestoServicio;
-        private BigDecimal montoTotalLinea;
-    }
-    
-    // Similar para otros responses...
+
+    // Detalles
+    private List<DetalleFacturaInternaResponse> detalles;
+
+    // Medios de pago (cuando es MIXTO)
+    private List<MedioPagoResponse> mediosPago;
 }

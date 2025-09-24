@@ -1,59 +1,84 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
+
 import java.math.BigDecimal;
 
+/**
+ * Detalle de líneas de factura interna - SÚPER SIMPLE
+ */
 @Entity
-@Table(name = "factura_interna_detalles")
+@Table(name = "factura_interna_detalle")
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(of = "id")
 public class FacturaInternaDetalle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "factura_id", nullable = false)
-    private FacturaInterna factura;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "factura_interna_id", nullable = false)
+    private FacturaInterna facturaInterna;
 
-    @Column(name = "numero_linea", nullable = false)
-    private Integer numeroLinea;
-
-    @ManyToOne
+    // ===== PRODUCTO =====
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "producto_id", nullable = false)
     private Producto producto;
 
-    @Column(name = "codigo_producto", nullable = false)
+    @Column(name = "codigo_producto", length = 50)
     private String codigoProducto;
 
-    @Column(name = "descripcion", nullable = false)
-    private String descripcion;
+    @Column(name = "nombre_producto", nullable = false, length = 255)
+    private String nombreProducto;
 
+    // ===== CANTIDADES Y PRECIOS =====
     @Column(name = "cantidad", nullable = false, precision = 10, scale = 2)
     private BigDecimal cantidad;
-
-    @Column(name = "unidad_medida")
-    private String unidadMedida = "Unid";
 
     @Column(name = "precio_unitario", nullable = false, precision = 15, scale = 2)
     private BigDecimal precioUnitario;
 
-    @Column(name = "monto_descuento", precision = 15, scale = 2)
-    private BigDecimal montoDescuento = BigDecimal.ZERO;
-
-    @Column(name = "porcentaje_descuento", precision = 5, scale = 2)
-    private BigDecimal porcentajeDescuento = BigDecimal.ZERO;
-
     @Column(name = "subtotal", nullable = false, precision = 15, scale = 2)
-    private BigDecimal subtotal; // (cantidad * precio) - descuento
+    private BigDecimal subtotal; // cantidad * precioUnitario
 
-    @Column(name = "monto_impuesto_servicio", precision = 15, scale = 2)
-    private BigDecimal montoImpuestoServicio = BigDecimal.ZERO;
+    @Column(name = "descuento", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal descuento = BigDecimal.ZERO;
 
-    @Column(name = "monto_total_linea", nullable = false, precision = 15, scale = 2)
-    private BigDecimal montoTotalLinea; // subtotal + impuesto servicio
+    @Column(name = "total", nullable = false, precision = 15, scale = 2)
+    private BigDecimal total; // subtotal - descuento
 
-    @Column(name = "notas")
+    // ===== NOTAS =====
+    @Column(name = "notas", length = 500)
     private String notas;
+
+    // ===== MÉTODOS HELPER =====
+
+    /**
+     * Calcula los totales de la línea
+     */
+    public void calcularTotales() {
+        // Subtotal = cantidad * precio unitario
+        this.subtotal = this.cantidad.multiply(this.precioUnitario);
+
+        // Total = subtotal - descuento
+        this.total = this.subtotal.subtract(
+            this.descuento != null ? this.descuento : BigDecimal.ZERO
+        );
+    }
+
+    /**
+     * Setea la información del producto
+     */
+    public void setearDatosProducto(Producto producto) {
+        this.producto = producto;
+        this.codigoProducto = producto.getCodigoInterno();
+        this.nombreProducto = producto.getNombre();
+        this.precioUnitario = producto.getPrecioVenta();
+    }
 }

@@ -13,7 +13,7 @@ public class MedioPagoInternoRequest {
     @NotBlank(message = "El tipo de pago es requerido")
     @Pattern(regexp = "EFECTIVO|TARJETA|SINPE|TRANSFERENCIA|CHEQUE", 
              message = "Tipo de pago inválido")
-    private String tipo;
+    private String tipoPago;
     
     @NotNull(message = "El monto es requerido")
     @DecimalMin(value = "0.01", message = "El monto debe ser mayor a 0")
@@ -21,5 +21,6 @@ public class MedioPagoInternoRequest {
     
     private String referencia; // Número de voucher, código SINPE, etc.
     private String banco; // Para tarjetas o transferencias
-    private String notas;
+    private String numeroAutorizacion;
+    private String descripcionPago;
 }

@@ -98,11 +98,11 @@ public class FacturaInternaService {
 
         for (MedioPagoInternoRequest medioPagoReq : request.getMediosPago()) {
             FacturaInternaMedioPago medioPago = FacturaInternaMedioPago.builder()
-                .tipo(medioPagoReq.getTipo())
+                .tipo(medioPagoReq.getTipoPago())
                 .monto(medioPagoReq.getMonto())
                 .referencia(medioPagoReq.getReferencia())
                 .banco(medioPagoReq.getBanco())
-                .notas(medioPagoReq.getNotas())
+                .notas(medioPagoReq.getNumeroAutorizacion())
                 .build();
 
             factura.agregarMedioPago(medioPago);

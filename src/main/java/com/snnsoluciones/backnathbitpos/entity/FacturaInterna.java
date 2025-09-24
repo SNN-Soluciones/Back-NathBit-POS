@@ -1,6 +1,8 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -73,4 +75,17 @@ public class FacturaInterna {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FacturaInternaOtrosCargos> facturaInternaOtrosCargos;
+
+    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FacturaInternaDescuentos> facturaInternaDescuentos;
+
+    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("numeroLinea ASC")
+    private List<FacturaInternaDetalle> facturaInternaDetalles;
+
+    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<FacturaInternaMediosPago> mediosPago = new ArrayList<>();
 }

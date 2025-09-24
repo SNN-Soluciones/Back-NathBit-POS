@@ -137,6 +137,9 @@ dependencies {
     // ================== Development ==================
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
+    implementation 'com.github.anastaciocintra:escpos-coffee:4.1.0'
+
+
     // ================== WAR Deployment ==================
     providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
 

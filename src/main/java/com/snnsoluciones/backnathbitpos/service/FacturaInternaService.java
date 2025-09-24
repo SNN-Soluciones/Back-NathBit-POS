@@ -2,6 +2,11 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.MedioPagoDto;
 import com.snnsoluciones.backnathbitpos.dto.facturainterna.*;
+import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.DescuentoRequest;
+import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.DetalleRequest;
+import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.MedioPagoRequest;
+import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaRequest.OtroCargoRequest;
+import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaResponse.DetalleResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.mh.MedioPago;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
@@ -61,7 +66,7 @@ public class FacturaInternaService {
         FacturaInterna factura = new FacturaInterna();
         factura.setEmpresa(empresaService.buscarPorId(request.getEmpresaId()));
         factura.setSucursal(sucursalService.finById(request.getSucursalId()).orElse(null));
-        factura.setCliente(cliente);
+        factura.setCliente(cliente == null ? null : cliente);
         factura.setUsuario(usuario);
         factura.setNombreCliente(request.getNombreCliente() != null? request.getNombreCliente() : "");
         factura.setFechaEmision(LocalDateTime.now());
@@ -74,7 +79,7 @@ public class FacturaInternaService {
 
         // Generar número de factura
         factura.setNumeroFactura(generarNumeroFactura(request.getSucursalId()));
-        
+
         // Calcular totales
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal totalDescuentos = BigDecimal.ZERO;
@@ -84,28 +89,40 @@ public class FacturaInternaService {
         factura = facturaRepository.save(factura);
         
         // Procesar detalles
+        FacturaInternaDetalle detalle;
+        List<FacturaInternaDetalle> detalles = new ArrayList<>();
         int numeroLinea = 1;
-        for (FacturaInternaRequest.DetalleRequest detalleReq : request.getDetalles()) {
-            FacturaInternaDetalle detalle = procesarDetalle(factura, detalleReq, numeroLinea++);
+        for (DetalleRequest detalleReq : request.getDetalles()) {
+            detalle = procesarDetalle(factura, detalleReq, numeroLinea++);
             subtotal = subtotal.add(detalle.getSubtotal());
             totalOtrosCargos = totalOtrosCargos.add(detalle.getMontoImpuestoServicio());
+            detalles.add(detalle);
         }
-        
+
+        factura.setFacturaInternaDetalles(detalles);
         // Procesar descuentos
+        List<FacturaInternaDescuentos> facturaInternaDescuentos = new ArrayList<>();
+        FacturaInternaDescuentos descuento;
         if (request.getDescuentos() != null) {
-            for (FacturaInternaRequest.DescuentoRequest descuentoReq : request.getDescuentos()) {
-                FacturaInternaDescuentos descuento = procesarDescuento(factura, descuentoReq);
+            for (DescuentoRequest descuentoReq : request.getDescuentos()) {
+                descuento = procesarDescuento(factura, descuentoReq);
                 totalDescuentos = totalDescuentos.add(descuento.getMonto());
+                facturaInternaDescuentos.add(descuento);
             }
         }
-        
+        factura.setFacturaInternaDescuentos(facturaInternaDescuentos);
+
+        List<FacturaInternaOtrosCargos> facturaInternaOtrosCargos = new ArrayList<>();
         // Procesar otros cargos
         if (request.getOtrosCargos() != null) {
-            for (FacturaInternaRequest.OtroCargoRequest cargoReq : request.getOtrosCargos()) {
+            for (OtroCargoRequest cargoReq : request.getOtrosCargos()) {
                 FacturaInternaOtrosCargos cargo = procesarOtroCargo(factura, cargoReq);
                 totalOtrosCargos = totalOtrosCargos.add(cargo.getMonto());
+                facturaInternaOtrosCargos.add(cargo);
             }
         }
+
+        factura.setFacturaInternaOtrosCargos(facturaInternaOtrosCargos);
         
         // Actualizar totales
         factura.setSubtotal(subtotal);
@@ -126,7 +143,7 @@ public class FacturaInternaService {
     }
     
     private FacturaInternaDetalle procesarDetalle(FacturaInterna factura, 
-                                                 FacturaInternaRequest.DetalleRequest request,
+                                                 DetalleRequest request,
                                                  int numeroLinea) {
         Producto producto = productoRepository.findById(request.getProductoId())
             .orElseThrow(() -> new BusinessException("Producto no encontrado"));
@@ -155,14 +172,14 @@ public class FacturaInternaService {
         return detalleRepository.save(detalle);
     }
     
-    private void procesarPagos(FacturaInterna factura, List<FacturaInternaRequest.MedioPagoRequest> pagos) {
+    private void procesarPagos(FacturaInterna factura, List<MedioPagoRequest> pagos) {
         if (pagos == null || pagos.isEmpty()) {
             throw new BusinessException("Debe especificar al menos un medio de pago");
         }
         
         BigDecimal totalPagado = BigDecimal.ZERO;
-        
-        for (FacturaInternaRequest.MedioPagoRequest pagoReq : pagos) {
+        List<FacturaInternaMediosPago> mediosPago = new ArrayList<>();
+        for (MedioPagoRequest pagoReq : pagos) {
             FacturaInternaMediosPago pago = new FacturaInternaMediosPago();
             pago.setFactura(factura);
             pago.setTipoPago(MedioPago.valueOf(pagoReq.getTipoPago()));
@@ -170,10 +187,10 @@ public class FacturaInternaService {
             pago.setReferencia(pagoReq.getReferencia());
             pago.setBanco(pagoReq.getBanco());
             pago.setNumeroAutorizacion(pagoReq.getNumeroAutorizacion());
-            
-            mediosPagoRepository.save(pago);
+            mediosPago.add(pago);
             totalPagado = totalPagado.add(pagoReq.getMonto());
         }
+        factura.setMediosPago(mediosPago);
         
         // Calcular vuelto si es efectivo
         if (totalPagado.compareTo(factura.getTotalVenta()) > 0) {
@@ -232,7 +249,7 @@ public class FacturaInternaService {
     // ========== MÉTODOS AUXILIARES ==========
 
     private FacturaInternaDescuentos procesarDescuento(FacturaInterna factura,
-        FacturaInternaRequest.DescuentoRequest request) {
+        DescuentoRequest request) {
         FacturaInternaDescuentos descuento = new FacturaInternaDescuentos();
         descuento.setFactura(factura);
         descuento.setTipoDescuento(request.getTipoDescuento());
@@ -254,7 +271,7 @@ public class FacturaInternaService {
     }
 
     private FacturaInternaOtrosCargos procesarOtroCargo(FacturaInterna factura,
-        FacturaInternaRequest.OtroCargoRequest request) {
+        OtroCargoRequest request) {
         FacturaInternaOtrosCargos cargo = new FacturaInternaOtrosCargos();
         cargo.setFactura(factura);
         cargo.setTipoCargo(request.getTipoCargo());
@@ -281,7 +298,7 @@ public class FacturaInternaService {
             .numeroFactura(factura.getNumeroFactura())
             .estado(factura.getEstado())
             .fechaEmision(factura.getFechaEmision())
-            .clienteId(factura.getCliente().getId())
+            .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
             .nombreCliente(factura.getNombreCliente())
             .subtotal(factura.getSubtotal())
             .totalDescuentos(factura.getTotalDescuentos())
@@ -291,17 +308,17 @@ public class FacturaInternaService {
             .sucursalNombre(factura.getSucursal().getNombre())
             .cajeroNombre(factura.getUsuario().getNombre())
             .notas(factura.getNotas())
-            .detalles(mapDetalles(factura.getId()))
-            .mediosPago(mapMediosPago(factura.getId()))
-            .otrosCargos(mapOtrosCargos(factura.getId()))
-            .descuentos(mapDescuentos(factura.getId()))
+            .detalles(mapDetalles(factura.getFacturaInternaDetalles()))
+            .mediosPago(mapMediosPago(factura.getMediosPago()))
+            .otrosCargos(mapOtrosCargos(factura.getFacturaInternaOtrosCargos()))
+            .descuentos(mapDescuentos(factura.getFacturaInternaDescuentos()))
             .build();
     }
 
-    private List<FacturaInternaResponse.DetalleResponse> mapDetalles(Long facturaId) {
-        return detalleRepository.findByFacturaIdOrderByNumeroLinea(facturaId)
+    private List<DetalleResponse> mapDetalles(List<FacturaInternaDetalle> facturaInternaDetalle) {
+        return facturaInternaDetalle
             .stream()
-            .map(detalle -> FacturaInternaResponse.DetalleResponse.builder()
+            .map(detalle -> DetalleResponse.builder()
                 .id(detalle.getId())
                 .numeroLinea(detalle.getNumeroLinea())
                 .codigoProducto(detalle.getCodigoProducto())
@@ -317,8 +334,8 @@ public class FacturaInternaService {
             .collect(Collectors.toList());
     }
 
-    private List<MedioPagoResponse> mapMediosPago(Long facturaId) {
-        return mediosPagoRepository.findByFacturaId(facturaId)
+    private List<MedioPagoResponse> mapMediosPago(List<FacturaInternaMediosPago> medioPagos) {
+        return medioPagos
             .stream()
             .map(pago -> MedioPagoResponse.builder()
                 .id(pago.getId())
@@ -333,8 +350,8 @@ public class FacturaInternaService {
             .collect(Collectors.toList());
     }
 
-    private List<OtroCargoResponse> mapOtrosCargos(Long facturaId) {
-        return otrosCargosRepository.findByFacturaId(facturaId)
+    private List<OtroCargoResponse> mapOtrosCargos(List<FacturaInternaOtrosCargos> facturaInternaOtrosCargos) {
+        return facturaInternaOtrosCargos
             .stream()
             .map(cargo -> OtroCargoResponse.builder()
                 .id(cargo.getId())
@@ -347,8 +364,8 @@ public class FacturaInternaService {
             .collect(Collectors.toList());
     }
 
-    private List<DescuentoResponse> mapDescuentos(Long facturaId) {
-        return descuentosRepository.findByFacturaId(facturaId)
+    private List<DescuentoResponse> mapDescuentos(List<FacturaInternaDescuentos> facturaInternaDescuentos) {
+        return facturaInternaDescuentos
             .stream()
             .map(descuento -> DescuentoResponse.builder()
                 .id(descuento.getId())
@@ -396,9 +413,9 @@ public class FacturaInternaService {
 
     // ========== VALIDACIONES ==========
 
-    private void validarTotales(FacturaInterna factura, List<FacturaInternaRequest.MedioPagoRequest> pagos) {
+    private void validarTotales(FacturaInterna factura, List<MedioPagoRequest> pagos) {
         BigDecimal totalPagos = pagos.stream()
-            .map(FacturaInternaRequest.MedioPagoRequest::getMonto)
+            .map(MedioPagoRequest::getMonto)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         if (totalPagos.compareTo(factura.getTotalVenta()) < 0) {

@@ -804,7 +804,10 @@ public class FacturaPdfMapperService {
           item.put("numeroLinea", String.valueOf(numeroLinea.get()));
           item.put("codigo", detalle.getProducto().getCodigoInterno());
           item.put("descripcion", detalle.getDetalle() != null ?
-              detalle.getDetalle().concat("---").concat(detalle.getDescripcionPersonalizada()) : detalle.getProducto().getNombre());
+              detalle.getDetalle().concat("---").concat(
+                  detalle.getDescripcionPersonalizada() != null ? detalle.getDescripcionPersonalizada() : "") : detalle.getProducto().getNombre());
+
+
           item.put("unidadMedida", detalle.getUnidadMedida());
           item.put("cantidad", DECIMAL_FORMAT.format(detalle.getCantidad()));
           item.put("precioUnitario", DECIMAL_FORMAT.format(detalle.getPrecioUnitario()));

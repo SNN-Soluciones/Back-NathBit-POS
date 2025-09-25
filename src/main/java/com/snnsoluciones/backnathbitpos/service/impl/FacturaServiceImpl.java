@@ -12,13 +12,21 @@ import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import io.hypersistence.utils.common.StringUtils;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.criteria.Predicate;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -805,6 +813,91 @@ public class FacturaServiceImpl implements FacturaService {
   public ValidacionTotalesResponse validarTotales(ValidacionTotalesRequest request) {
     // Usar la misma validación completa
     return validarTotalesCompleto(request);
+  }
+
+  @Override
+  public Page<FacturaReferenciaDto> buscarParaReferencia(BuscarFacturaReferenciaRequest request) {
+    Specification<Factura> spec = crearEspecificacionBusquedaReferencia(request);
+
+    Pageable pageable = PageRequest.of(
+        request.getPagina(),
+        request.getTamanio(),
+        Sort.by(Sort.Direction.DESC, "fechaEmision")
+    );
+
+    Page<Factura> facturas = facturaRepository.findAll(spec, pageable);
+
+    return facturas.map(this::convertirAFacturaReferenciaDto);
+  }
+
+  /**
+   * Crear especificación para búsqueda de facturas para referencia
+   */
+  private Specification<Factura> crearEspecificacionBusquedaReferencia(BuscarFacturaReferenciaRequest request) {
+    return (root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+
+      // Filtro por empresa (obligatorio)
+      if (request.getEmpresaId() != null) {
+        predicates.add(cb.equal(root.get("empresa").get("id"), request.getEmpresaId()));
+      }
+
+      // Filtro por sucursal (opcional)
+      if (request.getSucursalId() != null) {
+        predicates.add(cb.equal(root.get("sucursal").get("id"), request.getSucursalId()));
+      }
+
+      // Solo facturas aceptadas/procesadas
+      predicates.add(cb.in(root.get("estado")).value(Arrays.asList("ACEPTADA", "PROCESADA")));
+
+      // Búsqueda por término libre
+      if (request.getTermino() != null && !request.getTermino().trim().isEmpty()) {
+        String termino = "%" + request.getTermino().toLowerCase().trim() + "%";
+
+        Predicate clavePredicate = cb.like(cb.lower(root.get("clave")), termino);
+        Predicate consecutivoPredicate = cb.like(cb.lower(root.get("consecutivo")), termino);
+        Predicate clientePredicate = cb.like(cb.lower(root.get("clienteNombre")), termino);
+
+        predicates.add(cb.or(clavePredicate, consecutivoPredicate, clientePredicate));
+      }
+
+      // Filtro por rango de fechas
+      if (request.getFechaDesde() != null) {
+        predicates.add(cb.greaterThanOrEqualTo(
+            root.get("fechaEmision").as(LocalDate.class),
+            request.getFechaDesde()
+        ));
+      }
+
+      if (request.getFechaHasta() != null) {
+        predicates.add(cb.lessThanOrEqualTo(
+            root.get("fechaEmision").as(LocalDate.class),
+            request.getFechaHasta()
+        ));
+      }
+
+      return cb.and(predicates.toArray(new Predicate[0]));
+    };
+  }
+
+  /**
+   * Convertir Factura a FacturaReferenciaDto
+   */
+  private FacturaReferenciaDto convertirAFacturaReferenciaDto(Factura factura) {
+    return FacturaReferenciaDto.builder()
+        .id(factura.getId())
+        .clave(factura.getClave())
+        .consecutivo(factura.getConsecutivo())
+        .fechaEmision(LocalDateTime.parse(factura.getFechaEmision()))
+        .tipoDocumento("01") // Siempre será Factura Electrónica
+        .clienteNombre(factura.getCliente().getRazonSocial())
+        .clienteIdentificacion(factura.getCliente().getNumeroIdentificacion())
+        .totalComprobante(factura.getTotalComprobante())
+        .moneda(factura.getMoneda().name())
+        .estado(factura.getEstado().name())
+        .empresaNombre("")
+        .sucursalNombre(factura.getSucursal().getNombre())
+        .build();
   }
 
   private void validarFacturaParaNotaCredito(Factura factura) {

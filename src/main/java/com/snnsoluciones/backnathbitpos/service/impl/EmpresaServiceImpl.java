@@ -89,6 +89,7 @@ public class EmpresaServiceImpl implements EmpresaService {
         existente.setRegimenTributario(empresa.getRegimenTributario());
         existente.setLimiteAnualSimplificado(empresa.getLimiteAnualSimplificado());
         existente.setLogoUrl(empresa.getLogoUrl());
+        existente.setRegimenTributario(empresa.getRegimenTributario());
 
         return empresaRepository.save(existente);
     }

@@ -11,9 +11,11 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -203,6 +205,31 @@ public class FacturaController {
             log.error("Error al validar totales", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Error al validar totales: " + e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Buscar facturas para referencias",
+        description = "Busca facturas por clave, consecutivo, nombre de cliente o fechas para ser usadas como referencia")
+    @PostMapping("/buscar-para-referencia/{empresaId}")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Page<FacturaReferenciaDto>>> buscarParaReferencia(
+        @Valid @RequestBody BuscarFacturaReferenciaRequest request, @PathVariable Long empresaId) {
+
+        try {
+            // Obtener empresa del contexto de usuario
+            request.setEmpresaId(empresaId);
+
+            Page<FacturaReferenciaDto> facturas = facturaService.buscarParaReferencia(request);
+
+            return ResponseEntity.ok(ApiResponse.ok(
+                "Facturas encontradas: " + facturas.getTotalElements(),
+                facturas
+            ));
+
+        } catch (Exception e) {
+            log.error("Error al buscar facturas para referencia: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Error al buscar facturas: " + e.getMessage()));
         }
     }
 }

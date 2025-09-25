@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.empresa;
 
+import com.snnsoluciones.backnathbitpos.enums.mh.RegimenTributario;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import lombok.Builder;
 import lombok.Data;
@@ -25,4 +26,5 @@ public class EmpresaResponse {
     private Boolean categoriasPorSucursal;
     private Boolean proveedoresPorSucursal;
     private Boolean inventarioPorSucursal;
+    private RegimenTributario regimenTributario;
 }

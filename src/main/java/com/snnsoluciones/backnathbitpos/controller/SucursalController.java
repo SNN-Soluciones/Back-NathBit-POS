@@ -56,7 +56,7 @@ public class SucursalController extends BaseController {
 
   @Operation(summary = "Obtener sucursal por ID")
   @GetMapping("/{id}")
-  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'CAJERO', 'COCINA', 'ADMIN', 'JEFE_CAJAS', 'MESERO')")
   public ResponseEntity<ApiResponse<SucursalResponse>> obtenerPorId(@PathVariable Long id) {
     Sucursal sucursal = sucursalService.buscarPorId(id)
         .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));

@@ -53,18 +53,12 @@ public class EmpresaController extends BaseController{
 
     @Operation(summary = "Obtener empresa por ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'CAJERO', 'COCINA', 'ADMIN', 'JEFE_CAJAS', 'MESERO')")
     public ResponseEntity<ApiResponse<EmpresaResponse>> obtenerPorId(@PathVariable Long id) {
         Empresa empresa = empresaService.buscarPorId(id);
         if (empresa == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("Empresa no encontrada"));
-        }
-
-        // Validar acceso para SUPER_ADMIN
-        if (!validarAccesoEmpresa(empresa)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error("No tiene acceso a esta empresa"));
         }
 
         return ResponseEntity.ok(ApiResponse.ok(convertirAResponse(empresa)));

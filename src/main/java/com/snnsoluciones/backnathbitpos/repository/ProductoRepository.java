@@ -168,4 +168,6 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
   // Opcional: Para buscar productos globales de una empresa
   @Query("SELECT p FROM Producto p WHERE p.empresa.id = :empresaId AND p.sucursal IS NULL AND p.activo = true")
   Page<Producto> findGlobalProductsByEmpresa(@Param("empresaId") Long empresaId, Pageable pageable);
+
+  boolean existsByCodigoInternoAndEmpresaIdAndSucursalId(String codigoInterno, Long empresaId, Long sucursalId);
 }

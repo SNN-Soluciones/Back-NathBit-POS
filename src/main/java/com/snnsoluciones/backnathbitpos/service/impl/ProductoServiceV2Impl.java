@@ -80,7 +80,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       // 3. OBTENER SUCURSAL SI VIENE
       if (dto.getSucursalId() != null) {
         sucursal = sucursalRepository.findById(dto.getSucursalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada: " + dto.getSucursalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Sucursal no encontrada: " + dto.getSucursalId()));
 
         // Validar que la sucursal pertenezca a la empresa
         if (!sucursal.getEmpresa().getId().equals(empresaId)) {
@@ -92,7 +93,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       }
 
       // 4. DETERMINAR MODO DE FACTURACIÓN
-      boolean esRegimenSimplificado = empresa.getRegimenTributario() == RegimenTributario.REGIMEN_SIMPLIFICADO;
+      boolean esRegimenSimplificado =
+          empresa.getRegimenTributario() == RegimenTributario.REGIMEN_SIMPLIFICADO;
       boolean esFacturacionElectronica = empresa.getRequiereHacienda();
 
       // Para sucursal específica, usar su configuración
@@ -101,7 +103,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       }
 
       // 5. VALIDAR CÓDIGOS ÚNICOS
-      validarCodigosUnicos(empresaId, dto.getSucursalId(), dto.getCodigoInterno(), dto.getCodigoBarras());
+      validarCodigosUnicos(empresaId, dto.getSucursalId(), dto.getCodigoInterno(),
+          dto.getCodigoBarras());
 
       // 6. CREAR PRODUCTO
       Producto producto = new Producto();
@@ -121,11 +124,13 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       if (dto.getCategoriaIds() != null && !dto.getCategoriaIds().isEmpty()) {
         for (Long categoriaId : dto.getCategoriaIds()) {
           CategoriaProducto categoria = categoriaService.buscarPorId(categoriaId)
-              .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
+              .orElseThrow(
+                  () -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
 
           // Validar que pertenezca a la misma empresa
           if (!categoria.getEmpresa().getId().equals(empresa.getId())) {
-            throw new BusinessException("La categoría " + categoriaId + " no pertenece a la misma empresa");
+            throw new BusinessException(
+                "La categoría " + categoriaId + " no pertenece a la misma empresa");
           }
 
           if (!categoria.getActivo()) {
@@ -152,21 +157,33 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
         // Buscar o crear CABYS genérico
         Sucursal finalSucursal = sucursal;
-        EmpresaCAByS cabysSinMesa = empresaCAbySRepository
-            .findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(empresaId, "6332000000000")
-            .orElseGet(() -> {
-              CodigoCAByS codigoGenerico = codigoCAbySRepository.findByCodigo("6332000000000")
-                  .orElseThrow(() -> new BusinessException("CABYS genérico no configurado en el sistema"));
+        EmpresaCAByS cabysSinMesa;
+        if (sucursal == null) {
+          cabysSinMesa = empresaCAbySRepository
+              .findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(empresaId, "6332000000000")
+              .orElse(null);
+        } else {
+          cabysSinMesa = empresaCAbySRepository
+              .findBySucursalIdAndCodigoCabysCodigoAndActivoTrue(sucursal.getId(), "6332000000000")
+              .orElse(null);
+        }
 
-              EmpresaCAByS nuevo = EmpresaCAByS.builder()
-                  .empresa(empresa)
-                  .sucursal(finalSucursal)
-                  .codigoCabys(codigoGenerico)
-                  .activo(true)
-                  .createdAt(LocalDateTime.now())
-                  .build();
-              return empresaCAbySRepository.save(nuevo);
-            });
+// 2. Si no existe, crearlo
+        if (cabysSinMesa == null) {
+          CodigoCAByS codigoGenerico = codigoCAbySRepository.findByCodigo("6332000000000")
+              .orElseThrow(
+                  () -> new BusinessException("CABYS genérico no configurado en el sistema"));
+
+          cabysSinMesa = EmpresaCAByS.builder()
+              .empresa(empresa)
+              .sucursal(finalSucursal)
+              .codigoCabys(codigoGenerico)
+              .activo(true)
+              .createdAt(LocalDateTime.now())
+              .build();
+
+          cabysSinMesa = empresaCAbySRepository.save(cabysSinMesa);
+        }
 
         producto.setEmpresaCabys(cabysSinMesa);
 
@@ -218,7 +235,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
       // 8. CONFIGURAR PRECIOS
       producto.setPrecioVenta(dto.getPrecioVenta());
-      producto.setPrecioCompra(dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
+      producto.setPrecioCompra(
+          dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
       producto.setMoneda(dto.getMoneda() != null ? dto.getMoneda() : Moneda.CRC);
 
       // 9. CONFIGURAR INVENTARIO SEGÚN EMPRESA/SUCURSAL
@@ -257,7 +275,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
           String urlImagen = productoImagenService.subirImagen(
               empresaId,
-              empresa.getNombreComercial() != null ? empresa.getNombreComercial() : empresa.getNombreRazonSocial(),
+              empresa.getNombreComercial() != null ? empresa.getNombreComercial()
+                  : empresa.getNombreRazonSocial(),
               producto.getCodigoInterno(),
               imagen
           );
@@ -296,7 +315,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
             .build();
 
         inventarioRepository.save(inventario);
-        log.info("Inventario inicial creado para materia prima en sucursal: {}", sucursal.getNombre());
+        log.info("Inventario inicial creado para materia prima en sucursal: {}",
+            sucursal.getNombre());
       }
 
       // 14. CONVERTIR Y RETORNAR
@@ -313,13 +333,15 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
 // MÉTODOS AUXILIARES
 
-  private void validarCodigosUnicos(Long empresaId, Long sucursalId, String codigoInterno, String codigoBarras) {
+  private void validarCodigosUnicos(Long empresaId, Long sucursalId, String codigoInterno,
+      String codigoBarras) {
     if (codigoInterno != null) {
       boolean existeCodigo;
 
       if (sucursalId != null) {
         // Validar unicidad en la sucursal
-        existeCodigo = productoRepository.existsByCodigoInternoAndSucursalId(codigoInterno, sucursalId);
+        existeCodigo = productoRepository.existsByCodigoInternoAndSucursalId(codigoInterno,
+            sucursalId);
       } else {
         // Validar unicidad en productos globales de la empresa
         existeCodigo = productoRepository
@@ -913,7 +935,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   public Page<ProductoDto> listarPorEmpresa(Long empresaId, Pageable pageable) {
     // Verificar que la empresa existe
     empresaRepository.findById(empresaId)
-        .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada con ID: " + empresaId));
+        .orElseThrow(
+            () -> new ResourceNotFoundException("Empresa no encontrada con ID: " + empresaId));
 
     // Buscar productos activos de la empresa
     Page<Producto> productos = productoRepository.findByEmpresaIdAndActivoTrue(empresaId, pageable);
@@ -930,7 +953,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   public Page<ProductoDto> listarPorSucursal(Long sucursalId, Pageable pageable) {
     // Verificar que la sucursal existe y obtener la empresa
     Sucursal sucursal = sucursalRepository.findById(sucursalId)
-        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada con ID: " + sucursalId));
+        .orElseThrow(
+            () -> new ResourceNotFoundException("Sucursal no encontrada con ID: " + sucursalId));
 
     // Por ahora, listar todos los productos de la empresa de la sucursal
     // En el futuro podrías filtrar por productos específicos de la sucursal

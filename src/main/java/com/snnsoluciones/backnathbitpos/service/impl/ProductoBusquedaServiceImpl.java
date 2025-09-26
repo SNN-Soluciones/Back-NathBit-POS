@@ -131,7 +131,7 @@ public class ProductoBusquedaServiceImpl implements ProductoBusquedaService {
         dto.setEmpresaId(producto.getEmpresa().getId());
         
         // Mapear categorías
-        dto.setCategoriaProductoDtos(
+        dto.setCategorias(
             producto.getCategorias().stream()
                 .map(cat -> modelMapper.map(cat, CategoriaProductoDto.class))
                 .collect(Collectors.toSet())

@@ -364,7 +364,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     Set<CategoriaProductoDto> categorias = producto.getCategorias().stream()
         .map(cat -> modelMapper.map(cat, CategoriaProductoDto.class))
         .collect(Collectors.toSet());
-    dto.setCategoriaProductoDtos(categorias);
+    dto.setCategorias(categorias);
 
     // Cargar impuestos
     dto.setImpuestos(

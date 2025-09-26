@@ -23,7 +23,7 @@ public class ProductoDto {
     private String nombre;
     private String descripcion;
     private EmpresaCABySSelectDto empresaCabys;
-    private Set<CategoriaProductoDto> categoriaProductoDtos; // Info de categorías
+    private Set<CategoriaProductoDto> categorias; // Info de categorías
     private UnidadMedida unidadMedida;
     private Moneda moneda;
     private BigDecimal precioVenta;

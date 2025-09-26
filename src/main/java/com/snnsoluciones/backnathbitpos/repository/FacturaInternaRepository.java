@@ -17,6 +17,10 @@ public interface FacturaInternaRepository extends JpaRepository<FacturaInterna, 
 
     // Buscar por empresa
     Page<FacturaInterna> findByEmpresaId(Long empresaId, Pageable pageable);
+    /**
+     * Buscar factura interna por número
+     */
+    Optional<FacturaInterna> findByNumero(String numero);
 
     // Buscar por sucursal
     Page<FacturaInterna> findBySucursalId(Long sucursalId, Pageable pageable);

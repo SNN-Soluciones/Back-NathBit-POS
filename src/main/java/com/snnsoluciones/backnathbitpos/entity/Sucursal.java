@@ -82,6 +82,8 @@ public class Sucursal {
     @Column(name = "activa", nullable = false)
     private Boolean activa;
 
+    private String logoSucursalPath;
+
     // NUEVOS CAMPOS PARA FASE 2
 
     /**

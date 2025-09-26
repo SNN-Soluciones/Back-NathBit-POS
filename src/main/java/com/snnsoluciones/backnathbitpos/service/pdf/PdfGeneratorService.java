@@ -37,6 +37,9 @@ public class PdfGeneratorService {
         "otros_cargos_80mm",
         "exoneraciones_80mm",
 
+        "tiquete_interno_80mm",
+        "detalle_tiquete_interno_80mm",
+
         "ventas_basico",
         "ventas_por_tipo_pago"
     };

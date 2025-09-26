@@ -1,96 +1,67 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
-  name="detalle_tiquete_interno_80mm"
-  pageWidth="216"
-  pageHeight="792"
-  columnWidth="196"
-  leftMargin="10"
-  rightMargin="10"
-  topMargin="0"
-  bottomMargin="0"
-  uuid="7a8b9c0d-e1f2-3456-7890-abcdef123456">
-
-  <property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
-  <property name="com.jaspersoft.studio.unit.pageWidth" value="pixel"/>
-  <property name="com.jaspersoft.studio.unit.pageHeight" value="pixel"/>
-  <property name="com.jaspersoft.studio.unit.topMargin" value="pixel"/>
-  <property name="com.jaspersoft.studio.unit.bottomMargin" value="pixel"/>
-  <property name="com.jaspersoft.studio.unit.leftMargin" value="pixel"/>
-  <property name="com.jaspersoft.studio.unit.rightMargin" value="pixel"/>
-  <property name="com.jaspersoft.studio.unit.columnWidth" value="pixel"/>
-  <property name="com.jaspersoft.studio.unit.columnSpacing" value="pixel"/>
-
-  <!-- Campos del datasource -->
-  <field name="cantidad" class="java.math.BigDecimal"/>
-  <field name="descripcion" class="java.lang.String"/>
-  <field name="precioUnitario" class="java.math.BigDecimal"/>
-  <field name="subtotal" class="java.math.BigDecimal"/>
-
-  <background>
-    <band splitType="Stretch"/>
-  </background>
-
-  <detail>
-    <band height="25" splitType="Stretch">
-      <!-- Primera línea: cantidad + descripción -->
-      <textField>
-        <reportElement x="0" y="2" width="20" height="10" uuid="8b9c0d1e-f234-5678-901a-bcdef2345678"/>
-        <textElement textAlignment="Right">
-          <font fontName="DejaVu Sans" size="8" isBold="true"/>
-        </textElement>
-        <textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
-      </textField>
-
-      <textField textAdjust="StretchHeight">
-        <reportElement x="25" y="2" width="171" height="10" uuid="9c0d1e2f-3456-789a-bc01-def345678901"/>
-        <textElement textAlignment="Left">
-          <font fontName="DejaVu Sans" size="8"/>
-        </textElement>
-        <textFieldExpression><![CDATA[$F{descripcion}]]></textFieldExpression>
-      </textField>
-
-      <!-- Segunda línea: cálculo (precio x cantidad = total) -->
-      <textField pattern="#,##0.00">
-        <reportElement x="25" y="14" width="50" height="9" uuid="a0d1e2f3-4567-89ab-cd12-ef4567890123"/>
-        <textElement textAlignment="Right">
-          <font fontName="DejaVu Sans" size="7"/>
-        </textElement>
-        <textFieldExpression><![CDATA[$F{precioUnitario}]]></textFieldExpression>
-      </textField>
-
-      <staticText>
-        <reportElement x="75" y="14" width="15" height="9" uuid="b1e2f345-6789-0abc-de23-f56789012345"/>
-        <textElement textAlignment="Center">
-          <font fontName="DejaVu Sans" size="7"/>
-        </textElement>
-        <text><![CDATA[x]]></text>
-      </staticText>
-
-      <textField>
-        <reportElement x="90" y="14" width="20" height="9" uuid="c2f34567-890a-bcde-f345-678901234567"/>
-        <textElement textAlignment="Center">
-          <font fontName="DejaVu Sans" size="7"/>
-        </textElement>
-        <textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
-      </textField>
-
-      <staticText>
-        <reportElement x="110" y="14" width="15" height="9" uuid="d3456789-01ab-cdef-4567-890123456789"/>
-        <textElement textAlignment="Center">
-          <font fontName="DejaVu Sans" size="7"/>
-        </textElement>
-        <text><![CDATA[=]]></text>
-      </staticText>
-
-      <textField pattern="#,##0.00">
-        <reportElement x="125" y="14" width="71" height="9" uuid="e456789a-bc01-def2-3456-789012345678"/>
-        <textElement textAlignment="Right">
-          <font fontName="DejaVu Sans" size="7" isBold="true"/>
-        </textElement>
-        <textFieldExpression><![CDATA[$F{subtotal}]]></textFieldExpression>
-      </textField>
-    </band>
-  </detail>
+<!-- Created with Jaspersoft Studio version 6.21.3.final using JasperReports Library version 6.21.3-4a3078d20785ebe464f18037d738d12fc98c13cf  -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="detalle_tiquete_interno_80mm" pageWidth="216" pageHeight="792" columnWidth="196" leftMargin="10" rightMargin="10" topMargin="0" bottomMargin="0" uuid="7a8b9c0d-e1f2-3456-7890-abcdef123456">
+	<field name="cantidad" class="java.math.BigDecimal"/>
+	<field name="descripcion" class="java.lang.String"/>
+	<field name="precioUnitario" class="java.math.BigDecimal"/>
+	<field name="subtotal" class="java.math.BigDecimal"/>
+	<background>
+		<band/>
+	</background>
+	<detail>
+		<band height="36">
+			<textField>
+				<reportElement x="0" y="2" width="20" height="10" uuid="8b9c0d1e-f234-5678-901a-bcdef2345678"/>
+				<textElement textAlignment="Right">
+					<font fontName="DejaVu Sans" size="8" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
+			</textField>
+			<textField textAdjust="StretchHeight">
+				<reportElement x="25" y="2" width="171" height="18" uuid="9c0d1e2f-3456-789a-bc01-def345678901"/>
+				<textElement textAlignment="Left">
+					<font fontName="DejaVu Sans" size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{descripcion}]]></textFieldExpression>
+			</textField>
+			<frame>
+				<reportElement positionType="Float" x="25" y="22" width="171" height="10" uuid="9c0d1e2f-3456-789a-bc01-def345678907"/>
+				<textField pattern="#,##0.00">
+					<reportElement x="0" y="0" width="50" height="9" uuid="9c0d1e2f-3456-789a-bc01-def345678987"/>
+					<textElement textAlignment="Right">
+						<font fontName="DejaVu Sans" size="7"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$F{precioUnitario}]]></textFieldExpression>
+				</textField>
+				<staticText>
+					<reportElement x="50" y="0" width="15" height="9" uuid="9c0d1e2f-3456-789a-bc01-def345678902"/>
+					<textElement textAlignment="Center">
+						<font fontName="DejaVu Sans" size="7"/>
+					</textElement>
+					<text><![CDATA[x]]></text>
+				</staticText>
+				<textField>
+					<reportElement x="65" y="0" width="20" height="9" uuid="9c0d1e2f-3456-789a-bc01-def345678903"/>
+					<textElement textAlignment="Center">
+						<font fontName="DejaVu Sans" size="7"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
+				</textField>
+				<staticText>
+					<reportElement x="85" y="0" width="15" height="9" uuid="9c0d1e2f-3456-789a-bc01-def345678904"/>
+					<textElement textAlignment="Center">
+						<font fontName="DejaVu Sans" size="7"/>
+					</textElement>
+					<text><![CDATA[=]]></text>
+				</staticText>
+				<textField pattern="#,##0.00">
+					<reportElement x="100" y="0" width="71" height="9" uuid="9c0d1e2f-3456-789a-bc01-def345678905"/>
+					<textElement textAlignment="Right">
+						<font fontName="DejaVu Sans" size="7" isBold="true"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$F{subtotal}]]></textFieldExpression>
+				</textField>
+			</frame>
+		</band>
+	</detail>
 </jasperReport>

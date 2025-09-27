@@ -49,7 +49,7 @@ public class FacturaInternaService {
 
         // Crear factura
         FacturaInterna factura = FacturaInterna.builder()
-            .numero(generarNumeroFactura(request.getEmpresaId()))
+            .numero( generarNumeroFactura(request.getEmpresaId(), sucursal.getId()))
             .empresa(empresa)
             .sucursal(sucursal)
             .cajero(cajero)
@@ -169,17 +169,10 @@ public class FacturaInternaService {
     }
 
     /**
-     * Obtener siguiente número de factura
-     */
-    public String obtenerSiguienteNumero(Long empresaId) {
-        return generarNumeroFactura(empresaId);
-    }
-
-    /**
      * Generar número de factura
      */
-    private String generarNumeroFactura(Long empresaId) {
-        String prefix = "INT-" + LocalDate.now().getYear() + "-";
+    private String generarNumeroFactura(Long empresaId, Long sucursalId) {
+        String prefix = sucursalId.toString() + LocalDate.now().getYear() + "-";
 
         List<String> ultimos = facturaInternaRepository.findUltimoNumeroByEmpresaAndPrefix(
             empresaId, prefix, Pageable.ofSize(1)

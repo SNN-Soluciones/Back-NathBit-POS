@@ -147,8 +147,6 @@ public class TiqueteInternoPdfMapperService {
                 dto.setPrecioUnitario(detalle.getPrecioUnitario());
                 dto.setSubtotal(detalle.getSubtotal());
                 dtos.add(dto);
-
-                System.out.println(dto.getDescripcion().replace("\n", "\\n"));
             }
         }
 

@@ -27,21 +27,28 @@ public class PdfGeneratorService {
 
     // Lista actualizada de reportes a precompilar
     String[] reportes = {
+        //ELECTRONICAS 80mm
         "factura_electronica",
         "detalle_factura",
         "otros_cargos",
         "subreport_exoneraciones",
 
+        //ELECTRONICAS CARTA
         "factura_electronica_80mm",
         "detalle_factura_80mm",
         "otros_cargos_80mm",
         "exoneraciones_80mm",
 
+        //INTERNAS 80mm
         "tiquete_interno_80mm",
         "detalle_tiquete_interno_80mm",
 
+        //REPORTES
         "ventas_basico",
-        "ventas_por_tipo_pago"
+        "ventas_por_tipo_pago",
+
+        //COMANDAS
+        "comanda_cocina",
     };
 
     for (String reporte : reportes) {

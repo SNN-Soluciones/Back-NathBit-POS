@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with Jaspersoft Studio version 6.21.3.final using JasperReports Library version 6.21.3-4a3078d20785ebe464f18037d738d12fc98c13cf  -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="comanda_cocina" pageWidth="226" pageHeight="842" columnWidth="206" leftMargin="10" rightMargin="10" topMargin="10" bottomMargin="10" isIgnorePagination="true" uuid="c1a2b3d4-e5f6-7890-abcd-ef1234567890">
+	<property name="com.jaspersoft.studio.unit." value="mm"/>
+	<property name="com.jaspersoft.studio.unit.pageWidth" value="mm"/>
+	<property name="com.jaspersoft.studio.unit.pageHeight" value="mm"/>
+	<parameter name="numero_orden" class="java.lang.String"/>
+	<parameter name="mesa" class="java.lang.String"/>
+	<parameter name="fecha_hora" class="java.lang.String"/>
+	<parameter name="mesero" class="java.lang.String"/>
+	<parameter name="sucursal" class="java.lang.String"/>
+	<parameter name="observaciones_generales" class="java.lang.String"/>
+	<field name="cantidad" class="java.math.BigDecimal"/>
+	<field name="descripcion" class="java.lang.String"/>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<title>
+		<band height="80">
+			<staticText>
+				<reportElement x="0" y="5" width="206" height="20" uuid="a1b2c3d4-e5f6-7890-abcd-ef1234567891"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="DejaVu Sans" size="14" isBold="true"/>
+				</textElement>
+				<text><![CDATA[COMANDA COCINA]]></text>
+			</staticText>
+			<line>
+				<reportElement x="0" y="28" width="206" height="1" uuid="b2c3d4e5-f6a7-8901-2345-678901bcdef1"/>
+				<graphicElement>
+					<pen lineWidth="2.0" lineStyle="Solid"/>
+				</graphicElement>
+			</line>
+			<textField>
+				<reportElement x="0" y="35" width="103" height="15" uuid="c3d4e5f6-a789-0123-4567-890123cdef12"/>
+				<textElement>
+					<font fontName="DejaVu Sans" size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Orden: " + $P{numero_orden}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="103" y="35" width="103" height="15" uuid="d4e5f6a7-b890-1234-5678-901234def123"/>
+				<textElement textAlignment="Right">
+					<font fontName="DejaVu Sans" size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Mesa: " + ($P{mesa} != null ? $P{mesa} : "---")]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="0" y="52" width="206" height="12" uuid="e5f6a7b8-c901-2345-6789-012345ef1234"/>
+				<textElement textAlignment="Center">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{fecha_hora}]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement x="0" y="68" width="206" height="1" uuid="f6a7b8c9-d012-3456-789a-123456f12345"/>
+				<graphicElement>
+					<pen lineWidth="1.0" lineStyle="Dashed"/>
+				</graphicElement>
+			</line>
+			<staticText>
+				<reportElement x="0" y="70" width="206" height="10" uuid="a7b8c9d0-e123-4567-89ab-234567123456"/>
+				<textElement>
+					<font fontName="DejaVu Sans" size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[PRODUCTOS:]]></text>
+			</staticText>
+		</band>
+	</title>
+	<detail>
+		<band height="35" splitType="Stretch">
+			<textField>
+				<reportElement x="0" y="2" width="30" height="15" uuid="a1234567-89ab-cdef-0123-456789abcdef"/>
+				<textElement textAlignment="Right" verticalAlignment="Top">
+					<font fontName="DejaVu Sans" size="12" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
+			</textField>
+			<textField textAdjust="StretchHeight">
+				<reportElement x="35" y="2" width="171" height="15" isPrintWhenDetailOverflows="true" uuid="b2345678-9abc-def0-1234-56789abcdef0"/>
+				<textElement textAlignment="Left" verticalAlignment="Top">
+					<font fontName="DejaVu Sans" size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{descripcion}]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement positionType="Float" x="0" y="30" width="206" height="1" uuid="c3456789-abcd-ef01-2345-6789abcdef01"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineStyle="Dotted"/>
+				</graphicElement>
+			</line>
+		</band>
+	</detail>
+	<pageFooter>
+		<band height="60">
+			<line>
+				<reportElement x="0" y="5" width="206" height="1" uuid="d456789a-bcde-f012-3456-789abcdef012"/>
+				<graphicElement>
+					<pen lineWidth="2.0" lineStyle="Solid"/>
+				</graphicElement>
+			</line>
+			<textField textAdjust="StretchHeight" isBlankWhenNull="true">
+				<reportElement x="0" y="10" width="206" height="15" isRemoveLineWhenBlank="true" uuid="e56789ab-cdef-0123-4567-89abcdef0123">
+					<printWhenExpression><![CDATA[$P{observaciones_generales} != null && !$P{observaciones_generales}.trim().isEmpty()]]></printWhenExpression>
+				</reportElement>
+				<box topPadding="2" bottomPadding="2">
+					<pen lineWidth="0.5"/>
+				</box>
+				<textElement>
+					<font fontName="DejaVu Sans" size="9" isItalic="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Observaciones: " + $P{observaciones_generales}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="0" y="30" width="206" height="12" uuid="f6789abc-def0-1234-5678-9abcdef01234"/>
+				<textElement textAlignment="Center">
+					<font fontName="DejaVu Sans" size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Mesero: " + $P{mesero}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="0" y="44" width="206" height="10" uuid="a789abcd-ef01-2345-6789-abcdef012345"/>
+				<textElement textAlignment="Center">
+					<font fontName="DejaVu Sans" size="8" isItalic="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{sucursal}]]></textFieldExpression>
+			</textField>
+		</band>
+	</pageFooter>
+</jasperReport>

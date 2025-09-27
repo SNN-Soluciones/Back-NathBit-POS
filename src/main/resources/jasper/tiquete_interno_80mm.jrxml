@@ -34,7 +34,7 @@
 		<band splitType="Stretch"/>
 	</background>
 	<title>
-		<band height="127">
+		<band height="133">
 			<image hAlign="Center" onErrorType="Blank">
 				<reportElement x="71" y="0" width="64" height="50" uuid="1a2b3c4d-5e6f-7890-abcd-ef1234567890">
 					<printWhenExpression><![CDATA[$P{tiene_logo} && $P{logo_empresa} != null]]></printWhenExpression>
@@ -42,39 +42,53 @@
 				<imageExpression><![CDATA[$P{logo_empresa}]]></imageExpression>
 			</image>
 			<textField>
-				<reportElement x="0" y="52" width="204" height="18" uuid="a1a2b3c4-d5e6-78f9-0abc-def123456789"/>
+				<reportElement x="0" y="52" width="204" height="14" uuid="a1a2b3c4-d5e6-78f9-0abc-def123456789"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="9" isBold="true"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{empresa_nombre}]]></textFieldExpression>
 			</textField>
 			<textField>
-				<reportElement x="0" y="70" width="204" height="12" uuid="e5f6a7b8-c9d0-12e3-f456-456789012345"/>
+				<reportElement x="0" y="67" width="204" height="8" uuid="e5f6a7b8-c9d0-12e3-f456-456789012345"/>
 				<textElement textAlignment="Center">
 					<font fontName="DejaVu Sans" size="6"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{sucursal_nombre}]]></textFieldExpression>
 			</textField>
 			<textField>
-				<reportElement x="0" y="82" width="122" height="10" uuid="f6a7b8c9-d0e1-23f4-5678-567890123456"/>
+				<reportElement x="0" y="91" width="122" height="8" uuid="f6a7b8c9-d0e1-23f4-5678-567890123456"/>
 				<textElement textAlignment="Left">
-					<font fontName="DejaVu Sans" size="7"/>
+					<font fontName="DejaVu Sans" size="6"/>
 				</textElement>
 				<textFieldExpression><![CDATA["Terminal: " + $P{terminal}]]></textFieldExpression>
 			</textField>
 			<textField>
-				<reportElement x="79" y="82" width="125" height="10" uuid="a7b8c9d0-e1f2-34a5-6789-678901234567"/>
+				<reportElement x="79" y="91" width="125" height="8" uuid="a7b8c9d0-e1f2-34a5-6789-678901234567"/>
 				<textElement textAlignment="Right">
-					<font fontName="DejaVu Sans" size="7"/>
+					<font fontName="DejaVu Sans" size="6"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{fecha_hora}]]></textFieldExpression>
 			</textField>
 			<textField>
-				<reportElement x="0" y="94" width="204" height="12" uuid="b8c9d0e1-f2a3-45b6-789a-789012345678"/>
+				<reportElement x="0" y="100" width="204" height="12" uuid="b8c9d0e1-f2a3-45b6-789a-789012345678"/>
 				<textElement textAlignment="Center">
 					<font fontName="DejaVu Sans" size="7" isBold="true"/>
 				</textElement>
 				<textFieldExpression><![CDATA["Tiquete: #" + $P{numero_interno}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="0" y="75" width="204" height="8" uuid="b17e0606-c5a1-4580-a5e2-1e7b31c5363e"/>
+				<textElement textAlignment="Center">
+					<font size="6"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{email_empresa}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="0" y="83" width="204" height="8" uuid="7dc110df-82cd-4258-9210-1fbf4e473659"/>
+				<textElement textAlignment="Center">
+					<font size="6"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{telefono_empresa}]]></textFieldExpression>
 			</textField>
 		</band>
 	</title>

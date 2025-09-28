@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
+import java.math.BigDecimal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -37,4 +38,19 @@ public interface FacturaInternaRepository extends JpaRepository<FacturaInterna, 
         @Param("prefix") String prefix,
         Pageable pageable
     );
+
+    @Query("SELECT fi FROM FacturaInterna fi WHERE fi.sesionCaja.id = :sesionId ORDER BY fi.fecha DESC")
+    List<FacturaInterna> findBySesionCajaId(@Param("sesionId") Long sesionId);
+
+    /**
+     * Contar facturas internas por sesión
+     */
+    @Query("SELECT COUNT(fi) FROM FacturaInterna fi WHERE fi.sesionCaja.id = :sesionId AND fi.estado != 'ANULADA'")
+    Long countBySesionCajaIdAndNotAnulada(@Param("sesionId") Long sesionId);
+
+    /**
+     * Sumar totales de facturas internas por sesión
+     */
+    @Query("SELECT COALESCE(SUM(fi.total), 0) FROM FacturaInterna fi WHERE fi.sesionCaja.id = :sesionId AND fi.estado != 'ANULADA'")
+    BigDecimal sumTotalBySesionCajaId(@Param("sesionId") Long sesionId);
 }

@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
+import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
+import com.snnsoluciones.backnathbitpos.entity.FacturaInternaMedioPago;
 import com.snnsoluciones.backnathbitpos.entity.FacturaMedioPago;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
@@ -10,6 +12,7 @@ import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
+import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
@@ -42,6 +45,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   private final MovimientoCajaRepository movimientoCajaRepository;
   private final SecurityContextService securityContext;
   private final FacturaRepository facturaRepository;
+  private final FacturaInternaRepository facturaInternaRepository;
 
   @Override
   public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
@@ -246,10 +250,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
     // Montos básicos
     resumen.setMontoInicial(sesion.getMontoInicial());
-    resumen.setVentasEfectivo(sesion.getTotalEfectivo());
-    resumen.setVentasTarjeta(sesion.getTotalTarjeta());
-    resumen.setVentasTransferencia(sesion.getTotalTransferencia());
-    resumen.setVentasOtros(sesion.getTotalOtros());
 
     // Movimientos
     resumen.setEntradasAdicionales(
@@ -263,20 +263,13 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         movimientoCajaRepository.sumBySesionIdAndTipo(sesionId, TipoMovimientoCaja.SALIDA_DEPOSITO)
     );
 
-    // Monto esperado
-    resumen.setMontoEsperado(calcularMontoEsperado(sesion));
-    resumen.setMontoCierre(sesion.getMontoCierre());
-
-    // NUEVO: Obtener facturas detalladas
-    List<Factura> facturas = facturaRepository.findBySesionCajaId(sesionId);
-
     // Contadores y totales por tipo
     int cantFacturas = 0, cantTiquetes = 0, cantNC = 0;
     BigDecimal totalFacturas = BigDecimal.ZERO;
     BigDecimal totalTiquetes = BigDecimal.ZERO;
     BigDecimal totalNC = BigDecimal.ZERO;
 
-    // Reiniciar totales por tipo de pago
+    // Totales por tipo de pago
     BigDecimal totalEfectivo = BigDecimal.ZERO;
     BigDecimal totalTarjeta = BigDecimal.ZERO;
     BigDecimal totalTransferencia = BigDecimal.ZERO;
@@ -284,6 +277,9 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
     // Lista de documentos para el detalle
     List<ResumenCajaDetalladoDTO.DocumentoResumenDTO> documentos = new ArrayList<>();
+
+    // PROCESAR FACTURAS ELECTRÓNICAS
+    List<Factura> facturas = facturaRepository.findBySesionCajaId(sesionId);
 
     for (Factura f : facturas) {
       // Solo contar documentos válidos
@@ -300,7 +296,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
               (f.getCliente() != null ? f.getCliente().getRazonSocial() : "Cliente General"))
           .total(f.getTotalComprobante())
           .estado(f.getEstado().toString())
-          .fechaEmision(LocalDateTime.now())
+          .fechaEmision(LocalDateTime.parse(f.getFechaEmision())) // Usar fecha real de la factura
           .metodoPago(obtenerMetodosPago(f))
           .build();
 
@@ -309,12 +305,10 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       // Sumar por tipo
       switch (f.getTipoDocumento()) {
         case FACTURA_ELECTRONICA:
-        case FACTURA_INTERNA:
           cantFacturas++;
           totalFacturas = totalFacturas.add(f.getTotalComprobante());
           break;
         case TIQUETE_ELECTRONICO:
-        case TIQUETE_INTERNO:
           cantTiquetes++;
           totalTiquetes = totalTiquetes.add(f.getTotalComprobante());
           break;
@@ -344,6 +338,54 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       }
     }
 
+    // NUEVO: PROCESAR FACTURAS INTERNAS
+    List<FacturaInterna> facturasInternas = facturaInternaRepository.findBySesionCajaId(sesionId);
+
+    for (FacturaInterna fi : facturasInternas) {
+      // Solo contar documentos válidos
+      if ("ANULADA".equals(fi.getEstado())) {
+        continue;
+      }
+
+      // Obtener métodos de pago para mostrar
+      String metodosPago = obtenerMetodosPagoInterna(fi);
+
+      // Agregar al listado de documentos
+      ResumenCajaDetalladoDTO.DocumentoResumenDTO doc = ResumenCajaDetalladoDTO.DocumentoResumenDTO.builder()
+          .id(fi.getId())
+          .consecutivo(fi.getNumero())
+          .tipoDocumento("Tiquete Interno")
+          .clienteNombre(fi.getNombreCliente() != null ? fi.getNombreCliente() : "Cliente General")
+          .total(fi.getTotal())
+          .estado(fi.getEstado())
+          .fechaEmision(fi.getFecha())
+          .metodoPago(metodosPago)
+          .build();
+
+      documentos.add(doc);
+
+      // Sumar por tipo de pago
+      if (fi.getMediosPago() != null && !fi.getMediosPago().isEmpty()) {
+        for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
+          switch (mp.getTipo()) {
+            case "EFECTIVO":
+              totalEfectivo = totalEfectivo.add(mp.getMonto());
+              break;
+            case "TARJETA":
+              totalTarjeta = totalTarjeta.add(mp.getMonto());
+              break;
+            case "TRANSFERENCIA":
+              totalTransferencia = totalTransferencia.add(mp.getMonto());
+              break;
+            case "SINPE":
+              totalSinpe = totalSinpe.add(mp.getMonto());
+              break;
+          }
+        }
+      }
+    }
+
+    // Asignar totales por tipo de pago
     resumen.setVentasEfectivo(totalEfectivo);
     resumen.setVentasTarjeta(totalTarjeta);
     resumen.setVentasTransferencia(totalTransferencia);
@@ -362,6 +404,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     // Establecer lista de documentos
     resumen.setDocumentos(documentos);
 
+    // Procesar vales
     List<MovimientoCaja> valesMovimientos = movimientoCajaRepository
         .findBySesionCajaIdAndTipoMovimiento(sesionId, TipoMovimientoCaja.SALIDA_VALE);
 
@@ -374,7 +417,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
                 obtenerNombreUsuario(m.getAutorizadoPorId()) :
                 "No especificado")
             .fecha(m.getFechaHora())
-            .fecha(m.getFechaHora())
             .tipo(m.getTipoMovimiento().toString())
             .build())
         .collect(Collectors.toList());
@@ -386,9 +428,15 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
     );
 
-    BigDecimal esperado = resumen.getMontoInicial().add(resumen.getVentasEfectivo())
-        .subtract(resumen.getVales());
+    // Calcular monto esperado
+    BigDecimal esperado = resumen.getMontoInicial()
+        .add(resumen.getVentasEfectivo())
+        .add(resumen.getEntradasAdicionales())
+        .subtract(resumen.getVales())
+        .subtract(resumen.getDepositos());
     resumen.setMontoEsperado(esperado);
+
+    resumen.setMontoCierre(sesion.getMontoCierre());
 
     return resumen;
   }
@@ -540,5 +588,16 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
     log.info("Totales actualizados - Ventas: {}, Devoluciones: {}, Efectivo: {}",
         totalVentas, totalDevoluciones, totalEfectivo);
+  }
+
+  private String obtenerMetodosPagoInterna(FacturaInterna factura) {
+    if (factura.getMediosPago() == null || factura.getMediosPago().isEmpty()) {
+      return "No especificado";
+    }
+
+    return factura.getMediosPago().stream()
+        .map(FacturaInternaMedioPago::getTipo)
+        .distinct()
+        .collect(Collectors.joining(", "));
   }
 }

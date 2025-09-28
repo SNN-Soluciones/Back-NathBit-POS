@@ -29,6 +29,7 @@ public class FacturaInternaService {
     private final EmpresaRepository empresaRepository;
     private final SucursalRepository sucursalRepository;
     private final UsuarioRepository usuarioRepository;
+    private final SesionCajaRepository sesionCajaRepository;
 
     /**
      * Crear una nueva factura interna
@@ -47,11 +48,15 @@ public class FacturaInternaService {
         Usuario cajero = usuarioRepository.findById(request.getUsuarioId())
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
+        SesionCaja sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
+            .orElseThrow(()-> new ResourceNotFoundException("No hay sesion de caja abierta"));
+
         // Crear factura
         FacturaInterna factura = FacturaInterna.builder()
             .numero( generarNumeroFactura(request.getEmpresaId(), sucursal.getId()))
             .empresa(empresa)
             .sucursal(sucursal)
+            .sesionCaja(sesionCaja)
             .cajero(cajero)
             .fecha(LocalDateTime.now())
             .estado("PAGADA")

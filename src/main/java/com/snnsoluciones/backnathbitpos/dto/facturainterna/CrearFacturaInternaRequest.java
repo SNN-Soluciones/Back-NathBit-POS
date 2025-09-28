@@ -21,6 +21,8 @@ public class CrearFacturaInternaRequest {
     @NotNull(message = "El usuario es requerido")
     private Long usuarioId;
 
+    private Long sesionCajaId;
+
     // Cliente opcional
     private Long clienteId;
     private String nombreCliente;

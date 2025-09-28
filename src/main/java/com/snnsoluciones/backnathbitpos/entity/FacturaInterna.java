@@ -101,6 +101,10 @@ public class FacturaInterna {
     @Builder.Default
     private List<FacturaInternaMedioPago> mediosPago = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sesion_caja_id", nullable = true)
+    private SesionCaja sesionCaja;
+
     // ===== AUDITORÍA =====
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

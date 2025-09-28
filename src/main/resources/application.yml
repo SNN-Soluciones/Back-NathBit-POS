@@ -1,17 +1,17 @@
 spring:
   datasource:
-    url: jdbc:postgresql://45.32.164.243:5432/nathbitpos
-    username: snnsoluciones
-    password: "@39NSNm90@1"
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
 
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:none}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-    show-sql: false
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
 
   mail:
     host: smtp.gmail.com

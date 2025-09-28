@@ -1,8 +1,13 @@
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      initialization-fail-timeout: -1
+      connection-timeout: 10000
+    url: jdbc:postgresql://nathbitpos.cjo68qiy0h12.us-east-2.rds.amazonaws.com:5432/nathbitpos
+    username: snnsoluciones
+    password: "#39NSNm90#1"
 
   jpa:
     hibernate:

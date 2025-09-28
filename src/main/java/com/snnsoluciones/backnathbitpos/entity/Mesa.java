@@ -3,6 +3,9 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.*;
 
 @Entity
@@ -41,7 +44,42 @@ public class Mesa {
   @Column(nullable = false)
   private Integer orden = 0;
 
+  @OneToMany(mappedBy = "mesa")
+  private List<Orden> ordenes = new ArrayList<>();
+
   // Para unir mesas (misma orden), agrupa lógicamente varias mesas
   @Column(name = "union_group_id")
   private Long unionGroupId;
+
+  @Transient
+  public Orden getOrdenActiva() {
+    return ordenes.stream()
+        .filter(o -> !o.getEstado().esFinal())
+        .findFirst()
+        .orElse(null);
+  }
+
+  @Transient
+  public boolean tieneOrdenActiva() {
+    return getOrdenActiva() != null;
+  }
+
+  @Transient
+  public BigDecimal getTotalOrdenActiva() {
+    Orden ordenActiva = getOrdenActiva();
+    return ordenActiva != null ? ordenActiva.getTotal() : BigDecimal.ZERO;
+  }
+
+  // Método helper para cambiar estado basado en órdenes
+  public void actualizarEstadoSegunOrden() {
+    if (tieneOrdenActiva()) {
+      if (this.estado != EstadoMesa.OCUPADA) {
+        this.estado = EstadoMesa.OCUPADA;
+      }
+    } else {
+      if (this.estado == EstadoMesa.OCUPADA) {
+        this.estado = EstadoMesa.DISPONIBLE;
+      }
+    }
+  }
 }

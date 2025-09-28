@@ -12,6 +12,8 @@
 	<property name="com.jaspersoft.studio.unit.columnWidth" value="mm"/>
 	<property name="com.jaspersoft.studio.unit.columnSpacing" value="mm"/>
 	<parameter name="empresa_nombre" class="java.lang.String"/>
+	<parameter name="email_empresa" class="java.lang.Object"/>
+	<parameter name="telefono_empresa" class="java.lang.Object"/>
 	<parameter name="logo_empresa" class="java.lang.Object"/>
 	<parameter name="tiene_logo" class="java.lang.Boolean"/>
 	<parameter name="numero_interno" class="java.lang.String"/>

@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.dto.sucursal;
 
 import com.snnsoluciones.backnathbitpos.dto.terminal.TerminalResponse;
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
+import com.snnsoluciones.backnathbitpos.enums.ModoImpresion;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,6 +24,9 @@ public class CrearSucursalCompletaResponse {
     private String empresaNombre;
     private ModoFacturacion modoFacturacion;
     private Boolean activa;
+
+    private ModoImpresion modoImpresion;
+    private String ipOrquestador;
     
     // Resumen de terminales creadas
     private Integer terminalesCreadas;

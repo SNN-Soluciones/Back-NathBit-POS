@@ -38,7 +38,7 @@ public class Orden {
     private Sucursal sucursal;
 
     @ManyToOne(optional = false)
-    @JoinColumn(name = "usuario_id", nullable = false)
+    @JoinColumn(name = "mesero_id", nullable = false)
     private Usuario mesero; // Usuario que atiende
 
     @Column(nullable = false)

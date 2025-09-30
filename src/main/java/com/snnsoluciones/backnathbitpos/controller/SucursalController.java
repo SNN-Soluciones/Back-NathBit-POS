@@ -155,10 +155,19 @@ public class SucursalController extends BaseController {
     response.setEmail(sucursal.getEmail());
     response.setActiva(sucursal.getActiva());
     response.setModoFacturacion(sucursal.getModoFacturacion());
+
+    // === NUEVOS CAMPOS DE IMPRESIÓN ===
+    response.setModoImpresion(sucursal.getModoImpresion());
+    response.setIpOrquestador(sucursal.getIpOrquestador());
+
+    // Campos de empresa
     response.setEmpresaId(sucursal.getEmpresa().getId());
     response.setEmpresaNombre(sucursal.getEmpresa().getNombreComercial());
+
+    // Auditoría
     response.setCreatedAt(sucursal.getCreatedAt());
     response.setUpdatedAt(sucursal.getUpdatedAt());
+
     return response;
   }
 
@@ -170,6 +179,11 @@ public class SucursalController extends BaseController {
     sucursal.setModoFacturacion(request.getModoFacturacion());
     sucursal.setActiva(request.getActiva());
 
+    // === NUEVOS CAMPOS DE IMPRESIÓN ===
+    sucursal.setModoImpresion(request.getModoImpresion());
+    sucursal.setIpOrquestador(request.getIpOrquestador());
+
+    // Ubicación (solo si vienen todos los campos)
     if (request.getProvinciaId() != null && request.getCantonId() != null
         && request.getDistritoId() != null && request.getBarrioId() != null) {
       sucursal.setProvincia(
@@ -189,11 +203,8 @@ public class SucursalController extends BaseController {
               () -> new RuntimeException("Barrio no encontrado")
           ));
     }
+
     sucursal.setNumeroSucursal(request.getNumeroSucursal());
-    if (request.getEmpresaId() != null) {
-      sucursal.setEmpresa(empresaService.buscarPorId(request.getEmpresaId()
-      ));
-    }
     sucursal.setOtrasSenas(request.getOtrasSenas());
     sucursal.setTerminales(mapTerminalesToEntity(request));
 

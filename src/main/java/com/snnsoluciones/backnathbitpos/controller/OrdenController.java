@@ -27,7 +27,7 @@ public class OrdenController {
 
     @Operation(summary = "Crear nueva orden")
     @PostMapping
-    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN', 'SUPER_ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<OrdenResponse>> crear(@Valid @RequestBody CrearOrdenRequest request) {
         try {
             OrdenResponse orden = ordenService.crearOrden(request);
@@ -56,7 +56,7 @@ public class OrdenController {
 
     @Operation(summary = "Obtener orden activa por mesa")
     @GetMapping("/mesa/{mesaId}/activa")
-    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<OrdenResponse>> obtenerPorMesa(@PathVariable Long mesaId) {
         try {
             OrdenResponse orden = ordenService.obtenerOrdenActivaPorMesa(mesaId);
@@ -70,7 +70,7 @@ public class OrdenController {
 
     @Operation(summary = "Listar órdenes por sucursal")
     @GetMapping("/sucursal/{sucursalId}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<List<OrdenListResponse>>> listarPorSucursal(
             @PathVariable Long sucursalId,
             @RequestParam(required = false) EstadoOrden estado) {
@@ -86,7 +86,7 @@ public class OrdenController {
 
     @Operation(summary = "Agregar item a orden")
     @PostMapping("/{id}/items")
-    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<OrdenResponse>> agregarItem(
             @PathVariable Long id,
             @Valid @RequestBody AgregarItemRequest request) {
@@ -102,7 +102,7 @@ public class OrdenController {
 
     @Operation(summary = "Actualizar item de orden")
     @PutMapping("/{id}/items/{itemId}")
-    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<OrdenResponse>> actualizarItem(
             @PathVariable Long id,
             @PathVariable Long itemId,
@@ -119,7 +119,7 @@ public class OrdenController {
 
     @Operation(summary = "Eliminar item de orden")
     @DeleteMapping("/{id}/items/{itemId}")
-    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<OrdenResponse>> eliminarItem(
             @PathVariable Long id,
             @PathVariable Long itemId) {
@@ -135,7 +135,7 @@ public class OrdenController {
 
     @Operation(summary = "Enviar orden a cocina")
     @PostMapping("/{id}/enviar-cocina")
-    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<OrdenResponse>> enviarCocina(@PathVariable Long id) {
         try {
             OrdenResponse orden = ordenService.enviarCocina(id);
@@ -149,7 +149,7 @@ public class OrdenController {
 
     @Operation(summary = "Cambiar estado de orden")
     @PutMapping("/{id}/estado")
-    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<OrdenResponse>> cambiarEstado(
             @PathVariable Long id,
             @Valid @RequestBody ActualizarEstadoOrdenRequest request) {
@@ -165,7 +165,7 @@ public class OrdenController {
 
     @Operation(summary = "Obtener órdenes para cocina")
     @GetMapping("/cocina/sucursal/{sucursalId}")
-    @PreAuthorize("hasAnyRole('COCINERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('COCINERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<List<OrdenCocinaResponse>>> obtenerParaCocina(@PathVariable Long sucursalId) {
         try {
             List<OrdenCocinaResponse> ordenes = ordenService.obtenerOrdenesParaCocina(sucursalId);
@@ -179,7 +179,7 @@ public class OrdenController {
 
     @Operation(summary = "Marcar item como preparado")
     @PutMapping("/{id}/items/{itemId}/preparado")
-    @PreAuthorize("hasAnyRole('COCINERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('COCINERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<Void>> marcarPreparado(
             @PathVariable Long id,
             @PathVariable Long itemId) {
@@ -195,7 +195,7 @@ public class OrdenController {
 
     @Operation(summary = "Marcar item como entregado")
     @PutMapping("/{id}/items/{itemId}/entregado")
-    @PreAuthorize("hasAnyRole('MESERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('MESERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<Void>> marcarEntregado(
             @PathVariable Long id,
             @PathVariable Long itemId) {
@@ -211,7 +211,7 @@ public class OrdenController {
 
     @Operation(summary = "Marcar orden como pagada")
     @PutMapping("/{id}/marcar-pagada")
-    @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN','ROOT')")
     public ResponseEntity<ApiResponse<Void>> marcarComoPagada(
         @PathVariable Long id,
         @RequestParam(required = false) Long facturaId) {

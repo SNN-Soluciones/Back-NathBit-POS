@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
+import com.snnsoluciones.backnathbitpos.enums.ModoImpresion;
+import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.service.SucursalService;
@@ -33,6 +35,9 @@ public class SucursalServiceImpl implements SucursalService {
             int siguiente = (maxNumero != null ? maxNumero : 0) + 1;
             sucursal.setNumeroSucursal(String.format("%03d", siguiente));
         }
+
+        validarConfiguracionImpresion(sucursal);
+
 
         return sucursalRepository.save(sucursal);
     }
@@ -66,6 +71,9 @@ public class SucursalServiceImpl implements SucursalService {
         existente.setDistrito(sucursal.getDistrito());
         existente.setBarrio(sucursal.getBarrio());
         existente.setOtrasSenas(sucursal.getOtrasSenas());
+
+        validarConfiguracionImpresion(existente);
+
 
         return sucursalRepository.save(existente);
     }
@@ -124,5 +132,28 @@ public class SucursalServiceImpl implements SucursalService {
 
         terminal.setSucursal(sucursal);
         return terminalRepository.save(terminal);
+    }
+
+    /**
+     * Valida que si el modo es ORQUESTADOR, tenga IP configurada
+     */
+    private void validarConfiguracionImpresion(Sucursal sucursal) {
+        if (sucursal.getModoImpresion() == ModoImpresion.ORQUESTADOR) {
+            if (sucursal.getIpOrquestador() == null || sucursal.getIpOrquestador().trim().isEmpty()) {
+                throw new BusinessException(
+                    "Si el modo de impresión es ORQUESTADOR, debe configurar la IP del orquestador. " +
+                        "Ejemplo: 192.168.1.100:5001"
+                );
+            }
+
+            // Validación adicional: verificar formato básico
+            String ip = sucursal.getIpOrquestador().trim();
+            if (!ip.matches("^(https?://)?[\\w.-]+(:\\d+)?$")) {
+                throw new BusinessException(
+                    "El formato de la IP del orquestador no es válido. " +
+                        "Ejemplos válidos: 192.168.1.100:5001, localhost:5001, http://192.168.1.100:5001"
+                );
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
+import com.snnsoluciones.backnathbitpos.enums.ModoImpresion;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,6 +111,23 @@ public class Sucursal {
     @Builder.Default
     private Boolean permiteNegativos = false;
 
+    /**
+     * Define si imprime LOCAL (navegador) u ORQUESTADOR (La Chismosa)
+     */
+    @Column(name = "modo_impresion", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Builder.Default
+    private ModoImpresion modoImpresion = ModoImpresion.LOCAL;
+
+    /**
+     * IP y puerto del orquestador de impresoras
+     * Ejemplo: "192.168.1.100:5001" o "http://192.168.1.100:5001"
+     * Solo se usa si modoImpresion = ORQUESTADOR
+     */
+    @Column(name = "ip_orquestador", length = 100)
+    private String ipOrquestador;
+
     // Campos existentes de auditoría
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -130,5 +148,50 @@ public class Sucursal {
 
     public boolean puedeVenderSinStock() {
         return !this.manejaInventario || this.permiteNegativos;
+    }
+
+    /**
+     * Verifica si esta sucursal usa impresión local (desde navegador)
+     */
+    public boolean usaImpresionLocal() {
+        return this.modoImpresion == ModoImpresion.LOCAL;
+    }
+
+    /**
+     * Verifica si esta sucursal usa el orquestador de impresoras
+     */
+    public boolean usaOrquestador() {
+        return this.modoImpresion == ModoImpresion.ORQUESTADOR;
+    }
+
+    /**
+     * Obtiene la URL completa del orquestador con protocolo
+     * @return URL con protocolo, ej: "http://192.168.1.100:5001", o null si no configurado
+     */
+    public String getUrlOrquestador() {
+        if (this.ipOrquestador == null || this.ipOrquestador.trim().isEmpty()) {
+            return null;
+        }
+
+        String ip = this.ipOrquestador.trim();
+
+        // Si ya tiene http:// o https://, devolverlo tal cual
+        if (ip.startsWith("http://") || ip.startsWith("https://")) {
+            return ip;
+        }
+
+        // Si no, agregar http://
+        return "http://" + ip;
+    }
+
+    /**
+     * Valida que la configuración de impresión sea correcta
+     * @return true si es válida, false si falta configuración
+     */
+    public boolean tieneConfiguracionImpresionValida() {
+        if (this.modoImpresion == ModoImpresion.ORQUESTADOR) {
+            return this.ipOrquestador != null && !this.ipOrquestador.trim().isEmpty();
+        }
+        return true; // LOCAL no requiere configuración adicional
     }
 }

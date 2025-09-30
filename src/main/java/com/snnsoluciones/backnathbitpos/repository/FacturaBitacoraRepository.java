@@ -1,11 +1,13 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
+import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.entity.FacturaBitacora;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -18,6 +20,13 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface FacturaBitacoraRepository extends JpaRepository<FacturaBitacora, Long>,
     JpaSpecificationExecutor<FacturaBitacora> {
+
+  // FacturaBitacoraRepository.java
+  List<FacturaBitacora> findByEstadoInOrderByUpdatedAtAsc(
+      java.util.Set<EstadoBitacora> estados,
+      Pageable pageable
+  );
+  Optional<FacturaBitacora> findTopByFacturaIdOrderByCreatedAtDesc(Long facturaId);
 
   @Query("SELECT b FROM FacturaBitacora b WHERE " +
       "(b.estado = 'PENDIENTE' OR b.estado = 'ERROR') AND " +

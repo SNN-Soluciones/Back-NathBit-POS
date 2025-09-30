@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.sucursal;
 
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
+import com.snnsoluciones.backnathbitpos.enums.ModoImpresion;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -16,6 +17,8 @@ public class SucursalResponse {
     private Long empresaId;
     private ModoFacturacion modoFacturacion = ModoFacturacion.ELECTRONICO;
     private String empresaNombre;
+    private ModoImpresion modoImpresion;
+    private String ipOrquestador;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

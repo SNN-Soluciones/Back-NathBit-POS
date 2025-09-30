@@ -83,6 +83,9 @@ public class OrdenService {
       orden.setNombreCliente(request.nombreCliente());
     }
 
+    orden.setFechaCreacion(LocalDateTime.now());
+    orden.setFechaActualizacion(LocalDateTime.now());
+
     orden = ordenRepository.save(orden);
 
     // Actualizar estado de mesa

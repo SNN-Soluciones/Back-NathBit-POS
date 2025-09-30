@@ -5,9 +5,9 @@ spring:
       maximum-pool-size: 10
       initialization-fail-timeout: -1
       connection-timeout: 10000
-    url: jdbc:postgresql://nathbitpos.cjo68qiy0h12.us-east-2.rds.amazonaws.com:5432/nathbitpos
+    url: jdbc:postgresql://45.32.164.243:5432/nathbitpos
     username: snnsoluciones
-    password: "#39NSNm90#1"
+    password: "@39NSNm90@1"
 
   jpa:
     hibernate:
@@ -39,6 +39,7 @@ app:
 
 server:
   port: 8080
+  address: 0.0.0.0
 
 storage:
   spaces:

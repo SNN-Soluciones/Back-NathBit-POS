@@ -88,7 +88,7 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
     // Validar nombre duplicado en el contexto correcto
     if (sucursalId != null) {
 
-      if (existePorNombreYEmpresa(categoria.getNombre(), categoria.getSucursal().getId(),
+      if (existePorNombreYEmpresa(categoria.getNombre(), sucursalId,
           empresaId)) {
         throw new BusinessException(
             "Ya existe una categoría con el nombre: " + categoria.getNombre());
@@ -97,7 +97,7 @@ public class CategoriaProductoServiceImpl implements CategoriaProductoService {
 
     // Si no tiene orden, asignar el siguiente
     if (categoria.getOrden() == null || categoria.getOrden() == 0) {
-      Integer siguienteOrden = obtenerSiguienteOrden(empresaId, categoria.getSucursal().getId());
+      Integer siguienteOrden = obtenerSiguienteOrden(empresaId, sucursalId);
       categoria.setOrden(siguienteOrden);
     }
 

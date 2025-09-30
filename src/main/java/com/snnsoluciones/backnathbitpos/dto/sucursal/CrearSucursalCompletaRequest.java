@@ -2,9 +2,11 @@ package com.snnsoluciones.backnathbitpos.dto.sucursal;
 
 import com.snnsoluciones.backnathbitpos.dto.terminal.TerminalRequest;
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
+import com.snnsoluciones.backnathbitpos.enums.ModoImpresion;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -43,6 +45,12 @@ public class CrearSucursalCompletaRequest {
     private Boolean activa = true;
     
     private String numeroSucursal;
+
+    @NotNull(message = "El modo de impresión es obligatorio")
+    private ModoImpresion modoImpresion = ModoImpresion.LOCAL;
+
+    @Size(max = 100, message = "La IP del orquestador no puede exceder 100 caracteres")
+    private String ipOrquestador;
 
     // Terminales
     private List<TerminalRequest> terminales;

@@ -1,8 +1,8 @@
 package com.snnsoluciones.backnathbitpos.service.metrics;
 
 import com.snnsoluciones.backnathbitpos.dto.metrics.VentaDiariaDTO;
-import com.snnsoluciones.backnathbitpos.entity.VentaDiaria;
-import com.snnsoluciones.backnathbitpos.repository.VentaDiariaRepository;
+import com.snnsoluciones.backnathbitpos.entity.MetricasVentasDiarias;
+import com.snnsoluciones.backnathbitpos.repository.MetricasVentasDiariasRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import java.time.LocalDate;
 @Transactional(readOnly = true) // Solo lectura!
 public class VentaDiariaService {
 
-    private final VentaDiariaRepository ventaDiariaRepository;
+    private final MetricasVentasDiariasRepository MetricasVentasDiariasRepository;
 
     /**
      * Obtener ventas del día para empresa (consolidado)
@@ -25,7 +25,7 @@ public class VentaDiariaService {
     public VentaDiariaDTO obtenerVentasHoyEmpresa(Long empresaId) {
         LocalDate hoy = LocalDate.now();
         
-        return ventaDiariaRepository.findVentasHoyEmpresa(empresaId, hoy)
+        return MetricasVentasDiariasRepository.findVentasHoyEmpresa(empresaId, hoy)
                 .map(this::toDTO)
                 .orElse(crearDTOVacio(hoy));
     }
@@ -36,7 +36,7 @@ public class VentaDiariaService {
     public VentaDiariaDTO obtenerVentasHoySucursal(Long sucursalId) {
         LocalDate hoy = LocalDate.now();
         
-        return ventaDiariaRepository.findVentasHoySucursal(sucursalId, hoy)
+        return MetricasVentasDiariasRepository.findVentasHoySucursal(sucursalId, hoy)
                 .map(this::toDTO)
                 .orElse(crearDTOVacio(hoy));
     }
@@ -44,7 +44,7 @@ public class VentaDiariaService {
     /**
      * Convertir entidad a DTO
      */
-    private VentaDiariaDTO toDTO(VentaDiaria venta) {
+    private VentaDiariaDTO toDTO(MetricasVentasDiarias venta) {
         return VentaDiariaDTO.builder()
                 .fecha(venta.getFecha())
                 .ventasMh(venta.getVentasMh())

@@ -1,6 +1,6 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
-import com.snnsoluciones.backnathbitpos.entity.MetricaMensual;
+import com.snnsoluciones.backnathbitpos.entity.MetricasVentasMensuales;
 import java.util.Map;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -11,39 +11,39 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface MetricaMensualRepository extends JpaRepository<MetricaMensual, Long> {
+public interface MetricaMensualRepository extends JpaRepository<MetricasVentasMensuales, Long> {
 
     // Buscar métrica específica de empresa (consolidada)
-    @Query("SELECT m FROM MetricaMensual m WHERE m.empresa.id = :empresaId " +
+    @Query("SELECT m FROM MetricasVentasMensuales m WHERE m.empresa.id = :empresaId " +
            "AND m.sucursal IS NULL AND m.anio = :anio AND m.mes = :mes")
-    Optional<MetricaMensual> findByEmpresaConsolidada(@Param("empresaId") Long empresaId, 
+    Optional<MetricasVentasMensuales> findByEmpresaConsolidada(@Param("empresaId") Long empresaId,
                                                       @Param("anio") Integer anio, 
                                                       @Param("mes") Integer mes);
 
     // Buscar métrica específica de sucursal
-    @Query("SELECT m FROM MetricaMensual m WHERE m.sucursal.id = :sucursalId " +
+    @Query("SELECT m FROM MetricasVentasMensuales m WHERE m.sucursal.id = :sucursalId " +
            "AND m.anio = :anio AND m.mes = :mes")
-    Optional<MetricaMensual> findBySucursal(@Param("sucursalId") Long sucursalId, 
+    Optional<MetricasVentasMensuales> findBySucursal(@Param("sucursalId") Long sucursalId,
                                            @Param("anio") Integer anio, 
                                            @Param("mes") Integer mes);
 
     // Obtener métricas de todas las sucursales de una empresa para un período
-    @Query("SELECT m FROM MetricaMensual m WHERE m.empresa.id = :empresaId " +
+    @Query("SELECT m FROM MetricasVentasMensuales m WHERE m.empresa.id = :empresaId " +
            "AND m.sucursal IS NOT NULL AND m.anio = :anio AND m.mes = :mes")
-    List<MetricaMensual> findAllSucursalesByEmpresaAndPeriodo(@Param("empresaId") Long empresaId,
+    List<MetricasVentasMensuales> findAllSucursalesByEmpresaAndPeriodo(@Param("empresaId") Long empresaId,
                                                                @Param("anio") Integer anio,
                                                                @Param("mes") Integer mes);
 
     // Obtener histórico anual de empresa
-    @Query("SELECT m FROM MetricaMensual m WHERE m.empresa.id = :empresaId " +
+    @Query("SELECT m FROM MetricasVentasMensuales m WHERE m.empresa.id = :empresaId " +
            "AND m.sucursal IS NULL AND m.anio = :anio ORDER BY m.mes")
-    List<MetricaMensual> findHistoricoAnualEmpresa(@Param("empresaId") Long empresaId,
+    List<MetricasVentasMensuales> findHistoricoAnualEmpresa(@Param("empresaId") Long empresaId,
                                                     @Param("anio") Integer anio);
 
     // Obtener histórico anual de sucursal
-    @Query("SELECT m FROM MetricaMensual m WHERE m.sucursal.id = :sucursalId " +
+    @Query("SELECT m FROM MetricasVentasMensuales m WHERE m.sucursal.id = :sucursalId " +
            "AND m.anio = :anio ORDER BY m.mes")
-    List<MetricaMensual> findHistoricoAnualSucursal(@Param("sucursalId") Long sucursalId,
+    List<MetricasVentasMensuales> findHistoricoAnualSucursal(@Param("sucursalId") Long sucursalId,
                                                      @Param("anio") Integer anio);
 
     // Verificar si existe registro para actualizar
@@ -54,7 +54,7 @@ public interface MetricaMensualRepository extends JpaRepository<MetricaMensual, 
     boolean existsByEmpresaIdAndSucursalIsNullAndAnioAndMes(Long empresaId, 
                                                              Integer anio, Integer mes);
 
-    // Agregar este método al MetricaMensualRepository:
+    // Agregar este método al MetricasVentasMensualesRepository:
 
     // Query para reporte D104 - Declaración de IVA mensual
     @Query("SELECT new map(" +
@@ -75,7 +75,7 @@ public interface MetricaMensualRepository extends JpaRepository<MetricaMensual, 
         "(m.impuestoIva13 + m.impuestoIva4 + m.impuestoIva2 + m.impuestoIva1) as ivaAcreditable, " +
         "m.cantidadFacturasMh + m.cantidadFacturasInternas as totalDocumentos, " +
         "m.cantidadNotasCredito as totalNotasCredito " +
-        ") FROM MetricaMensual m " +
+        ") FROM MetricasVentasMensuales m " +
         "WHERE m.empresa.id = :empresaId AND m.sucursal IS NULL " +
         "AND m.anio = :anio AND m.mes = :mes")
     Map<String, Object> obtenerDatosD104(@Param("empresaId") Long empresaId,
@@ -89,7 +89,7 @@ public interface MetricaMensualRepository extends JpaRepository<MetricaMensual, 
         "m.ventasTotales as ventas, " +
         "m.impuestoTotal as iva, " +
         "m.exentoTotal + m.exoneradoTotal as ventasNoGravadas " +
-        ") FROM MetricaMensual m " +
+        ") FROM MetricasVentasMensuales m " +
         "JOIN m.sucursal s " +
         "WHERE m.empresa.id = :empresaId AND m.sucursal IS NOT NULL " +
         "AND m.anio = :anio AND m.mes = :mes " +

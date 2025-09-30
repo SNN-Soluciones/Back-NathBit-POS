@@ -2,7 +2,7 @@ package com.snnsoluciones.backnathbitpos.service.metrics;
 
 import com.snnsoluciones.backnathbitpos.dto.metrics.MetricaDashboardDTO;
 import com.snnsoluciones.backnathbitpos.dto.metrics.MetricaMensualDTO;
-import com.snnsoluciones.backnathbitpos.entity.MetricaMensual;
+import com.snnsoluciones.backnathbitpos.entity.MetricasVentasMensuales;
 import com.snnsoluciones.backnathbitpos.repository.MetricaMensualRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,9 +32,9 @@ public class MetricaMensualService {
         Integer mesActual = hoy.getMonthValue();
         
         // Obtener métrica consolidada de la empresa
-        MetricaMensual metrica = metricaRepository
+        MetricasVentasMensuales metrica = metricaRepository
             .findByEmpresaConsolidada(empresaId, anioActual, mesActual)
-            .orElse(new MetricaMensual()); // Si no existe, retornar vacío
+            .orElse(new MetricasVentasMensuales()); // Si no existe, retornar vacío
         
         return MetricaDashboardDTO.builder()
             .ventasMesActual(metrica.getVentasTotales())
@@ -58,9 +58,9 @@ public class MetricaMensualService {
         Integer anioActual = hoy.getYear();
         Integer mesActual = hoy.getMonthValue();
         
-        MetricaMensual metrica = metricaRepository
+        MetricasVentasMensuales metrica = metricaRepository
             .findBySucursal(sucursalId, anioActual, mesActual)
-            .orElse(new MetricaMensual());
+            .orElse(new MetricasVentasMensuales());
         
         return MetricaDashboardDTO.builder()
             .ventasMesActual(metrica.getVentasTotales())
@@ -116,7 +116,7 @@ public class MetricaMensualService {
     /**
      * Convertir entidad a DTO
      */
-    private MetricaMensualDTO toDTO(MetricaMensual metrica) {
+    private MetricaMensualDTO toDTO(MetricasVentasMensuales metrica) {
         return MetricaMensualDTO.builder()
             .id(metrica.getId())
             .empresaId(metrica.getEmpresa().getId())

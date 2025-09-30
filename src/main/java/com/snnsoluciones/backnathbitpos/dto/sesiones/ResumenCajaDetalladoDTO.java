@@ -73,7 +73,7 @@ public class ResumenCajaDetalladoDTO {
         private String clienteNombre;
         private BigDecimal total;
         private String estado;
-        private LocalDateTime fechaEmision;
+        private String fechaEmision;
         private String metodoPago;
     }
 

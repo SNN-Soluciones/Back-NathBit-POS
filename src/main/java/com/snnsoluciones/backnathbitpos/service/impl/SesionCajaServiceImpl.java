@@ -296,7 +296,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
               (f.getCliente() != null ? f.getCliente().getRazonSocial() : "Cliente General"))
           .total(f.getTotalComprobante())
           .estado(f.getEstado().toString())
-          .fechaEmision(LocalDateTime.parse(f.getFechaEmision())) // Usar fecha real de la factura
+          .fechaEmision(f.getFechaEmision()) // Usar fecha real de la factura
           .metodoPago(obtenerMetodosPago(f))
           .build();
 
@@ -358,7 +358,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
           .clienteNombre(fi.getNombreCliente() != null ? fi.getNombreCliente() : "Cliente General")
           .total(fi.getTotal())
           .estado(fi.getEstado())
-          .fechaEmision(fi.getFecha())
+          .fechaEmision(String.valueOf(fi.getFecha()))
           .metodoPago(metodosPago)
           .build();
 

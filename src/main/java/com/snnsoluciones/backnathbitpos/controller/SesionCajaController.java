@@ -7,7 +7,9 @@ import com.snnsoluciones.backnathbitpos.dto.sesiones.RegistrarValeRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
+import com.snnsoluciones.backnathbitpos.entity.SesionCajaDenominacion;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
+import com.snnsoluciones.backnathbitpos.repository.SesionCajaDenominacionRepository;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.MovimientoCajaService;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
@@ -17,9 +19,18 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jasperreports.engine.JRDataSource;
+import net.sf.jasperreports.engine.JasperExportManager;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,6 +52,7 @@ public class SesionCajaController {
   private final MovimientoCajaService movimientoCajaService;
   private final SecurityContextService securityContextService;
   private final JwtTokenProvider jwtTokenProvider;
+  private final SesionCajaDenominacionRepository sesionCajaDenominacionRepository;
 
   @Operation(summary = "Abrir sesión de caja")
   @PostMapping("/abrir")
@@ -89,7 +101,7 @@ public class SesionCajaController {
   }
 
   @PostMapping("/{id}/cerrar")
-  @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
+  @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
   public ResponseEntity<ApiResponse<CierreCajaResponse>> cerrarSesion(
       @PathVariable Long id,
       @Valid @RequestBody CerrarSesionRequest request,
@@ -99,23 +111,19 @@ public class SesionCajaController {
       String token = httpRequest.getHeader("Authorization").substring(7);
       Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
 
-      // Verificar que la sesión existe
       SesionCaja sesion = sesionCajaService.buscarPorId(id)
           .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
 
-      // Validar permisos (cajero solo su propia sesión, supervisores cualquiera)
       if (!securityContextService.isSupervisor() &&
           !sesion.getUsuario().getId().equals(usuarioId)) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
             .body(ApiResponse.error("No tiene permisos para cerrar esta sesión"));
       }
 
-      // Obtener monto esperado antes de cerrar
       BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
       BigDecimal diferencia = request.getMontoCierre().subtract(montoEsperado);
+      BigDecimal umbral = new BigDecimal("10000"); // ₡10,000
 
-      // Si hay diferencia significativa y no es supervisor
-      BigDecimal umbral = new BigDecimal("10000"); // ₡10,000 de tolerancia
       if (diferencia.abs().compareTo(umbral) > 0 && !securityContextService.isSupervisor()) {
         return ResponseEntity.badRequest()
             .body(ApiResponse.error(String.format(
@@ -124,14 +132,13 @@ public class SesionCajaController {
             )));
       }
 
-      // Cerrar sesión
       SesionCaja sesionCerrada = sesionCajaService.cerrarSesion(
           id,
           request.getMontoCierre(),
-          request.getObservaciones()
+          request.getObservaciones(),
+          request.getDenominaciones()
       );
 
-      // Construir respuesta mejorada
       CierreCajaResponse response = CierreCajaResponse.builder()
           .sesionId(sesionCerrada.getId())
           .fechaApertura(sesionCerrada.getFechaHoraApertura())
@@ -139,10 +146,10 @@ public class SesionCajaController {
           .montoInicial(sesionCerrada.getMontoInicial())
           .totalVentas(sesionCerrada.getTotalVentas())
           .totalDevoluciones(sesionCerrada.getTotalDevoluciones())
-          .totalVales(movimientoCajaService.obtenerTotalVales(id)) // NUEVO
-          .montoEsperado(montoEsperado) // CALCULADO
+          .totalVales(movimientoCajaService.obtenerTotalVales(id))
+          .montoEsperado(montoEsperado)
           .montoCierre(sesionCerrada.getMontoCierre())
-          .diferencia(diferencia) // CALCULADA
+          .diferencia(diferencia)
           .cantidadFacturas(sesionCerrada.getCantidadFacturas())
           .cantidadTiquetes(sesionCerrada.getCantidadTiquetes())
           .cantidadNotasCredito(sesionCerrada.getCantidadNotasCredito())
@@ -150,15 +157,15 @@ public class SesionCajaController {
           .totalTarjeta(sesionCerrada.getTotalTarjeta())
           .totalTransferencia(sesionCerrada.getTotalTransferencia())
           .observaciones(sesionCerrada.getObservacionesCierre())
+          .denominaciones(
+              request.getDenominaciones()
+          )
           .build();
 
-      return ResponseEntity.ok(ApiResponse.ok(
-          "Sesión cerrada exitosamente",
-          response
-      ));
+      return ResponseEntity.ok(ApiResponse.ok("Sesión cerrada exitosamente", response));
 
     } catch (Exception e) {
-      log.error("Error cerrando sesión: {}", e.getMessage());
+      log.error("Error cerrando sesión: {}", e.getMessage(), e);
       return ResponseEntity.badRequest()
           .body(ApiResponse.error("Error al cerrar sesión: " + e.getMessage()));
     }
@@ -222,6 +229,45 @@ public class SesionCajaController {
         .build();
 
     return ResponseEntity.ok(ApiResponse.ok(resumen));
+  }
+
+  @GetMapping("/{id}/cierre/recibo")
+  @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+  public ResponseEntity<byte[]> imprimirCierre(@PathVariable Long id) throws Exception {
+    SesionCaja s = sesionCajaService.buscarPorId(id)
+        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+    List<SesionCajaDenominacion> den = sesionCajaDenominacionRepository.findBySesionCajaId(id);
+
+    Map<String,Object> params = new HashMap<>();
+    params.put("SESION_ID", s.getId());
+    params.put("FECHA_APERTURA", s.getFechaHoraApertura());
+    params.put("FECHA_CIERRE", s.getFechaHoraCierre());
+    params.put("MONTO_INICIAL", s.getMontoInicial());
+    params.put("MONTO_ESPERADO", sesionCajaService.calcularMontoEsperado(s));
+    params.put("MONTO_CIERRE", s.getMontoCierre());
+    params.put("DIFERENCIA", s.getMontoCierre().subtract((BigDecimal)params.get("MONTO_ESPERADO")));
+    params.put("TOTAL_EFECTIVO", s.getTotalEfectivo());
+    params.put("TOTAL_TARJETA", s.getTotalTarjeta());
+    params.put("TOTAL_TRANSFERENCIA", s.getTotalTransferencia());
+    params.put("OBSERVACIONES", s.getObservacionesCierre());
+
+    // datasource para el subreporte/tabla de denominaciones
+    JRDataSource dataSource = new JRBeanCollectionDataSource(den);
+
+    JasperPrint jp = JasperFillManager.fillReport(
+        // apunta a tu .jasper en el classpath o filesystem
+        this.getClass().getResourceAsStream("/reports/cierre_caja.jasper"),
+        params,
+        dataSource
+    );
+    byte[] pdf = JasperExportManager.exportReportToPdf(jp);
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+    headers.setContentDispositionFormData("inline", "cierre_caja_" + id + ".pdf");
+
+    return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
   }
 
   // Agregar en SesionCajaController.java
@@ -487,5 +533,49 @@ public class SesionCajaController {
       return ResponseEntity.badRequest()
           .body(ApiResponse.error("Error al cerrar sesión: " + e.getMessage()));
     }
+  }
+
+  // en tu controller de cierres
+  @GetMapping("/{id}/cierre/recibo-ticket")
+  @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+  public ResponseEntity<byte[]> imprimirCierreTicket(@PathVariable Long id,
+      @Qualifier("cierreCajaTicket")
+      net.sf.jasperreports.engine.JasperReport report) throws Exception {
+    var sesion = sesionCajaService.buscarPorId(id)
+        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+    var denoms = sesionCajaDenominacionRepository.findBySesionCajaId(id);
+
+    var params = new java.util.HashMap<String,Object>();
+    params.put("EMPRESA_NOMBRE", /* tu empresa */ "Nathbit POS");
+    params.put("EMPRESA_CEDULA", /* opcional */ null);
+    params.put("SESION_ID", sesion.getId());
+    params.put("USUARIO", sesion.getUsuario()!=null ? sesion.getUsuario().getNombre() : "");
+    params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
+    params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
+    params.put("MONTO_INICIAL", sesion.getMontoInicial());
+    var esperado = sesionCajaService.calcularMontoEsperado(sesion);
+    params.put("MONTO_ESPERADO", esperado);
+    params.put("MONTO_CIERRE", sesion.getMontoCierre());
+    params.put("DIFERENCIA", sesion.getMontoCierre().subtract(esperado));
+    params.put("TOTAL_VENTAS", sesion.getTotalVentas());
+    params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
+    params.put("TOTAL_VALES", movimientoCajaService.obtenerTotalVales(id));
+    params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
+    params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
+    params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
+    params.put("OBSERVACIONES", sesion.getObservacionesCierre());
+
+    // Fuente de datos para la lista de denominaciones
+    var ds = new net.sf.jasperreports.engine.data.JRBeanCollectionDataSource(denoms);
+    params.put("DENOMINACIONES_DS", ds);
+
+    var jp = net.sf.jasperreports.engine.JasperFillManager.fillReport(report, params,
+        new net.sf.jasperreports.engine.JREmptyDataSource());
+    byte[] pdf = net.sf.jasperreports.engine.JasperExportManager.exportReportToPdf(jp);
+
+    var headers = new org.springframework.http.HttpHeaders();
+    headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+    headers.setContentDispositionFormData("inline", "cierre_ticket_" + id + ".pdf");
+    return new ResponseEntity<>(pdf, headers, org.springframework.http.HttpStatus.OK);
   }
 }

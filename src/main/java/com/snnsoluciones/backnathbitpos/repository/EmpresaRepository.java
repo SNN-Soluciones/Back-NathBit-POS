@@ -16,6 +16,8 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
 
   boolean existsByIdentificacion(String identificacion);
 
+  Optional<Empresa> findByIdentificacion(String identificacion);
+
   @Query("""
       SELECT DISTINCT e FROM Empresa e
       JOIN UsuarioEmpresa ue ON ue.empresa.id = e.id

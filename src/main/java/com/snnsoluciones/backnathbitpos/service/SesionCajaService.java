@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service;
 
+import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 
@@ -35,4 +36,8 @@ public interface SesionCajaService {
     List<SesionCaja> buscarTodas();
     List<SesionCaja> buscarPorEstado(EstadoSesion estado);
     SesionCaja cerrarSesionAdmin(Long sesionId, BigDecimal montoCierre, String observaciones);
+
+    SesionCaja cerrarSesion(Long id, BigDecimal montoCierre, String observaciones,
+        List<CerrarSesionRequest.DenominacionDTO> denominaciones);
+
 }

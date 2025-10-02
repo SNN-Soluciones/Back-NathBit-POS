@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
@@ -7,6 +8,7 @@ import com.snnsoluciones.backnathbitpos.entity.FacturaInternaMedioPago;
 import com.snnsoluciones.backnathbitpos.entity.FacturaMedioPago;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
+import com.snnsoluciones.backnathbitpos.entity.SesionCajaDenominacion;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
@@ -15,6 +17,7 @@ import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
+import com.snnsoluciones.backnathbitpos.repository.SesionCajaDenominacionRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
@@ -46,6 +49,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   private final SecurityContextService securityContext;
   private final FacturaRepository facturaRepository;
   private final FacturaInternaRepository facturaInternaRepository;
+  private final SesionCajaDenominacionRepository sesionCajaDenominacionRepository;
 
   @Override
   public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
@@ -133,6 +137,43 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     sesion.setDiferenciaCierre(diferencia);
     sesion.setObservacionesCierre(observaciones);
     sesion.setEstado(EstadoSesion.CERRADA);
+
+    return sesionCajaRepository.save(sesion);
+  }
+
+  // SesionCajaServiceImpl.java (núcleo)
+  @Transactional
+  @Override
+  public SesionCaja cerrarSesion(Long id, BigDecimal montoCierre, String observaciones,
+      List<CerrarSesionRequest.DenominacionDTO> denominaciones) {
+
+    SesionCaja sesion = sesionCajaRepository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("Sesión no encontrada"));
+
+    // actualiza totales propios de tu negocio (ventas, devoluciones, etc.) antes de cerrar
+    sesion.setMontoCierre(montoCierre);
+    sesion.setObservacionesCierre(observaciones);
+    sesion.setFechaHoraCierre(LocalDateTime.now());
+
+    // guarda desglose
+    sesionCajaDenominacionRepository.deleteAll(
+        sesionCajaDenominacionRepository.findBySesionCajaId(id)); // limpia previos si reintentan
+
+    List<SesionCajaDenominacion> filas = denominaciones.stream()
+        .map(d -> SesionCajaDenominacion.builder()
+            .sesionCaja(sesion)
+            .valor(d.getValor())
+            .cantidad(d.getCantidad())
+            .total(d.getValor().multiply(BigDecimal.valueOf(d.getCantidad())))
+            .build()
+        ).toList();
+    sesionCajaDenominacionRepository.saveAll(filas);
+
+    // puedes recalcular totalEfectivo con las denominaciones si aplica
+    BigDecimal totalDenominaciones = filas.stream()
+        .map(SesionCajaDenominacion::getTotal)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    sesion.setTotalEfectivo(totalDenominaciones); // opcional, si ese campo representa efectivo contado
 
     return sesionCajaRepository.save(sesion);
   }

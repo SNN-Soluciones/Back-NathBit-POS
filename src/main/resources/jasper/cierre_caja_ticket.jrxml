@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:c="http://jasperreports.sourceforge.net/jasperreports/components"
+  xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports
+                                  http://jasperreports.sourceforge.net/xsd/jasperreport.xsd
+                                  http://jasperreports.sourceforge.net/jasperreports/components
+                                  http://jasperreports.sourceforge.net/xsd/components.xsd"
+  name="cierre_caja_ticket"
+  pageWidth="226" pageHeight="1000"
+  columnWidth="216"
+  leftMargin="5" rightMargin="5" topMargin="5" bottomMargin="5"
+  whenNoDataType="AllSectionsNoDetail"
+  isIgnorePagination="true"
+  uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c01">
+
+    <!-- estilos -->
+    <style name="base" fontName="DejaVu Sans" fontSize="8"/>
+    <style name="title" style="base" fontSize="10" isBold="true"/>
+    <style name="bold" style="base" isBold="true"/>
+    <style name="mono" fontName="DejaVu Sans Mono" fontSize="8"/>
+
+    <!-- parámetros -->
+    <parameter name="EMPRESA_NOMBRE"/>
+    <parameter name="EMPRESA_CEDULA"/>
+    <parameter name="SESION_ID" class="java.lang.Long"/>
+    <parameter name="USUARIO"/>
+    <parameter name="FECHA_APERTURA" class="java.time.OffsetDateTime"/>
+    <parameter name="FECHA_CIERRE" class="java.time.OffsetDateTime"/>
+    <parameter name="MONTO_INICIAL" class="java.math.BigDecimal"/>
+    <parameter name="MONTO_ESPERADO" class="java.math.BigDecimal"/>
+    <parameter name="MONTO_CIERRE" class="java.math.BigDecimal"/>
+    <parameter name="DIFERENCIA" class="java.math.BigDecimal"/>
+    <parameter name="TOTAL_VENTAS" class="java.math.BigDecimal"/>
+    <parameter name="TOTAL_DEVOLUCIONES" class="java.math.BigDecimal"/>
+    <parameter name="TOTAL_VALES" class="java.math.BigDecimal"/>
+    <parameter name="TOTAL_EFECTIVO" class="java.math.BigDecimal"/>
+    <parameter name="TOTAL_TARJETA" class="java.math.BigDecimal"/>
+    <parameter name="TOTAL_TRANSFERENCIA" class="java.math.BigDecimal"/>
+    <parameter name="OBSERVACIONES"/>
+    <parameter name="DENOMINACIONES_DS" class="net.sf.jasperreports.engine.data.JRBeanCollectionDataSource"/>
+
+    <!-- dataset (campos de la lista) -->
+    <subDataset name="denoms" uuid="c8c8b2b4-3b4e-4b34-9d24-111111111111">
+        <field name="valor" class="java.math.BigDecimal"/>
+        <field name="cantidad" class="java.lang.Integer"/>
+        <field name="total" class="java.math.BigDecimal"/>
+    </subDataset>
+
+    <!-- título -->
+    <title>
+        <band height="54">
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="0" width="216" height="14" style="title"/>
+                <textFieldExpression><![CDATA[$P{EMPRESA_NOMBRE}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="16" width="216" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Céd: " + ($P{EMPRESA_CEDULA}==null?"":$P{EMPRESA_CEDULA})]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="30" width="216" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Cierre de Caja #"+$P{SESION_ID}+"  -  Usuario: "+($P{USUARIO}==null?"":$P{USUARIO})]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <!-- detalle -->
+    <detail>
+        <band height="560">
+            <!-- Fechas -->
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="0" width="216" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Apertura: " + ($P{FECHA_APERTURA}==null?"":$P{FECHA_APERTURA}.toString())]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="12" width="216" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Cierre:   " + ($P{FECHA_CIERRE}==null?"":$P{FECHA_CIERRE}.toString())]]></textFieldExpression>
+            </textField>
+
+            <!-- Totales -->
+            <staticText>
+                <reportElement x="0" y="28" width="216" height="12" style="bold"/>
+                <text><![CDATA[Totales]]></text>
+            </staticText>
+
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="0" y="42" width="110" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Inicial: " + ($P{MONTO_INICIAL}==null? java.math.BigDecimal.ZERO : $P{MONTO_INICIAL})]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="110" y="42" width="106" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Esperado: " + ($P{MONTO_ESPERADO}==null? java.math.BigDecimal.ZERO : $P{MONTO_ESPERADO})]]></textFieldExpression>
+            </textField>
+
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="0" y="56" width="110" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Cierre:   " + ($P{MONTO_CIERRE}==null? java.math.BigDecimal.ZERO : $P{MONTO_CIERRE})]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="110" y="56" width="106" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Difer:    " + ($P{DIFERENCIA}==null? java.math.BigDecimal.ZERO : $P{DIFERENCIA})]]></textFieldExpression>
+            </textField>
+
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="0" y="70" width="110" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Ventas:   " + ($P{TOTAL_VENTAS}==null? java.math.BigDecimal.ZERO : $P{TOTAL_VENTAS})]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="110" y="70" width="106" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Devols:   " + ($P{TOTAL_DEVOLUCIONES}==null? java.math.BigDecimal.ZERO : $P{TOTAL_DEVOLUCIONES})]]></textFieldExpression>
+            </textField>
+
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="0" y="84" width="110" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Vales:    " + ($P{TOTAL_VALES}==null? java.math.BigDecimal.ZERO : $P{TOTAL_VALES})]]></textFieldExpression>
+            </textField>
+
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="0" y="100" width="72" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Efectivo: " + ($P{TOTAL_EFECTIVO}==null? java.math.BigDecimal.ZERO : $P{TOTAL_EFECTIVO})]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="72" y="100" width="72" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Tarjeta: " + ($P{TOTAL_TARJETA}==null? java.math.BigDecimal.ZERO : $P{TOTAL_TARJETA})]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" textAdjust="StretchHeight">
+                <reportElement x="144" y="100" width="72" height="12" style="base"/>
+                <textFieldExpression><![CDATA["Transf: " + ($P{TOTAL_TRANSFERENCIA}==null? java.math.BigDecimal.ZERO : $P{TOTAL_TRANSFERENCIA})]]></textFieldExpression>
+            </textField>
+
+            <!-- Observaciones -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="0" y="118" width="216" height="24" style="base"/>
+                <textFieldExpression><![CDATA["Obs: " + ($P{OBSERVACIONES}==null?"":$P{OBSERVACIONES})]]></textFieldExpression>
+            </textField>
+
+            <!-- separador -->
+            <rectangle>
+                <reportElement x="0" y="150" width="216" height="1"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="0" y="154" width="216" height="12" style="bold"/>
+                <text><![CDATA[Desglose en caja]]></text>
+            </staticText>
+
+            <!-- LIST COMPONENT correcto -->
+            <componentElement>
+                <reportElement x="0" y="170" width="216" height="320"/>
+                <c:list xmlns:c="http://jasperreports.sourceforge.net/jasperreports/components" xsi:type="c:List">
+                    <datasetRun subDataset="denoms">
+                        <dataSourceExpression><![CDATA[$P{DENOMINACIONES_DS}]]></dataSourceExpression>
+                    </datasetRun>
+                    <c:listContents height="12" width="216">
+                        <textField pattern="#,##0.00" style="mono">
+                            <reportElement x="0" y="0" width="80" height="12"/>
+                            <textFieldExpression><![CDATA[$F{valor}]]></textFieldExpression>
+                        </textField>
+                        <textField style="mono">
+                            <reportElement x="80" y="0" width="56" height="12"/>
+                            <textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
+                        </textField>
+                        <textField pattern="#,##0.00" style="mono">
+                            <reportElement x="136" y="0" width="80" height="12"/>
+                            <textFieldExpression><![CDATA[$F{total}]]></textFieldExpression>
+                        </textField>
+                    </c:listContents>
+                </c:list>
+            </componentElement>
+
+            <!-- Footer -->
+            <rectangle>
+                <reportElement x="0" y="500" width="216" height="1"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="0" y="506" width="216" height="12" style="base"/>
+                <text><![CDATA[Gracias por su trabajo.]]></text>
+            </staticText>
+        </band>
+    </detail>
+</jasperReport>

@@ -54,6 +54,7 @@ public class FacturaBitacora {
      * Número de intentos de procesamiento
      */
     @Column(name = "intentos", nullable = false)
+    @Builder.Default
     private Integer intentos = 0;
 
     /**

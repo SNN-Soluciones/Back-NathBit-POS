@@ -144,7 +144,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   // SesionCajaServiceImpl.java (núcleo)
   @Transactional
   @Override
-  public SesionCaja cerrarSesion(Long id, BigDecimal montoCierre, String observaciones,
+  public SesionCaja cerrarSesion(Long id, BigDecimal montoCierre, CerrarSesionRequest request, String observaciones,
       List<CerrarSesionRequest.DenominacionDTO> denominaciones) {
 
     SesionCaja sesion = sesionCajaRepository.findById(id)
@@ -170,10 +170,13 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     sesionCajaDenominacionRepository.saveAll(filas);
 
     // puedes recalcular totalEfectivo con las denominaciones si aplica
-    BigDecimal totalDenominaciones = filas.stream()
-        .map(SesionCajaDenominacion::getTotal)
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    sesion.setTotalEfectivo(totalDenominaciones); // opcional, si ese campo representa efectivo contado
+
+    sesion.setTotalEfectivo(request.getTotalEfectivo());
+    sesion.setTotalTarjeta(request.getTotalTarjeta());
+    sesion.setTotalTransferencia(request.getTotalTransferencia());
+    sesion.setTotalOtros(request.getTotalSinpe());
+
+    sesion.setEstado(EstadoSesion.CERRADA);
 
     return sesionCajaRepository.save(sesion);
   }

@@ -16,8 +16,12 @@ public class CerrarSesionRequest {
     @Size(max = 500)
     private String observaciones;
 
+    private BigDecimal totalEfectivo;
+    private BigDecimal totalTarjeta;
+    private BigDecimal totalTransferencia;
+    private BigDecimal totalSinpe;
+
     @NotNull
-    @Size(min = 1)
     private List<DenominacionDTO> denominaciones;
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

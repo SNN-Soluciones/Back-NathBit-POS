@@ -95,6 +95,7 @@ public class ClienteExoneracion {
     private String origen; // ej. "HACIENDA_API"
 
     @OneToMany(mappedBy = "exoneracion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private java.util.Set<ClienteExoneracionCabys> cabysAutorizados = new java.util.HashSet<>();
     
     public boolean estaVigente() {

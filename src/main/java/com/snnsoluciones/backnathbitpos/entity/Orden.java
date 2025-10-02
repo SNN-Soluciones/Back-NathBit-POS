@@ -107,6 +107,7 @@ public class Orden {
     private Orden ordenPadre; // Si es un split, referencia a la orden original
 
     @OneToMany(mappedBy = "ordenPadre")
+    @Builder.Default
     private List<Orden> splits = new ArrayList<>();
 
     // Timestamps

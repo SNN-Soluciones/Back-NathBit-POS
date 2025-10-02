@@ -21,9 +21,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Entidad LIMPIA para Factura
- * Solo almacena datos, NO hace cálculos
- * Arquitectura La Jachuda 🚀
+ * Entidad LIMPIA para Factura Solo almacena datos, NO hace cálculos Arquitectura La Jachuda 🚀
  */
 @Data
 @Entity
@@ -34,245 +32,279 @@ import java.util.Random;
 @ToString(exclude = {"detalles", "mediosPago", "otrosCargos", "resumenImpuestos"})
 public class Factura {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    // ========== IDENTIFICACIÓN ==========
-    @Column(length = 50, unique = true, updatable = false)
-    private String clave;
+  // ========== IDENTIFICACIÓN ==========
+  @Column(length = 50, unique = true, updatable = false)
+  private String clave;
 
-    @Column(length = 20, nullable = false, unique = true)
-    private String consecutivo;
+  @Column(length = 20, nullable = false, unique = true)
+  private String consecutivo;
 
-    @Column(name = "codigo_seguridad", length = 8)
-    private String codigoSeguridad;
+  @Column(name = "codigo_seguridad", length = 8)
+  private String codigoSeguridad;
 
-    @Column(name = "nombre_receptor", length = 100)
-    private String nombreReceptor;
+  @Column(name = "nombre_receptor", length = 100)
+  private String nombreReceptor;
 
-    @Column(name = "email_receptor", length = 100)
-    private String emailReceptor;
+  @Column(name = "email_receptor", length = 100)
+  private String emailReceptor;
 
-    @Column(name = "tipo_documento", nullable = false)
-    @Enumerated(EnumType.STRING)
-    private TipoDocumento tipoDocumento;
+  @Column(name = "tipo_documento", nullable = false)
+  @Enumerated(EnumType.STRING)
+  private TipoDocumento tipoDocumento;
 
-    @Column(name = "fecha_emision", nullable = false)
-    private String fechaEmision;
+  @Column(name = "fecha_emision", nullable = false)
+  private String fechaEmision;
 
-    @Column(name = "estado", length = 20, nullable = false)
-    @Enumerated(EnumType.STRING)
-    private EstadoFactura estado = EstadoFactura.GENERADA;
+  @Column(name = "estado", length = 20, nullable = false)
+  @Enumerated(EnumType.STRING)
+  @Builder.Default
+  private EstadoFactura estado = EstadoFactura.GENERADA;
 
-    @Column(name = "situacion_comprobante", nullable = false)
-    @Enumerated(EnumType.STRING)
-    private SituacionDocumento situacion = SituacionDocumento.NORMAL;
+  @Column(name = "situacion_comprobante", nullable = false)
+  @Enumerated(EnumType.STRING)
+  @Builder.Default
+  private SituacionDocumento situacion = SituacionDocumento.NORMAL;
 
-    // ========== REFERENCIAS ==========
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "sucursal_id", nullable = false)
-    private Sucursal sucursal;
+  // ========== REFERENCIAS ==========
+  @ManyToOne(fetch = FetchType.EAGER)
+  @JoinColumn(name = "sucursal_id", nullable = false)
+  private Sucursal sucursal;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "terminal_id", nullable = false)
-    private Terminal terminal;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "terminal_id", nullable = false)
+  private Terminal terminal;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sesion_caja_id", nullable = false)
-    private SesionCaja sesionCaja;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "sesion_caja_id", nullable = false)
+  private SesionCaja sesionCaja;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "cliente_id")
-    private Cliente cliente;
+  @ManyToOne(fetch = FetchType.EAGER)
+  @JoinColumn(name = "cliente_id")
+  private Cliente cliente;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cajero_id", nullable = false)
-    private Usuario cajero;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "cajero_id", nullable = false)
+  private Usuario cajero;
 
-    // Para NC/ND
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "factura_referencia_id")
-    private Factura facturaReferencia;
+  // Para NC/ND
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "factura_referencia_id")
+  private Factura facturaReferencia;
 
-    @Column(name = "codigo_referencia", length = 2)
-    private String codigoReferencia;
+  @Column(name = "codigo_referencia", length = 2)
+  private String codigoReferencia;
 
-    @Column(name = "razon_referencia", length = 180)
-    private String razonReferencia;
+  @Column(name = "razon_referencia", length = 180)
+  private String razonReferencia;
 
-    @Column(name = "fecha_emision_referencia")
-    private String fechaEmisionReferencia;
+  @Column(name = "fecha_emision_referencia")
+  private String fechaEmisionReferencia;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_doc_referencia")
-    private TipoDocumento tipoDocReferencia;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "tipo_doc_referencia")
+  private TipoDocumento tipoDocReferencia;
 
-    // Número de referencia (clave o consecutivo del documento referenciado)
-    @Column(name = "numero_referencia", length = 50)
-    private String numeroReferencia;
+  // Número de referencia (clave o consecutivo del documento referenciado)
+  @Column(name = "numero_referencia", length = 50)
+  private String numeroReferencia;
 
-    // ========== DATOS COMERCIALES ==========
-    @Column(name = "condicion_venta", nullable = false)
-    @Enumerated(EnumType.STRING)
-    private CondicionVenta condicionVenta = CondicionVenta.CONTADO;
+  // ========== DATOS COMERCIALES ==========
+  @Column(name = "condicion_venta", nullable = false)
+  @Enumerated(EnumType.STRING)
+  @Builder.Default
+  private CondicionVenta condicionVenta = CondicionVenta.CONTADO;
 
-    @Column(name = "plazo_credito")
-    private Integer plazoCredito;
+  @Column(name = "plazo_credito")
+  private Integer plazoCredito;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "codigo_moneda", length = 3, nullable = false)
-    private Moneda moneda = Moneda.CRC;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "codigo_moneda", length = 3, nullable = false)
+  @Builder.Default
+  private Moneda moneda = Moneda.CRC;
 
-    @Column(name = "tipo_cambio", nullable = false, precision = 18, scale = 5)
-    private BigDecimal tipoCambio = BigDecimal.ONE;
+  @Column(name = "tipo_cambio", nullable = false, precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal tipoCambio = BigDecimal.ONE;
 
-    @Column(name = "observaciones", length = 500)
-    private String observaciones;
+  @Column(name = "observaciones", length = 500)
+  private String observaciones;
 
-    @Column(name = "actividad_receptor", length = 6)
-    private String actividadReceptor;
+  @Column(name = "actividad_receptor", length = 6)
+  private String actividadReceptor;
 
-    @Column(name = "vuelto", precision = 18, scale = 5)
-    private BigDecimal vuelto = BigDecimal.ZERO;
+  @Column(name = "vuelto", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal vuelto = BigDecimal.ZERO;
 
-    // ========== DESCUENTO GLOBAL ==========
-    @Column(name = "descuento_global_porcentaje", precision = 5, scale = 2)
-    private BigDecimal descuentoGlobalPorcentaje = BigDecimal.ZERO;
+  // ========== DESCUENTO GLOBAL ==========
+  @Column(name = "descuento_global_porcentaje", precision = 5, scale = 2)
+  @Builder.Default
+  private BigDecimal descuentoGlobalPorcentaje = BigDecimal.ZERO;
 
-    @Column(name = "monto_descuento_global", precision = 18, scale = 5)
-    private BigDecimal montoDescuentoGlobal = BigDecimal.ZERO;
+  @Column(name = "monto_descuento_global", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal montoDescuentoGlobal = BigDecimal.ZERO;
 
-    @Column(name = "motivo_descuento_global", length = 200)
-    private String motivoDescuentoGlobal;
+  @Column(name = "motivo_descuento_global", length = 200)
+  private String motivoDescuentoGlobal;
+
+  // ========== TOTALES HACIENDA (Frontend los calcula) ==========
+  @Column(name = "total_servicios_gravados", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalServiciosGravados = BigDecimal.ZERO;
 
-    // ========== TOTALES HACIENDA (Frontend los calcula) ==========
-    @Column(name = "total_servicios_gravados", precision = 18, scale = 5)
-    private BigDecimal totalServiciosGravados = BigDecimal.ZERO;
+  @Column(name = "total_servicios_exentos", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalServiciosExentos = BigDecimal.ZERO;
+
+  @Column(name = "total_servicios_exonerados", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalServiciosExonerados = BigDecimal.ZERO;
+
+  @Column(name = "total_servicios_no_sujetos", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalServiciosNoSujetos = BigDecimal.ZERO;
+
+  @Column(name = "total_mercancias_gravadas", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalMercanciasGravadas = BigDecimal.ZERO;
 
-    @Column(name = "total_servicios_exentos", precision = 18, scale = 5)
-    private BigDecimal totalServiciosExentos = BigDecimal.ZERO;
+  @Column(name = "total_mercancias_exentas", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalMercanciasExentas = BigDecimal.ZERO;
 
-    @Column(name = "total_servicios_exonerados", precision = 18, scale = 5)
-    private BigDecimal totalServiciosExonerados = BigDecimal.ZERO;
+  @Column(name = "total_mercancias_exoneradas", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalMercanciasExoneradas = BigDecimal.ZERO;
 
-    @Column(name = "total_servicios_no_sujetos", precision = 18, scale = 5)
-    private BigDecimal totalServiciosNoSujetos = BigDecimal.ZERO;
+  @Column(name = "total_mercancias_no_sujetas", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalMercanciasNoSujetas = BigDecimal.ZERO;
 
-    @Column(name = "total_mercancias_gravadas", precision = 18, scale = 5)
-    private BigDecimal totalMercanciasGravadas = BigDecimal.ZERO;
-
-    @Column(name = "total_mercancias_exentas", precision = 18, scale = 5)
-    private BigDecimal totalMercanciasExentas = BigDecimal.ZERO;
-
-    @Column(name = "total_mercancias_exoneradas", precision = 18, scale = 5)
-    private BigDecimal totalMercanciasExoneradas = BigDecimal.ZERO;
-
-    @Column(name = "total_mercancias_no_sujetas", precision = 18, scale = 5)
-    private BigDecimal totalMercanciasNoSujetas = BigDecimal.ZERO;
-
-    @Column(name = "total_gravado", precision = 18, scale = 5)
-    private BigDecimal totalGravado = BigDecimal.ZERO;
-
-    @Column(name = "total_exento", precision = 18, scale = 5)
-    private BigDecimal totalExento = BigDecimal.ZERO;
-
-    @Column(name = "total_exonerado", precision = 18, scale = 5)
-    private BigDecimal totalExonerado = BigDecimal.ZERO;
-
-    @Column(name = "total_venta", precision = 18, scale = 5)
-    private BigDecimal totalVenta = BigDecimal.ZERO;
-
-    @Column(name = "total_descuentos", precision = 18, scale = 5)
-    private BigDecimal totalDescuentos = BigDecimal.ZERO;
-
-    @Column(name = "total_venta_neta", precision = 18, scale = 5)
-    private BigDecimal totalVentaNeta = BigDecimal.ZERO;
-
-    @Column(name = "total_impuesto", precision = 18, scale = 5)
-    private BigDecimal totalImpuesto = BigDecimal.ZERO;
-
-    @Column(name = "total_iva_devuelto", precision = 18, scale = 5)
-    private BigDecimal totalIVADevuelto = BigDecimal.ZERO;
-
-    @Column(name = "total_otros_cargos", precision = 18, scale = 5)
-    private BigDecimal totalOtrosCargos = BigDecimal.ZERO;
-
-    @Column(name = "total_comprobante", precision = 18, scale = 5)
-    private BigDecimal totalComprobante = BigDecimal.ZERO;
-
-    @Column(name = "monto_acreditado", precision = 19, scale = 5)
-    private BigDecimal montoAcreditado = BigDecimal.ZERO;
-
-    @Column(name = "parcialmente_acreditada")
-    private Boolean parcialmenteAcreditada = Boolean.FALSE;
-
-    @Column(name = "totalmente_acreditada")
-    private Boolean totalmenteAcreditada = Boolean.FALSE;
-
-    // ========== RELACIONES ==========
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("numeroLinea ASC")
-    private List<FacturaDetalle> detalles = new ArrayList<>();
-
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<FacturaMedioPago> mediosPago = new ArrayList<>();
-
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("numeroLinea ASC")
-    private List<OtroCargo> otrosCargos = new ArrayList<>();
-
-    @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<FacturaResumenImpuesto> resumenImpuestos = new ArrayList<>();
-
-    // ========== AUDITORÍA ==========
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
-    @Column(name = "total_no_sujeto", precision = 19, scale = 5, nullable = false)
-    private BigDecimal totalNoSujeto = BigDecimal.ZERO;
-
-    @Column(name = "version_catalogos", length = 64, nullable = false)
-    private String versionCatalogos;
-
-    // ========== MÉTODOS HELPER (Solo relaciones) ==========
-
-    public void agregarDetalle(FacturaDetalle detalle) {
-        detalles.add(detalle);
-        detalle.setFactura(this);
-    }
-
-    public void agregarMedioPago(FacturaMedioPago medioPago) {
-        mediosPago.add(medioPago);
-        medioPago.setFactura(this);
-    }
-
-    public void agregarOtroCargo(OtroCargo otroCargo) {
-        otrosCargos.add(otroCargo);
-        otroCargo.setFactura(this);
-        otroCargo.setNumeroLinea(otrosCargos.size());
-    }
-
-    public void agregarResumenImpuesto(FacturaResumenImpuesto resumen) {
-        resumenImpuestos.add(resumen);
-        resumen.setFactura(this);
-    }
-
-    public boolean esElectronica() {
-        return tipoDocumento != null && tipoDocumento.isElectronico();
-    }
-
-    public boolean esNotaCreditoDebito() {
-        return tipoDocumento == TipoDocumento.NOTA_CREDITO ||
-            tipoDocumento == TipoDocumento.NOTA_DEBITO;
-    }
-
-    public void generarCodigoSeguridad() {
-        this.codigoSeguridad = String.format("%08d", new Random().nextInt(100000000));
-    }
+  @Column(name = "total_gravado", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalGravado = BigDecimal.ZERO;
+
+  @Column(name = "total_exento", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalExento = BigDecimal.ZERO;
+
+  @Column(name = "total_exonerado", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalExonerado = BigDecimal.ZERO;
+
+  @Column(name = "total_venta", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalVenta = BigDecimal.ZERO;
+
+  @Column(name = "total_descuentos", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalDescuentos = BigDecimal.ZERO;
+
+  @Column(name = "total_venta_neta", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalVentaNeta = BigDecimal.ZERO;
+
+  @Column(name = "total_impuesto", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalImpuesto = BigDecimal.ZERO;
+
+  @Column(name = "total_iva_devuelto", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalIVADevuelto = BigDecimal.ZERO;
+
+  @Column(name = "total_otros_cargos", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalOtrosCargos = BigDecimal.ZERO;
+
+  @Column(name = "total_comprobante", precision = 18, scale = 5)
+  @Builder.Default
+  private BigDecimal totalComprobante = BigDecimal.ZERO;
+
+  @Column(name = "monto_acreditado", precision = 19, scale = 5)
+  @Builder.Default
+  private BigDecimal montoAcreditado = BigDecimal.ZERO;
+
+  @Column(name = "parcialmente_acreditada")
+  @Builder.Default
+  private Boolean parcialmenteAcreditada = Boolean.FALSE;
+
+  @Column(name = "totalmente_acreditada")
+  @Builder.Default
+  private Boolean totalmenteAcreditada = Boolean.FALSE;
+
+  // ========== RELACIONES ==========
+  @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+  @OrderBy("numeroLinea ASC")
+  @Builder.Default
+  private List<FacturaDetalle> detalles = new ArrayList<>();
+
+  @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+  @Builder.Default
+  private List<FacturaMedioPago> mediosPago = new ArrayList<>();
+
+  @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+  @Builder.Default
+  @OrderBy("numeroLinea ASC")
+  private List<OtroCargo> otrosCargos = new ArrayList<>();
+
+  @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+  @Builder.Default
+  private List<FacturaResumenImpuesto> resumenImpuestos = new ArrayList<>();
+
+  // ========== AUDITORÍA ==========
+  @CreationTimestamp
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private LocalDateTime createdAt;
+
+  @UpdateTimestamp
+  @Column(name = "updated_at")
+  private LocalDateTime updatedAt;
+
+  @Column(name = "total_no_sujeto", precision = 19, scale = 5, nullable = false)
+  @Builder.Default
+  private BigDecimal totalNoSujeto = BigDecimal.ZERO;
+
+  @Column(name = "version_catalogos", length = 64, nullable = false)
+  private String versionCatalogos;
+
+  // ========== MÉTODOS HELPER (Solo relaciones) ==========
+
+  public void agregarDetalle(FacturaDetalle detalle) {
+    detalles.add(detalle);
+    detalle.setFactura(this);
+  }
+
+  public void agregarMedioPago(FacturaMedioPago medioPago) {
+    mediosPago.add(medioPago);
+    medioPago.setFactura(this);
+  }
+
+  public void agregarOtroCargo(OtroCargo otroCargo) {
+    otrosCargos.add(otroCargo);
+    otroCargo.setFactura(this);
+    otroCargo.setNumeroLinea(otrosCargos.size());
+  }
+
+  public void agregarResumenImpuesto(FacturaResumenImpuesto resumen) {
+    resumenImpuestos.add(resumen);
+    resumen.setFactura(this);
+  }
+
+  public boolean esElectronica() {
+    return tipoDocumento != null && tipoDocumento.isElectronico();
+  }
+
+  public boolean esNotaCreditoDebito() {
+    return tipoDocumento == TipoDocumento.NOTA_CREDITO ||
+        tipoDocumento == TipoDocumento.NOTA_DEBITO;
+  }
+
+  public void generarCodigoSeguridad() {
+    this.codigoSeguridad = String.format("%08d", new Random().nextInt(100000000));
+  }
 }

@@ -40,6 +40,7 @@ public class ProductoImportDto {
     private String cabysId;     // ID del código CABYS
 
     // Para control de importación
+    @Builder.Default
     private Boolean importado = false;
     private String mensajeError;
 }

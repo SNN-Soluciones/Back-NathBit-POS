@@ -56,6 +56,7 @@ public class ClienteExoneracionCreateDTO {
     private Integer numeroAutorizacion;
 
     @NotNull(message = "Debe indicar si posee códigos CABYS")
+    @Builder.Default
     private Boolean poseeCabys = false;
 
     // Lista de códigos CABYS como strings

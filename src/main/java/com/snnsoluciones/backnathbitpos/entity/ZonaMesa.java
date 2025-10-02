@@ -23,8 +23,10 @@ public class ZonaMesa {
   private String descripcion;
 
   @Column(nullable = false)
+  @Builder.Default
   private Boolean activo = true;
 
   @Column(name = "orden_exhibicion", nullable = false)
+  @Builder.Default
   private Integer ordenExhibicion = 1;
 }

@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.sesion.*;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.MovimientoCajaDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.RegistrarValeRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCajaDenominacion;
@@ -14,6 +15,7 @@ import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.MovimientoCajaService;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
 import com.snnsoluciones.backnathbitpos.service.impl.SecurityContextService;
+import com.snnsoluciones.backnathbitpos.service.pdf.PdfGeneratorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,6 +34,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -53,6 +56,7 @@ public class SesionCajaController {
   private final SecurityContextService securityContextService;
   private final JwtTokenProvider jwtTokenProvider;
   private final SesionCajaDenominacionRepository sesionCajaDenominacionRepository;
+  private final PdfGeneratorService pdfGeneratorService;
 
   @Operation(summary = "Abrir sesión de caja")
   @PostMapping("/abrir")
@@ -135,6 +139,7 @@ public class SesionCajaController {
       SesionCaja sesionCerrada = sesionCajaService.cerrarSesion(
           id,
           request.getMontoCierre(),
+          request,
           request.getObservaciones(),
           request.getDenominaciones()
       );
@@ -364,13 +369,6 @@ public class SesionCajaController {
     }
   }
 
-  // Métodos helper
-
-  private Long obtenerUsuarioIdDelToken(HttpServletRequest request) {
-    // TODO: Implementar extracción real del JWT
-    return 1L;
-  }
-
   private SesionCajaResponse construirResponse(SesionCaja sesion) {
     return SesionCajaResponse.builder()
         .id(sesion.getId())
@@ -539,43 +537,90 @@ public class SesionCajaController {
   @GetMapping("/{id}/cierre/recibo-ticket")
   @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
   public ResponseEntity<byte[]> imprimirCierreTicket(@PathVariable Long id,
-      @Qualifier("cierreCajaTicket")
-      net.sf.jasperreports.engine.JasperReport report) throws Exception {
-    var sesion = sesionCajaService.buscarPorId(id)
-        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
-    var denoms = sesionCajaDenominacionRepository.findBySesionCajaId(id);
+      HttpServletRequest request) {
 
-    var params = new java.util.HashMap<String,Object>();
-    params.put("EMPRESA_NOMBRE", /* tu empresa */ "Nathbit POS");
-    params.put("EMPRESA_CEDULA", /* opcional */ null);
-    params.put("SESION_ID", sesion.getId());
-    params.put("USUARIO", sesion.getUsuario()!=null ? sesion.getUsuario().getNombre() : "");
-    params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
-    params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
-    params.put("MONTO_INICIAL", sesion.getMontoInicial());
-    var esperado = sesionCajaService.calcularMontoEsperado(sesion);
-    params.put("MONTO_ESPERADO", esperado);
-    params.put("MONTO_CIERRE", sesion.getMontoCierre());
-    params.put("DIFERENCIA", sesion.getMontoCierre().subtract(esperado));
-    params.put("TOTAL_VENTAS", sesion.getTotalVentas());
-    params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
-    params.put("TOTAL_VALES", movimientoCajaService.obtenerTotalVales(id));
-    params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
-    params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
-    params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
-    params.put("OBSERVACIONES", sesion.getObservacionesCierre());
+    try {
+      // Verificar permisos
+      String token = request.getHeader("Authorization").substring(7);
+      Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
 
-    // Fuente de datos para la lista de denominaciones
-    var ds = new net.sf.jasperreports.engine.data.JRBeanCollectionDataSource(denoms);
-    params.put("DENOMINACIONES_DS", ds);
+      // Obtener sesión
+      var sesion = sesionCajaService.buscarPorId(id)
+          .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
 
-    var jp = net.sf.jasperreports.engine.JasperFillManager.fillReport(report, params,
-        new net.sf.jasperreports.engine.JREmptyDataSource());
-    byte[] pdf = net.sf.jasperreports.engine.JasperExportManager.exportReportToPdf(jp);
+      // Validar que esté cerrada
+      if (sesion.getEstado().name().equals("ABIERTA")) {
+        throw new RuntimeException("La sesión debe estar cerrada para generar el reporte");
+      }
 
-    var headers = new org.springframework.http.HttpHeaders();
-    headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
-    headers.setContentDispositionFormData("inline", "cierre_ticket_" + id + ".pdf");
-    return new ResponseEntity<>(pdf, headers, org.springframework.http.HttpStatus.OK);
+      // Validar permisos
+      if (!securityContextService.isSupervisor() &&
+          !sesion.getUsuario().getId().equals(usuarioId)) {
+        throw new RuntimeException("No tiene permisos para ver este reporte");
+      }
+
+      // Obtener denominaciones
+      var denoms = sesionCajaDenominacionRepository.findBySesionCajaId(id);
+
+      // Preparar parámetros del reporte
+      var params = new java.util.HashMap<String,Object>();
+
+      // Datos de empresa
+      Empresa empresa = sesion.getTerminal().getSucursal().getEmpresa();
+      params.put("EMPRESA_NOMBRE", empresa.getNombreComercial() != null ?
+          empresa.getNombreComercial() : empresa.getNombreRazonSocial());
+      params.put("EMPRESA_CEDULA", empresa.getIdentificacion());
+
+      // Datos de sesión
+      params.put("SESION_ID", sesion.getId());
+      params.put("USUARIO", sesion.getUsuario() != null ?
+          sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos() : "");
+      params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
+      params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
+
+      // Montos
+      params.put("MONTO_INICIAL", sesion.getMontoInicial());
+      var esperado = sesionCajaService.calcularMontoEsperado(sesion);
+      params.put("MONTO_ESPERADO", esperado);
+      params.put("MONTO_CIERRE", sesion.getMontoCierre());
+      params.put("DIFERENCIA", sesion.getMontoCierre().subtract(esperado));
+
+      // Totales
+      params.put("TOTAL_VENTAS", sesion.getTotalVentas());
+      params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
+      params.put("TOTAL_VALES", movimientoCajaService.obtenerTotalVales(id));
+      params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
+      params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
+      params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
+      params.put("TOTAL_SINPE", sesion.getTotalOtros());
+      params.put("OBSERVACIONES", sesion.getObservacionesCierre());
+
+      // Datasource para denominaciones
+      JRBeanCollectionDataSource denominacionesDS = null;
+      if (denoms != null && !denoms.isEmpty()) {
+        denominacionesDS = new JRBeanCollectionDataSource(denoms);
+      }
+
+      // IMPORTANTE: Aquí usamos el PdfGeneratorService que ya tiene
+      // los reportes compilados en caché
+      byte[] pdf = pdfGeneratorService.generarPdf(
+          "cierre_caja_ticket", // nombre del reporte sin .jrxml
+          params,
+          denoms // lista de datos para el reporte
+      );
+
+      // Preparar respuesta
+      var headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_PDF);
+      headers.setContentDispositionFormData("inline",
+          "cierre_caja_ticket_" + id + ".pdf");
+
+      return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+
+    } catch (Exception e) {
+      log.error("Error generando reporte de cierre: {}", e.getMessage());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(("Error: " + e.getMessage()).getBytes());
+    }
   }
 }

@@ -16,6 +16,8 @@ public class ProductoImportResultDto {
     private Integer totalProcesados;
     private Integer exitosos;
     private Integer errores;
+
+    @Builder.Default
     private List<ProductoImportDto> productosConError = new ArrayList<>();
     private List<String> mensajesGenerales = new ArrayList<>();
 }

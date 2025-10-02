@@ -37,7 +37,7 @@ public interface SesionCajaService {
     List<SesionCaja> buscarPorEstado(EstadoSesion estado);
     SesionCaja cerrarSesionAdmin(Long sesionId, BigDecimal montoCierre, String observaciones);
 
-    SesionCaja cerrarSesion(Long id, BigDecimal montoCierre, String observaciones,
+    SesionCaja cerrarSesion(Long id, BigDecimal montoCierre, CerrarSesionRequest request, String observaciones,
         List<CerrarSesionRequest.DenominacionDTO> denominaciones);
 
 }

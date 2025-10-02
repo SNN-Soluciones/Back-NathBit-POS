@@ -18,6 +18,8 @@ public class ClientePOSDto implements Serializable {
     private Long sucursalId;
     private String numeroIdentificacion;
     private String razonSocial;
+
+    @Builder.Default
     private Set<ClienteEmailDTO> clienteEmails = new HashSet<>();
     private String telefonoNumero;
     private Boolean tieneExoneracion;

@@ -61,6 +61,7 @@ public class FacturaResumenImpuesto {
    * Total exonerado para este impuesto
    */
   @Column(name = "total_monto_exoneracion", precision = 18, scale = 5)
+  @Builder.Default
   private BigDecimal totalMontoExoneracion = BigDecimal.ZERO;
 
   /**
@@ -73,6 +74,7 @@ public class FacturaResumenImpuesto {
    * Número de líneas que tienen este impuesto
    */
   @Column(name = "cantidad_lineas", nullable = false)
+  @Builder.Default
   private Integer cantidadLineas = 0;
 
   // Índice único para evitar duplicad

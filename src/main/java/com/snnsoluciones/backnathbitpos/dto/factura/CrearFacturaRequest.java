@@ -34,6 +34,8 @@ public class CrearFacturaRequest {
     @Size(max = 100, message = "El nombre del receptor no puede exceder 100 caracteres")
     private String nombreReceptor;
     private String razonNotaCredito;
+
+    @Builder.Default
     private boolean anulacionCompleta = false;
 
     private String emailReceptor;

@@ -63,6 +63,7 @@ public class ProductoUpdateDto {
     private BigDecimal precioCompra;
 
     @Schema(description = "Indica si se debe actualizar la configuración tributaria (CABYS, impuestos, unidad medida)")
+    @Builder.Default
     private Boolean actualizarConfigTributaria = false;
 
     // Campos tributarios (solo se usan si actualizarConfigTributaria = true)

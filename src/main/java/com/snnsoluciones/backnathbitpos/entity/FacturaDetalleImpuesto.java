@@ -21,7 +21,7 @@ import java.math.RoundingMode;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"facturaDetalle", "productoImpuesto"})
+@ToString(exclude = {"productoImpuesto", "detalle"})
 public class FacturaDetalleImpuesto {
     
     @Id
@@ -80,6 +80,7 @@ public class FacturaDetalleImpuesto {
      * Indica si esta línea tiene exoneración
      */
     @Column(name = "tiene_exoneracion", nullable = false)
+    @Builder.Default
     private Boolean tieneExoneracion = false;
     
     /**
@@ -134,6 +135,7 @@ public class FacturaDetalleImpuesto {
 
     // ---- IMPUESTO ASUMIDO (v4.4) ----
     @Column(name = "impuesto_asumido_por_emisor")
+    @Builder.Default
     private Boolean impuestoAsumidoPorEmisor = Boolean.FALSE;
 
     @Column(name = "monto_impuesto_asumido", precision = 19, scale = 5)

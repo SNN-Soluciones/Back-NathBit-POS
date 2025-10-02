@@ -28,10 +28,12 @@ public class Mesa {
   private String nombre; // opcional (alias)
 
   @Column(nullable = false)
+  @Builder.Default
   private Integer capacidad = 2;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 30)
+  @Builder.Default
   private EstadoMesa estado = EstadoMesa.DISPONIBLE;
 
   @ManyToOne(optional = false, fetch = FetchType.LAZY)
@@ -39,12 +41,15 @@ public class Mesa {
   private Sucursal sucursal;
 
   @Column(nullable = false)
+  @Builder.Default
   private Boolean activo = true;
 
   @Column(nullable = false)
+  @Builder.Default
   private Integer orden = 0;
 
   @OneToMany(mappedBy = "mesa")
+  @Builder.Default
   private List<Orden> ordenes = new ArrayList<>();
 
   // Para unir mesas (misma orden), agrupa lógicamente varias mesas

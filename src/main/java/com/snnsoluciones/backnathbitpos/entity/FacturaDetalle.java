@@ -41,6 +41,7 @@ public class FacturaDetalle {
     private Producto producto;
 
     @Column(name = "unidad_medida", length = 30, nullable = false)
+    @Builder.Default
     private String unidadMedida = "Unid";
 
     // Campos para facturación electrónica
@@ -54,9 +55,11 @@ public class FacturaDetalle {
     private String descripcionPersonalizada;
 
     @Column(name = "es_servicio", nullable = false)
+    @Builder.Default
     private Boolean esServicio = Boolean.FALSE;
 
     @Column(name = "aplica_impuesto_servicio", nullable = false)
+    @Builder.Default
     private Boolean aplicaImpuestoServicio = Boolean.FALSE;
 
     @Column(name = "cantidad", precision = 19, scale = 5, nullable = false)
@@ -69,6 +72,7 @@ public class FacturaDetalle {
     private BigDecimal montoTotal;
 
     @Column(name = "monto_descuento", precision = 19, scale = 5, nullable = false)
+    @Builder.Default
     private BigDecimal montoDescuento = BigDecimal.ZERO;
 
     @Column(name = "subtotal", precision = 19, scale = 5, nullable = false)
@@ -83,10 +87,12 @@ public class FacturaDetalle {
     // Relaciones
     @OneToMany(mappedBy = "facturaDetalle", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("orden ASC")
+    @Builder.Default
     private List<FacturaDescuento> descuentos = new ArrayList<>();
 
     @OneToMany(mappedBy = "detalle", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("codigoImpuesto ASC")
+    @Builder.Default
     private List<FacturaDetalleImpuesto> impuestos = new ArrayList<>();
 
     // Métodos helper solo para agregar relaciones

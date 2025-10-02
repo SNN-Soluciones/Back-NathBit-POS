@@ -21,5 +21,6 @@ public class LoginResponse {
     private List<SucursalResumen> sucursales; // Para ADMIN
     private Contexto contexto;              // Para OPERATIVOS
 
+    @Builder.Default
     private Boolean passwordTemporal = false;
 }

@@ -22,5 +22,6 @@ public class ReintentarProcesamientoRequest {
     private String motivo;
     
     // Opcional: reiniciar contador de intentos
+    @Builder.Default
     private Boolean reiniciarContador = false;
 }

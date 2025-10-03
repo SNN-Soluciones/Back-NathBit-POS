@@ -10,8 +10,9 @@ import java.util.List;
 // ========== REQUESTS ==========
 
 public record CrearOrdenRequest(
-    @NotNull(message = "Mesa ID es requerido") 
     Long mesaId,
+
+    Long sucursalId,
     
     Long clienteId,
     
@@ -24,5 +25,13 @@ public record CrearOrdenRequest(
     @DecimalMax(value = "100", message = "Porcentaje de servicio no puede ser mayor a 100")
     BigDecimal porcentajeServicio,
     
-    String observaciones
-) {}
+    String observaciones,
+
+    @NotEmpty List<ItemRequest> items  // AGREGAR ESTO
+) {
+    public record ItemRequest(
+        @NotNull Long productoId,
+        @NotNull BigDecimal cantidad,
+        String notas
+    ) {}
+}

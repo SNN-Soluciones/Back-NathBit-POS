@@ -9,7 +9,7 @@ public record OrdenItemResponse(
     Long productoId,
     String productoNombre,
     String productoCodigo,
-    Integer cantidad,
+    BigDecimal cantidad,
     BigDecimal precioUnitario,
     BigDecimal porcentajeDescuento,
     BigDecimal tarifaImpuesto,

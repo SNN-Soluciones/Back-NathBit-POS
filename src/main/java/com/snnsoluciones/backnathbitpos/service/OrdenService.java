@@ -34,14 +34,26 @@ public class OrdenService {
   private final UsuarioRepository usuarioRepository;
   private final ClienteRepository clienteRepository;
   private final ProductoCompuestoSlotRepository slotRepository;
+  private final SucursalRepository sucursalRepository;
 
   @Transactional
   public OrdenResponse crearOrden(CrearOrdenRequest request) {
     log.info("Creando nueva orden para mesa ID: {}", request.mesaId());
 
     // Validar mesa
-    Mesa mesa = mesaRepository.findById(request.mesaId())
-        .orElseThrow(() -> new ResourceNotFoundException("Mesa no encontrada"));
+    Mesa mesa = null;
+    if (request.mesaId() != null) {
+      mesa = mesaRepository.findById(request.mesaId())
+          .orElseThrow(() -> new ResourceNotFoundException("Mesa no encontrada"));
+
+      // Validar estado solo si hay mesa
+      if (mesa.getEstado() != EstadoMesa.DISPONIBLE) {
+        throw new BusinessException("La mesa " + mesa.getCodigo() + " no está disponible");
+      }
+    }
+
+    Sucursal sucursal = sucursalRepository.findById(request.sucursalId())
+        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
 
     // Verificar si la mesa ya tiene orden activa
     if (mesa.tieneOrdenActiva()) {
@@ -53,6 +65,8 @@ public class OrdenService {
       throw new BusinessException("La mesa no está disponible");
     }
 
+    String numeroOrden = generarNumeroOrden(request.sucursalId());
+
     ContextoUsuario contexto = (ContextoUsuario) SecurityContextHolder.getContext()
         .getAuthentication().getPrincipal();
     Long usuarioId = contexto.getUserId();
@@ -63,9 +77,9 @@ public class OrdenService {
 
     // Crear orden
     Orden orden = Orden.builder()
-        .numero(generarNumeroOrden(mesa.getSucursal().getId()))
-        .mesa(mesa)
-        .sucursal(mesa.getSucursal())
+        .numero(numeroOrden)
+        .mesa(mesa)  // Puede ser null
+        .sucursal(sucursal)
         .mesero(mesero)
         .estado(EstadoOrden.ABIERTA)
         .numeroPersonas(request.numeroPersonas() != null ? request.numeroPersonas() : 1)
@@ -88,8 +102,32 @@ public class OrdenService {
 
     orden = ordenRepository.save(orden);
 
+    for (CrearOrdenRequest.ItemRequest itemReq : request.items()) {
+      Producto producto = productoRepository.findById(itemReq.productoId())
+          .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + itemReq.productoId()));
+
+      OrdenItem item = OrdenItem.builder()
+          .orden(orden)
+          .producto(producto)
+          .cantidad(itemReq.cantidad())
+          .precioUnitario(producto.getPrecioVenta())
+          .tarifaImpuesto(obtenerTarifaImpuesto(producto))
+          .notas(itemReq.notas())
+          .build();
+
+      item.calcularTotales(); // Si existe este método
+      orden.getItems().add(item);
+    }
+
+    // Recalcular totales de la orden
+    orden.calcularTotales();
+    orden = ordenRepository.save(orden);
+
     // Actualizar estado de mesa
-    mesa.setEstado(EstadoMesa.OCUPADA);
+    if (mesa != null) {
+      mesa.setEstado(EstadoMesa.OCUPADA);
+      mesaRepository.save(mesa);
+    }
     mesaRepository.save(mesa);
 
     log.info("Orden creada: {}", orden.getNumero());
@@ -133,7 +171,7 @@ public class OrdenService {
             .ordenItemPadre(item)
             .slot(slot)
             .productoOpcion(productoOpcion)
-            .cantidad(opcionReq.cantidad() != null ? opcionReq.cantidad() : 1)
+            .cantidad(opcionReq.cantidad() != null ? opcionReq.cantidad() : BigDecimal.ONE)
             .nombreSlot(slot.getNombre())
             .nombreOpcion(productoOpcion.getNombre())
             .build();
@@ -369,9 +407,9 @@ public class OrdenService {
     return new OrdenResponse(
         orden.getId(),
         orden.getNumero(),
-        orden.getMesa().getId(),
-        orden.getMesa().getCodigo(),
-        orden.getMesa().getZona().getNombre(),
+        orden.getMesa() != null ? orden.getMesa().getId() : null,
+        orden.getMesa() != null ? orden.getMesa().getCodigo() : "VENTANILLA",
+        orden.getMesa() != null ? orden.getMesa().getZona().getNombre() : "Para llevar",
         orden.getMesero().getId(),
         orden.getMesero().getNombre(),
         orden.getEstado(),

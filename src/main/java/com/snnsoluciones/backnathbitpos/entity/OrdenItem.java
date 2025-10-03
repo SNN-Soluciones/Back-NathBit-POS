@@ -29,8 +29,9 @@ public class OrdenItem {
     @JoinColumn(name = "producto_id", nullable = false)
     private Producto producto;
 
-    @Column(nullable = false)
-    private Integer cantidad;
+    @Column(nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal cantidad = BigDecimal.ONE;
 
     // Precio al momento de la venta (puede cambiar en el futuro)
     @Column(name = "precio_unitario", precision = 18, scale = 2, nullable = false)
@@ -106,13 +107,13 @@ public class OrdenItem {
     // Métodos de cálculo
     public void calcularTotales() {
         // Subtotal base
-        this.subtotal = precioUnitario.multiply(new BigDecimal(cantidad));
+        this.subtotal = precioUnitario.multiply(cantidad);
 
         // Calcular descuento
         if (porcentajeDescuento != null && porcentajeDescuento.compareTo(BigDecimal.ZERO) > 0) {
             this.totalDescuento = subtotal.multiply(porcentajeDescuento).divide(new BigDecimal("100"));
         } else if (montoDescuento != null && montoDescuento.compareTo(BigDecimal.ZERO) > 0) {
-            this.totalDescuento = montoDescuento.multiply(new BigDecimal(cantidad));
+            this.totalDescuento = montoDescuento.multiply(cantidad);
         } else {
             this.totalDescuento = BigDecimal.ZERO;
         }

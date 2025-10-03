@@ -8,7 +8,7 @@ public record OrdenItemOpcionResponse(
     String slotNombre,
     Long productoOpcionId,
     String productoOpcionNombre,
-    Integer cantidad,
+    BigDecimal cantidad,
     BigDecimal precioAdicional,
     Boolean esGratuita
 ) {}

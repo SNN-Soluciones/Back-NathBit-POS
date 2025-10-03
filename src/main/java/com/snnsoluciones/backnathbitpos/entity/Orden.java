@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
 import jakarta.persistence.*;
+import java.math.RoundingMode;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -29,8 +30,8 @@ public class Orden {
     @Column(nullable = false, unique = true)
     private String numero; // ORD-2024-00001
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "mesa_id", nullable = false)
+    @ManyToOne
+    @JoinColumn(name = "mesa_id")
     private Mesa mesa;
 
     @ManyToOne(optional = false)
@@ -164,11 +165,65 @@ public class Orden {
             .add(totalServicio);
     }
 
+    public boolean esOrdenVentanilla() {
+        return this.mesa == null;
+    }
+
+    public String getIdentificador() {
+        if (mesa != null) {
+            return mesa.getCodigo(); // "M-01"
+        }
+        return "VENTANILLA-" + this.numero.substring(this.numero.length() - 5); // "VENTANILLA-00123"
+    }
+
     public boolean puedeModificarse() {
         return estado == EstadoOrden.ABIERTA;
     }
 
     public boolean puedeFacturarse() {
         return estado == EstadoOrden.ABIERTA && !items.isEmpty();
+    }
+
+    /**
+     * Calcula todos los totales de la orden basándose en sus items
+     */
+    public void calcularTotales() {
+        // Inicializar totales
+        BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal totalDescuento = BigDecimal.ZERO;
+        BigDecimal totalImpuesto = BigDecimal.ZERO;
+
+        // Calcular desde los items
+        for (OrdenItem item : this.items) {
+            // Asegurarse que el item tiene sus totales calculados
+            item.calcularTotales();
+
+            subtotal = subtotal.add(item.getSubtotal());
+            totalDescuento = totalDescuento.add(item.getTotalDescuento());
+            totalImpuesto = totalImpuesto.add(item.getTotalImpuesto());
+        }
+
+        // Calcular servicio si aplica
+        BigDecimal totalServicio = BigDecimal.ZERO;
+        if (this.porcentajeServicio != null && this.porcentajeServicio.compareTo(BigDecimal.ZERO) > 0) {
+            // Servicio se calcula sobre el subtotal menos descuentos
+            BigDecimal baseServicio = subtotal.subtract(totalDescuento);
+            totalServicio = baseServicio
+                .multiply(this.porcentajeServicio)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        }
+
+        // Calcular total final
+        BigDecimal total = subtotal
+            .subtract(totalDescuento)
+            .add(totalImpuesto)
+            .add(totalServicio);
+
+        // Asignar valores calculados
+        this.subtotal = subtotal;
+        this.totalDescuento = totalDescuento;
+        this.totalImpuesto = totalImpuesto;
+        this.totalServicio = totalServicio;
+        this.total = total;
     }
 }

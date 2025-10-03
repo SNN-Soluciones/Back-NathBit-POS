@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.service.OrdenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -220,6 +221,33 @@ public class OrdenController {
             return ResponseEntity.ok(ApiResponse.success("Orden marcada como pagada", null));
         } catch (Exception e) {
             log.error("Error al marcar orden como pagada: ", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Crear orden de ventanilla (sin mesa)")
+    @PostMapping("/ventanilla")
+    @PreAuthorize("hasAnyRole('CAJERO', 'MESERO', 'ADMIN', 'ROOT')")
+    public ResponseEntity<ApiResponse<OrdenResponse>> crearOrdenVentanilla(
+        @Valid @RequestBody CrearOrdenRequest request) {
+        try {
+            // Mapear a CrearOrdenRequest con mesaId = null
+            CrearOrdenRequest ordenRequest = new CrearOrdenRequest(
+                null,
+                request.sucursalId(),
+                request.clienteId(),  // Sin cliente
+                request.nombreCliente(),
+                1,     // 1 persona por defecto
+                BigDecimal.ZERO,  // Sin servicio para llevar
+                request.observaciones(),
+                request.items()
+            );
+
+            OrdenResponse orden = ordenService.crearOrden(ordenRequest);
+            return ResponseEntity.ok(ApiResponse.success("Orden de ventanilla creada", orden));
+        } catch (Exception e) {
+            log.error("Error al crear orden de ventanilla: ", e);
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error(e.getMessage()));
         }

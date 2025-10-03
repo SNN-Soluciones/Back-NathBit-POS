@@ -32,7 +32,7 @@ public class OrdenItemOpcion {
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer cantidad = 1;
+    private BigDecimal cantidad = BigDecimal.ONE;
 
     // Precio adicional si aplica
     @Column(name = "precio_adicional", precision = 18, scale = 2)

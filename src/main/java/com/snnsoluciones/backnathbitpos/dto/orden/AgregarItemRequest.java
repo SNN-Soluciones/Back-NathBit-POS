@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.dto.orden;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.List;
 
 public record AgregarItemRequest(
@@ -11,7 +12,7 @@ public record AgregarItemRequest(
     
     @NotNull(message = "Cantidad es requerida")
     @Min(value = 1, message = "Cantidad debe ser al menos 1")
-    Integer cantidad,
+    BigDecimal cantidad,
     
     String notas,
     

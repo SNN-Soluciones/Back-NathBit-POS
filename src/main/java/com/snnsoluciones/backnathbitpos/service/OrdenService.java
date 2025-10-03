@@ -9,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
+import java.util.Collections;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -56,16 +57,19 @@ public class OrdenService {
         .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
 
     // Verificar si la mesa ya tiene orden activa
-    if (mesa.tieneOrdenActiva()) {
-      throw new BusinessException("La mesa ya tiene una orden activa");
+    if(mesa != null && mesa.tieneOrdenActiva()) {
+      if (mesa.tieneOrdenActiva()) {
+        throw new BusinessException("La mesa ya tiene una orden activa");
+      }
+      // Verificar estado de la mesa
+      if (mesa.getEstado() != EstadoMesa.DISPONIBLE) {
+        throw new BusinessException("La mesa no está disponible");
+      }
     }
 
-    // Verificar estado de la mesa
-    if (mesa.getEstado() != EstadoMesa.DISPONIBLE) {
-      throw new BusinessException("La mesa no está disponible");
-    }
 
-    String numeroOrden = generarNumeroOrden(request.sucursalId());
+
+    String numeroOrden = request.ordenNumero() != null ? request.ordenNumero() : generarNumeroOrden(request.sucursalId());
 
     ContextoUsuario contexto = (ContextoUsuario) SecurityContextHolder.getContext()
         .getAuthentication().getPrincipal();
@@ -128,7 +132,6 @@ public class OrdenService {
       mesa.setEstado(EstadoMesa.OCUPADA);
       mesaRepository.save(mesa);
     }
-    mesaRepository.save(mesa);
 
     log.info("Orden creada: {}", orden.getNumero());
     return mapToResponse(orden);
@@ -474,19 +477,45 @@ public class OrdenService {
   }
 
   private OrdenListResponse mapToListResponse(Orden orden) {
-    long minutosTranscurridos = ChronoUnit.MINUTES.between(orden.getFechaCreacion(),
-        LocalDateTime.now());
+    LocalDateTime creacion = orden.getFechaCreacion();
+    long minutos = (creacion != null)
+        ? ChronoUnit.MINUTES.between(creacion, LocalDateTime.now())
+        : 0;
+
+    String mesaCodigo = "VENTANILLA";
+    if (orden.getMesa() != null && orden.getMesa().getCodigo() != null && !orden.getMesa().getCodigo().isBlank()) {
+      mesaCodigo = orden.getMesa().getCodigo();
+    }
+
+    String meseroNombre = (orden.getMesero() != null && orden.getMesero().getNombre() != null)
+        ? orden.getMesero().getNombre()
+        : "Sin asignar";
+
+    // Mapear items -> DTO (y null-safe)
+    List<OrdenItemResumenResponse> items =
+        (orden.getItems() != null ? orden.getItems() : Collections.<OrdenItem>emptyList())
+            .stream()
+            .map(it -> new OrdenItemResumenResponse(
+                it.getProducto() != null ? it.getProducto().getId() : null,
+                it.getProducto() != null ? it.getProducto().getNombre() : "(Sin nombre)",
+                it.getCantidad(),
+                it.getNotas()
+            ))
+            .toList();
+
+    BigDecimal total = orden.getTotal() != null ? orden.getTotal() : BigDecimal.ZERO;
 
     return new OrdenListResponse(
         orden.getId(),
         orden.getNumero(),
-        orden.getMesa().getCodigo(),
-        orden.getMesero().getNombre(),
+        mesaCodigo,
+        meseroNombre,
         orden.getEstado(),
-        orden.getItems().size(),
-        orden.getTotal(),
-        orden.getFechaCreacion(),
-        (int) minutosTranscurridos
+        items.size(),
+        total,
+        creacion,
+        (int) minutos,
+        items
     );
   }
 

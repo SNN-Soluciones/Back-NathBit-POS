@@ -1,6 +1,8 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.facturainterna.*;
+import com.snnsoluciones.backnathbitpos.dto.orden.CrearOrdenRequest;
+import com.snnsoluciones.backnathbitpos.dto.orden.OrdenResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -30,6 +32,7 @@ public class FacturaInternaService {
     private final SucursalRepository sucursalRepository;
     private final UsuarioRepository usuarioRepository;
     private final SesionCajaRepository sesionCajaRepository;
+    private final OrdenService ordenService;
 
     /**
      * Crear una nueva factura interna
@@ -38,7 +41,7 @@ public class FacturaInternaService {
     public FacturaInternaResponse crear(CrearFacturaInternaRequest request) {
         log.info("Creando factura interna para empresa: {}", request.getEmpresaId());
 
-        // Obtener entidades desde el request
+        // ===== 1) Cargar entidades base =====
         Empresa empresa = empresaRepository.findById(request.getEmpresaId())
             .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
 
@@ -49,11 +52,48 @@ public class FacturaInternaService {
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         SesionCaja sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
-            .orElseThrow(()-> new ResourceNotFoundException("No hay sesion de caja abierta"));
+            .orElseThrow(() -> new ResourceNotFoundException("No hay sesion de caja abierta"));
 
-        // Crear factura
+        // ===== 2) Generar el número de factura ANTES (para usarlo en la Orden) =====
+        final String numeroFactura = generarNumeroFactura(empresa.getId(), sucursal.getId());
+
+        // ===== 3) Construir y crear ORDEN (ABRE ANTES DE LA FACTURA) =====
+        // (Si es ventanilla, mesaId = null; si viene mesa desde el request, úsala)
+        // Ajusta los getters al DTO real de tu request de factura interna:
+        Long mesaId = null; // si tu DTO no lo trae, déjalo null
+        Long clienteId = request.getClienteId();
+        String nombreCliente = request.getNombreCliente();
+
+        // Regla sencilla para servicio: 10% si mesa, 0% si ventanilla (ajústalo a tu negocio)
+        BigDecimal pctServicio = BigDecimal.ZERO;
+
+        // Mapear los detalles a items de orden
+        List<CrearOrdenRequest.ItemRequest> itemsOrden = request.getDetalles().stream()
+            .map(d -> new CrearOrdenRequest.ItemRequest(
+                d.getProductoId(),
+                d.getCantidad(),          // BigDecimal según tu DTO
+                d.getNotas()              // observaciones/notas por línea
+            ))
+            .toList();
+
+        CrearOrdenRequest crearOrdenRequest = new CrearOrdenRequest(
+            mesaId,                       // Long mesaId
+            sucursal.getId(),             // Long sucursalId
+            clienteId,                    // Long clienteId
+            nombreCliente,                // String nombreCliente
+            1,                            // Integer numeroPersonas (MVP)
+            pctServicio,                  // BigDecimal porcentajeServicio
+            "Orden generada desde TIQ " + numeroFactura, // observaciones
+            numeroFactura,                // String ordenNumero (¡aquí va el número de factura!)
+            itemsOrden                    // List<ItemRequest> @NotEmpty
+        );
+
+        OrdenResponse orden = ordenService.crearOrden(crearOrdenRequest);
+        log.info("Orden {} creada antes de factura interna {}", orden.numero(), numeroFactura);
+
+        // ===== 4) Construir y guardar la FACTURA usando el MISMO número =====
         FacturaInterna factura = FacturaInterna.builder()
-            .numero( generarNumeroFactura(request.getEmpresaId(), sucursal.getId()))
+            .numero(numeroFactura)             // <<-- usar el ya generado
             .empresa(empresa)
             .sucursal(sucursal)
             .sesionCaja(sesionCaja)
@@ -64,16 +104,16 @@ public class FacturaInternaService {
             .build();
 
         // Cliente opcional
-        if (request.getClienteId() != null) {
-            Cliente cliente = clienteRepository.findById(request.getClienteId())
+        if (clienteId != null) {
+            Cliente cliente = clienteRepository.findById(clienteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
             factura.setCliente(cliente);
             factura.setNombreCliente(cliente.getRazonSocial());
-        } else if (request.getNombreCliente() != null) {
-            factura.setNombreCliente(request.getNombreCliente());
+        } else if (nombreCliente != null) {
+            factura.setNombreCliente(nombreCliente);
         }
 
-        // Procesar detalles
+        // ===== 5) Detalles de la factura =====
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (DetalleFacturaInternaRequest detalleReq : request.getDetalles()) {
@@ -93,14 +133,13 @@ public class FacturaInternaService {
             subtotal = subtotal.add(detalle.getTotal());
         }
 
-        // Calcular totales
+        // Totales
         factura.setSubtotal(subtotal);
         factura.setDescuento(request.getDescuento() != null ? request.getDescuento() : BigDecimal.ZERO);
         factura.calcularTotal();
 
-        // Procesar medios de pago
+        // Medios de pago
         BigDecimal totalPagos = BigDecimal.ZERO;
-
         for (MedioPagoInternoRequest medioPagoReq : request.getMediosPago()) {
             FacturaInternaMedioPago medioPago = FacturaInternaMedioPago.builder()
                 .tipo(medioPagoReq.getTipoPago())

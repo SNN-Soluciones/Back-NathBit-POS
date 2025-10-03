@@ -27,6 +27,8 @@ public record CrearOrdenRequest(
     
     String observaciones,
 
+    String ordenNumero,
+
     @NotEmpty List<ItemRequest> items  // AGREGAR ESTO
 ) {
     public record ItemRequest(

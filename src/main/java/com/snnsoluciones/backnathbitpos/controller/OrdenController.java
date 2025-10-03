@@ -241,6 +241,7 @@ public class OrdenController {
                 1,     // 1 persona por defecto
                 BigDecimal.ZERO,  // Sin servicio para llevar
                 request.observaciones(),
+                request.ordenNumero(),
                 request.items()
             );
 

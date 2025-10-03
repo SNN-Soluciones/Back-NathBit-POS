@@ -1,8 +1,10 @@
 package com.snnsoluciones.backnathbitpos.dto.orden;
 
+import com.snnsoluciones.backnathbitpos.entity.OrdenItem;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record OrdenListResponse(
     Long id,
@@ -13,5 +15,6 @@ public record OrdenListResponse(
     Integer cantidadItems,
     BigDecimal total,
     LocalDateTime fechaCreacion,
-    Integer tiempoTranscurridoMinutos
+    Integer tiempoTranscurridoMinutos,
+    List<OrdenItemResumenResponse> items
 ) {}

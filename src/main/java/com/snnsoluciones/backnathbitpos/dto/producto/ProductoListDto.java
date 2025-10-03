@@ -29,4 +29,6 @@ public class ProductoListDto {
     private Boolean activo;
     private Boolean aplicaServicio = false;
     private Boolean esServicio = false;
+    private String imagenUrl;
+    private String thumbnailUrl;
 }

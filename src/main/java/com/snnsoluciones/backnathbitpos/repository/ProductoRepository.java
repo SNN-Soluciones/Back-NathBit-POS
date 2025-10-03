@@ -35,6 +35,21 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
   Page<Producto> findBySucursalId(Long empresaId, Pageable pageable);
 
+  /**
+   * Encuentra todos los productos que tienen imagen pero no tienen thumbnail
+   * Útil para migración de thumbnails
+   * @return Lista de productos sin thumbnail
+   */
+  List<Producto> findAllByImagenUrlNotNullAndThumbnailUrlNull();
+
+  /**
+   * Encuentra producto por empresa y código interno
+   * @param empresaId ID de la empresa
+   * @param codigoInterno Código interno del producto
+   * @return Producto si existe
+   */
+  Optional<Producto> findByEmpresaIdAndCodigoInterno(Long empresaId, String codigoInterno);
+
   // Búsqueda general
   @Query("""
       SELECT p FROM Producto p

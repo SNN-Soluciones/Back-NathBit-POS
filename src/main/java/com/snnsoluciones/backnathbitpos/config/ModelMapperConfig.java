@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.config;
 
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCreateDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoDto;
+import com.snnsoluciones.backnathbitpos.dto.producto.ProductoListDto;
 import com.snnsoluciones.backnathbitpos.entity.Producto;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.convention.MatchingStrategies;
@@ -45,5 +46,11 @@ public class ModelMapperConfig {
                 mapper.skip(Producto::setEmpresa);
                 mapper.skip(Producto::setImpuestos);
             });
+
+      modelMapper.typeMap(Producto.class, ProductoListDto.class)
+          .addMappings(mapper -> {
+            mapper.map(Producto::getImagenUrl, ProductoListDto::setImagenUrl);
+            mapper.map(Producto::getThumbnailUrl, ProductoListDto::setThumbnailUrl);
+          });
     }
 }

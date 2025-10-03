@@ -141,6 +141,12 @@ public class Producto {
 
   private Boolean requiereInventario = false;
 
+  @Column(name = "thumbnail_url")
+  private String thumbnailUrl;
+
+  @Column(name = "thumbnail_key")
+  private String thumbnailKey;
+
   // Impuestos
   @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL,
       orphanRemoval = true, fetch = FetchType.LAZY)

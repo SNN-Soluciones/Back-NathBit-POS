@@ -417,6 +417,8 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
     // URL de imagen
     if (producto.getImagenUrl() != null) {
       dto.setImagenUrl(producto.getImagenUrl());
+      dto.setImagenUrl(producto.getImagenUrl());
+      dto.setThumbnailUrl(producto.getThumbnailUrl());
     }
 
     return dto;

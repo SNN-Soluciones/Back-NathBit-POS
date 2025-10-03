@@ -34,6 +34,7 @@ public class ProductoDto {
     private Boolean esServicio = false;
     private Boolean incluyeIVA = true;
     private String imagenUrl;
+    private String thumbnailUrl;
     private Boolean activo;
     private String createdAt;
     private String updatedAt;

@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -125,4 +127,6 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
   List<SesionCaja> findAllByEstadoWithDetails(@Param("estado") EstadoSesion estado);
 
   List<SesionCaja> findByEstado(EstadoSesion estado);
+
+  Page<SesionCaja> findByTerminalSucursalId(Long sucursalId, Pageable pageable);
 }

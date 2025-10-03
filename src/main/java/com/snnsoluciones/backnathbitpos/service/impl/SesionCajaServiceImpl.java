@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
 import com.snnsoluciones.backnathbitpos.entity.FacturaInternaMedioPago;
@@ -9,16 +10,19 @@ import com.snnsoluciones.backnathbitpos.entity.FacturaMedioPago;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCajaDenominacion;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
+import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaDenominacionRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
+import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
@@ -26,6 +30,8 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +56,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   private final FacturaRepository facturaRepository;
   private final FacturaInternaRepository facturaInternaRepository;
   private final SesionCajaDenominacionRepository sesionCajaDenominacionRepository;
+  private final SucursalRepository sucursalRepository;
 
   @Override
   public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
@@ -224,6 +231,51 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   @Override
   public Optional<SesionCaja> buscarSesionActivaPorTerminal(Long terminalId) {
     return sesionCajaRepository.findByTerminalIdAndEstado(terminalId, EstadoSesion.ABIERTA);
+  }
+
+  @Override
+  public Page<SesionCajaDTO> listarPorSucursal(Long sucursalId, Pageable pageable) {
+    log.info("Buscando sesiones de caja para sucursal ID: {}", sucursalId);
+
+    // Verificar que la sucursal existe
+    Sucursal sucursal = sucursalRepository.findById(sucursalId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada con ID: " + sucursalId));
+
+    // Obtener las sesiones de caja de la sucursal
+    Page<SesionCaja> sesiones = sesionCajaRepository.findByTerminalSucursalId(sucursalId, pageable);
+
+    log.info("Se encontraron {} sesiones de caja para la sucursal {}",
+        sesiones.getTotalElements(), sucursal.getNombre());
+
+    // Convertir a DTOs
+    return sesiones.map(this::convertirADTO);
+  }
+
+  private SesionCajaDTO convertirADTO(SesionCaja sesion) {
+    SesionCajaDTO dto = SesionCajaDTO.builder()
+        .id(sesion.getId())
+        .usuarioId(sesion.getUsuario().getId())
+        .usuarioNombre(sesion.getUsuario().getNombre())
+        .usuarioEmail(sesion.getUsuario().getEmail())
+        .sucursalId(sesion.getTerminal().getSucursal().getId())
+        .sucursalNombre(sesion.getTerminal().getSucursal().getNombre())
+        .fechaHoraApertura(sesion.getFechaHoraApertura())
+        .fechaHoraCierre(sesion.getFechaHoraCierre())
+        .montoInicial(sesion.getMontoInicial())
+        .montoFinal(sesion.getMontoCierre())
+        .estado(sesion.getEstado())
+        .observaciones(sesion.getObservacionesCierre())
+        .build();
+
+    // Calcular total de ventas si la sesión está cerrada
+    if (sesion.getEstado() == EstadoSesion.CERRADA
+        && sesion.getMontoCierre() != null
+        && sesion.getMontoInicial() != null) {
+      BigDecimal totalVentas = sesion.getMontoCierre().subtract(sesion.getMontoInicial());
+      dto.setTotalVentas(totalVentas);
+    }
+
+    return dto;
   }
 
   private boolean puedeVerResumen(SesionCaja sesion) {

@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.sesion.*;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.MovimientoCajaDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.RegistrarValeRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
@@ -31,6 +32,10 @@ import net.sf.jasperreports.engine.JasperFillManager;
 import net.sf.jasperreports.engine.JasperPrint;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -621,6 +626,33 @@ public class SesionCajaController {
       log.error("Error generando reporte de cierre: {}", e.getMessage());
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(("Error: " + e.getMessage()).getBytes());
+    }
+  }
+
+
+  @GetMapping("/sucursal/{sucursalId}")
+  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
+  public ResponseEntity<ApiResponse<Page<SesionCajaDTO>>> listarPorSucursal(
+      @PathVariable Long sucursalId,
+      @PageableDefault(size = 20, sort = "fechaHoraApertura", direction = Sort.Direction.DESC) Pageable pageable) {
+
+    log.info("Listando sesiones de caja para sucursal: {}", sucursalId);
+
+    try {
+      Page<SesionCajaDTO> sesiones = sesionCajaService.listarPorSucursal(sucursalId, pageable);
+
+      return ResponseEntity.ok(ApiResponse.<Page<SesionCajaDTO>>builder()
+          .success(true)
+          .message("Sesiones de caja obtenidas exitosamente")
+          .data(sesiones)
+          .build());
+    } catch (Exception e) {
+      log.error("Error al listar sesiones de caja por sucursal", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(ApiResponse.<Page<SesionCajaDTO>>builder()
+              .success(false)
+              .message("Error al obtener las sesiones de caja")
+              .build());
     }
   }
 }

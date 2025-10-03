@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
@@ -10,6 +11,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface SesionCajaService {
     
@@ -40,4 +43,5 @@ public interface SesionCajaService {
     SesionCaja cerrarSesion(Long id, BigDecimal montoCierre, CerrarSesionRequest request, String observaciones,
         List<CerrarSesionRequest.DenominacionDTO> denominaciones);
 
+    Page<SesionCajaDTO> listarPorSucursal(Long sucursalId, Pageable pageable);
 }

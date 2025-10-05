@@ -35,47 +35,61 @@ public class Terminal {
     
     @Column(name = "descripcion", length = 200)
     private String descripcion;
-    
+
+    @Builder.Default
     @Column(nullable = false)
     private Boolean activa = true;
     
     // === Consecutivos para documentos electrónicos ===
+    @Builder.Default
     @Column(name = "consecutivo_factura_electronica")
     private Long consecutivoFacturaElectronica = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_tiquete_electronico")
     private Long consecutivoTiqueteElectronico = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_nota_credito")
     private Long consecutivoNotaCredito = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_nota_debito")
     private Long consecutivoNotaDebito = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_factura_compra")
     private Long consecutivoFacturaCompra = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_factura_exportacion")
     private Long consecutivoFacturaExportacion = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_recibo_pago")
     private Long consecutivoReciboPago = 0L;
     
     // === Consecutivos para documentos internos (no Hacienda) ===
+    @Builder.Default
     @Column(name = "consecutivo_tiquete_interno")
     private Long consecutivoTiqueteInterno = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_factura_interna")
     private Long consecutivoFacturaInterna = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_proforma")
     private Long consecutivoProforma = 0L;
-    
+
+    @Builder.Default
     @Column(name = "consecutivo_orden_pedido")
     private Long consecutivoOrdenPedido = 0L;
 
+    @Builder.Default
     private TipoImpresion tipoImpresion = TipoImpresion.TICKET;
-    
+
+    @Builder.Default
     @Column(name = "imprimir_automatico")
     private Boolean imprimirAutomatico = false;
     

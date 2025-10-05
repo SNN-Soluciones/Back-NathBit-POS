@@ -12,31 +12,21 @@ public interface StorageService {
     
     /**
      * Sube un archivo desde un InputStream
-     * 
+     *
      * @param inputStream Stream del archivo
-     * @param key Ruta/nombre en S3
+     * @param key         Ruta/nombre en S3
      * @param contentType Tipo MIME del archivo
-     * @param size Tamaño en bytes
-     * @return URL del archivo subido
+     * @param size        Tamaño en bytes
      */
-    String uploadFile(InputStream inputStream, String key, String contentType, long size);
+    void uploadFile(InputStream inputStream, String key, String contentType, long size);
     
     /**
      * Sube un archivo desde MultipartFile
-     * 
+     *
      * @param file Archivo a subir
-     * @param key Ruta/nombre en S3
-     * @return URL del archivo subido
+     * @param key  Ruta/nombre en S3
      */
-    String uploadFile(MultipartFile file, String key);
-    
-    /**
-     * Descarga un archivo
-     * 
-     * @param key Ruta/nombre en S3
-     * @return InputStream del archivo
-     */
-    InputStream downloadFile(String key);
+    void uploadFile(MultipartFile file, String key);
     
     /**
      * Genera una URL temporal firmada para acceso directo
@@ -47,21 +37,6 @@ public interface StorageService {
      */
     String generateSignedUrl(String key, int expirationMinutes);
     
-    /**
-     * Elimina un archivo
-     * 
-     * @param key Ruta/nombre en S3
-     */
-    void deleteFile(String key);
-    
-    /**
-     * Verifica si un archivo existe
-     * 
-     * @param key Ruta/nombre en S3
-     * @return true si existe
-     */
-    boolean fileExists(String key);
-
     /**
      * Sube un archivo a S3 con configuración específica
      * @param file archivo a subir
@@ -92,17 +67,11 @@ public interface StorageService {
 
     /**
      * Elimina un archivo de S3
+     *
      * @param key ruta del archivo a eliminar
-     * @return true si se eliminó correctamente
      */
-    boolean eliminarArchivo(String key);
+    void eliminarArchivo(String key);
 
-    /**
-     * Verifica si un archivo existe en S3
-     * @param key ruta del archivo
-     * @return true si existe
-     */
-    boolean existeArchivo(String key);
 
     /**
      * Obtiene el contenido de un archivo
@@ -111,6 +80,5 @@ public interface StorageService {
      */
     byte[] obtenerArchivo(String key);
 
-    String downloadFileAsString(String key);
     byte[] downloadFileAsBytes(String key);
 }

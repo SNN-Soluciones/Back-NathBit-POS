@@ -34,18 +34,18 @@ public class CuentaPorCobrarService {
     /**
      * Crear cuenta por cobrar desde una factura a crédito
      */
-    public CuentaPorCobrar crearDesdeFactura(Factura factura) {
+    public void crearDesdeFactura(Factura factura) {
         // Validar que sea venta a crédito
         if (factura.getCondicionVenta() != CondicionVenta.CREDITO) {
             log.info("Factura {} no es a crédito, no se crea cuenta por cobrar", 
                 factura.getConsecutivo());
-            return null;
+            return;
         }
         
         // Validar que no exista ya
         if (cuentaPorCobrarRepository.findByFacturaId(factura.getId()).isPresent()) {
             log.warn("Ya existe cuenta por cobrar para factura {}", factura.getId());
-            return null;
+            return;
         }
         
         // Crear la cuenta
@@ -74,8 +74,7 @@ public class CuentaPorCobrarService {
         log.info("Cuenta por cobrar creada para factura {} por monto {}", 
             factura.getConsecutivo(), 
             cuenta.getMontoOriginal());
-            
-        return cuenta;
+
     }
 
     @Transactional

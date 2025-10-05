@@ -187,12 +187,6 @@ public class ProductoComboServiceImpl implements ProductoComboService {
     
     @Override
     @Transactional(readOnly = true)
-    public boolean esCombo(Long productoId) {
-        return comboRepository.existsByProductoId(productoId);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
     public boolean tieneStock(Long productoId, Long sucursalId) {
         Producto producto = productoRepository.findById(productoId)
             .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
@@ -232,53 +226,6 @@ public class ProductoComboServiceImpl implements ProductoComboService {
             return true;
         }
     }
-    
-    @Override
-    public BigDecimal calcularAhorro(Long productoId) {
-        ProductoCombo combo = comboRepository.findByProductoId(productoId)
-            .orElse(null);
-        
-        return combo != null ? combo.getAhorro() : BigDecimal.ZERO;
-    }
-    
-    @Override
-    @Transactional
-    public void validarDisponibilidad(Long productoId, Long sucursalId, BigDecimal cantidad) {
-        if (!tieneStock(productoId, sucursalId)) {
-            throw new BusinessException("No hay stock disponible para el combo");
-        }
-        // Aquí podrías agregar más validaciones según cantidad solicitada
-    }
-    
-    @Override
-    @Transactional
-    public void descontarInventario(Long productoId, Long sucursalId, BigDecimal cantidad) {
-        Producto producto = productoRepository.findById(productoId)
-            .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
-        
-        ProductoCombo combo = comboRepository.findByProductoId(productoId)
-            .orElseThrow(() -> new ResourceNotFoundException("Combo no encontrado"));
-        
-        if (producto.getTipoInventario() == TipoInventario.PROPIO) {
-            // Descontar del inventario del combo
-            inventarioService.reducirInventario(productoId, sucursalId, cantidad, "Venta de combo");
-        }
-        
-        // Siempre descontar items (sea PROPIO o REFERENCIA)
-        List<ProductoComboItem> items = comboItemRepository.findByComboIdOrderByOrden(combo.getId());
-        
-        for (ProductoComboItem item : items) {
-            BigDecimal cantidadADescontar = item.getCantidad().multiply(cantidad);
-            inventarioService.reducirInventario(
-                item.getProducto().getId(), 
-                sucursalId, 
-                cantidadADescontar, 
-                "Venta como parte del combo: " + producto.getNombre()
-            );
-        }
-    }
-    
-    // ========== MÉTODOS PRIVADOS ==========
     
     private Producto validarProducto(Long empresaId, Long productoId) {
         Producto producto = productoRepository.findById(productoId)

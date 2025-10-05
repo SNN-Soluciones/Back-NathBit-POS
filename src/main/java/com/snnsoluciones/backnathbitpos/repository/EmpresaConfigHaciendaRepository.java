@@ -16,20 +16,7 @@ public interface EmpresaConfigHaciendaRepository extends JpaRepository<EmpresaCo
     
     // Buscar configuración por empresa
     Optional<EmpresaConfigHacienda> findByEmpresaId(Long empresaId);
-    
-    // Buscar configuraciones por ambiente
-    List<EmpresaConfigHacienda> findByAmbiente(AmbienteHacienda ambiente);
-    
-    // Buscar configuraciones con certificados próximos a vencer
-    @Query("""
-    SELECT ch FROM EmpresaConfigHacienda ch
-    WHERE ch.fechaVencimientoCertificado IS NOT NULL
-    AND ch.fechaVencimientoCertificado <= :fechaLimite
-    """)
-    List<EmpresaConfigHacienda> findCertificadosProximosVencer(
-        @Param("fechaLimite") LocalDate fechaLimite
-    );
-    
+
     // Verificar si existe configuración completa
     @Query("""
     SELECT CASE WHEN COUNT(ch) > 0 THEN true ELSE false END

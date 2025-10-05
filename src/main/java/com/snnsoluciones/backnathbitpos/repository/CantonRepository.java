@@ -13,14 +13,4 @@ import java.util.Optional;
 public interface CantonRepository extends JpaRepository<Canton, Integer> {
     
     List<Canton> findByCodigoProvincia(Integer codigoProvincia);
-    
-    @Query("""
-    SELECT c FROM Canton c
-    WHERE c.codigoProvincia = :codigoProvincia
-    AND c.codigo = :codigo
-    """)
-    Optional<Canton> findByCodigoProvinciaAndCodigo(
-        @Param("codigoProvincia") Integer codigoProvincia,
-        @Param("codigo") Integer codigo
-    );
 }

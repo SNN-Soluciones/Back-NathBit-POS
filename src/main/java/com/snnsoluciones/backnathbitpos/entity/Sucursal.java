@@ -54,6 +54,7 @@ public class Sucursal {
 
     @Column(name = "modo_facturacion", nullable = false, columnDefinition = "modo_facturacion_enum")
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     @JdbcType(PostgreSQLEnumJdbcType.class)
     private ModoFacturacion modoFacturacion = ModoFacturacion.ELECTRONICO;
 
@@ -77,6 +78,7 @@ public class Sucursal {
     private String otrasSenas;
 
     @OneToMany(mappedBy = "sucursal", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
     private List<Terminal> terminales = new ArrayList<>();
 
 

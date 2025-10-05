@@ -169,22 +169,6 @@ public class CertificadoServiceImpl implements CertificadoService {
     }
 
     @Override
-    public byte[] desencriptar(byte[] encryptedData) {
-        try {
-            byte[] keyBytes = ajustarClave(masterKey.getBytes());
-            Key key = new SecretKeySpec(keyBytes, ENCRYPTION_ALGORITHM);
-
-            Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, key);
-
-            return cipher.doFinal(encryptedData);
-        } catch (Exception e) {
-            log.error("Error al desencriptar: {}", e.getMessage());
-            throw new RuntimeException("Error al desencriptar datos", e);
-        }
-    }
-
-    @Override
     public String sanitizarNombreComercial(String nombreComercial) {
         if (nombreComercial == null) {
             return "sin_nombre";

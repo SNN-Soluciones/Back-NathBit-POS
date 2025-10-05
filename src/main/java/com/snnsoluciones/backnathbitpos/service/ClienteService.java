@@ -24,10 +24,6 @@ public interface ClienteService {
     void eliminar(Long id);
 
     void save (Cliente cliente);
-    
-    void activarDesactivar(Long id, boolean activo);
-
-    Page<Cliente> buscarPorEmpresaActivos(Long empresaId, Pageable pageable);
     Page<ClientePOSDto> buscarPorEmpresaActivosDTO(Long empresaId, Pageable pageable);
 
     // Búsquedas
@@ -35,8 +31,6 @@ public interface ClienteService {
     Page<ClientePOSDto> buscarPorEmpresaDto(Long empresaId, String busqueda, Pageable pageable);
 
     List<Cliente> buscarPorIdentificacion(Long empresaId, String numeroIdentificacion);
-    
-    Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion, String emails);
     
     List<Cliente> obtenerClientesConExoneracion(Long empresaId);
     
@@ -47,11 +41,6 @@ public interface ClienteService {
     
     void eliminarUbicacion(Long clienteId);
     
-    // Gestión de exoneraciones
-    ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion);
-    
-    ClienteExoneracion actualizarExoneracion(Long exoneracionId, ClienteExoneracion exoneracion);
-
     ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion, List<String> codigosCabys);
 
     ClienteExoneracion actualizarExoneracion(Long exoneracionId, ClienteExoneracion exoneracion, List<String> codigosCabys);
@@ -60,11 +49,6 @@ public interface ClienteService {
     List<ClienteExoneracion> obtenerExoneracionesVigentes(Long clienteId);
     
     void desactivarExoneracion(Long exoneracionId);
-    
-    // Validaciones
-    boolean existeCliente(Long empresaId, String numeroIdentificacion, String emails);
-    
-    void validarTelefonos(String codigoPais, String numero);
     
     // Utilidades
     long contarClientesPorEmpresa(Long empresaId);
@@ -77,7 +61,6 @@ public interface ClienteService {
     Cliente quitarEmail(Long clienteId, String email);
     List<String> obtenerEmails(Long clienteId);
     String obtenerEmailSugerido(Long clienteId);
-    void registrarUsoEmail(Long clienteId, String email);
     boolean puedeComprarACredito(Long clienteId, BigDecimal montoNuevaVenta);
 
     void desbloquearCredito(Long clienteId, String motivo);

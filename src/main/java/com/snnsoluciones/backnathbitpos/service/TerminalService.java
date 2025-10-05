@@ -20,5 +20,4 @@ public interface TerminalService {
     
     // Validaciones
     boolean estaOcupada(Long terminalId);
-    boolean puedeEliminar(Long terminalId);
 }

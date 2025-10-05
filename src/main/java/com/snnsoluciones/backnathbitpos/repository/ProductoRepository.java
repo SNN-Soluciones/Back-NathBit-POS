@@ -108,55 +108,9 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       String codigoCabysId);
 
   /**
-   * Buscar productos GLOBALES de una empresa (sin sucursal asignada)
-   */
-  List<Producto> findByEmpresaIdAndSucursalIdIsNullAndActivoTrue(Long empresaId);
-
-  /**
-   * Buscar productos LOCALES de una sucursal específica
-   */
-  List<Producto> findByEmpresaIdAndSucursalIdAndActivoTrue(Long empresaId, Long sucursalId);
-
-  /**
-   * Buscar productos globales con término de búsqueda
-   */
-  @Query("""
-      SELECT p FROM Producto p
-      WHERE p.empresa.id = :empresaId
-        AND p.sucursal.id IS NULL
-        AND p.activo = true
-        AND (LOWER(p.codigoInterno) LIKE LOWER(CONCAT('%', :termino, '%'))
-             OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :termino, '%'))
-             OR LOWER(p.codigoBarras) LIKE LOWER(CONCAT('%', :termino, '%')))
-      """)
-  List<Producto> buscarGlobalesPorTermino(@Param("empresaId") Long empresaId,
-      @Param("termino") String termino);
-
-  /**
-   * Buscar productos locales con término de búsqueda
-   */
-  @Query("""
-      SELECT p FROM Producto p
-      WHERE p.empresa.id = :empresaId
-        AND p.sucursal.id = :sucursalId
-        AND p.activo = true
-        AND (LOWER(p.codigoInterno) LIKE LOWER(CONCAT('%', :termino, '%'))
-             OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :termino, '%'))
-             OR LOWER(p.codigoBarras) LIKE LOWER(CONCAT('%', :termino, '%')))
-      """)
-  List<Producto> buscarLocalesPorTermino(@Param("empresaId") Long empresaId,
-      @Param("sucursalId") Long sucursalId,
-      @Param("termino") String termino);
-
-  /**
    * Contar productos activos globales
    */
   long countByEmpresaIdAndSucursalIdIsNullAndActivoTrue(Long empresaId);
-
-  /**
-   * Contar productos activos por sucursal
-   */
-  long countByEmpresaIdAndSucursalIdAndActivoTrue(Long empresaId, Long sucursalId);
 
   List<Producto> findByEmpresaIdAndTipoAndActivoTrue(Long empresaId, TipoProducto tipoProducto);
 
@@ -177,12 +131,6 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
   // Para contar productos (usado en generarCodigoInterno)
   long countBySucursalIdAndActivoTrue(Long sucursalId);
-  // Opcional: Para buscar por sucursal si ya no existe
-  Page<Producto> findBySucursalIdAndActivoTrue(Long sucursalId, Pageable pageable);
-
-  // Opcional: Para buscar productos globales de una empresa
-  @Query("SELECT p FROM Producto p WHERE p.empresa.id = :empresaId AND p.sucursal IS NULL AND p.activo = true")
-  Page<Producto> findGlobalProductsByEmpresa(@Param("empresaId") Long empresaId, Pageable pageable);
 
   boolean existsByCodigoInternoAndEmpresaIdAndSucursalId(String codigoInterno, Long empresaId, Long sucursalId);
 }

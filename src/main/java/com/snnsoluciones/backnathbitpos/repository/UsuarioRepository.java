@@ -20,11 +20,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     Optional<Usuario> findByUsernameIgnoreCase(String username);
 
-    // Buscar por múltiples sucursales
-    @Query("SELECT DISTINCT u FROM Usuario u " +
-        "JOIN u.usuarioSucursales us " +
-        "WHERE us.sucursal.id IN :sucursalesIds AND us.activo = true")
-    Page<Usuario> findBySucursalesIds(@Param("sucursalesIds") List<Long> sucursalesIds, Pageable pageable);
 
     @Query("SELECT DISTINCT u FROM Usuario u " +
         "JOIN UsuarioEmpresa ue ON ue.usuario = u " +
@@ -88,17 +83,5 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
         "WHERE (ue.id IS NOT NULL OR us IS NOT NULL) " +
         "AND u.rol != 'ROOT'")
     Page<Usuario> findConAsignacion(Pageable pageable);
-
-    // Validar si sucursal pertenece a empresas permitidas
-    @Query("SELECT DISTINCT u FROM Usuario u " +
-        "LEFT JOIN UsuarioSucursal us ON u.id = us.usuario.id " +
-        "LEFT JOIN us.sucursal s " +
-        "WHERE us.sucursal.id = :sucursalId " +
-        "AND s.empresa.id IN :empresasPermitidas " +
-        "AND u.rol != 'ROOT'")
-    Page<Usuario> findBySucursalIdYEmpresasPermitidas(
-        @Param("sucursalId") Long sucursalId,
-        @Param("empresasPermitidas") List<Long> empresasPermitidas,
-        Pageable pageable);
 
 }

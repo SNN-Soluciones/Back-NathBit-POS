@@ -14,12 +14,6 @@ public interface ProductoRecetaRepository extends JpaRepository<ProductoReceta, 
 
   List<ProductoReceta> findByEmpresaIdAndEstadoTrue(Long empresaId);
 
-  @Query("SELECT pr FROM ProductoReceta pr JOIN FETCH pr.ingredientes " +
-      "WHERE pr.empresa.id = :empresaId AND pr.producto.id = :productoId")
-  Optional<ProductoReceta> findByEmpresaIdAndProductoIdWithIngredientes(
-      @Param("empresaId") Long empresaId,
-      @Param("productoId") Long productoId);
-
   boolean existsByIngredientesProductoId(Long id);
 
   boolean existsByProductoIdAndEmpresaId(Long productoId, Long empresaId);

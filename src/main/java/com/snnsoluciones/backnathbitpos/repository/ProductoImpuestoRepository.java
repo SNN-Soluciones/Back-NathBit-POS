@@ -22,17 +22,7 @@ public interface ProductoImpuestoRepository extends JpaRepository<ProductoImpues
     // Verificar si existe
     boolean existsByProductoIdAndTipoImpuesto(Long productoId, TipoImpuesto tipoImpuesto);
     
-    // Contar impuestos activos de un producto
-    long countByProductoIdAndActivoTrue(Long productoId);
-    
     // Eliminar todos los impuestos de un producto
     void deleteByProductoId(Long productoId);
     
-    // Buscar productos con un tipo de impuesto específico
-    @Query("SELECT DISTINCT pi.producto FROM ProductoImpuesto pi " +
-           "WHERE pi.tipoImpuesto = :tipoImpuesto " +
-           "AND pi.activo = true " +
-           "AND pi.producto.empresa.id = :empresaId")
-    List<Long> findProductoIdsConTipoImpuesto(@Param("empresaId") Long empresaId, 
-                                               @Param("tipoImpuesto") TipoImpuesto tipoImpuesto);
 }

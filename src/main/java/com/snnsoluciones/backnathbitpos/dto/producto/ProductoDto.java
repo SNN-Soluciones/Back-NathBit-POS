@@ -31,7 +31,9 @@ public class ProductoDto {
     private TipoProducto tipo;
     private BigDecimal totalImpuestos;
     private BigDecimal precioFinal;
+    @Builder.Default
     private Boolean esServicio = false;
+    @Builder.Default
     private Boolean incluyeIVA = true;
     private String imagenUrl;
     private String thumbnailUrl;

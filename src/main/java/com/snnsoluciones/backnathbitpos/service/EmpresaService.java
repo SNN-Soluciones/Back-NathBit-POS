@@ -25,42 +25,6 @@ public interface EmpresaService {
     Page<Empresa> listarPorUsuarioPaginado(Long usuarioId, Pageable pageable);
 
     /**
-     * Sube el certificado P12 de una empresa
-     * @param empresaId ID de la empresa
-     * @param certificado archivo del certificado
-     * @param pin PIN del certificado
-     * @return información del certificado procesado
-     */
-    CertificadoResponse subirCertificado(Long empresaId, MultipartFile certificado, String pin);
-
-    /**
-     * Genera una URL temporal para descargar el certificado
-     * @param empresaId ID de la empresa
-     * @return URL pre-firmada con tiempo de expiración
-     */
-    UrlCertificadoResponse generarUrlCertificado(Long empresaId);
-
-    /**
-     * Elimina el certificado de una empresa
-     * @param empresaId ID de la empresa
-     */
-    void eliminarCertificado(Long empresaId);
-
-    /**
-     * Sube el logo de una empresa
-     * @param empresaId ID de la empresa
-     * @param logo archivo del logo
-     * @return URL pública del logo
-     */
-    String subirLogo(Long empresaId, MultipartFile logo);
-
-    /**
-     * Elimina el logo de una empresa
-     * @param empresaId ID de la empresa
-     */
-    void eliminarLogo(Long empresaId);
-
-    /**
      * Verifica si un usuario tiene acceso a una empresa
      * @param usuarioId ID del usuario
      * @param empresaId ID de la empresa

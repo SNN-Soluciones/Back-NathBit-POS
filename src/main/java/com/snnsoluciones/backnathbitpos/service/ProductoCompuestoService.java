@@ -38,9 +38,4 @@ public interface ProductoCompuestoService {
      * Filtra compuestos por disponibilidad en sucursal
      */
     List<ProductoCompuestoDto> filtrarPorDisponibilidadSucursal(List<ProductoCompuestoDto> compuestos, Long sucursalId);
-
-    /**
-     * Actualiza disponibilidad global de una opción
-     */
-    void actualizarDisponibilidadGlobal(Long opcionId, Boolean disponible);
 }

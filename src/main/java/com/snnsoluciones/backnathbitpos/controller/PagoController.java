@@ -6,7 +6,7 @@ import com.snnsoluciones.backnathbitpos.dto.pago.RegistrarPagoDTO;
 import com.snnsoluciones.backnathbitpos.entity.Pago;
 import com.snnsoluciones.backnathbitpos.enums.EstadoPago;
 import com.snnsoluciones.backnathbitpos.repository.PagoRepository;
-import com.snnsoluciones.backnathbitpos.scheduler.ResumenCobrosDTO;
+import com.snnsoluciones.backnathbitpos.dto.cobros.ResumenCobrosDTO;
 import com.snnsoluciones.backnathbitpos.service.PagoService;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;

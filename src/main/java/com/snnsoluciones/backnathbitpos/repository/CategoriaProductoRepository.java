@@ -13,17 +13,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CategoriaProductoRepository extends JpaRepository<CategoriaProducto, Long> {
 
-    // Buscar por nombre y empresa
-    Optional<CategoriaProducto> findByNombreAndEmpresaId(String nombre, Long empresaId);
-
-    // Verificar si existe
-    boolean existsByNombreAndEmpresaId(String nombre, Long empresaId);
-
-    // Todas las categorías activas de una empresa, ordenadas
-    List<CategoriaProducto> findByEmpresaIdAndActivoTrueOrderByOrdenAscNombreAsc(Long empresaId);
-
-    List<CategoriaProducto> findByEmpresaIdAndActivoTrueOrderByOrdenAsc(Long empresaId);
-
     // Búsqueda paginada por empresa
     @Query("""
            SELECT c
@@ -49,14 +38,6 @@ public interface CategoriaProductoRepository extends JpaRepository<CategoriaProd
            """)
     long contarProductosActivos(@Param("categoriaId") Long categoriaId);
 
-    // Siguiente orden disponible dentro de la empresa
-    @Query("""
-           SELECT COALESCE(MAX(c.orden), 0) + 1
-           FROM CategoriaProducto c
-           WHERE c.empresa.id = :empresaId
-           """)
-    Integer obtenerSiguienteOrden(@Param("empresaId") Long empresaId);
-
     /**
      * Buscar categorías GLOBALES de una empresa
      */
@@ -76,16 +57,6 @@ public interface CategoriaProductoRepository extends JpaRepository<CategoriaProd
      * Verificar si existe categoría local con nombre
      */
     boolean existsByNombreAndEmpresaIdAndSucursalId(String nombre, Long empresaId, Long sucursalId);
-
-    /**
-     * Buscar categoría global por nombre
-     */
-    Optional<CategoriaProducto> findByNombreAndEmpresaIdAndSucursalIdIsNull(String nombre, Long empresaId);
-
-    /**
-     * Buscar categoría local por nombre
-     */
-    Optional<CategoriaProducto> findByNombreAndEmpresaIdAndSucursalId(String nombre, Long empresaId, Long sucursalId);
 
     /**
      * Siguiente orden para categorías globales

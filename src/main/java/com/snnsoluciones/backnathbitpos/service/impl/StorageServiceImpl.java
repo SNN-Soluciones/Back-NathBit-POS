@@ -61,7 +61,7 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public String uploadFile(InputStream inputStream, String key, String contentType, long size) {
+    public void uploadFile(InputStream inputStream, String key, String contentType, long size) {
         try {
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentType(contentType);
@@ -79,8 +79,6 @@ public class StorageServiceImpl implements StorageService {
             String url = String.format("https://%s.%s/%s", bucketName, endpoint.replace("https://", ""), key);
             log.info("Archivo subido exitosamente: {}", url);
 
-            return url;
-
         } catch (Exception e) {
             log.error("Error subiendo archivo: {}", e.getMessage(), e);
             throw new RuntimeException("Error al subir archivo: " + e.getMessage(), e);
@@ -88,9 +86,9 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public String uploadFile(MultipartFile file, String key) {
+    public void uploadFile(MultipartFile file, String key) {
         try {
-            return uploadFile(
+            uploadFile(
                 file.getInputStream(),
                 key,
                 file.getContentType(),
@@ -99,17 +97,6 @@ public class StorageServiceImpl implements StorageService {
         } catch (Exception e) {
             log.error("Error subiendo MultipartFile: {}", e.getMessage(), e);
             throw new RuntimeException("Error al subir archivo: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public InputStream downloadFile(String key) {
-        try {
-            S3Object s3Object = s3Client.getObject(bucketName, key);
-            return s3Object.getObjectContent();
-        } catch (Exception e) {
-            log.error("Error descargando archivo: {}", e.getMessage(), e);
-            throw new RuntimeException("Error al descargar archivo: " + e.getMessage(), e);
         }
     }
 
@@ -133,26 +120,6 @@ public class StorageServiceImpl implements StorageService {
         }
     }
 
-    @Override
-    public void deleteFile(String key) {
-        try {
-            s3Client.deleteObject(bucketName, key);
-            log.info("Archivo eliminado: {}", key);
-        } catch (Exception e) {
-            log.error("Error eliminando archivo: {}", e.getMessage(), e);
-            throw new RuntimeException("Error al eliminar archivo: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public boolean fileExists(String key) {
-        try {
-            return s3Client.doesObjectExist(bucketName, key);
-        } catch (Exception e) {
-            log.error("Error verificando existencia de archivo: {}", e.getMessage(), e);
-            return false;
-        }
-    }
 
     @Override
     public String subirArchivo(MultipartFile archivo, String carpeta, String nombreArchivo, boolean privado) {
@@ -242,24 +209,12 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public boolean eliminarArchivo(String key) {
+    public void eliminarArchivo(String key) {
         try {
             s3Client.deleteObject(new DeleteObjectRequest(bucketName, key));
             log.info("Archivo eliminado correctamente: {}", key);
-            return true;
         } catch (Exception e) {
             log.error("Error al eliminar archivo: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    @Override
-    public boolean existeArchivo(String key) {
-        try {
-            return s3Client.doesObjectExist(bucketName, key);
-        } catch (Exception e) {
-            log.error("Error al verificar existencia del archivo: {}", e.getMessage());
-            return false;
         }
     }
 
@@ -272,18 +227,6 @@ public class StorageServiceImpl implements StorageService {
         } catch (Exception e) {
             log.error("Error al obtener archivo de S3: {}", e.getMessage());
             throw new RuntimeException("Error al obtener archivo de S3", e);
-        }
-    }
-
-    @Override
-    public String downloadFileAsString(String key) {
-        try {
-            byte[] bytes = obtenerArchivo(key);
-            return new String(bytes, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            log.error("Error descargando archivo como String: {}", e.getMessage(), e);
-            throw new RuntimeException("Error al descargar archivo como String: " + e.getMessage(),
-                e);
         }
     }
 

@@ -27,8 +27,6 @@ import java.io.IOException;
 @Slf4j
 public class ContextHeaderFilter extends OncePerRequestFilter {
 
-    private final JwtTokenProvider tokenProvider;
-
     @Override
     protected void doFilterInternal(HttpServletRequest request,
         HttpServletResponse response,

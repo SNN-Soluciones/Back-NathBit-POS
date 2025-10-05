@@ -21,14 +21,5 @@ public interface ProductoComboService {
     List<ProductoComboDto> listarPorEmpresa(Long empresaId);
     
     // ========== VALIDACIONES ==========
-    boolean esCombo(Long productoId);
-    
     boolean tieneStock(Long productoId, Long sucursalId);
-    
-    BigDecimal calcularAhorro(Long productoId);
-    
-    // ========== OPERACIONES DE VENTA ==========
-    void validarDisponibilidad(Long productoId, Long sucursalId, BigDecimal cantidad);
-    
-    void descontarInventario(Long productoId, Long sucursalId, BigDecimal cantidad);
 }

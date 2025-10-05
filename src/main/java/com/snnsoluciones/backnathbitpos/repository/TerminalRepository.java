@@ -15,20 +15,7 @@ public interface TerminalRepository extends JpaRepository<Terminal, Long> {
     // Buscar terminales por sucursal
     List<Terminal> findBySucursalId(Long sucursalId);
     
-    // Buscar terminales activas por sucursal
-    List<Terminal> findBySucursalIdAndActivaTrue(Long sucursalId);
-    
-    // Buscar terminal por número y sucursal
-    @Query("""
-    SELECT t FROM Terminal t
-    WHERE t.sucursal.id = :sucursalId
-    AND t.numeroTerminal = :numeroTerminal
-    """)
-    Optional<Terminal> findBySucursalIdAndNumeroTerminal(
-        @Param("sucursalId") Long sucursalId,
-        @Param("numeroTerminal") String numeroTerminal
-    );
-    
+
     // Contar terminales activas por sucursal
     @Query("SELECT COUNT(t) FROM Terminal t WHERE t.sucursal.id = :sucursalId AND t.activa = true")
     long countActivasBySucursalId(@Param("sucursalId") Long sucursalId);

@@ -3,14 +3,12 @@ package com.snnsoluciones.backnathbitpos.controller;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.usuarios.CrearUsuarioCompletoRequest;
 import com.snnsoluciones.backnathbitpos.dto.usuarios.CrearUsuarioCompletoResponse;
-import com.snnsoluciones.backnathbitpos.dto.usuarios.UsuarioAsignacionRequest;
 import com.snnsoluciones.backnathbitpos.dto.usuarios.UsuarioListadoResponse;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
-import com.snnsoluciones.backnathbitpos.service.UsuarioAsignacionService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioCreacionService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioListadoService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioPermisosService;
@@ -43,7 +41,6 @@ public class UsuarioCreacionController {
   private final UsuarioListadoService usuarioListadoService;
   private final UsuarioPermisosService usuarioPermisosService;
   private final UsuarioService usuarioService;
-  private final UsuarioAsignacionService usuarioAsignacionService;
 
   @Operation(summary = "Crear usuario completo con asignaciones",
       description = "Crea un usuario con todas sus asignaciones en una sola operación")

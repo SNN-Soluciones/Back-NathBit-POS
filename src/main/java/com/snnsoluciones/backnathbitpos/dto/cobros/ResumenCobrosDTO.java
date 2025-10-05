@@ -1,5 +1,5 @@
 // DTO para resumen
-package com.snnsoluciones.backnathbitpos.scheduler;
+package com.snnsoluciones.backnathbitpos.dto.cobros;
 
 import lombok.Data;
 import java.math.BigDecimal;

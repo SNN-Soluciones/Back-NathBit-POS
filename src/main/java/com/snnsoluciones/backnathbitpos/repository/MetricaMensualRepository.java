@@ -40,22 +40,6 @@ public interface MetricaMensualRepository extends JpaRepository<MetricasVentasMe
     List<MetricasVentasMensuales> findHistoricoAnualEmpresa(@Param("empresaId") Long empresaId,
                                                     @Param("anio") Integer anio);
 
-    // Obtener histórico anual de sucursal
-    @Query("SELECT m FROM MetricasVentasMensuales m WHERE m.sucursal.id = :sucursalId " +
-           "AND m.anio = :anio ORDER BY m.mes")
-    List<MetricasVentasMensuales> findHistoricoAnualSucursal(@Param("sucursalId") Long sucursalId,
-                                                     @Param("anio") Integer anio);
-
-    // Verificar si existe registro para actualizar
-    boolean existsByEmpresaIdAndSucursalIdAndAnioAndMes(Long empresaId, Long sucursalId, 
-                                                         Integer anio, Integer mes);
-
-    // Para el caso de consolidado (sucursal null)
-    boolean existsByEmpresaIdAndSucursalIsNullAndAnioAndMes(Long empresaId, 
-                                                             Integer anio, Integer mes);
-
-    // Agregar este método al MetricasVentasMensualesRepository:
-
     // Query para reporte D104 - Declaración de IVA mensual
     @Query("SELECT new map(" +
         "m.ventasMh + m.ventasInternas as ventasBrutas, " +
@@ -82,19 +66,4 @@ public interface MetricaMensualRepository extends JpaRepository<MetricasVentasMe
         @Param("anio") Integer anio,
         @Param("mes") Integer mes);
 
-    // Query para D104 detallado por sucursal (si lo necesitas)
-    @Query("SELECT new map(" +
-        "s.nombre as nombreSucursal, " +
-        "s.numeroSucursal as id, " +
-        "m.ventasTotales as ventas, " +
-        "m.impuestoTotal as iva, " +
-        "m.exentoTotal + m.exoneradoTotal as ventasNoGravadas " +
-        ") FROM MetricasVentasMensuales m " +
-        "JOIN m.sucursal s " +
-        "WHERE m.empresa.id = :empresaId AND m.sucursal IS NOT NULL " +
-        "AND m.anio = :anio AND m.mes = :mes " +
-        "ORDER BY s.numeroSucursal")
-    List<Map<String, Object>> obtenerD104PorSucursal(@Param("empresaId") Long empresaId,
-        @Param("anio") Integer anio,
-        @Param("mes") Integer mes);
 }

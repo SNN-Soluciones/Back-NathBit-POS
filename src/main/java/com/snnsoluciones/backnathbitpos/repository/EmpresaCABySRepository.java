@@ -17,17 +17,6 @@ public interface EmpresaCABySRepository extends JpaRepository<EmpresaCAByS, Long
     
     List<EmpresaCAByS> findByEmpresaIdAndActivoTrue(Long empresaId);
 
-    @Query("SELECT ec FROM EmpresaCAByS ec " +
-        "JOIN ec.codigoCabys c " +
-        "WHERE c.codigo = :codigo " +
-        "AND ec.activo = true")
-    List<EmpresaCAByS> findByCodigoCabysCodigo(@Param("codigo") String codigo);
-
-    Optional<EmpresaCAByS> findByEmpresaIdAndCodigoCabysIdAndActivoTrue(
-        Long empresaId,
-        Long codigoCabysId
-    );
-
     // Buscar por empresa y código CABYS (string)
     Optional<EmpresaCAByS> findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(
         Long empresaId,

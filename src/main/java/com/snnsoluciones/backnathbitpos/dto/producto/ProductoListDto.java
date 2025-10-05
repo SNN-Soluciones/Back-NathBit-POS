@@ -27,7 +27,9 @@ public class ProductoListDto {
     private Moneda moneda;
     private Long empresaId;
     private Boolean activo;
+    @Builder.Default
     private Boolean aplicaServicio = false;
+    @Builder.Default
     private Boolean esServicio = false;
     private String imagenUrl;
     private String thumbnailUrl;

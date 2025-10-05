@@ -23,5 +23,6 @@ public class ActividadEconomicaRequest {
     private String descripcion;
 
     // Indica si es la actividad principal
+    @Builder.Default
     private Boolean esPrincipal = false;
 }

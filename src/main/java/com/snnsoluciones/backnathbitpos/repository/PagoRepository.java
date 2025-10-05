@@ -15,32 +15,13 @@ import java.util.List;
 
 @Repository
 public interface PagoRepository extends JpaRepository<Pago, Long> {
-    
-    // Pagos de una cuenta
-    List<Pago> findByCuentaPorCobrarIdAndEstadoOrderByFechaPagoDesc(
-        Long cuentaId, 
-        EstadoPago estado
-    );
-    
-    // Pagos por sesión de caja
-    List<Pago> findBySesionCajaIdAndEstado(Long sesionId, EstadoPago estado);
+
     
     // Último número de recibo
     @Query("SELECT p.numeroRecibo FROM Pago p WHERE p.sesionCaja.terminal.sucursal.id = :sucursalId " +
            "ORDER BY p.id DESC LIMIT 1")
     String findUltimoNumeroRecibo(@Param("sucursalId") Long sucursalId);
     
-    // Total cobrado en un período
-    @Query("SELECT COALESCE(SUM(p.monto), 0) FROM Pago p " +
-           "WHERE p.cliente.empresa.id = :empresaId " +
-           "AND p.fechaPago BETWEEN :inicio AND :fin " +
-           "AND p.estado = 'APLICADO'")
-    BigDecimal sumTotalCobrado(
-        @Param("empresaId") Long empresaId,
-        @Param("inicio") LocalDateTime inicio,
-        @Param("fin") LocalDateTime fin
-    );
-
     /**
      * Alternativa con Order by para ordenar por fecha
      */

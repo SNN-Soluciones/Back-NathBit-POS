@@ -56,13 +56,6 @@ public interface ProductoCodigoProveedorRepository extends JpaRepository<Product
         @Param("codigo") String codigo,
         @Param("id") Long id);
 
-    // Buscar activos por producto
-    @Query("SELECT pcp FROM ProductoCodigoProveedor pcp " +
-        "JOIN FETCH pcp.proveedor pr " +
-        "WHERE pcp.producto.id = :productoId AND pcp.activo = true " +
-        "ORDER BY pr.nombreComercial")
-    List<ProductoCodigoProveedor> findActivosByProductoId(@Param("productoId") Long productoId);
-
     // Buscar por producto y empresa del proveedor
     @Query("SELECT pcp FROM ProductoCodigoProveedor pcp " +
         "JOIN FETCH pcp.producto p " +

@@ -21,9 +21,7 @@ public interface ProductoCrudService {
     // Generación de código
     String generarCodigoInterno(Long empresaId);
     ProductoDto actualizarPrecio(Long empresaId, Long productoId, ActualizarPrecioDto dto);
-    Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras);
     void save(Producto producto);
-    Optional<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId);
     ProductoDto crearProductoSimplificado(Long empresaId, Long sucursalId, ProductoCreateDto dto, MultipartFile imagen);
     Map<String, Object> obtenerModoFacturacion(Long sucursalId);
 }

@@ -25,26 +25,6 @@ public interface MovimientoCajaRepository extends JpaRepository<MovimientoCaja, 
       "AND m.tipoMovimiento IN ('SALIDA_VALE', 'SALIDA_DEPOSITO')")
   BigDecimal sumSalidasBySesionId(@Param("sesionId") Long sesionId);
 
-  // Sumar todas las entradas adicionales de una sesión
-  @Query("SELECT COALESCE(SUM(m.monto), 0) FROM MovimientoCaja m " +
-      "WHERE m.sesionCaja.id = :sesionId " +
-      "AND m.tipoMovimiento = 'ENTRADA_ADICIONAL'")
-  BigDecimal sumEntradasBySesionId(@Param("sesionId") Long sesionId);
-
-  // Contar movimientos por tipo en una sesión
-  @Query("SELECT COUNT(m) FROM MovimientoCaja m " +
-      "WHERE m.sesionCaja.id = :sesionId " +
-      "AND m.tipoMovimiento = :tipo")
-  Long countBySesionIdAndTipo(@Param("sesionId") Long sesionId,
-      @Param("tipo") TipoMovimientoCaja tipo);
-
-  // Obtener resumen de movimientos agrupados por tipo
-  @Query("SELECT m.tipoMovimiento, COUNT(m), COALESCE(SUM(m.monto), 0) " +
-      "FROM MovimientoCaja m " +
-      "WHERE m.sesionCaja.id = :sesionId " +
-      "GROUP BY m.tipoMovimiento")
-  List<Object[]> getResumenMovimientosPorSesion(@Param("sesionId") Long sesionId);
-
   List<MovimientoCaja> findBySesionCajaIdAndTipoMovimiento(Long sesionCajaId, TipoMovimientoCaja tipo);
 
 }

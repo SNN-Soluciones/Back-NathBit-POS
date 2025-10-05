@@ -16,16 +16,8 @@ public interface ActividadEconomicaRepository extends JpaRepository<ActividadEco
     @Query("SELECT a FROM ActividadEconomica a WHERE LOWER(a.descripcion) LIKE LOWER(CONCAT('%', :descripcion, '%'))")
     List<ActividadEconomica> findByDescripcionContaining(@Param("descripcion") String descripcion);
     
-    // Buscar por categoría
-    List<ActividadEconomica> findByCategoria(String categoria);
-    
     // Buscar activas
     List<ActividadEconomica> findByActivaTrue();
-    
-    // Buscar por código parcial
-    @Query("SELECT a FROM ActividadEconomica a WHERE a.codigo LIKE :codigoParcial%")
-    List<ActividadEconomica> findByCodigoStartsWith(@Param("codigoParcial") String codigoParcial);
-
     Optional<ActividadEconomica> findByCodigo(String codigo);
-    boolean existsByCodigo(String codigo);
+
 }

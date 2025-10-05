@@ -21,13 +21,6 @@ import org.springframework.stereotype.Repository;
 public interface FacturaBitacoraRepository extends JpaRepository<FacturaBitacora, Long>,
     JpaSpecificationExecutor<FacturaBitacora> {
 
-  // FacturaBitacoraRepository.java
-  List<FacturaBitacora> findByEstadoInOrderByUpdatedAtAsc(
-      java.util.Set<EstadoBitacora> estados,
-      Pageable pageable
-  );
-  Optional<FacturaBitacora> findTopByFacturaIdOrderByCreatedAtDesc(Long facturaId);
-
   @Query("SELECT b FROM FacturaBitacora b WHERE " +
       "(b.estado = 'PENDIENTE' OR b.estado = 'ERROR') AND " +
       "(b.proximoIntento IS NULL OR b.proximoIntento <= :ahora) AND " +
@@ -40,15 +33,5 @@ public interface FacturaBitacoraRepository extends JpaRepository<FacturaBitacora
   Optional<FacturaBitacora> findByClave(String clave);
 
   Optional<FacturaBitacora> findByFacturaId(Long facturaId);
-
-  @Query("SELECT COUNT(b) FROM FacturaBitacora b WHERE b.estado = :estado")
-  Long countByEstado(@Param("estado") EstadoBitacora estado);
-
-  @Query("SELECT b FROM FacturaBitacora b WHERE " +
-      "b.createdAt >= :fechaInicio AND b.createdAt <= :fechaFin")
-  List<FacturaBitacora> findByPeriodo(
-      @Param("fechaInicio") LocalDateTime fechaInicio,
-      @Param("fechaFin") LocalDateTime fechaFin
-  );
 
 }

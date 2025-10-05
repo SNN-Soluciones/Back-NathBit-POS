@@ -29,9 +29,11 @@ public class UsuarioSucursal {
     private Sucursal sucursal;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean activo = true;
 
     @Column(name = "fecha_asignacion")
+    @Builder.Default
     private LocalDateTime fechaAsignacion = LocalDateTime.now();
 
     // Clase para la clave compuesta

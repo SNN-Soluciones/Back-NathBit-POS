@@ -41,11 +41,13 @@ public class CrearSucursalCompletaRequest {
     // Facturación
     @NotNull(message = "El modo de facturación es obligatorio")
     private ModoFacturacion modoFacturacion;
-    
+
+    @Builder.Default
     private Boolean activa = true;
     
     private String numeroSucursal;
 
+    @Builder.Default
     @NotNull(message = "El modo de impresión es obligatorio")
     private ModoImpresion modoImpresion = ModoImpresion.LOCAL;
 

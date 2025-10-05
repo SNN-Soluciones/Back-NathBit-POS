@@ -44,6 +44,7 @@ public class EmailAuditLog {
     @Column(name = "estado", nullable = false, length = 50)
     private EstadoEmail estado;
 
+    @Builder.Default
     @Column(name = "intentos", nullable = false)
     private Integer intentos = 0;
 

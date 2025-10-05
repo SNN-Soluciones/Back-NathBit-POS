@@ -75,13 +75,5 @@ public interface FacturaBitacoraService {
      */
     ResponseEntity<?> descargarArchivo(Long bitacoraId, String tipoArchivo);
 
-    /**
-     * Marca una bitácora como completada manualmente
-     * @param bitacoraId ID de la bitácora
-     * @param observacion Observación del usuario
-     * @return Respuesta de la acción
-     */
-    FacturaBitacoraActionResponse marcarComoCompletada(Long bitacoraId, String observacion);
-
     String reenviarCorreo(Long bitacoraId, String emailOverride);
 }

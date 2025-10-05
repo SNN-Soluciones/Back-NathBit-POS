@@ -13,12 +13,4 @@ public class ContextoUsuario {
     private String rol;
     private Long empresaId;
     private Long sucursalId;
-    
-    public boolean tieneContextoCompleto() {
-        return empresaId != null && sucursalId != null;
-    }
-    
-    public boolean tieneEmpresa() {
-        return empresaId != null;
-    }
 }

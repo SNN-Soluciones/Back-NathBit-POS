@@ -139,6 +139,7 @@ public class Producto {
   @Builder.Default
   private Boolean incluyeIVA = true;
 
+  @Builder.Default
   private Boolean requiereInventario = false;
 
   @Column(name = "thumbnail_url")
@@ -183,6 +184,7 @@ public class Producto {
   private String unidadMedidaUso;
 
   @Column(name = "requiere_receta", nullable = false)
+  @Builder.Default
   private Boolean requiereReceta = false;     // ¿Necesita receta para producirse?
 
   @Column(name = "ultimo_precio_compra")
@@ -192,6 +194,7 @@ public class Producto {
   private LocalDateTime fechaUltimaCompra;
 
   @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL, orphanRemoval = true)
+  @Builder.Default
   private List<ProductoCodigoProveedor> codigosProveedor = new ArrayList<>();
 
 

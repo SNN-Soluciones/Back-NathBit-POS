@@ -38,13 +38,6 @@ public interface CertificadoService {
     byte[] encriptar(byte[] data);
     
     /**
-     * Desencripta datos usando AES-256
-     * @param encryptedData datos encriptados
-     * @return datos desencriptados
-     */
-    byte[] desencriptar(byte[] encryptedData);
-    
-    /**
      * Sanitiza el nombre comercial para usar como carpeta
      * @param nombreComercial nombre comercial de la empresa
      * @return nombre sanitizado

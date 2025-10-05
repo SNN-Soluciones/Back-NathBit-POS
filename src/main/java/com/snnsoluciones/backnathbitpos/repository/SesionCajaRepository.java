@@ -71,19 +71,6 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
       """)
   boolean existsSesionAbiertaByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-  // Buscar última sesión cerrada por terminal
-  @Query("""
-      SELECT sc FROM SesionCaja sc
-      WHERE sc.terminal.id = :terminalId
-      AND sc.estado = 'CERRADA'
-      ORDER BY sc.fechaHoraCierre DESC
-      LIMIT 1
-      """)
-  Optional<SesionCaja> findUltimaSesionCerradaByTerminalId(@Param("terminalId") Long terminalId);
-
-  @Query("SELECT s FROM SesionCaja s WHERE s.usuario.id = :usuarioId AND s.estado = 'ABIERTA' AND s.fechaHoraCierre IS NULL")
-  Optional<SesionCaja> findActivaByUsuarioId(@Param("usuarioId") Long usuarioId);
-
   /**
    * Busca una sesión de caja activa para un usuario en una sucursal específica
    *
@@ -102,29 +89,6 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
   );
 
   Optional<SesionCaja> findByTerminalIdAndEstado(Long terminalId, EstadoSesion estado);
-
-  @Query("SELECT s FROM SesionCaja s WHERE s.terminal.sucursal.id = :sucursalId " +
-      "AND s.fechaHoraApertura BETWEEN :inicio AND :fin")
-  List<SesionCaja> findBySucursalIdAndFechaBetween(
-      @Param("sucursalId") Long sucursalId,
-      @Param("inicio") LocalDateTime inicio,
-      @Param("fin") LocalDateTime fin
-  );
-
-  @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM SesionCaja s " +
-      "WHERE s.terminal.id = :terminalId AND s.estado = :estado " +
-      "AND s.fechaHoraApertura BETWEEN :inicio AND :fin")
-  boolean existsByTerminalIdAndEstadoAndFechaBetween(
-      @Param("terminalId") Long terminalId,
-      @Param("estado") EstadoSesion estado,
-      @Param("inicio") LocalDateTime inicio,
-      @Param("fin") LocalDateTime fin
-  );
-
-  // Query para obtener resumen de ventas por medio de pago
-  @Query("SELECT s FROM SesionCaja s LEFT JOIN FETCH s.usuario LEFT JOIN FETCH s.terminal " +
-      "WHERE s.estado = :estado ORDER BY s.fechaHoraApertura DESC")
-  List<SesionCaja> findAllByEstadoWithDetails(@Param("estado") EstadoSesion estado);
 
   List<SesionCaja> findByEstado(EstadoSesion estado);
 

@@ -14,26 +14,4 @@ public interface ClienteUbicacionRepository extends JpaRepository<ClienteUbicaci
     
     // Buscar ubicación por cliente
     Optional<ClienteUbicacion> findByClienteId(Long clienteId);
-    
-    // Verificar si cliente tiene ubicación
-    boolean existsByClienteId(Long clienteId);
-    
-    // Buscar clientes por ubicación geográfica
-    @Query("SELECT cu FROM ClienteUbicacion cu " +
-           "WHERE cu.cliente.empresa.id = :sucursalId " +
-           "AND cu.provincia.id = :provinciaId " +
-           "AND (:cantonId IS NULL OR cu.canton.id = :cantonId) " +
-           "AND (:distritoId IS NULL OR cu.distrito.id = :distritoId)")
-    List<ClienteUbicacion> findByUbicacionGeografica(
-        @Param("sucursalId") Long sucursalId,
-        @Param("provinciaId") String provinciaId,
-        @Param("cantonId") String cantonId,
-        @Param("distritoId") String distritoId
-    );
-    
-    // Contar clientes con ubicación por sucursal
-    @Query("SELECT COUNT(cu) FROM ClienteUbicacion cu " +
-           "WHERE cu.cliente.empresa.id = :sucursalId " +
-           "AND cu.cliente.activo = true")
-    long countClientesConUbicacionPorSucursal(@Param("sucursalId") Long sucursalId);
 }

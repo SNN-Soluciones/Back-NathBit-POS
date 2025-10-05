@@ -205,10 +205,4 @@ public class TerminalServiceImpl implements TerminalService {
   public boolean estaOcupada(Long terminalId) {
     return terminalRepository.isTerminalOcupada(terminalId);
   }
-
-  @Override
-  @Transactional(readOnly = true)
-  public boolean puedeEliminar(Long terminalId) {
-    return !estaOcupada(terminalId);
-  }
 }

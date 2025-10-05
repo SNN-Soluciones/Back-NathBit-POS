@@ -9,7 +9,5 @@ import java.util.List;
 
 @Repository
 public interface ProductoCompuestoOpcionRepository extends JpaRepository<ProductoCompuestoOpcion, Long> {
-    List<ProductoCompuestoOpcion> findBySlotIdAndDisponibleTrue(Long slotId);
     List<ProductoCompuestoOpcion> findBySlotId(Long slotId);
-    void deleteBySlotId(Long slotId);
 }

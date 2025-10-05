@@ -20,5 +20,6 @@ public class GenerarConsecutivoRequest {
     private Long terminalId;
     
     // Para casos de contingencia o sin internet
+    @Builder.Default
     private Integer situacion = 1; // 1=Normal, 2=Contingencia, 3=Sin Internet
 }

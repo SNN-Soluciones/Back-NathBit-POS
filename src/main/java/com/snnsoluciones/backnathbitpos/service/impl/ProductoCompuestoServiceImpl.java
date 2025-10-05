@@ -565,26 +565,4 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         log.info("Filtrados {} compuestos con disponibilidad", compuestosFiltrados.size());
         return compuestosFiltrados;
     }
-
-    @Override
-    @Transactional
-    public void actualizarDisponibilidadGlobal(Long opcionId, Boolean disponible) {
-        log.info("Actualizando disponibilidad global de opción {} a {}", opcionId, disponible);
-
-        ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId)
-            .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada"));
-
-        // Actualizar disponibilidad de la opción
-        opcion.setDisponible(disponible);
-        opcionRepository.save(opcion);
-
-        // Si se está desactivando, opcionalmente notificar a las sucursales
-        if (!disponible) {
-            log.warn("Opción {} desactivada globalmente. Producto: {}",
-                opcionId, opcion.getProducto().getNombre());
-
-            // Aquí podrías implementar notificaciones o eventos
-            // eventPublisher.publishEvent(new OpcionDesactivadaEvent(opcion));
-        }
-    }
 }

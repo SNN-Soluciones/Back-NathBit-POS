@@ -22,6 +22,7 @@ public class ConfigHaciendaRequest {
     private AmbienteHacienda ambiente;
 
     @NotNull(message = "El tipo de autenticación es requerido")
+    @Builder.Default
     private TipoAutenticacionHacienda tipoAutenticacion = TipoAutenticacionHacienda.LLAVE_CRIPTOGRAFICA;
 
     @NotBlank(message = "El usuario de Hacienda es requerido")

@@ -314,19 +314,6 @@ public class ClienteServiceImpl implements ClienteService {
   }
 
   @Override
-  public void activarDesactivar(Long id, boolean activo) {
-    log.info("Cambiando estado del cliente ID: {} a {}", id, activo ? "activo" : "inactivo");
-    Cliente cliente = obtenerPorId(id);
-    cliente.setActivo(activo);
-    clienteRepository.save(cliente);
-  }
-
-  @Override
-  public Page<Cliente> buscarPorEmpresaActivos(Long empresaId, Pageable pageable) {
-    return this.clienteRepository.findAllByEmpresaId(empresaId, pageable);
-  }
-
-  @Override
   public Page<ClientePOSDto> buscarPorEmpresaActivosDTO(Long empresaId, Pageable pageable) {
     Page<Cliente> clientes = clienteRepository.findAllByEmpresaId(empresaId, pageable);
 
@@ -547,24 +534,6 @@ public class ClienteServiceImpl implements ClienteService {
 
   @Override
   @Transactional(readOnly = true)
-  public Cliente buscarPorIdentificacionYEmails(Long empresaId, String numeroIdentificacion, String emails) {
-    // Si emails viene como CSV, tomar el primero
-    String email = null;
-    if (emails != null && !emails.trim().isEmpty()) {
-      email = emails.split(",")[0].trim().toLowerCase();
-    }
-
-    List<Cliente> clientes = clienteRepository.findByEmpresaIdAndNumeroIdentificacionAndEmails(
-        empresaId,
-        numeroIdentificacion,
-        email
-    );
-
-    return clientes.isEmpty() ? null : clientes.get(0);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
   public List<Cliente> obtenerClientesConExoneracion(Long empresaId) {
     return clienteRepository.findClientesConExoneracionActiva(empresaId);
   }
@@ -614,12 +583,6 @@ public class ClienteServiceImpl implements ClienteService {
     ubicacionRepository.delete(ubicacion);
   }
 
-  @Override
-  @Transactional
-  public ClienteExoneracion actualizarExoneracion(Long exoneracionId,
-      ClienteExoneracion exoneracion) {
-    return actualizarExoneracion(exoneracionId, exoneracion, new ArrayList<>());
-  }
 
   @Override
   @Transactional(readOnly = true)
@@ -647,53 +610,6 @@ public class ClienteServiceImpl implements ClienteService {
     if (exoneracionesActivas.isEmpty()) {
       cliente.setTieneExoneracion(false);
       clienteRepository.save(cliente);
-    }
-  }
-
-  // Validaciones
-  @Override
-  @Transactional(readOnly = true)
-  public boolean existeCliente(Long empresaId, String numeroIdentificacion, String emails) {
-    return clienteRepository.existsByEmpresaIdAndNumeroIdentificacionAndEmailsAndActivoTrue(
-        empresaId, numeroIdentificacion, emails
-    );
-  }
-
-  @Override
-  public void validarTelefonos(String codigoPais, String numero) {
-    if ((codigoPais == null && numero != null) ||
-        (codigoPais != null && numero == null)) {
-      throw new IllegalArgumentException(
-          "Debe proporcionar tanto el código de país como el número de teléfono"
-      );
-    }
-
-    if (codigoPais != null) {
-      if (codigoPais.length() < 1 || codigoPais.length() > 3) {
-        throw new IllegalArgumentException(
-            "El código de país debe tener entre 1 y 3 dígitos"
-        );
-      }
-
-      if (!codigoPais.matches("\\d+")) {
-        throw new IllegalArgumentException(
-            "El código de país debe contener solo números"
-        );
-      }
-    }
-
-    if (numero != null) {
-      if (numero.length() < 8 || numero.length() > 20) {
-        throw new IllegalArgumentException(
-            "El número de teléfono debe tener entre 8 y 20 dígitos"
-        );
-      }
-
-      if (!numero.matches("\\d+")) {
-        throw new IllegalArgumentException(
-            "El número de teléfono debe contener solo números"
-        );
-      }
     }
   }
 
@@ -725,13 +641,6 @@ public class ClienteServiceImpl implements ClienteService {
         clienteRepository.save(cliente);
       }
     }
-  }
-
-  @Override
-  @Transactional
-  public ClienteExoneracion agregarExoneracion(Long clienteId, ClienteExoneracion exoneracion) {
-    // Llamar al nuevo método con lista vacía
-    return agregarExoneracion(clienteId, exoneracion, new ArrayList<>());
   }
 
 
@@ -1085,29 +994,6 @@ public class ClienteServiceImpl implements ClienteService {
     return emails.get(0); // El primero es el más usado/reciente
   }
 
-  // Método helper para registrar uso de email (para cuando se facture)
-  @Override
-  @Transactional
-  public void registrarUsoEmail(Long clienteId, String email) {
-    Cliente cliente = obtenerPorId(clienteId);
-
-    if (cliente == null) {
-      throw new IllegalArgumentException("Cliente no encontrado");
-    }
-
-    email = email.toLowerCase().trim();
-
-    String finalEmail = email;
-    cliente.getClienteEmails().stream()
-        .filter(ce -> ce.getEmail().equalsIgnoreCase(finalEmail))
-        .findFirst()
-        .ifPresent(ce -> {
-          ce.registrarUso();
-          clienteRepository.save(cliente);
-        });
-  }
-
-  // En ClienteService.java agregar:
 
   /**
    * Validar si cliente puede comprar a crédito

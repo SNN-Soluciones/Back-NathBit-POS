@@ -113,41 +113,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     return sesion;
   }
 
-  @Override
-  public SesionCaja cerrarSesion(Long sesionId, BigDecimal montoCierre, String observaciones) {
-    // Validar permisos
-    if (!puedeCerrarCaja(sesionId)) {
-      throw new RuntimeException("No tiene permisos para cerrar esta caja");
-    }
-
-    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
-        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
-
-    // 🔥 AQUÍ USAS calcularMontoEsperado
-    BigDecimal montoEsperado = calcularMontoEsperado(sesion);
-
-    // Validar diferencia
-    BigDecimal diferencia = montoCierre.subtract(montoEsperado);
-
-    // Si hay diferencia significativa y no es supervisor
-    if (diferencia.abs().compareTo(new BigDecimal("10000")) > 0
-        && !securityContext.isSupervisor()) {
-      throw new RuntimeException(String.format(
-          "Diferencia de ₡%.2f requiere autorización de supervisor. Esperado: ₡%.2f, Cierre: ₡%.2f",
-          diferencia, montoEsperado, montoCierre
-      ));
-    }
-
-    // Actualizar sesión
-    sesion.setFechaHoraCierre(LocalDateTime.now());
-    sesion.setMontoCierre(montoCierre);
-    sesion.setDiferenciaCierre(diferencia);
-    sesion.setObservacionesCierre(observaciones);
-    sesion.setEstado(EstadoSesion.CERRADA);
-
-    return sesionCajaRepository.save(sesion);
-  }
-
   // SesionCajaServiceImpl.java (núcleo)
   @Transactional
   @Override

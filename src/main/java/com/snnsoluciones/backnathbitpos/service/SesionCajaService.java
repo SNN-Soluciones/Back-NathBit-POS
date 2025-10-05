@@ -18,7 +18,6 @@ public interface SesionCajaService {
     
     // Gestión de sesiones
     SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial);
-    SesionCaja cerrarSesion(Long sesionId, BigDecimal montoCierre, String observaciones);
     Optional<SesionCaja> buscarSesionActiva(Long usuarioId);
     Optional<SesionCaja> buscarSesionActivaPorTerminal(Long terminalId);
 

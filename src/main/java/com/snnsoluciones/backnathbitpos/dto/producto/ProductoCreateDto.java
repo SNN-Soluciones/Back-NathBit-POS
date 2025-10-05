@@ -69,9 +69,12 @@ public class ProductoCreateDto {
     @Builder.Default
     private Boolean activo = true;
 
+    @Builder.Default
     private Boolean requiereInventario = true;
+    @Builder.Default
     private Boolean requiereReceta = false;
 
+    @Builder.Default
     private TipoInventario tipoInventario = TipoInventario.SIMPLE;
     private Long sucursal;
     private BigDecimal precioCompra;

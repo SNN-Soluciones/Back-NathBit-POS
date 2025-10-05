@@ -442,20 +442,10 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
   }
 
   @Override
-  public Optional<Producto> buscarPorCodigoBarras(Long empresaId, String codigoBarras) {
-    return productoRepository.findByCodigoBarrasAndEmpresaId(codigoBarras, empresaId);
-  }
-
-  @Override
   public void save(Producto producto) {
     productoRepository.save(producto);
   }
 
-  @Override
-  public Optional<Producto> findByEmpresaIdAndCodigoCabys(Long empresaId, String codigoCabysId) {
-    return productoRepository.findAllByEmpresaIdAndEmpresaCabys_CodigoCabys_Codigo(empresaId,
-        codigoCabysId);
-  }
 
   private String limpiarNombreParaRuta(String nombre) {
     if (nombre == null) {

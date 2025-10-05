@@ -18,67 +18,6 @@ public class ProductoQueryRepository {
     private EntityManager entityManager;
 
     /**
-     * Busca productos con filtros múltiples
-     */
-    public List<Object[]> buscarProductosConFiltros(Long empresaId, Long categoriaId,
-        BigDecimal precioMin, BigDecimal precioMax,
-        Boolean esServicio, Boolean aplicaServicio,
-        String busqueda, int limit, int offset) {
-
-        StringBuilder jpql = new StringBuilder();
-        jpql.append("SELECT p.id, p.codigoInterno, p.nombre, p.precioVenta, ");
-        jpql.append("c.nombre, m.simbolo, p.esServicio, p.activo ");
-        jpql.append("FROM Producto p ");
-        jpql.append("LEFT JOIN p.categoria c ");
-        jpql.append("LEFT JOIN p.moneda m ");
-        jpql.append("WHERE p.empresa.id = :empresaId ");
-
-        Map<String, Object> params = new HashMap<>();
-        params.put("empresaId", empresaId);
-
-        if (categoriaId != null) {
-            jpql.append("AND p.categoria.id = :categoriaId ");
-            params.put("categoriaId", categoriaId);
-        }
-
-        if (precioMin != null) {
-            jpql.append("AND p.precioVenta >= :precioMin ");
-            params.put("precioMin", precioMin);
-        }
-
-        if (precioMax != null) {
-            jpql.append("AND p.precioVenta <= :precioMax ");
-            params.put("precioMax", precioMax);
-        }
-
-        if (esServicio != null) {
-            jpql.append("AND p.esServicio = :esServicio ");
-            params.put("esServicio", esServicio);
-        }
-
-        if (aplicaServicio != null) {
-            jpql.append("AND p.aplicaServicio = :aplicaServicio ");
-            params.put("aplicaServicio", aplicaServicio);
-        }
-
-        if (busqueda != null && !busqueda.trim().isEmpty()) {
-            jpql.append("AND (LOWER(p.nombre) LIKE :busqueda ");
-            jpql.append("OR LOWER(p.codigoInterno) LIKE :busqueda ");
-            jpql.append("OR LOWER(p.codigoBarras) LIKE :busqueda) ");
-            params.put("busqueda", "%" + busqueda.toLowerCase() + "%");
-        }
-
-        jpql.append("ORDER BY p.nombre");
-
-        TypedQuery<Object[]> query = entityManager.createQuery(jpql.toString(), Object[].class);
-        params.forEach(query::setParameter);
-        query.setFirstResult(offset);
-        query.setMaxResults(limit);
-
-        return query.getResultList();
-    }
-
-    /**
      * Estadísticas de productos por empresa
      */
     public Map<String, Object> obtenerEstadisticasProductos(Long empresaId) {

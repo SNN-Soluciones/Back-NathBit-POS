@@ -29,23 +29,37 @@ public class TerminalRequest {
     private String descripcion;
     
     @NotNull(message = "El estado activa es requerido")
+    @Builder.Default
     private Boolean activa = true;
-    
+
+    @Builder.Default
     private Boolean imprimirAutomatico = false;
 
+    @Builder.Default
     private TipoImpresion tipoImpresion = TipoImpresion.TICKET;
     
     // Para crear terminal en una sucursal específica
     private Long sucursalId;
+    @Builder.Default
     private Long consecutivoOrdenPedido = 0L;
+    @Builder.Default
     private Long consecutivoFacturaElectronica = 0L;
+    @Builder.Default
     private Long consecutivoTiqueteElectronico = 0L;
+    @Builder.Default
     private Long consecutivoNotaCredito = 0L;
+    @Builder.Default
     private Long consecutivoNotaDebito = 0L;
+    @Builder.Default
     private Long consecutivoFacturaCompra = 0L;
+    @Builder.Default
     private Long consecutivoFacturaExportacion = 0L;
+    @Builder.Default
     private Long consecutivoReciboPago = 0L;
+    @Builder.Default
     private Long consecutivoTiqueteInterno = 0L;
+    @Builder.Default
     private Long consecutivoFacturaInterna = 0L;
+    @Builder.Default
     private Long consecutivoProforma = 0L;
 }

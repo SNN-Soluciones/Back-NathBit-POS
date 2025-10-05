@@ -43,18 +43,23 @@ public class ProductoInventario {
     private Sucursal sucursal;
     
     @Column(name = "cantidad_actual", nullable = false, precision = 10, scale = 3)
+    @Builder.Default
     private BigDecimal cantidadActual = BigDecimal.ZERO;
     
     @Column(name = "cantidad_minima", nullable = false, precision = 10, scale = 3)
+    @Builder.Default
     private BigDecimal cantidadMinima = BigDecimal.ZERO;
     
     @Column(name = "ultima_actualizacion", nullable = false)
+    @Builder.Default
     private LocalDateTime ultimaActualizacion = LocalDateTime.now();
 
     @Column(name = "created_at")
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "updated_at")
+    @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @Column(name = "cantidad_bloqueada", precision = 18, scale = 5, nullable = false)
@@ -65,6 +70,7 @@ public class ProductoInventario {
     private LocalDateTime ultimaActualizacionBloqueada;
     
     @Column(nullable = false)
+    @Builder.Default
     private Boolean estado = true;
     
     // Método helper para verificar si está bajo mínimo

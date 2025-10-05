@@ -314,29 +314,6 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
         }
     }
 
-    @Override
-    @Transactional
-    public FacturaBitacoraActionResponse marcarComoCompletada(Long bitacoraId, String observacion) {
-        log.info("Marcando como completada bitácora ID: {}", bitacoraId);
-
-        FacturaBitacora bitacora = bitacoraRepository.findById(bitacoraId)
-            .orElseThrow(() -> new ResourceNotFoundException("Bitácora no encontrada"));
-
-        // Actualizar estado
-        bitacora.setEstado(EstadoBitacora.ACEPTADA);
-        bitacora.setHaciendaMensaje("Completado manualmente: " + (observacion != null ? observacion : "Sin observaciones"));
-        bitacora.setProximoIntento(null);
-
-        bitacoraRepository.save(bitacora);
-
-        return FacturaBitacoraActionResponse.builder()
-            .exitoso(true)
-            .mensaje("Bitácora marcada como completada")
-            .bitacoraId(bitacora.getId())
-            .nuevoEstado(bitacora.getEstado().name())
-            .build();
-    }
-
     @Transactional
     public String reenviarCorreo(Long bitacoraId, String emailOverride) {
         log.info("Reenviando correo para bitácora ID: {}", bitacoraId);

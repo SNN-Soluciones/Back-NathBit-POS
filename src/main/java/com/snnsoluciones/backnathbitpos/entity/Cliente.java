@@ -52,6 +52,7 @@ public class Cliente {
     private String razonSocial;
 
     @Column(name = "inscrito_hacienda")
+    @Builder.Default
     private Boolean inscritoHacienda = false;
 
     @Column(name = "fecha_verificacion_hacienda")
@@ -91,25 +92,29 @@ public class Cliente {
     private LocalDateTime updatedAt;
 
     @Column(name = "dias_credito")
+    @Builder.Default
     private Integer diasCredito = 30; // Por defecto 30 días
 
     @Column(name = "estado_credito", length = 50)
     private String estadoCredito;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sucursal_id", nullable = true)
+    @JoinColumn(name = "sucursal_id")
     private Sucursal sucursal;
 
     @Column(name = "saldo_actual", precision = 18, scale = 5)
+    @Builder.Default
     private BigDecimal saldoActual = BigDecimal.ZERO;
 
     @Column(name = "bloqueado_por_mora")
+    @Builder.Default
     private Boolean bloqueadoPorMora = false;
 
     @Column(name = "fecha_ultimo_pago")
     private LocalDateTime fechaUltimoPago;
 
     @Column(name = "limite_credito", precision = 18, scale = 5)
+    @Builder.Default
     private BigDecimal limiteCredito = BigDecimal.ZERO; // 0 = sin límite
     
     // Relaciones

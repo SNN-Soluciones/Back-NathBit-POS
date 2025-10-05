@@ -16,8 +16,6 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
 
   boolean existsByIdentificacion(String identificacion);
 
-  Optional<Empresa> findByIdentificacion(String identificacion);
-
   @Query("""
       SELECT DISTINCT e FROM Empresa e
       JOIN UsuarioEmpresa ue ON ue.empresa.id = e.id
@@ -26,21 +24,6 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
       ORDER BY e.nombreRazonSocial, e.nombreComercial
       """)
   Page<Empresa> findByUsuarioId(@Param("usuarioId") Long usuarioId, Pageable pageable);
-
-  // Buscar empresas por régimen tributario
-  @Query("SELECT e FROM Empresa e WHERE e.regimenTributario = :regimen")
-  List<Empresa> findByRegimenTributario(@Param("regimen") String regimen);
-
-  // Verificar si una empresa tiene facturación electrónica configurada
-  @Query("""
-      SELECT CASE WHEN COUNT(e) > 0 THEN true ELSE false END
-      FROM Empresa e
-      JOIN e.configHacienda ch
-      WHERE e.id = :empresaId
-      AND e.requiereHacienda = true
-      AND ch.usuarioHacienda IS NOT NULL
-      """)
-  boolean tieneFacturacionElectronicaConfigurada(@Param("empresaId") Long empresaId);
 
   boolean existsByEmail(String email);
 

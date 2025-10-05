@@ -28,11 +28,13 @@ public class ProductoImpuesto {
     private Producto producto;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     @Column(name = "tipo_impuesto", nullable = false)  // ✅ CORREGIDO: @Column, no @JoinColumn
     private TipoImpuesto tipoImpuesto = TipoImpuesto.IVA;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "codigo_tarifa_iva")  // ✅ CORREGIDO: @Column, no @JoinColumn
+    @Builder.Default
     private CodigoTarifaIVA codigoTarifaIVA = CodigoTarifaIVA.TARIFA_GENERAL_13;
 
     @Column(nullable = false, precision = 5, scale = 2)

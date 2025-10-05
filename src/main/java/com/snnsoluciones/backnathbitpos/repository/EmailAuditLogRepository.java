@@ -12,26 +12,6 @@ import java.util.Optional;
 public interface EmailAuditLogRepository extends JpaRepository<EmailAuditLog, Long> {
 
     /**
-     * Buscar por clave de factura
-     */
-    Optional<EmailAuditLog> findByClave(String clave);
-
-    /**
-     * Buscar todos los logs de una factura
-     */
-    List<EmailAuditLog> findByFacturaIdOrderByCreatedAtDesc(Long facturaId);
-
-    /**
-     * Buscar por estado
-     */
-    List<EmailAuditLog> findByEstado(EstadoEmail estado);
-
-    /**
-     * Contar emails enviados por factura
-     */
-    long countByFacturaIdAndEstado(Long facturaId, EstadoEmail estado);
-
-    /**
      * Buscar emails pendientes de reintento
      */
     List<EmailAuditLog> findByEstadoInAndIntentosLessThan(List<EstadoEmail> estados, Integer maxIntentos);
@@ -39,8 +19,5 @@ public interface EmailAuditLogRepository extends JpaRepository<EmailAuditLog, Lo
 //    Optional<EmailAuditLog> findByFacturaIdAndEstado(Long facturaId, EstadoEmail estado);
 
     Optional<EmailAuditLog> findFirstByFacturaIdAndEstadoOrderByCreatedAtDesc(Long facturaId, EstadoEmail estado);
-
-    // O si necesitas todos los registros:
-    List<EmailAuditLog> findAllByFacturaIdAndEstadoOrderByCreatedAtDesc(Long facturaId, EstadoEmail estado);
 
 }

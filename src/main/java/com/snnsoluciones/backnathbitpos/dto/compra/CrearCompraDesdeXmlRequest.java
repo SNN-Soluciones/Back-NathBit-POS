@@ -3,10 +3,12 @@ package com.snnsoluciones.backnathbitpos.dto.compra;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import lombok.Builder;
 import lombok.Data;
 
 // DTO para crear compra desde XML
 @Data
+@Builder
 public class CrearCompraDesdeXmlRequest {
     private Long proveedorId;
     private String xmlContent; // Base64 o XML plano

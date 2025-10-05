@@ -66,19 +66,47 @@ public interface MensajeReceptorBitacoraRepository extends JpaRepository<Mensaje
     long countByEstado(EstadoBitacora estado);
     
     // Buscar con filtros para el frontend
-    @Query("SELECT m FROM MensajeReceptorBitacora m " +
-           "JOIN Compra c ON c.id = m.compraId " +
-           "WHERE (:empresaId IS NULL OR c.empresa.id = :empresaId) " +
-           "AND (:sucursalId IS NULL OR c.sucursal.id = :sucursalId) " +
-           "AND (:estado IS NULL OR m.estado = :estado) " +
-           "AND (:fechaInicio IS NULL OR m.createdAt >= :fechaInicio) " +
-           "AND (:fechaFin IS NULL OR m.createdAt <= :fechaFin)")
+    @Query(value = """
+    SELECT m.* FROM mensaje_receptor_bitacora m 
+    JOIN compras c ON c.id = m.compra_id 
+    WHERE (:empresaId IS NULL OR c.empresa_id = :empresaId) 
+      AND (:sucursalId IS NULL OR c.sucursal_id = :sucursalId) 
+      AND (:estado IS NULL OR m.estado = CAST(:estado AS VARCHAR)) 
+      AND (:fechaInicio IS NULL OR m.created_at >= CAST(:fechaInicio AS timestamp)) 
+      AND (:fechaFin IS NULL OR m.created_at <= CAST(:fechaFin AS timestamp))
+    ORDER BY m.created_at DESC
+    """,
+        countQuery = """
+    SELECT COUNT(*) FROM mensaje_receptor_bitacora m 
+    JOIN compras c ON c.id = m.compra_id 
+    WHERE (:empresaId IS NULL OR c.empresa_id = :empresaId) 
+      AND (:sucursalId IS NULL OR c.sucursal_id = :sucursalId) 
+      AND (:estado IS NULL OR m.estado = CAST(:estado AS VARCHAR)) 
+      AND (:fechaInicio IS NULL OR m.created_at >= CAST(:fechaInicio AS timestamp)) 
+      AND (:fechaFin IS NULL OR m.created_at <= CAST(:fechaFin AS timestamp))
+    """,
+        nativeQuery = true)
     Page<MensajeReceptorBitacora> buscarConFiltros(
         @Param("empresaId") Long empresaId,
         @Param("sucursalId") Long sucursalId,
-        @Param("estado") EstadoBitacora estado,
+        @Param("estado") String estado, // ⚠️ Cambiar a String
         @Param("fechaInicio") LocalDateTime fechaInicio,
         @Param("fechaFin") LocalDateTime fechaFin,
         Pageable pageable
+    );
+
+    /**
+     * Buscar último consecutivo por sucursal
+     */
+    @Query("""
+        SELECT m FROM MensajeReceptorBitacora m
+        JOIN Compra c ON c.id = m.compraId
+        WHERE c.sucursal.id = :sucursalId
+          AND m.consecutivo IS NOT NULL
+        ORDER BY m.consecutivo DESC
+        LIMIT 1
+        """)
+    Optional<MensajeReceptorBitacora> findUltimoConsecutivoBySucursal(
+        @Param("sucursalId") Long sucursalId
     );
 }

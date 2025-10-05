@@ -126,7 +126,7 @@ public class FacturaInternaService {
                 .notas(detalleReq.getNotas())
                 .build();
 
-            detalle.setearDatosProducto(producto);
+            detalle.setearDatosProducto(producto, detalleReq);
             detalle.calcularTotales();
 
             factura.agregarDetalle(detalle);

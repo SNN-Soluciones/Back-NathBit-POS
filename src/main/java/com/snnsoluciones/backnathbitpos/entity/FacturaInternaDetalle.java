@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.dto.facturainterna.DetalleFacturaInternaRequest;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -75,10 +76,10 @@ public class FacturaInternaDetalle {
     /**
      * Setea la información del producto
      */
-    public void setearDatosProducto(Producto producto) {
+    public void setearDatosProducto(Producto producto, DetalleFacturaInternaRequest detalleFacturaInternaRequest) {
         this.producto = producto;
         this.codigoProducto = producto.getCodigoInterno();
         this.nombreProducto = producto.getNombre();
-        this.precioUnitario = producto.getPrecioVenta();
+        this.precioUnitario = detalleFacturaInternaRequest.getPrecioUnitario();
     }
 }

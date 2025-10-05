@@ -19,6 +19,8 @@ public class DetalleFacturaInternaRequest {
     
     @DecimalMin(value = "0.0", message = "El descuento no puede ser negativo")
     private BigDecimal descuento;
+
+    private BigDecimal precioUnitario;
     
     private String notas;
 }

@@ -203,7 +203,7 @@ public class FacturaXMLGeneratorService {
 
     Empresa empresa = factura.getSucursal().getEmpresa();
 
-    agregarElemento(doc, emisor, "Nombre", empresa.getNombreComercial());
+    agregarElemento(doc, emisor, "Nombre", empresa.getNombreRazonSocial());
 
     Element identificacion = doc.createElement("Identificacion");
     emisor.appendChild(identificacion);

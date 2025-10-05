@@ -101,7 +101,10 @@ public class FacturaPdfMapperService {
     Empresa empresa = empresaService.buscarPorId(sucursal.getEmpresa().getId());
 
     // Nombre comercial o razón social
-    params.put("emisor_nombre", empresa.getNombreComercial() != null ?
+    params.put("emisor_nombre", empresa.getNombreRazonSocial() != null ?
+        empresa.getNombreRazonSocial() : empresa.getNombreComercial());
+
+    params.put("emisor_nombre_comercial", empresa.getNombreComercial() != null  ?
         empresa.getNombreComercial() : empresa.getNombreRazonSocial());
 
     // Identificación
@@ -110,8 +113,11 @@ public class FacturaPdfMapperService {
 
     // Contacto
     params.put("emisor_telefono", empresa.getTelefono());
-    params.put("emisor_correo", sucursal.getEmail() != null ?
-        sucursal.getEmail() : empresa.getEmail());
+    if(sucursal.getEmail() != null && !sucursal.getEmail().isEmpty()) {
+      params.put("emisor_correo", sucursal.getEmail());
+    } else {
+      params.put("emisor_correo", empresa.getEmail());
+    }
 
     // Dirección completa
     String direccion = construirDireccionCompleta(sucursal, empresa);

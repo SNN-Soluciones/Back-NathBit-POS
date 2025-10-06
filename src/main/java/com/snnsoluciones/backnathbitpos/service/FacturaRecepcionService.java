@@ -665,40 +665,58 @@ public class FacturaRecepcionService {
      * Crear Compra desde Factura
      */
     private Compra crearCompraDesdeFactura(FacturaRecepcion factura) {
+        log.info("Creando compra desde factura recepción ID: {}", factura.getId());
 
+        // Obtener usuario del contexto de seguridad
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
-
         Usuario usuario = usuarioRepository.findByEmail(username)
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + username));
 
+        // Crear compra
         Compra compra = new Compra();
         compra.setEmpresa(factura.getEmpresa());
         compra.setSucursal(factura.getSucursal());
         compra.setProveedor(factura.getProveedor());
         compra.setUsuario(usuario);
 
+        // Tipo de documento
         compra.setTipoDocumentoHacienda(factura.getTipoDocumento());
         compra.setClaveHacienda(factura.getClave());
         compra.setNumeroDocumento(factura.getNumeroConsecutivo());
+
+        // Determinar tipo de compra según documento
+        if (factura.getTipoDocumento() == TipoDocumento.FACTURA_ELECTRONICA) {
+            compra.setTipoCompra(TipoCompra.FACTURA_PROVEEDOR_INSCRITO);
+        } else if (factura.getTipoDocumento() == TipoDocumento.TIQUETE_ELECTRONICO) {
+            compra.setTipoCompra(TipoCompra.TIQUETE_COMPRA);
+        } else {
+            compra.setTipoCompra(TipoCompra.FACTURA_PROVEEDOR_INSCRITO);
+        }
+
+        // Fechas
         compra.setFechaEmision(factura.getFechaEmision());
         compra.setFechaRecepcion(LocalDateTime.now());
 
+        // Condiciones comerciales
         compra.setCondicionVenta(factura.getCondicionVenta());
         compra.setPlazoCredito(factura.getPlazoCredito());
 
+        // Estado inicial según tipo de mensaje receptor
         if (factura.getTipoMensajeReceptor() == TipoMensajeReceptor.ACEPTADO) {
             compra.setEstado(EstadoCompra.ACEPTADA);
         } else if (factura.getTipoMensajeReceptor() == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
             compra.setEstado(EstadoCompra.ACEPTADA_PARCIAL);
         } else {
-            compra.setEstado(EstadoCompra.RECIBIDA);
+            compra.setEstado(EstadoCompra.ACEPTADA); // Default
         }
 
+        // Moneda y tipo de cambio
         if (factura.getMoneda() != null) {
             compra.setMoneda(factura.getMoneda());
         }
-        compra.setTipoCambio(factura.getTipoCambio() != null ? factura.getTipoCambio() : BigDecimal.ONE);
+        compra.setTipoCambio(factura.getTipoCambio() != null ?
+            factura.getTipoCambio() : BigDecimal.ONE);
 
         // Totales
         compra.setTotalGravado(factura.getTotalGravado());
@@ -711,17 +729,28 @@ public class FacturaRecepcionService {
         compra.setTotalOtrosCargos(factura.getTotalOtrosCargos());
         compra.setTotalComprobante(factura.getTotalComprobante());
 
+        // ============ MAPEAR DETALLES ============
+        log.debug("Mapeando {} detalles de factura a compra", factura.getDetalles().size());
+
         for (FacturaRecepcionDetalle detFact : factura.getDetalles()) {
             CompraDetalle detalle = new CompraDetalle();
-            detalle.setCompra(compra);
             detalle.setNumeroLinea(detFact.getNumeroLinea());
+
+            // Códigos
             detalle.setCodigo(detFact.getCodigoComercial());
             detalle.setCodigoCabys(detFact.getCodigoCabys());
             detalle.setDescripcion(detFact.getDetalle());
-            detalle.setEsServicio(false); // Ajustar según tu lógica
+
+            // Cantidades y unidades
             detalle.setCantidad(detFact.getCantidad());
-            detalle.setUnidadMedida(detFact.getUnidadMedida().name());
+            detalle.setUnidadMedida(detFact.getUnidadMedida() != null ?
+                detFact.getUnidadMedida().name() : "Unid");
             detalle.setUnidadMedidaComercial(detFact.getUnidadMedidaComercial());
+
+            // Es servicio?
+            detalle.setEsServicio(false); // TODO: Determinar según código CABYS
+
+            // Precios
             detalle.setPrecioUnitario(detFact.getPrecioUnitario());
             detalle.setMontoTotal(detFact.getMontoTotal());
             detalle.setMontoDescuento(detFact.getMontoDescuento() != null ?
@@ -729,21 +758,32 @@ public class FacturaRecepcionService {
             detalle.setSubTotal(detFact.getSubtotal());
             detalle.setBaseImponible(detFact.getBaseImponible());
 
-            // Calcular impuesto total de la línea
+            // Calcular impuesto total de esta línea
             BigDecimal totalImpuesto = detFact.getImpuestos().stream()
-                .map(FacturaRecepcionDetalleImpuesto::getMonto)
+                .map(imp -> imp.getMonto() != null ? imp.getMonto() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             detalle.setMontoImpuesto(totalImpuesto);
 
+            // Obtener código de tarifa IVA del primer impuesto (si existe)
+            if (!detFact.getImpuestos().isEmpty()) {
+                FacturaRecepcionDetalleImpuesto primerImpuesto = detFact.getImpuestos().get(0);
+                detalle.setCodigoTarifaIVA(primerImpuesto.getCodigoTarifa());
+                detalle.setTarifaIVA(primerImpuesto.getTarifa());
+            }
+
             detalle.setMontoTotalLinea(detFact.getMontoTotalLinea());
 
-            // TODO FUTURO: Buscar/crear producto automáticamente
-            // detalle.setProducto(buscarOCrearProducto(detFact));
+            // TODO FASE 2: Buscar/crear producto automáticamente
+            // detalle.setProducto(buscarOCrearProducto(detFact, factura.getProveedor()));
 
+            // Factor de conversión (si existe en el proveedor)
+            detalle.setFactorConversion(BigDecimal.ONE); // Default 1:1
+
+            // Agregar detalle a la compra
             compra.addDetalle(detalle);
         }
 
-        compra.setEstado(EstadoCompra.ACEPTADA);
+        log.info("Compra creada con {} detalles", compra.getDetalles().size());
 
         return compra;
     }

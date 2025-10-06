@@ -40,11 +40,15 @@ public enum TipoDocumento {
             .findFirst();
     }
 
-    public static Optional<TipoDocumento> fromCodigo(String codigo) {
-        if (codigo == null) return Optional.empty();
-
-        return Arrays.stream(values())
-            .filter(tipo -> tipo.getCodigo().equals(codigo))
-            .findFirst();
+    public static TipoDocumento fromCodigo(String codigo) {
+        if (codigo == null) {
+            return null;
+        }
+        for(TipoDocumento tipo : values()) {
+            if(tipo.codigo.equals(codigo)) {
+                return tipo;
+            }
+        }
+        return null;
     }
 }

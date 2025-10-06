@@ -36,6 +36,10 @@ public class FacturaRecepcionDetalle {
     @JoinColumn(name = "factura_recepcion_id", nullable = false)
     private FacturaRecepcion facturaRecepcion;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
+    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
+
     @OneToMany(mappedBy = "facturaRecepcionDetalle", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orden ASC")
     @Builder.Default
@@ -58,6 +62,8 @@ public class FacturaRecepcionDetalle {
      */
     @Column(name = "codigo_cabys", length = 13)
     private String codigoCabys;
+
+    private String tipoCodigoComercial;
 
     /**
      * Código comercial del proveedor

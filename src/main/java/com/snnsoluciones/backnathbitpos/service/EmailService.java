@@ -1030,4 +1030,91 @@ public class EmailService {
 
     return html.toString();
   }
+
+  /**
+   * Enviar email simple sin adjuntos (para notificaciones)
+   */
+  public void enviarEmailSimple(String destinatario, String asunto, String mensaje) {
+    try {
+      MimeMessage mimeMessage = mailSender.createMimeMessage();
+      MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
+
+      helper.setFrom(emailFrom);
+      helper.setTo(destinatario);
+      helper.setSubject(asunto);
+
+      // HTML simple
+      String htmlContent = construirHtmlSimple(mensaje);
+      helper.setText(htmlContent, true);
+
+      mailSender.send(mimeMessage);
+      log.info("Email simple enviado a: {}", destinatario);
+
+    } catch (MessagingException e) {
+      log.error("Error enviando email simple a {}: {}", destinatario, e.getMessage());
+      throw new RuntimeException("Error al enviar email: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Construir HTML básico para emails simples
+   */
+  private String construirHtmlSimple(String mensaje) {
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { 
+                    font-family: Arial, sans-serif; 
+                    color: #333; 
+                    line-height: 1.6; 
+                }
+                .container { 
+                    max-width: 600px; 
+                    margin: 0 auto; 
+                    padding: 20px; 
+                    background-color: #f9f9f9; 
+                }
+                .content { 
+                    background: white; 
+                    padding: 30px; 
+                    border-radius: 8px; 
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+                }
+                .header { 
+                    color: #2c3e50; 
+                    border-bottom: 2px solid #3498db; 
+                    padding-bottom: 10px; 
+                    margin-bottom: 20px; 
+                }
+                .footer { 
+                    margin-top: 30px; 
+                    padding-top: 20px; 
+                    border-top: 1px solid #ddd; 
+                    font-size: 12px; 
+                    color: #666; 
+                    text-align: center; 
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="content">
+                    <div class="header">
+                        <h2>NathBit POS - Notificación del Sistema</h2>
+                    </div>
+                    <div>
+                        %s
+                    </div>
+                    <div class="footer">
+                        Este es un email automático de NathBit POS. Por favor no responder.
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """.formatted(mensaje.replace("\n", "<br>"));
+  }
 }

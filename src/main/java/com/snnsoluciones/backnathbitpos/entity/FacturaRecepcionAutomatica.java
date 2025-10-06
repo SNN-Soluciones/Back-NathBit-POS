@@ -294,7 +294,7 @@ public class FacturaRecepcionAutomatica {
     private List<FacturaRecepcionDetalle> detalles = new ArrayList<>();
     
     @OneToMany(mappedBy = "facturaRecepcion", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<FacturaRecepcionImpuestoTotal> impuestosTotales = new ArrayList<>();
+    private List<FacturaRecepcionDetalleImpuesto> impuestosTotales = new ArrayList<>();
     
     @OneToMany(mappedBy = "facturaRecepcion", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FacturaRecepcionMedioPago> mediosPago = new ArrayList<>();
@@ -303,7 +303,7 @@ public class FacturaRecepcionAutomatica {
     private List<FacturaRecepcionReferencia> referencias = new ArrayList<>();
     
     @OneToMany(mappedBy = "facturaRecepcion", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<FacturaRecepcionOtrosCargos> otrosCargos = new ArrayList<>();
+    private List<FacturaRecepcionOtroCargo> otrosCargos = new ArrayList<>();
     
     @PrePersist
     protected void onCreate() {

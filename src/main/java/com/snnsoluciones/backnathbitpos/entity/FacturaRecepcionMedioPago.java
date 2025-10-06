@@ -33,6 +33,12 @@ public class FacturaRecepcionMedioPago {
     @JoinColumn(name = "factura_recepcion_id", nullable = false)
     private FacturaRecepcion facturaRecepcion;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
+    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
+
+    private String medioPagoOtro;
+
     /**
      * Medio de pago según nota 6 de Hacienda:
      * 01 - Efectivo

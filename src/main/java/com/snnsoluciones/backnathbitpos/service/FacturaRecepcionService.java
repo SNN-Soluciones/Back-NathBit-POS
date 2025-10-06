@@ -1,0 +1,638 @@
+package com.snnsoluciones.backnathbitpos.service;
+
+import com.snnsoluciones.backnathbitpos.dto.auth.Contexto;
+import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.*;
+import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
+import com.snnsoluciones.backnathbitpos.enums.factura.TipoMensajeReceptor;
+import com.snnsoluciones.backnathbitpos.integrations.hacienda.HaciendaClient;
+import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.scheduler.FacturaRecepcionXMLParserService;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class FacturaRecepcionService {
+
+    private final FacturaRecepcionRepository facturaRecepcionRepository;
+    private final EmpresaRepository empresaRepository;
+    private final SucursalRepository sucursalRepository;
+    private final ProveedorRepository proveedorRepository;
+    private final CompraRepository compraRepository;
+    private final MetricaCompraMensualRepository metricasRepository;
+
+    private final FacturaRecepcionXMLParserService xmlParserService;
+    private final StorageService storageService;
+    private final HaciendaClient haciendaClient;
+
+    public Optional<FacturaRecepcion> buscarPorId(Long id){
+        return facturaRecepcionRepository.findById(id);
+    }
+
+
+    /**
+     * Subir XML y parsear factura recibida
+     */
+    @Transactional
+    public FacturaRecepcionResponse subirYParsearXml(SubirXmlRequest request) {
+        log.info("Subiendo XML para empresa: {}, sucursal: {}",
+            request.getEmpresaId(), request.getSucursalId());
+
+        try {
+            // 1. Validar empresa y sucursal
+            Empresa empresa = empresaRepository.findById(request.getEmpresaId())
+                .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+
+            Sucursal sucursal = sucursalRepository.findById(request.getSucursalId())
+                .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
+
+            // 2. Leer contenido del XML
+            String xmlContent = new String(request.getXmlFile().getBytes(), StandardCharsets.UTF_8);
+
+            // 3. Parsear XML a entidad
+            FacturaRecepcion factura = xmlParserService.parsearXML(xmlContent, empresa, sucursal);
+
+            // 4. Validar que no exista duplicada
+            if (facturaRecepcionRepository.existsByClave(factura.getClave())) {
+                throw new RuntimeException("Ya existe una factura con esta clave: " + factura.getClave());
+            }
+
+            // 5. Subir XML a S3
+            String rutaXml = subirArchivoS3(
+                empresa.getNombreRazonSocial(),
+                factura.getTipoDocumento().name(),
+                factura.getClave(),
+                "xml",
+                request.getXmlFile()
+            );
+            factura.setXmlOriginalPath(rutaXml);
+
+            // 6. Subir PDF si viene
+            if (request.getPdfFile() != null && !request.getPdfFile().isEmpty()) {
+                String rutaPdf = subirArchivoS3(
+                    empresa.getNombreRazonSocial(),
+                    factura.getTipoDocumento().name(),
+                    factura.getClave(),
+                    "pdf",
+                    request.getPdfFile()
+                );
+                factura.setPdfPath(rutaPdf);
+            }
+
+            // 7. Fecha de recepción
+            factura.setFechaRecepcion(LocalDateTime.now());
+
+            // 8. Buscar o crear proveedor
+            Proveedor proveedor = buscarOCrearProveedor(factura, empresa, request.isCrearProveedorSiNoExiste());
+            if (proveedor != null) {
+                factura.setProveedor(proveedor);
+            }
+
+            // 9. Guardar
+            factura = facturaRecepcionRepository.save(factura);
+
+            log.info("Factura recepción guardada exitosamente. ID: {}, Clave: {}",
+                factura.getId(), factura.getClave());
+
+            return mapearAResponse(factura);
+
+        } catch (IOException e) {
+            log.error("Error leyendo archivo XML", e);
+            throw new RuntimeException("Error leyendo archivo: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Listar facturas recibidas con filtros
+     */
+    @Transactional(readOnly = true)
+    public Page<FacturaRecepcionListResponse> listar(
+        Long empresaId,
+        Long sucursalId,
+        EstadoFacturaRecepcion estado,
+        LocalDate fechaInicio,
+        LocalDate fechaFin,
+        Pageable pageable) {
+
+        LocalDateTime inicio = fechaInicio != null ? fechaInicio.atStartOfDay() : null;
+        LocalDateTime fin = fechaFin != null ? fechaFin.atTime(23, 59, 59) : null;
+
+        List<FacturaRecepcion> lista = facturaRecepcionRepository.findByFiltros(
+            empresaId, sucursalId, estado, inicio, fin
+        );
+
+        List<FacturaRecepcionListResponse> content = lista.stream()
+            .map(this::mapearAListResponse)
+            .collect(Collectors.toList());
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), content.size());
+
+        return new PageImpl<>(
+            content.subList(start, end),
+            pageable,
+            content.size()
+        );
+    }
+
+    /**
+     * Obtener detalle completo de factura
+     */
+    @Transactional(readOnly = true)
+    public FacturaRecepcionResponse obtenerDetalle(Long id) {
+        FacturaRecepcion factura = facturaRecepcionRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
+
+        return mapearAResponse(factura);
+    }
+
+    /**
+     * Tomar decisión y enviar mensaje receptor a Hacienda
+     */
+    @Transactional
+    public MensajeReceptorResponse tomarDecision(Long id, DecisionMensajeRequest request) {
+        log.info("Procesando decisión para factura recepción ID: {}, decisión: {}",
+            id, request.getDecision());
+
+        FacturaRecepcion factura = facturaRecepcionRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
+
+        // Validar estado
+        if (factura.getEstadoInterno() != EstadoFacturaRecepcion.PENDIENTE_DECISION) {
+            throw new RuntimeException("La factura ya fue procesada. Estado actual: " +
+                factura.getEstadoInterno());
+        }
+
+        try {
+            // Determinar tipo de mensaje
+            TipoMensajeReceptor tipoMensaje = switch (request.getDecision()) {
+                case ACEPTAR -> TipoMensajeReceptor.ACEPTADO;
+                case PARCIAL -> TipoMensajeReceptor.ACEPTADO_PARCIAL;
+                case RECHAZAR -> TipoMensajeReceptor.RECHAZADO;
+            };
+
+            // Construir y enviar mensaje receptor
+            String xmlMensaje = construirXmlMensajeReceptor(factura, tipoMensaje, request);
+            String respuestaHacienda = haciendaClient.enviarMensajeReceptor(
+                factura.getEmpresa().getId(),
+                xmlMensaje
+            );
+
+            // Actualizar estado según decisión
+            EstadoFacturaRecepcion nuevoEstado = switch (request.getDecision()) {
+                case ACEPTAR -> EstadoFacturaRecepcion.ACEPTADA;
+                case PARCIAL -> EstadoFacturaRecepcion.ACEPTADA_PARCIAL;
+                case RECHAZAR -> EstadoFacturaRecepcion.RECHAZADA;
+            };
+
+            factura.setEstadoInterno(nuevoEstado);
+            factura.setMensajeReceptorEnviado(true);
+            factura.setTipoMensajeReceptor(tipoMensaje);
+            factura.setMotivoRespuesta(request.getJustificacion());
+
+            if (request.getMontoAceptado() != null) {
+                factura.setMontoTotalAceptado(request.getMontoAceptado());
+            }
+
+            facturaRecepcionRepository.save(factura);
+
+            log.info("Mensaje receptor enviado exitosamente. Estado: {}", nuevoEstado);
+
+            return MensajeReceptorResponse.builder()
+                .exitoso(true)
+                .mensaje("Mensaje receptor enviado exitosamente")
+                .estadoFinal(nuevoEstado)
+                .build();
+
+        } catch (Exception e) {
+            log.error("Error enviando mensaje receptor", e);
+            throw new RuntimeException("Error al enviar mensaje receptor: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Convertir factura aceptada a Compra
+     */
+    @Transactional
+    public ConvertirCompraResponse convertirACompra(Long facturaRecepcionId) {
+        log.info("Convirtiendo factura recepción {} a compra", facturaRecepcionId);
+
+        FacturaRecepcion factura = facturaRecepcionRepository.findById(facturaRecepcionId)
+            .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
+
+        // Validaciones
+        if (factura.getEstadoInterno() != EstadoFacturaRecepcion.ACEPTADA) {
+            throw new RuntimeException("Solo se pueden convertir facturas ACEPTADAS");
+        }
+
+        if (factura.getConvertidaCompra()) {
+            throw new RuntimeException("Esta factura ya fue convertida a compra");
+        }
+
+        if (factura.getProveedor() == null) {
+            throw new RuntimeException("Debe asignar un proveedor antes de convertir a compra");
+        }
+
+        try {
+            // Crear Compra
+            Compra compra = new Compra();
+            compra.setEmpresa(factura.getEmpresa());
+            compra.setSucursal(factura.getSucursal());
+            compra.setProveedor(factura.getProveedor());
+            compra.setUsuario(factura.getCompra().getUsuario());
+
+            compra.setTipoDocumentoHacienda(factura.getTipoDocumento());
+            compra.setClaveHacienda(factura.getClave());
+            compra.setNumeroDocumento(factura.getNumeroConsecutivo());
+            compra.setFechaEmision(factura.getFechaEmision());
+            compra.setFechaRecepcion(LocalDateTime.now());
+
+            compra.setCondicionVenta(factura.getCondicionVenta());
+            compra.setPlazoCredito(factura.getPlazoCredito());
+
+            if (factura.getMoneda() != null) {
+                compra.setMoneda(factura.getMoneda());
+            }
+            compra.setTipoCambio(factura.getTipoCambio() != null ? factura.getTipoCambio() : BigDecimal.ONE);
+
+            // Totales
+            compra.setTotalGravado(factura.getTotalGravado());
+            compra.setTotalExento(factura.getTotalExento());
+            compra.setTotalExonerado(factura.getTotalExonerado());
+            compra.setTotalVenta(factura.getTotalVenta());
+            compra.setTotalDescuentos(factura.getTotalDescuentos());
+            compra.setTotalVentaNeta(factura.getTotalVentaNeta());
+            compra.setTotalImpuesto(factura.getTotalImpuesto());
+            compra.setTotalOtrosCargos(factura.getTotalOtrosCargos());
+            compra.setTotalComprobante(factura.getTotalComprobante());
+
+            compra = compraRepository.save(compra);
+
+            // Vincular
+            factura.setCompra(compra);
+            factura.setConvertidaCompra(true);
+            facturaRecepcionRepository.save(factura);
+
+            // Actualizar métricas mensuales por fecha de FACTURA
+            actualizarMetricasMensuales(compra);
+
+            log.info("Factura convertida a compra exitosamente. Compra ID: {}", compra.getId());
+
+            return ConvertirCompraResponse.builder()
+                .compraId(compra.getId())
+                .facturaRecepcionId(factura.getId())
+                .mensaje("Factura convertida exitosamente a compra")
+                .build();
+
+        } catch (Exception e) {
+            log.error("Error convirtiendo a compra", e);
+            throw new RuntimeException("Error al convertir a compra: " + e.getMessage());
+        }
+    }
+
+    // ==================== MÉTODOS PRIVADOS ====================
+
+    private String subirArchivoS3(String razonSocial, String tipoDoc, String clave,
+        String extension, MultipartFile file) throws IOException {
+        String carpeta = String.format("%s/compras/%s/%s/",
+            razonSocial,
+            tipoDoc,
+            LocalDate.now().getYear()
+        );
+        String key = carpeta + clave + "." + extension;
+
+        // Usar el método con InputStream
+        storageService.uploadFile(
+            file.getInputStream(),
+            key,
+            file.getContentType(),
+            file.getSize()
+        );
+
+        return key;
+    }
+
+    private Proveedor buscarOCrearProveedor(FacturaRecepcion factura, Empresa empresa, boolean crearSiNoExiste) {
+        Proveedor proveedor = proveedorRepository
+            .findByNumeroIdentificacionAndEmpresaId(factura.getProveedorIdentificacion(), empresa.getId())
+            .orElse(null);
+
+        if (proveedor == null && crearSiNoExiste) {
+            proveedor = new Proveedor();
+            proveedor.setEmpresa(empresa);
+            proveedor.setTipoIdentificacion(factura.getProveedorTipoIdentificacion());
+            proveedor.setNumeroIdentificacion(factura.getProveedorIdentificacion());
+            proveedor.setRazonSocial(factura.getProveedorNombre());
+            proveedor.setNombreComercial(factura.getProveedorNombreComercial());
+            proveedor.setEmail(factura.getProveedorEmail());
+            proveedor.setTelefono(factura.getProveedorTelefono());
+            proveedor.setActivo(true);
+
+            proveedor = proveedorRepository.save(proveedor);
+            log.info("Proveedor creado automáticamente: {}", proveedor.getNumeroIdentificacion());
+        }
+
+        return proveedor;
+    }
+
+    private String construirXmlMensajeReceptor(FacturaRecepcion factura,
+        TipoMensajeReceptor tipo,
+        DecisionMensajeRequest request) {
+        // TODO: Implementar construcción correcta según Hacienda
+        return """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <MensajeReceptor>
+                <Clave>%s</Clave>
+                <Mensaje>%s</Mensaje>
+                <MontoTotalImpuesto>%s</MontoTotalImpuesto>
+            </MensajeReceptor>
+            """.formatted(
+            factura.getClave(),
+            tipo.getCodigo(),
+            request.getMontoAceptado() != null ? request.getMontoAceptado() : factura.getTotalImpuesto()
+        );
+    }
+
+    private void actualizarMetricasMensuales(Compra compra) {
+        int anio = compra.getFechaEmision().getYear();
+        int mes = compra.getFechaEmision().getMonthValue();
+
+        MetricaCompraMensual metricas = metricasRepository
+            .findByEmpresaIdAndSucursalIdAndAnioAndMes(
+                compra.getEmpresa().getId(),
+                compra.getSucursal().getId(),
+                anio,
+                mes
+            )
+            .orElseGet(() -> {
+                MetricaCompraMensual nueva = MetricaCompraMensual.builder()
+                    .empresa(compra.getEmpresa())
+                    .sucursal(compra.getSucursal())
+                    .anio(anio)
+                    .mes(mes)
+                    .totalCompras(0L)
+                    .montoTotal(BigDecimal.ZERO)
+                    .montoTotalImpuestos(BigDecimal.ZERO)
+                    .cantidadProveedores(0)
+                    .build();
+                return nueva;
+            });
+
+        metricas.setMontoTotal(metricas.getMontoTotal().add(compra.getTotalComprobante()));
+        metricas.setTotalCompras(metricas.getTotalCompras() + 1);
+        metricas.setMontoTotalImpuestos(metricas.getMontoTotalImpuestos().add(compra.getTotalImpuesto()));
+
+        metricasRepository.save(metricas);
+        log.info("Métricas mensuales actualizadas: {}/{}", mes, anio);
+    }
+
+    private FacturaRecepcionResponse mapearAResponse(FacturaRecepcion factura) {
+        return FacturaRecepcionResponse.builder()
+            .id(factura.getId())
+            .clave(factura.getClave())
+            .tipoDocumento(factura.getTipoDocumento())
+            .numeroConsecutivo(factura.getNumeroConsecutivo())
+            .fechaEmision(factura.getFechaEmision())
+            .estadoInterno(factura.getEstadoInterno())
+
+            .proveedorId(factura.getProveedor() != null ? factura.getProveedor().getId() : null)
+            .proveedorNombre(factura.getProveedorNombre())
+            .proveedorIdentificacion(factura.getProveedorIdentificacion())
+            .proveedorCorreo(factura.getProveedorEmail())
+
+            .receptorNombre(factura.getReceptorNombre())
+            .receptorIdentificacion(factura.getReceptorIdentificacion())
+
+            .condicionVenta(factura.getCondicionVenta())
+            .plazoCredito(factura.getPlazoCredito())
+
+            .totalGravado(factura.getTotalGravado())
+            .totalExento(factura.getTotalExento())
+            .totalExonerado(factura.getTotalExonerado())
+            .totalVenta(factura.getTotalVenta())
+            .totalDescuentos(factura.getTotalDescuentos())
+            .totalVentaNeta(factura.getTotalVentaNeta())
+            .totalImpuesto(factura.getTotalImpuesto())
+            .totalOtrosCargos(factura.getTotalOtrosCargos())
+            .totalComprobante(factura.getTotalComprobante())
+
+            .mensajeReceptorEnviado(factura.getMensajeReceptorEnviado())
+            .tipoMensajeReceptor(factura.getTipoMensajeReceptor() != null ? factura.getTipoMensajeReceptor().name() : null)
+
+            .convertidaACompra(factura.getConvertidaCompra())
+            .compraId(factura.getCompra() != null ? factura.getCompra().getId() : null)
+
+            .rutaXmlS3(factura.getXmlOriginalPath())
+            .rutaPdfS3(factura.getPdfPath())
+
+            .detalles(factura.getDetalles().stream()
+                .map(this::mapearDetalleAResponse)
+                .collect(Collectors.toList()))
+
+            .build();
+    }
+
+    private FacturaRecepcionListResponse mapearAListResponse(FacturaRecepcion factura) {
+        return FacturaRecepcionListResponse.builder()
+            .id(factura.getId())
+            .clave(factura.getClave())
+            .numeroConsecutivo(factura.getNumeroConsecutivo())
+            .fechaEmision(factura.getFechaEmision())
+            .proveedorNombre(factura.getProveedorNombre())
+            .proveedorIdentificacion(factura.getProveedorIdentificacion())
+            .totalComprobante(factura.getTotalComprobante())
+            .estadoInterno(factura.getEstadoInterno())
+            .mensajeReceptorEnviado(factura.getMensajeReceptorEnviado())
+            .convertidaACompra(factura.getConvertidaCompra())
+            .build();
+    }
+
+    private FacturaRecepcionDetalleResponse mapearDetalleAResponse(FacturaRecepcionDetalle detalle) {
+        return FacturaRecepcionDetalleResponse.builder()
+            .id(detalle.getId())
+            .numeroLinea(detalle.getNumeroLinea())
+            .codigoCabys(detalle.getCodigoCabys())
+            .codigoComercial(detalle.getCodigoComercial())
+            .tipoCodigoComercial(detalle.getTipoCodigoComercial())
+            .detalle(detalle.getDetalle())
+            .cantidad(detalle.getCantidad())
+            .unidadMedida(detalle.getUnidadMedida().name())
+            .unidadMedidaComercial(detalle.getUnidadMedidaComercial())
+            .precioUnitario(detalle.getPrecioUnitario())
+            .montoTotal(detalle.getMontoTotal())
+            .subTotal(detalle.getSubtotal())
+            .montoDescuento(detalle.getMontoDescuento())
+            .montoTotalLinea(detalle.getMontoTotalLinea())
+            .productoNombre(detalle.getDescripcion() != null ? detalle.getDescripcion() : null)
+            .build();
+    }
+
+    /**
+     * Subir XML y procesar COMPLETAMENTE en un solo paso
+     */
+    @Transactional
+    public FacturaRecepcionResponse subirYProcesarCompleto(SubirXmlRequest request) {
+        log.info("Subiendo y procesando XML completamente para empresa: {}, sucursal: {}",
+            request.getEmpresaId(), request.getSucursalId());
+
+        try {
+            // 1. Validar empresa y sucursal
+            Empresa empresa = empresaRepository.findById(request.getEmpresaId())
+                .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+
+            Sucursal sucursal = sucursalRepository.findById(request.getSucursalId())
+                .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
+
+            // 2. Leer y parsear XML
+            String xmlContent = new String(request.getXmlFile().getBytes(), StandardCharsets.UTF_8);
+            FacturaRecepcion factura = xmlParserService.parsearXML(xmlContent, empresa, sucursal);
+
+            // 3. Validar duplicado
+            if (facturaRecepcionRepository.existsByClave(factura.getClave())) {
+                throw new RuntimeException("Ya existe una factura con esta clave: " + factura.getClave());
+            }
+
+            // 4. Subir archivos a S3
+            String rutaXml = subirArchivoS3(
+                empresa.getNombreRazonSocial(),
+                factura.getTipoDocumento().name(),
+                factura.getClave(),
+                "xml",
+                request.getXmlFile()
+            );
+            factura.setXmlOriginalPath(rutaXml);
+
+            if (request.getPdfFile() != null && !request.getPdfFile().isEmpty()) {
+                String rutaPdf = subirArchivoS3(
+                    empresa.getNombreRazonSocial(),
+                    factura.getTipoDocumento().name(),
+                    factura.getClave(),
+                    "pdf",
+                    request.getPdfFile()
+                );
+                factura.setPdfPath(rutaPdf);
+            }
+
+            factura.setFechaRecepcion(LocalDateTime.now());
+
+            // 5. BUSCAR O CREAR PROVEEDOR AUTOMÁTICAMENTE
+            Proveedor proveedor = buscarOCrearProveedor(factura, empresa, true);
+            factura.setProveedor(proveedor);
+
+            // 6. Guardar factura
+            factura = facturaRecepcionRepository.save(factura);
+
+            // 7. ACEPTAR AUTOMÁTICAMENTE Y CREAR COMPRA
+            if (request.isAceptarAutomaticamente()) {
+                aceptarYCrearCompraAutomatico(factura);
+            }
+
+            log.info("✅ Factura procesada completamente. ID: {}, Compra ID: {}",
+                factura.getId(), factura.getCompra() != null ? factura.getCompra().getId() : "N/A");
+
+            return mapearAResponse(factura);
+
+        } catch (IOException e) {
+            log.error("Error leyendo archivo XML", e);
+            throw new RuntimeException("Error leyendo archivo: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Aceptar automáticamente y crear compra
+     */
+    private void aceptarYCrearCompraAutomatico(FacturaRecepcion factura) {
+        try {
+            // 1. Construir mensaje receptor de aceptación
+            String xmlMensaje = construirXmlMensajeReceptor(
+                factura,
+                TipoMensajeReceptor.ACEPTADO,
+                null
+            );
+
+            // 2. Enviar a Hacienda
+            haciendaClient.enviarMensajeReceptor(
+                factura.getEmpresa().getId(),
+                xmlMensaje
+            );
+
+            // 3. Actualizar estado
+            factura.setEstadoInterno(EstadoFacturaRecepcion.ACEPTADA);
+            factura.setMensajeReceptorEnviado(true);
+            factura.setTipoMensajeReceptor(TipoMensajeReceptor.ACEPTADO);
+
+            // 4. CREAR COMPRA AUTOMÁTICAMENTE
+            Compra compra = crearCompraDesdeFactura(factura);
+            compra = compraRepository.save(compra);
+
+            // 5. Vincular
+            factura.setCompra(compra);
+            factura.setConvertidaCompra(true);
+
+            // 6. Actualizar métricas
+            actualizarMetricasMensuales(compra);
+
+            log.info("✅ Factura aceptada y compra creada automáticamente. Compra ID: {}", compra.getId());
+
+        } catch (Exception e) {
+            log.error("❌ Error en proceso automático, dejando factura como PENDIENTE", e);
+            // Si falla, dejar en pendiente para que usuario tome decisión manual
+            factura.setEstadoInterno(EstadoFacturaRecepcion.PENDIENTE_DECISION);
+        }
+    }
+
+    /**
+     * Crear Compra desde Factura
+     */
+    private Compra crearCompraDesdeFactura(FacturaRecepcion factura) {
+        Compra compra = new Compra();
+        compra.setEmpresa(factura.getEmpresa());
+        compra.setSucursal(factura.getSucursal());
+        compra.setProveedor(factura.getProveedor());
+        compra.setUsuario(factura.getCompra().getUsuario());
+
+        compra.setTipoDocumentoHacienda(factura.getTipoDocumento());
+        compra.setClaveHacienda(factura.getClave());
+        compra.setNumeroDocumento(factura.getNumeroConsecutivo());
+        compra.setFechaEmision(factura.getFechaEmision());
+        compra.setFechaRecepcion(LocalDateTime.now());
+
+        compra.setCondicionVenta(factura.getCondicionVenta());
+        compra.setPlazoCredito(factura.getPlazoCredito());
+
+        if (factura.getMoneda() != null) {
+            compra.setMoneda(factura.getMoneda());
+        }
+        compra.setTipoCambio(factura.getTipoCambio() != null ? factura.getTipoCambio() : BigDecimal.ONE);
+
+        // Totales
+        compra.setTotalGravado(factura.getTotalGravado());
+        compra.setTotalExento(factura.getTotalExento());
+        compra.setTotalExonerado(factura.getTotalExonerado());
+        compra.setTotalVenta(factura.getTotalVenta());
+        compra.setTotalDescuentos(factura.getTotalDescuentos());
+        compra.setTotalVentaNeta(factura.getTotalVentaNeta());
+        compra.setTotalImpuesto(factura.getTotalImpuesto());
+        compra.setTotalOtrosCargos(factura.getTotalOtrosCargos());
+        compra.setTotalComprobante(factura.getTotalComprobante());
+
+        return compra;
+    }
+}

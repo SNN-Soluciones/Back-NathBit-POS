@@ -62,6 +62,10 @@ public class FacturaRecepcion {
     @JoinColumn(name = "compra_id")
     private Compra compra; // Nullable hasta que se convierta
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
+    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
+
     @OneToMany(mappedBy = "facturaRecepcion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("numeroLinea ASC")
     @Builder.Default
@@ -95,6 +99,20 @@ public class FacturaRecepcion {
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_documento", nullable = false, length = 20)
     private TipoDocumento tipoDocumento;
+
+    @Column(name = "codigo_actividad")
+    private String codigoActividad;
+
+    private String proveedorCorreo;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    private Proveedor proveedor;
+
+    private String receptorCorreo;
+    private String receptorNombre;
+    private String receptorNombreComercial;
+    private String receptorIdentificacion;
+    private TipoIdentificacion receptorTipoIdentificacion;
 
     /**
      * Consecutivo de 20 dígitos del documento
@@ -301,6 +319,9 @@ public class FacturaRecepcion {
     /**
      * Monto de impuesto aceptado (solo para aceptación parcial)
      */
+
+    private BigDecimal montoTotalAceptado;
+
     @Column(name = "monto_impuesto_aceptado", precision = 18, scale = 5)
     private BigDecimal montoImpuestoAceptado;
 

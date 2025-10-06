@@ -34,6 +34,8 @@ public class FacturaRecepcionOtroCargo {
     @JoinColumn(name = "factura_recepcion_id", nullable = false)
     private FacturaRecepcion facturaRecepcion;
 
+    private String detalle;
+
     /**
      * Código según nota 16 de Hacienda:
      * 01 - Contribución parafiscal
@@ -96,4 +98,8 @@ public class FacturaRecepcionOtroCargo {
 
     @Column(name = "tercero_nombre", length = 100)
     private String terceroNombre;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
+    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
 }

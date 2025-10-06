@@ -193,14 +193,14 @@ public class FacturaServiceImpl implements FacturaService {
 
     // PASO 21: Si es NOTA DE CRÉDITO, procesar información de referencia
     if (request.getTipoDocumento() == TipoDocumento.NOTA_CREDITO) {
-      if (request.getInformacionReferencia() != null && !request.getInformacionReferencia().isEmpty()) {
+      if (request.getInformacionReferencia() != null && !request.getInformacionReferencia()
+          .isEmpty()) {
         InformacionReferenciaDto ref = request.getInformacionReferencia().get(0);
 
         // IMPORTANTE: usar getTipoDoc() NO getCodigo()
         // getTipoDoc() = "01" (Factura Electrónica), "04" (Tiquete), etc.
         facturaGuardada.setTipoDocReferencia(
             TipoDocumento.fromCodigo(ref.getTipoDoc())
-                .orElse(TipoDocumento.FACTURA_ELECTRONICA)
         );
 
         // Número puede ser clave (50 dig) o consecutivo
@@ -218,7 +218,8 @@ public class FacturaServiceImpl implements FacturaService {
         // Establecer relación con factura original si viene el ID
         if (request.getFacturaReferenciaId() != null) {
           Factura facturaOriginal = facturaRepository.findById(request.getFacturaReferenciaId())
-              .orElseThrow(() -> new EntityNotFoundException("Factura de referencia no encontrada"));
+              .orElseThrow(
+                  () -> new EntityNotFoundException("Factura de referencia no encontrada"));
           facturaGuardada.setFacturaReferencia(facturaOriginal);
         }
       }
@@ -833,7 +834,8 @@ public class FacturaServiceImpl implements FacturaService {
   /**
    * Crear especificación para búsqueda de facturas para referencia
    */
-  private Specification<Factura> crearEspecificacionBusquedaReferencia(BuscarFacturaReferenciaRequest request) {
+  private Specification<Factura> crearEspecificacionBusquedaReferencia(
+      BuscarFacturaReferenciaRequest request) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
 

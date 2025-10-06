@@ -26,11 +26,23 @@ public enum UnidadMedida {
     }
     public String getCodigo() { return codigo; }
     public String getDescripcion() { return descripcion; }
-    Optional<?> fromCodigoOptional(String codigo) {
+    public static Optional<?> fromCodigoOptional(String codigo) {
         if (codigo == null) return Optional.empty();
 
         return Arrays.stream(values())
             .filter(tipo -> tipo.codigo.equals(codigo))
             .findFirst();
+    }
+
+    public static UnidadMedida fromCodigo(String codigo) {
+        if (codigo == null) {
+            return null;
+        }
+        for(UnidadMedida tipo : values()) {
+            if(tipo.codigo.equals(codigo)) {
+                return tipo;
+            }
+        }
+        return null;
     }
 }

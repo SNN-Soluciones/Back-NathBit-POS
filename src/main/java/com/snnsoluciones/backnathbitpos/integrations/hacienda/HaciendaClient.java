@@ -1,10 +1,18 @@
 package com.snnsoluciones.backnathbitpos.integrations.hacienda;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.snnsoluciones.backnathbitpos.entity.EmpresaConfigHacienda;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.ConsultaEstadoResponse;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.HaciendaAuthParams;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.HaciendaTokenResponse;
+import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.IdentificacionDTO;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.RecepcionRequest;
+import com.snnsoluciones.backnathbitpos.repository.EmpresaConfigHaciendaRepository;
+import java.io.StringReader;
+import java.time.LocalDateTime;
+import java.util.Base64;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -19,6 +27,9 @@ import org.springframework.web.client.RestTemplate;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
 /**
  * Implementación de cliente para la API de Hacienda (Recepción v1).
@@ -32,6 +43,7 @@ import java.util.Map;
 public class HaciendaClient {
 
   private final RestTemplateBuilder restTemplateBuilder;
+  private final EmpresaConfigHaciendaRepository empresaConfigHaciendaRepository;
   private final ObjectMapper objectMapper;
 
   // Bases API
@@ -144,6 +156,87 @@ public class HaciendaClient {
     } catch (HttpClientErrorException | HttpServerErrorException e) {
       log.error("Error GET /recepcion/{}: status={} body={}", clave, e.getStatusCode(), e.getResponseBodyAsString());
       throw e;
+    }
+  }
+
+  /**
+   * Enviar mensaje receptor a Hacienda
+   * @param empresaId ID de la empresa
+   * @param xmlMensajeReceptor XML del mensaje receptor firmado
+   * @return Respuesta de Hacienda
+   */
+  public String enviarMensajeReceptor(Long empresaId, String xmlMensajeReceptor) {
+    log.info("Enviando mensaje receptor a Hacienda para empresa: {}", empresaId);
+
+    try {
+      // 1. Obtener configuración de Hacienda
+      EmpresaConfigHacienda config = empresaConfigHaciendaRepository
+          .findByEmpresaId(empresaId)
+          .orElseThrow(() -> new RuntimeException(
+              "No hay configuración de Hacienda para la empresa: " + empresaId));
+
+      // 2. Obtener token de acceso
+      HaciendaAuthParams authParams = HaciendaAuthParams.builder()
+          .username(config.getUsuarioHacienda())
+          .password(config.getClaveHacienda())
+          .sandbox(false)
+          .build();
+
+      HaciendaTokenResponse tokenResponse = getToken(authParams);
+      String accessToken = tokenResponse.getAccessToken();
+
+      // 3. Construir payload del mensaje receptor
+      RecepcionRequest payload = RecepcionRequest.builder()
+          .clave(extraerClaveDeXml(xmlMensajeReceptor))
+          .fecha(LocalDateTime.now().toString())
+          .emisor(IdentificacionDTO.builder()
+              .tipoIdentificacion(config.getEmpresa().getTipoIdentificacion().getCodigo())
+              .numeroIdentificacion(config.getEmpresa().getIdentificacion())
+              .build())
+          .comprobanteXml(Base64.getEncoder().encodeToString(
+              xmlMensajeReceptor.getBytes(StandardCharsets.UTF_8)))
+          .build();
+
+      // 4. Enviar a Hacienda
+      ResponseEntity<Void> response = postMensajeReceptor(
+          accessToken,
+          true,
+          payload
+      );
+
+      if (response.getStatusCode() == HttpStatus.CREATED) {
+        String location = response.getHeaders().getFirst(HttpHeaders.LOCATION);
+        log.info("Mensaje receptor enviado exitosamente. Location: {}", location);
+        return "Mensaje receptor enviado exitosamente";
+      } else {
+        throw new RuntimeException("Respuesta inesperada de Hacienda: " + response.getStatusCode());
+      }
+
+    } catch (Exception e) {
+      log.error("Error enviando mensaje receptor a Hacienda", e);
+      throw new RuntimeException("Error enviando mensaje receptor: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Extraer clave numérica del XML
+   */
+  private String extraerClaveDeXml(String xml) {
+    try {
+      // Parsear XML para extraer la clave
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setNamespaceAware(true);
+      DocumentBuilder builder = factory.newDocumentBuilder();
+      Document doc = builder.parse(new InputSource(new StringReader(xml)));
+
+      NodeList claveNodes = doc.getElementsByTagName("Clave");
+      if (claveNodes.getLength() > 0) {
+        return claveNodes.item(0).getTextContent();
+      }
+
+      throw new RuntimeException("No se encontró la clave en el XML");
+    } catch (Exception e) {
+      throw new RuntimeException("Error extrayendo clave del XML: " + e.getMessage(), e);
     }
   }
 

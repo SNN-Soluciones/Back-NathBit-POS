@@ -134,7 +134,7 @@ public class Compra {
     // Estado y procesamiento
     @Enumerated(EnumType.STRING)
     @Column(name = "estado", nullable = false)
-    private EstadoCompra estado = EstadoCompra.BORRADOR;
+    private EstadoCompra estado = EstadoCompra.RECIBIDA;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_hacienda")

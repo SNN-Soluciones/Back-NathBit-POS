@@ -138,9 +138,9 @@ public class ProductoInventarioService {
         log.info("Procesando compra {} para actualizar inventario", compra.getId());
 
         // Validar que la compra esté en estado válido
-        if (compra.getEstado() != EstadoCompra.ACEPTADA &&
-            compra.getEstado() != EstadoCompra.ENVIADA) {
-            log.warn("Compra {} no está en estado válido para procesar inventario", compra.getId());
+        if (!compra.getEstado().puedeAfectarInventario()) {
+            log.warn("Compra {} no está en estado válido para procesar inventario. Estado: {}",
+                compra.getId(), compra.getEstado());
             return;
         }
 

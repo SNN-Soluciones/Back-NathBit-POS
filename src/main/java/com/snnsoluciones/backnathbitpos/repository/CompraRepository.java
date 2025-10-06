@@ -22,5 +22,39 @@ public interface CompraRepository extends JpaRepository<Compra, Long> {
     
     // Buscar por sucursal
     List<Compra> findBySucursalIdOrderByFechaEmisionDesc(Long sucursalId);
-    
+
+    /**
+     * Contar proveedores únicos en un mes
+     */
+    @Query("SELECT COUNT(DISTINCT c.proveedor.id) FROM Compra c " +
+        "WHERE c.empresa.id = :empresaId " +
+        "AND c.sucursal.id = :sucursalId " +
+        "AND YEAR(c.fechaEmision) = :anio " +
+        "AND MONTH(c.fechaEmision) = :mes " +
+        "AND c.estado = 'COMPLETADA'")
+    long countDistinctProveedoresByMesAnio(
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("anio") int anio,
+        @Param("mes") int mes
+    );
+
+    /**
+     * Top proveedor del mes
+     */
+    @Query("SELECT c.proveedor.id, SUM(c.totalComprobante) as total " +
+        "FROM Compra c " +
+        "WHERE c.empresa.id = :empresaId " +
+        "AND c.sucursal.id = :sucursalId " +
+        "AND YEAR(c.fechaEmision) = :anio " +
+        "AND MONTH(c.fechaEmision) = :mes " +
+        "AND c.estado = 'COMPLETADA' " +
+        "GROUP BY c.proveedor.id " +
+        "ORDER BY total DESC")
+    List<Object[]> findTopProveedorByMesAnio(
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("anio") int anio,
+        @Param("mes") int mes
+    );
 }

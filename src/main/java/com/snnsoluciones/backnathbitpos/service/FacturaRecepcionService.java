@@ -5,6 +5,9 @@ import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.enums.factura.TipoMensajeReceptor;
+import com.snnsoluciones.backnathbitpos.enums.mh.EstadoCompra;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoCompra;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.HaciendaClient;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.scheduler.FacturaRecepcionXMLParserService;
@@ -14,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,6 +42,9 @@ public class FacturaRecepcionService {
     private final ProveedorRepository proveedorRepository;
     private final CompraRepository compraRepository;
     private final MetricaCompraMensualRepository metricasRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final CompraDetalleRepository compraDetalleRepository;
+    private final ProductoInventarioService productoInventarioService;
 
     private final FacturaRecepcionXMLParserService xmlParserService;
     private final StorageService storageService;
@@ -290,6 +298,22 @@ public class FacturaRecepcionService {
             factura.setConvertidaCompra(true);
             facturaRecepcionRepository.save(factura);
 
+            try {
+                productoInventarioService.procesarCompra(compra);
+
+                // Marcar como completada solo si inventario se procesó OK
+                compra.setEstado(EstadoCompra.COMPLETADA);
+                compraRepository.save(compra);
+
+                log.info("✅ Inventario actualizado automáticamente para compra {}", compra.getId());
+
+            } catch (Exception e) {
+                log.error("⚠️ Error actualizando inventario para compra {}: {}",
+                    compra.getId(), e.getMessage());
+                // La compra queda en ACEPTADA pero sin inventario procesado
+                // El usuario puede procesarlo manualmente después
+            }
+
             // Actualizar métricas mensuales por fecha de FACTURA
             actualizarMetricasMensuales(compra);
 
@@ -395,12 +419,51 @@ public class FacturaRecepcionService {
                 return nueva;
             });
 
+        // Actualizar totales
         metricas.setMontoTotal(metricas.getMontoTotal().add(compra.getTotalComprobante()));
         metricas.setTotalCompras(metricas.getTotalCompras() + 1);
-        metricas.setMontoTotalImpuestos(metricas.getMontoTotalImpuestos().add(compra.getTotalImpuesto()));
+        metricas.setMontoTotalImpuestos(
+            metricas.getMontoTotalImpuestos().add(compra.getTotalImpuesto())
+        );
+
+        // Recalcular cantidad de proveedores únicos
+        long proveedoresUnicos = compraRepository.countDistinctProveedoresByMesAnio(
+            compra.getEmpresa().getId(),
+            compra.getSucursal().getId(),
+            anio,
+            mes
+        );
+        metricas.setCantidadProveedores((int) proveedoresUnicos);
+
+        // Calcular top proveedor
+        List<Object[]> topProveedor = compraRepository.findTopProveedorByMesAnio(
+            compra.getEmpresa().getId(),
+            compra.getSucursal().getId(),
+            anio,
+            mes
+        );
+        if (!topProveedor.isEmpty()) {
+            Object[] top = topProveedor.get(0);
+            metricas.setTopProveedorId((Long) top[0]);
+            metricas.setTopProveedorMonto((BigDecimal) top[1]);
+        }
+
+        // Calcular top producto CABYS
+        List<Object[]> topCabys = compraDetalleRepository.findTopCabysByMesAnio(
+            compra.getEmpresa().getId(),
+            compra.getSucursal().getId(),
+            anio,
+            mes
+        );
+        if (!topCabys.isEmpty()) {
+            Object[] top = topCabys.get(0);
+            metricas.setTopProductoCabys((String) top[0]);
+            metricas.setTopProductoMonto((BigDecimal) top[1]);
+        }
 
         metricasRepository.save(metricas);
-        log.info("Métricas mensuales actualizadas: {}/{}", mes, anio);
+        log.info("✅ Métricas mensuales actualizadas: {}/{} - {} compras, {} proveedores",
+            mes, anio, metricas.getTotalCompras(), metricas.getCantidadProveedores());
     }
 
     private FacturaRecepcionResponse mapearAResponse(FacturaRecepcion factura) {
@@ -602,11 +665,18 @@ public class FacturaRecepcionService {
      * Crear Compra desde Factura
      */
     private Compra crearCompraDesdeFactura(FacturaRecepcion factura) {
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        Usuario usuario = usuarioRepository.findByEmail(username)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + username));
+
         Compra compra = new Compra();
         compra.setEmpresa(factura.getEmpresa());
         compra.setSucursal(factura.getSucursal());
         compra.setProveedor(factura.getProveedor());
-        compra.setUsuario(factura.getCompra().getUsuario());
+        compra.setUsuario(usuario);
 
         compra.setTipoDocumentoHacienda(factura.getTipoDocumento());
         compra.setClaveHacienda(factura.getClave());
@@ -616,6 +686,14 @@ public class FacturaRecepcionService {
 
         compra.setCondicionVenta(factura.getCondicionVenta());
         compra.setPlazoCredito(factura.getPlazoCredito());
+
+        if (factura.getTipoMensajeReceptor() == TipoMensajeReceptor.ACEPTADO) {
+            compra.setEstado(EstadoCompra.ACEPTADA);
+        } else if (factura.getTipoMensajeReceptor() == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
+            compra.setEstado(EstadoCompra.ACEPTADA_PARCIAL);
+        } else {
+            compra.setEstado(EstadoCompra.RECIBIDA);
+        }
 
         if (factura.getMoneda() != null) {
             compra.setMoneda(factura.getMoneda());
@@ -632,6 +710,40 @@ public class FacturaRecepcionService {
         compra.setTotalImpuesto(factura.getTotalImpuesto());
         compra.setTotalOtrosCargos(factura.getTotalOtrosCargos());
         compra.setTotalComprobante(factura.getTotalComprobante());
+
+        for (FacturaRecepcionDetalle detFact : factura.getDetalles()) {
+            CompraDetalle detalle = new CompraDetalle();
+            detalle.setCompra(compra);
+            detalle.setNumeroLinea(detFact.getNumeroLinea());
+            detalle.setCodigo(detFact.getCodigoComercial());
+            detalle.setCodigoCabys(detFact.getCodigoCabys());
+            detalle.setDescripcion(detFact.getDetalle());
+            detalle.setEsServicio(false); // Ajustar según tu lógica
+            detalle.setCantidad(detFact.getCantidad());
+            detalle.setUnidadMedida(detFact.getUnidadMedida().name());
+            detalle.setUnidadMedidaComercial(detFact.getUnidadMedidaComercial());
+            detalle.setPrecioUnitario(detFact.getPrecioUnitario());
+            detalle.setMontoTotal(detFact.getMontoTotal());
+            detalle.setMontoDescuento(detFact.getMontoDescuento() != null ?
+                detFact.getMontoDescuento() : BigDecimal.ZERO);
+            detalle.setSubTotal(detFact.getSubtotal());
+            detalle.setBaseImponible(detFact.getBaseImponible());
+
+            // Calcular impuesto total de la línea
+            BigDecimal totalImpuesto = detFact.getImpuestos().stream()
+                .map(FacturaRecepcionDetalleImpuesto::getMonto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            detalle.setMontoImpuesto(totalImpuesto);
+
+            detalle.setMontoTotalLinea(detFact.getMontoTotalLinea());
+
+            // TODO FUTURO: Buscar/crear producto automáticamente
+            // detalle.setProducto(buscarOCrearProducto(detFact));
+
+            compra.addDetalle(detalle);
+        }
+
+        compra.setEstado(EstadoCompra.ACEPTADA);
 
         return compra;
     }

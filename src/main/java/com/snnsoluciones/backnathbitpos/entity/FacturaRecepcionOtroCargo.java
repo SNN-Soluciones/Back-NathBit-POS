@@ -98,8 +98,4 @@ public class FacturaRecepcionOtroCargo {
 
     @Column(name = "tercero_nombre", length = 100)
     private String terceroNombre;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
-    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
 }

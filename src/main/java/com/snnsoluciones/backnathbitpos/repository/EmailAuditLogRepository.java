@@ -2,7 +2,10 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.EmailAuditLog;
 import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
+import java.util.Collection;
+import java.util.Set;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -19,5 +22,15 @@ public interface EmailAuditLogRepository extends JpaRepository<EmailAuditLog, Lo
 //    Optional<EmailAuditLog> findByFacturaIdAndEstado(Long facturaId, EstadoEmail estado);
 
     Optional<EmailAuditLog> findFirstByFacturaIdAndEstadoOrderByCreatedAtDesc(Long facturaId, EstadoEmail estado);
+
+    boolean existsByFacturaIdAndEstado(Long facturaId, EstadoEmail estado);
+
+    @Query("""
+      select e.facturaId
+      from EmailAuditLog e
+      where e.estado = com.snnsoluciones.backnathbitpos.enums.EstadoEmail.ENVIADO
+        and e.facturaId in :facturaIds
+    """)
+    Set<Long> findFacturaIdsEnviados(Collection<Long> facturaIds);
 
 }

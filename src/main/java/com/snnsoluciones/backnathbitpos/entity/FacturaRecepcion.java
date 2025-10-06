@@ -62,10 +62,6 @@ public class FacturaRecepcion {
     @JoinColumn(name = "compra_id")
     private Compra compra; // Nullable hasta que se convierta
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
-    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
-
     @OneToMany(mappedBy = "facturaRecepcion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("numeroLinea ASC")
     @Builder.Default

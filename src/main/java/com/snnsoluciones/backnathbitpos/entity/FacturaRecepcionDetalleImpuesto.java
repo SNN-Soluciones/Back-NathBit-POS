@@ -32,10 +32,6 @@ public class FacturaRecepcionDetalleImpuesto {
     @JoinColumn(name = "factura_recepcion_detalle_id", nullable = false)
     private FacturaRecepcionDetalle facturaRecepcionDetalle;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
-    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
-
     /**
      * Código del impuesto (01=IVA, 02=Selectivo de Consumo, etc.)
      * Ver nota 8 de Hacienda

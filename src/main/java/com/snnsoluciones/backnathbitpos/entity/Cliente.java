@@ -48,7 +48,7 @@ public class Cliente {
     @Column(name = "numero_identificacion", nullable = false, length = 20)
     private String numeroIdentificacion;
     
-    @Column(name = "razon_social", nullable = false, length = 100)
+    @Column(name = "razon_social", nullable = false)
     private String razonSocial;
 
     @Column(name = "inscrito_hacienda")

@@ -36,10 +36,6 @@ public class FacturaRecepcionDetalle {
     @JoinColumn(name = "factura_recepcion_id", nullable = false)
     private FacturaRecepcion facturaRecepcion;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "factura_recepcion_automatica_id", nullable = false)
-    private FacturaRecepcionAutomatica facturaRecepcionAutomatica;
-
     @OneToMany(mappedBy = "facturaRecepcionDetalle", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orden ASC")
     @Builder.Default

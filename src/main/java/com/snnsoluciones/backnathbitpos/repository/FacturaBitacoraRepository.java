@@ -21,6 +21,28 @@ import org.springframework.stereotype.Repository;
 public interface FacturaBitacoraRepository extends JpaRepository<FacturaBitacora, Long>,
     JpaSpecificationExecutor<FacturaBitacora> {
 
+  @Query("""
+      select b.id as id,
+             b.facturaId as facturaId,
+             b.clave as clave,
+             b.xmlFirmadoPath as xmlFirmadoPath,
+             b.xmlRespuestaPath as xmlRespuestaPath
+      from FacturaBitacora b
+        join Factura f on f.id = b.facturaId
+      where b.estado = com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora.ACEPTADA
+        and b.createdAt between :desde and :hasta
+        and f.tipoDocumento = com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento.FACTURA_ELECTRONICA
+    """)
+  List<BitacoraMin> findAceptadasTipoFacturaBetween(LocalDateTime desde, LocalDateTime hasta);
+
+  interface BitacoraMin {
+    Long getId();
+    Long getFacturaId();
+    String getClave();
+    String getXmlFirmadoPath();
+    String getXmlRespuestaPath();
+  }
+
   @Query("SELECT b FROM FacturaBitacora b WHERE " +
       "(b.estado = 'PENDIENTE' OR b.estado = 'ERROR') AND " +
       "(b.proximoIntento IS NULL OR b.proximoIntento <= :ahora) AND " +

@@ -19,6 +19,10 @@ spring:
     show-sql: ${SPRING_JPA_SHOW_SQL:false}
 
   mail:
+    properties:
+      mail:
+        debug: false         # <- APAGA el debug SMTP
+        debug.auth: false
     host: smtp.gmail.com
     port: 465
     username: fe@samyx.digital
@@ -60,3 +64,11 @@ firma:
 
 gometa:
   api-key: iyPaqeKXKCCgwKX
+
+
+logging:
+  level:
+    root: INFO
+    jakarta.mail: OFF
+    org.eclipse.angus.mail: OFF
+    org.springframework.mail: INFO

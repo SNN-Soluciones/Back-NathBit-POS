@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +20,15 @@ public interface FacturaRepository extends JpaRepository<Factura, Long>,
     JpaSpecificationExecutor<Factura> {
 
   Optional<Factura> findByClave(String clave);
+
+  @Query("""
+      select f
+      from Factura f
+        join fetch f.sucursal s
+        join fetch s.empresa e
+      where f.id in :ids
+    """)
+  List<Factura> findAllByIdInWithEmpresa(Collection<Long> ids);
 
   Optional<Factura> findByConsecutivo(String consecutivo);
 

@@ -54,6 +54,7 @@ public class FacturaRecepcionService {
   private final UsuarioRepository usuarioRepository;
   private final CompraDetalleRepository compraDetalleRepository;
   private final ProductoInventarioService productoInventarioService;
+  private final TerminalService terminalService;
 
   private final FacturaRecepcionXMLParserService xmlParserService;
   private final StorageService storageService;
@@ -508,30 +509,68 @@ public class FacturaRecepcionService {
   private String construirXmlMensajeReceptor(FacturaRecepcion factura,
       TipoMensajeReceptor tipo, DecisionMensajeRequest request) {
 
-    ZonedDateTime ahoraCR = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
-    String fechaFormateada = ahoraCR.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"));
+    // Fecha con TIMEZONE de Costa Rica
+    ZonedDateTime now = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+    String fechaFormateada = now.format(formatter);
 
-    String codigoMensaje = tipo.getCodigo();
+    String codigoMensaje = tipo.getCodigo(); // "1", "2", o "3"
 
-    String detalleMensaje = "";
+    // ==================== DETALLE MENSAJE ====================
+    // SIEMPRE incluir DetalleMensaje (aunque sea opcional para código 1)
+    String detalleMensaje;
     if (tipo == TipoMensajeReceptor.RECHAZADO || tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
-      String razon = request != null ? request.getRazon() : null;
-      detalleMensaje = (razon != null && razon.length() >= 5 && razon.length() <= 160)
-          ? razon : "Detalle requerido";
+      // Obligatorio para 2 y 3
+      String razon = request != null && request.getRazon() != null
+          ? request.getRazon().trim()
+          : null;
+
+      if (razon == null || razon.length() < 5) {
+        detalleMensaje = tipo == TipoMensajeReceptor.RECHAZADO
+            ? "Factura rechazada por discrepancias"
+            : "Aceptacion parcial por ajustes";
+      } else if (razon.length() > 160) {
+        detalleMensaje = razon.substring(0, 160);
+      } else {
+        detalleMensaje = razon;
+      }
+    } else {
+      // Para ACEPTADO (código 1) - opcional pero lo incluimos
+      detalleMensaje = "Factura aceptada";
     }
 
-    BigDecimal montoTotalImpuesto = BigDecimal.ZERO;
-    BigDecimal totalFactura = BigDecimal.ZERO;
+    // ==================== MONTOS ====================
+    // Estos campos SON OPCIONALES pero los incluimos siempre que haya datos
+    BigDecimal montoTotalImpuesto = factura.getTotalImpuesto();
+    BigDecimal totalFactura = factura.getTotalComprobante();
+
+    // Para aceptación parcial, usar montos del request si existen
     if (tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL && request != null) {
-      montoTotalImpuesto = Optional.ofNullable(request.getMontoIvaAceptado())
-          .orElse(factura.getTotalImpuesto());
-      totalFactura = Optional.ofNullable(request.getMontoAceptado())
-          .orElse(factura.getTotalComprobante());
+      if (request.getMontoIvaAceptado() != null) {
+        montoTotalImpuesto = request.getMontoIvaAceptado();
+      }
+      if (request.getMontoAceptado() != null) {
+        totalFactura = request.getMontoAceptado();
+      }
     }
 
-    // Genera tu consecutivo de receptor (20 chars). Ajusta a tu lógica real.
-    String numConsecutivoReceptor = generarConsecutivoReceptor(factura); // <= implementa abajo
+    // ==================== CÓDIGO ACTIVIDAD ====================
+    // Actividad económica del receptor (tu empresa) para aplicar crédito fiscal
+    String codigoActividad = factura.getCodigoActividad(); // De la factura
 
+    // ==================== CONDICIÓN IMPUESTO ====================
+    // 01 = Crédito fiscal (por defecto)
+    // 02 = Gasto
+    // 03 = Proporcionalidad
+    // 04 = Crédito parcial y gasto
+    // 05 = No genera crédito ni gasto (exento/exonerado)
+    String condicionImpuesto = "01"; // Por defecto: Crédito fiscal
+
+    // ==================== MONTO ACREDITABLE ====================
+    BigDecimal montoImpuestoAcreditar = montoTotalImpuesto; // Por defecto todo el IVA
+    BigDecimal montoGastoAplicable = null; // Opcional
+
+    // ==================== CONSTRUCCIÓN XML ====================
     StringBuilder xml = new StringBuilder();
     xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     xml.append("<MensajeReceptor ")
@@ -539,42 +578,109 @@ public class FacturaRecepcionService {
         .append("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ")
         .append("xsi:schemaLocation=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor MensajeReceptor_4.4.xsd\">\n");
 
-    // Clave del comprobante original (NO generar otra)
+    // ==================== ORDEN SEGÚN EJEMPLO REAL ====================
+
+    // 1. Clave
     xml.append("  <Clave>").append(factura.getClave()).append("</Clave>\n");
 
-    // Emisor del comprobante original (proveedor)
-    xml.append("  <NumeroCedulaEmisor>").append(factura.getProveedorIdentificacion()).append("</NumeroCedulaEmisor>\n");
+    // 2. NumeroCedulaEmisor (proveedor - emisor del comprobante original)
+    xml.append("  <NumeroCedulaEmisor>")
+        .append(formatearCedulaConPadding(factura.getProveedorIdentificacion()))
+        .append("</NumeroCedulaEmisor>\n");
 
-    // Receptor del comprobante original (tu empresa/cliente)
-    xml.append("  <NumeroCedulaReceptor>").append(factura.getReceptorIdentificacion()).append("</NumeroCedulaReceptor>\n");
-
-    // Tu numeración interna para el MR (20 posiciones)
-    xml.append("  <NumConsecutivoReceptor>").append(numConsecutivoReceptor).append("</NumConsecutivoReceptor>\n");
-
+    // 3. FechaEmisionDoc
     xml.append("  <FechaEmisionDoc>").append(fechaFormateada).append("</FechaEmisionDoc>\n");
+
+    // 4. Mensaje
     xml.append("  <Mensaje>").append(codigoMensaje).append("</Mensaje>\n");
 
-    if (tipo == TipoMensajeReceptor.RECHAZADO || tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
-      xml.append("  <DetalleMensaje>").append(escapeXml(detalleMensaje)).append("</DetalleMensaje>\n");
+    // 5. DetalleMensaje (SIEMPRE incluir)
+    xml.append("  <DetalleMensaje>").append(escapeXml(detalleMensaje)).append("</DetalleMensaje>\n");
+
+    // 6. MontoTotalImpuesto (si existe)
+    if (montoTotalImpuesto != null && montoTotalImpuesto.compareTo(BigDecimal.ZERO) > 0) {
+      xml.append("  <MontoTotalImpuesto>")
+          .append(formatearMonto(montoTotalImpuesto))
+          .append("</MontoTotalImpuesto>\n");
     }
 
-    if (tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
-      xml.append("  <MontoTotalImpuesto>").append(montoTotalImpuesto).append("</MontoTotalImpuesto>\n");
-      xml.append("  <TotalFactura>").append(totalFactura).append("</TotalFactura>\n");
+    // 7. CodigoActividad (si existe)
+    if (codigoActividad != null && !codigoActividad.isEmpty()) {
+      xml.append("  <CodigoActividad>").append(codigoActividad).append("</CodigoActividad>\n");
     }
+
+    // 8. CondicionImpuesto
+    xml.append("  <CondicionImpuesto>").append(condicionImpuesto).append("</CondicionImpuesto>\n");
+
+    // 9. MontoTotalImpuestoAcreditar (si aplica crédito fiscal)
+    if (montoImpuestoAcreditar != null && montoImpuestoAcreditar.compareTo(BigDecimal.ZERO) > 0) {
+      xml.append("  <MontoTotalImpuestoAcreditar>")
+          .append(formatearMonto(montoImpuestoAcreditar))
+          .append("</MontoTotalImpuestoAcreditar>\n");
+    }
+
+    // 10. MontoTotalDeGastoAplicable (opcional - si parte se declara como gasto)
+    if (montoGastoAplicable != null && montoGastoAplicable.compareTo(BigDecimal.ZERO) > 0) {
+      xml.append("  <MontoTotalDeGastoAplicable>")
+          .append(formatearMonto(montoGastoAplicable))
+          .append("</MontoTotalDeGastoAplicable>\n");
+    }
+
+    // 11. TotalFactura (OBLIGATORIO)
+    xml.append("  <TotalFactura>")
+        .append(formatearMonto(totalFactura))
+        .append("</TotalFactura>\n");
+
+    // 12. NumeroCedulaReceptor (tu empresa - receptor del comprobante original)
+    xml.append("  <NumeroCedulaReceptor>")
+        .append(formatearCedulaConPadding(factura.getReceptorIdentificacion()))
+        .append("</NumeroCedulaReceptor>\n");
+
+    String consecutivo = terminalService.generarNumeroConsecutivo(1L, TipoDocumento.MENSAJE_RECEPTOR);
+    // 13. NumConsecutivoReceptor (20 dígitos)
+    xml.append("  <NumConsecutivoReceptor>").append(consecutivo).append("</NumConsecutivoReceptor>\n");
 
     xml.append("</MensajeReceptor>");
     return xml.toString();
   }
 
-  // Ejemplo simple: arma 20 caracteres. Adapta a tu formato real (sucursal/terminal/seq).
-  private String generarConsecutivoReceptor(FacturaRecepcion factura) {
-    // p.ej: 0010000101 + leftPad(seq, 10, '0') = 20 chars
-    long seq = System.currentTimeMillis() % 1_000_000_000L; // ejemplo
-    String prefijo = "0010000101";
-    String sufijo = String.format("%010d", seq);
-    return (prefijo + sufijo).substring(0, 20);
+
+  /**
+   * Formatear cédula con padding a 12 caracteres
+   * Ejemplos:
+   * - 3101752961 (10 dígitos) → 003101752961 (12 dígitos)
+   * - 123456789 (9 dígitos)   → 000123456789 (12 dígitos)
+   * - 123456789012 (12)       → 123456789012 (sin cambio)
+   */
+  private String formatearCedulaConPadding(String cedula) {
+    if (cedula == null || cedula.isEmpty()) {
+      throw new RuntimeException("Cédula no puede ser nula o vacía");
+    }
+
+    // Remover cualquier caracter no numérico
+    String cedulaLimpia = cedula.replaceAll("[^0-9]", "");
+
+    // Si ya tiene 12 o más dígitos, devolver como está (máximo 12)
+    if (cedulaLimpia.length() >= 12) {
+      return cedulaLimpia.substring(0, 12);
+    }
+
+    // Agregar padding de ceros a la izquierda hasta 12 caracteres
+    return String.format("%012d", Long.parseLong(cedulaLimpia));
   }
+
+
+  /**
+   * Formatear monto a formato decimal 18,5
+   * Ejemplo: 113.10000
+   */
+  private String formatearMonto(BigDecimal monto) {
+    if (monto == null) {
+      return "0.00000";
+    }
+    return String.format("%.5f", monto);
+  }
+
 
   /**
    * Escapar caracteres especiales XML
@@ -834,8 +940,6 @@ public class FacturaRecepcionService {
           .tipoIdentificacion(factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
           .numeroIdentificacion(factura.getProveedorIdentificacion())
           .build();
-
-      log.info("=== XML MENSAJE RECEPTOR GENERADO ===\n{}", xmlMensaje);
 
       haciendaClient.enviarMensajeReceptor(
           factura.getEmpresa().getId(),

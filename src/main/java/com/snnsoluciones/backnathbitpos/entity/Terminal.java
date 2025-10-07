@@ -65,6 +65,10 @@ public class Terminal {
     @Column(name = "consecutivo_factura_exportacion")
     private Long consecutivoFacturaExportacion = 0L;
 
+    @Column(name = "consecutivo_mensaje_receptor", nullable = false)
+    @Builder.Default
+    private Long consecutivoMensajeReceptor = 0L;
+
     @Builder.Default
     @Column(name = "consecutivo_recibo_pago")
     private Long consecutivoReciboPago = 0L;
@@ -131,6 +135,7 @@ public class Terminal {
         case "02" -> consecutivoNotaDebito;
         case "03" -> consecutivoNotaCredito;
         case "04" -> consecutivoTiqueteElectronico;
+        case "05" -> consecutivoMensajeReceptor;
         case "08" -> consecutivoFacturaCompra;
         case "09" -> consecutivoFacturaExportacion;
         case "10" -> consecutivoReciboPago;

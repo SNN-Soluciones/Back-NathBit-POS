@@ -14,34 +14,36 @@ import java.util.Optional;
 @Repository
 public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepcion, Long> {
 
-    Optional<FacturaRecepcion> findByClave(String clave);
+  Optional<FacturaRecepcion> findByClave(String clave);
 
-    boolean existsByClave(String clave);
+  boolean existsByClave(String clave);
 
-    List<FacturaRecepcion> findByEmpresaIdAndSucursalIdAndEstadoInternoOrderByFechaRecepcionDesc(
-        Long empresaId,
-        Long sucursalId,
-        EstadoFacturaRecepcion estadoInterno
-    );
+  List<FacturaRecepcion> findByEmpresaIdAndSucursalIdAndEstadoInternoOrderByFechaRecepcionDesc(
+      Long empresaId,
+      Long sucursalId,
+      EstadoFacturaRecepcion estadoInterno
+  );
 
-    @Query("SELECT f FROM FacturaRecepcion f " +
-           "WHERE f.empresa.id = :empresaId " +
-           "AND (:sucursalId IS NULL OR f.sucursal.id = :sucursalId) " +
-           "AND (:estadoInterno IS NULL OR f.estadoInterno = :estadoInterno) " +
-           "AND (:fechaDesde IS NULL OR f.fechaEmision >= :fechaDesde) " +
-           "AND (:fechaHasta IS NULL OR f.fechaEmision <= :fechaHasta) " +
-           "ORDER BY f.fechaRecepcion DESC")
-    List<FacturaRecepcion> findByFiltros(
-        @Param("empresaId") Long empresaId,
-        @Param("sucursalId") Long sucursalId,
-        @Param("estadoInterno") EstadoFacturaRecepcion estadoInterno,
-        @Param("fechaDesde") LocalDateTime fechaDesde,
-        @Param("fechaHasta") LocalDateTime fechaHasta
-    );
+  @Query("""
+          SELECT fr FROM FacturaRecepcion fr
+          WHERE fr.empresa.id = :empresaId
+          AND (:sucursalId IS NULL OR fr.sucursal.id = :sucursalId)
+          AND (:estado IS NULL OR fr.estadoInterno = :estadoInterno)
+          AND fr.fechaEmision >= COALESCE(:fechaInicio, fr.fechaEmision)
+          AND fr.fechaEmision <= COALESCE(:fechaFin, fr.fechaEmision)
+          ORDER BY fr.fechaRecepcion DESC
+      """)
+  List<FacturaRecepcion> findByFiltros(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("estadoInterno") EstadoFacturaRecepcion estadoInterno,
+      @Param("fechaDesde") LocalDateTime fechaDesde,
+      @Param("fechaHasta") LocalDateTime fechaHasta
+  );
 
-    long countByEmpresaIdAndSucursalIdAndEstadoInterno(
-        Long empresaId,
-        Long sucursalId,
-        EstadoFacturaRecepcion estadoInterno
-    );
+  long countByEmpresaIdAndSucursalIdAndEstadoInterno(
+      Long empresaId,
+      Long sucursalId,
+      EstadoFacturaRecepcion estadoInterno
+  );
 }

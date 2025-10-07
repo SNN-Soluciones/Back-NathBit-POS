@@ -25,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/facturas-recepcion")
@@ -204,12 +205,26 @@ public class FacturaRecepcionController {
     @Operation(summary = "Subir XML y procesar automáticamente",
         description = "Sube XML, busca/crea proveedor, acepta y crea compra en un solo paso")
     public ResponseEntity<ApiResponse<FacturaRecepcionResponse>> subirXml(
-        @ModelAttribute @Valid SubirXmlRequest request) {
+        @RequestParam Long empresaId,
+        @RequestParam Long sucursalId,
+        @RequestPart("xmlFile") MultipartFile xmlFile,
+        @RequestPart(value = "pdfFile", required = false) MultipartFile pdfFile,
+        @RequestParam(defaultValue = "true") boolean crearProveedorSiNoExiste,
+        @RequestParam(defaultValue = "true") boolean aceptarAutomaticamente) {
 
-        log.info("POST /api/facturas-recepcion/subir-xml - empresa: {}, sucursal: {}",
-            request.getEmpresaId(), request.getSucursalId());
+        log.info("POST /api/facturas-recepcion/subir-xml - empresa: {}, sucursal: {}", empresaId, sucursalId);
 
         try {
+            // Construir request usando el DTO
+            SubirXmlRequest request = SubirXmlRequest.builder()
+                .empresaId(empresaId)
+                .sucursalId(sucursalId)
+                .xmlFile(xmlFile)
+                .pdfFile(pdfFile)
+                .crearProveedorSiNoExiste(crearProveedorSiNoExiste)
+                .aceptarAutomaticamente(aceptarAutomaticamente)
+                .build();
+
             FacturaRecepcionResponse response = facturaRecepcionService.subirYProcesarCompleto(request);
 
             String mensaje = response.isConvertidaACompra()

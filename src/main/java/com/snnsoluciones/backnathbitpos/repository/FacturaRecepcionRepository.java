@@ -2,6 +2,9 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.FacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
+import java.time.LocalDate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,17 +31,18 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
           SELECT fr FROM FacturaRecepcion fr
           WHERE fr.empresa.id = :empresaId
           AND (:sucursalId IS NULL OR fr.sucursal.id = :sucursalId)
-          AND (:estado IS NULL OR fr.estadoInterno = :estadoInterno)
-          AND fr.fechaEmision >= COALESCE(:fechaInicio, fr.fechaEmision)
-          AND fr.fechaEmision <= COALESCE(:fechaFin, fr.fechaEmision)
+          AND (:estado IS NULL OR fr.estadoInterno = :estado)
+          AND (CAST(:fechaInicio AS date) IS NULL OR fr.fechaEmision >= :fechaInicio)
+          AND (CAST(:fechaFin AS date) IS NULL OR fr.fechaEmision <= :fechaFin)
           ORDER BY fr.fechaRecepcion DESC
       """)
-  List<FacturaRecepcion> findByFiltros(
+  Page<FacturaRecepcion> findByFiltros(
       @Param("empresaId") Long empresaId,
       @Param("sucursalId") Long sucursalId,
-      @Param("estadoInterno") EstadoFacturaRecepcion estadoInterno,
-      @Param("fechaDesde") LocalDateTime fechaDesde,
-      @Param("fechaHasta") LocalDateTime fechaHasta
+      @Param("estado") EstadoFacturaRecepcion estado,  // ✅ AHORA SÍ COINCIDE
+      @Param("fechaInicio") LocalDate fechaInicio,
+      @Param("fechaFin") LocalDate fechaFin,
+      Pageable pageable
   );
 
   long countByEmpresaIdAndSucursalIdAndEstadoInterno(

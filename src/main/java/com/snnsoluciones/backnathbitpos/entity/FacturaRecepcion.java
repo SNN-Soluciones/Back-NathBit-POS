@@ -313,11 +313,14 @@ public class FacturaRecepcion {
     private String motivoRespuesta;
 
     /**
-     * Monto de impuesto aceptado (solo para aceptación parcial)
+     * Monto total aceptado (solo para aceptación parcial)
      */
-
+    @Column(name = "monto_total_aceptado", precision = 18, scale = 5)
     private BigDecimal montoTotalAceptado;
 
+    /**
+     * Monto de impuesto aceptado (solo para aceptación parcial)
+     */
     @Column(name = "monto_impuesto_aceptado", precision = 18, scale = 5)
     private BigDecimal montoImpuestoAceptado;
 

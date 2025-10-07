@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.auth.Contexto;
 import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.*;
+import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.DecisionMensajeRequest.TipoDecision;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.enums.factura.TipoMensajeReceptor;
@@ -11,6 +12,10 @@ import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.HaciendaClient;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.scheduler.FacturaRecepcionXMLParserService;
+import com.snnsoluciones.backnathbitpos.sign.SignerService;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +56,7 @@ public class FacturaRecepcionService {
   private final FacturaRecepcionXMLParserService xmlParserService;
   private final StorageService storageService;
   private final HaciendaClient haciendaClient;
+  private final SignerService signerService;
 
   public Optional<FacturaRecepcion> buscarPorId(Long id) {
     return facturaRecepcionRepository.findById(id);
@@ -183,54 +189,118 @@ public class FacturaRecepcionService {
 
     // Validar estado
     if (factura.getEstadoInterno() != EstadoFacturaRecepcion.PENDIENTE_DECISION) {
-      throw new RuntimeException("La factura ya fue procesada. Estado actual: " +
-          factura.getEstadoInterno());
+      throw new RuntimeException("La factura ya fue procesada");
     }
 
-    try {
-      // Determinar tipo de mensaje
-      TipoMensajeReceptor tipoMensaje = switch (request.getDecision()) {
-        case ACEPTAR -> TipoMensajeReceptor.ACEPTADO;
-        case PARCIAL -> TipoMensajeReceptor.ACEPTADO_PARCIAL;
-        case RECHAZAR -> TipoMensajeReceptor.RECHAZADO;
-      };
+    // 👇 AQUÍ VAN LAS VALIDACIONES
+    // ==================== VALIDACIONES ====================
 
-      // Construir y enviar mensaje receptor
-      String xmlMensaje = construirXmlMensajeReceptor(factura, tipoMensaje, request);
-      String respuestaHacienda = haciendaClient.enviarMensajeReceptor(
-          factura.getEmpresa().getId(),
-          xmlMensaje
-      );
+    // Validar razón para rechazo y parcial
+    if (request.getDecision() == TipoDecision.RECHAZAR ||
+        request.getDecision() == TipoDecision.PARCIAL) {
 
-      // Actualizar estado según decisión
-      EstadoFacturaRecepcion nuevoEstado = switch (request.getDecision()) {
-        case ACEPTAR -> EstadoFacturaRecepcion.ACEPTADA;
-        case PARCIAL -> EstadoFacturaRecepcion.ACEPTADA_PARCIAL;
-        case RECHAZAR -> EstadoFacturaRecepcion.RECHAZADA;
-      };
-
-      factura.setEstadoInterno(nuevoEstado);
-      factura.setMensajeReceptorEnviado(true);
-      factura.setTipoMensajeReceptor(tipoMensaje);
-      factura.setMotivoRespuesta(request.getJustificacion());
-
-      if (request.getMontoAceptado() != null) {
-        factura.setMontoTotalAceptado(request.getMontoAceptado());
+      // Validar razón obligatoria
+      if (request.getRazon() == null || request.getRazon().isBlank()) {
+        throw new RuntimeException("La razón es obligatoria para rechazo y aceptación parcial");
       }
 
-      facturaRecepcionRepository.save(factura);
+      // Validar longitud según Hacienda (5-160 caracteres)
+      if (request.getRazon().length() < 5 || request.getRazon().length() > 160) {
+        throw new RuntimeException("La razón debe tener entre 5 y 160 caracteres");
+      }
+    }
 
-      log.info("Mensaje receptor enviado exitosamente. Estado: {}", nuevoEstado);
+    // Validar montos para aceptación parcial
+    if (request.getDecision() == TipoDecision.PARCIAL) {
+      // Validar montos obligatorios
+      if (request.getMontoAceptado() == null) {
+        throw new RuntimeException("El monto aceptado es obligatorio para aceptación parcial");
+      }
+
+      if (request.getMontoIvaAceptado() == null) {
+        throw new RuntimeException("El monto de IVA aceptado es obligatorio para aceptación parcial");
+      }
+
+      // Validar que no excedan los montos originales
+      if (request.getMontoAceptado().compareTo(factura.getTotalComprobante()) > 0) {
+        throw new RuntimeException("El monto aceptado no puede ser mayor al total de la factura");
+      }
+
+      if (request.getMontoIvaAceptado().compareTo(factura.getTotalImpuesto()) > 0) {
+        throw new RuntimeException("El IVA aceptado no puede ser mayor al IVA total de la factura");
+      }
+    }
+
+    // ==================== PROCESAR SEGÚN DECISIÓN ====================
+
+// Determinar tipo de mensaje
+    TipoMensajeReceptor tipoMensaje;
+
+    switch (request.getDecision()) {
+      case ACEPTAR:
+        factura.setEstadoInterno(EstadoFacturaRecepcion.ACEPTADA);
+        tipoMensaje = TipoMensajeReceptor.ACEPTADO;
+        break;
+
+      case PARCIAL:
+        factura.setEstadoInterno(EstadoFacturaRecepcion.ACEPTADA_PARCIAL);
+        factura.setMotivoRespuesta(request.getRazon());
+        factura.setMontoTotalAceptado(request.getMontoAceptado());
+        factura.setMontoImpuestoAceptado(request.getMontoIvaAceptado());
+        tipoMensaje = TipoMensajeReceptor.ACEPTADO_PARCIAL;
+        break;
+
+      case RECHAZAR:
+        factura.setEstadoInterno(EstadoFacturaRecepcion.RECHAZADA);
+        factura.setMotivoRespuesta(request.getRazon());
+        tipoMensaje = TipoMensajeReceptor.RECHAZADO;
+        break;
+
+      default:
+        throw new RuntimeException("Decisión no válida");
+    }
+
+    // ==================== CONSTRUIR Y ENVIAR MENSAJE ====================
+
+    try {
+
+      log.info("Tipo de mensaje receptor: {}", tipoMensaje);
+      // 1. Construir XML mensaje receptor
+      String xmlSinFirmar = construirXmlMensajeReceptor(factura, tipoMensaje, request);
+
+      // 2. Firmar XML (si aplica)
+      byte[] xmlFirmado = signerService.signXmlForEmpresa(
+          xmlSinFirmar.getBytes(StandardCharsets.UTF_8),
+          factura.getEmpresa().getId(),
+          TipoDocumento.MENSAJE_RECEPTOR  // 👈 Usar el enum correcto
+      );
+
+      String xmlMensajeFirmado = new String(xmlFirmado, StandardCharsets.UTF_8);
+
+      // 3. Enviar a Hacienda
+      String respuestaHacienda = haciendaClient.enviarMensajeReceptor(
+          factura.getEmpresa().getId(),
+          xmlMensajeFirmado  // 👈 Enviar el firmado
+      );
+
+      // 4. Actualizar factura
+      factura.setMensajeReceptorEnviado(true);
+      factura.setTipoMensajeReceptor(tipoMensaje);
+
+      // 5. Guardar
+      factura = facturaRecepcionRepository.save(factura);
+
+      log.info("✅ Mensaje receptor enviado exitosamente. Factura ID: {}", factura.getId());
 
       return MensajeReceptorResponse.builder()
           .exitoso(true)
-          .mensaje("Mensaje receptor enviado exitosamente")
-          .estadoFinal(nuevoEstado)
+          .mensaje("Decisión procesada exitosamente")
+          .respuestaHacienda(tipoMensaje.name())
           .build();
 
     } catch (Exception e) {
       log.error("Error enviando mensaje receptor", e);
-      throw new RuntimeException("Error al enviar mensaje receptor: " + e.getMessage());
+      throw new RuntimeException("Error al procesar decisión: " + e.getMessage());
     }
   }
 
@@ -366,12 +436,12 @@ public class FacturaRecepcionService {
       proveedor.setTipoIdentificacion(factura.getProveedorTipoIdentificacion());
       proveedor.setNumeroIdentificacion(factura.getProveedorIdentificacion());
       proveedor.setRazonSocial(factura.getProveedorNombre());
-      proveedor.setNombreComercial(factura.getProveedorNombreComercial());
+      proveedor.setNombreComercial(factura.getProveedorNombreComercial()); // 👈 PUEDE SER NULL
       proveedor.setEmail(factura.getProveedorEmail());
       proveedor.setTelefono(factura.getProveedorTelefono());
       proveedor.setActivo(true);
 
-      proveedor = proveedorRepository.save(proveedor);
+      proveedor = proveedorRepository.save(proveedor);  // 👈 AQUÍ FALLA
       log.info("Proveedor creado automáticamente: {}", proveedor.getNumeroIdentificacion());
     }
 
@@ -381,19 +451,81 @@ public class FacturaRecepcionService {
   private String construirXmlMensajeReceptor(FacturaRecepcion factura,
       TipoMensajeReceptor tipo,
       DecisionMensajeRequest request) {
-    // TODO: Implementar construcción correcta según Hacienda
-    return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <MensajeReceptor>
-            <Clave>%s</Clave>
-            <Mensaje>%s</Mensaje>
-            <MontoTotalImpuesto>%s</MontoTotalImpuesto>
-        </MensajeReceptor>
-        """.formatted(
-        factura.getClave(),
-        tipo.getCodigo(),
-        request.getMontoAceptado() != null ? request.getMontoAceptado() : factura.getTotalImpuesto()
+
+    // ✅ Usar ZonedDateTime con zona horaria de Costa Rica
+    ZonedDateTime fechaEmision = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
+    String fechaFormateada = fechaEmision.format(
+        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
     );
+
+    // Determinar código de mensaje según tipo
+    String codigoMensaje = tipo.getCodigo(); // 1=Aceptado, 2=Parcial, 3=Rechazado
+
+    // Detalle del mensaje (obligatorio para rechazo y parcial)
+    String detalleMensaje = "";
+    if (tipo == TipoMensajeReceptor.RECHAZADO || tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
+      detalleMensaje = request != null && request.getRazon() != null
+          ? request.getRazon()
+          : "Sin detalle";
+    }
+
+    // Montos para aceptación parcial
+    BigDecimal montoTotalImpuesto = BigDecimal.ZERO;
+    BigDecimal totalFactura = BigDecimal.ZERO;
+
+    if (tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL && request != null) {
+      montoTotalImpuesto = Optional.ofNullable(request.getMontoIvaAceptado())
+          .orElse(factura.getTotalImpuesto());
+      totalFactura = Optional.ofNullable(request.getMontoAceptado())
+          .orElse(factura.getTotalComprobante());
+    }
+
+    // Construir XML según estructura oficial de Hacienda
+    StringBuilder xml = new StringBuilder();
+    xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.append("<MensajeReceptor xmlns=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor\" ");
+    xml.append("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ");
+    xml.append("xsi:schemaLocation=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor MensajeReceptor_4.4.xsd\">\n");
+
+    // Clave del comprobante (50 dígitos)
+    xml.append("  <Clave>").append(factura.getClave()).append("</Clave>\n");
+
+    // Número de cédula del emisor (del XML original)
+    xml.append("  <NumeroCedulaEmisor>").append(factura.getProveedorIdentificacion()).append("</NumeroCedulaEmisor>\n");
+
+    // Fecha y hora de emisión del mensaje
+    xml.append("  <FechaEmisionDoc>").append(fechaFormateada).append("</FechaEmisionDoc>\n");
+
+    // Código del mensaje (1, 2 o 3)
+    xml.append("  <Mensaje>").append(codigoMensaje).append("</Mensaje>\n");
+
+    // Detalle del mensaje (obligatorio para rechazo y parcial)
+    if (tipo == TipoMensajeReceptor.RECHAZADO || tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
+      xml.append("  <DetalleMensaje>").append(escapeXml(detalleMensaje)).append("</DetalleMensaje>\n");
+    }
+
+    // Montos (solo para aceptación parcial)
+    if (tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
+      xml.append("  <MontoTotalImpuesto>").append(montoTotalImpuesto).append("</MontoTotalImpuesto>\n");
+      xml.append("  <TotalFactura>").append(totalFactura).append("</TotalFactura>\n");
+    }
+
+    xml.append("</MensajeReceptor>");
+
+    return xml.toString();
+  }
+
+  /**
+   * Escapar caracteres especiales XML
+   */
+  private String escapeXml(String text) {
+    if (text == null) return "";
+    return text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;");
   }
 
   private void actualizarMetricasMensuales(Compra compra) {

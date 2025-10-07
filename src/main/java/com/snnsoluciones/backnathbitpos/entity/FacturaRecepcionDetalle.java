@@ -59,6 +59,7 @@ public class FacturaRecepcionDetalle {
     @Column(name = "codigo_cabys", length = 13)
     private String codigoCabys;
 
+    @Column(name = "tipo_codigo_comercial", length = 2)
     private String tipoCodigoComercial;
 
     /**

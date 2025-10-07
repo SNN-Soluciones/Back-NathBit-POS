@@ -7,14 +7,29 @@ import java.math.BigDecimal;
 
 @Data
 public class DecisionMensajeRequest {
-    
+
     @NotNull(message = "Debe indicar la decisión")
     private TipoDecision decision;
-    
-    private String justificacion; // Obligatorio si es RECHAZAR
-    
-    private BigDecimal montoAceptado; // Obligatorio si es PARCIAL
-    
+
+    /**
+     * Razón/justificación de la decisión
+     * OBLIGATORIO para RECHAZAR y PARCIAL
+     * Mínimo 5 caracteres, máximo 160 según Hacienda
+     */
+    private String razon;
+
+    /**
+     * Monto total aceptado (para PARCIAL)
+     * Debe ser menor o igual al total de la factura
+     */
+    private BigDecimal montoAceptado;
+
+    /**
+     * Monto de IVA aceptado (para PARCIAL)
+     * Debe ser menor o igual al IVA total de la factura
+     */
+    private BigDecimal montoIvaAceptado;
+
     public enum TipoDecision {
         ACEPTAR,
         PARCIAL,

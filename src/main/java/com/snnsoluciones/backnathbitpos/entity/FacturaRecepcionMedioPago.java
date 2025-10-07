@@ -33,6 +33,7 @@ public class FacturaRecepcionMedioPago {
     @JoinColumn(name = "factura_recepcion_id", nullable = false)
     private FacturaRecepcion facturaRecepcion;
 
+    @Column(name = "medio_pago_otro", length = 100)
     private String medioPagoOtro;
 
     /**

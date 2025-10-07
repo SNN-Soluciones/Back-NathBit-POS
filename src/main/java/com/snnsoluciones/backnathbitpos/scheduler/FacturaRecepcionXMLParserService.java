@@ -209,9 +209,6 @@ public class FacturaRecepcionXMLParserService {
         factura.setReceptorCorreo(getElementValue(receptor, "CorreoElectronico"));
     }
 
-    /**
-     * Parsear líneas de detalle
-     */
     private void parsearDetalles(Element root, FacturaRecepcion factura) {
         Element detalleServicio = getFirstElement(root, "DetalleServicio");
         if (detalleServicio == null) return;
@@ -221,13 +218,17 @@ public class FacturaRecepcionXMLParserService {
 
         for (int i = 0; i < lineas.getLength(); i++) {
             Element linea = (Element) lineas.item(i);
-            
+
+            // 👇 CORREGIR AQUÍ
+            String detalleTexto = getElementValue(linea, "Detalle");
+
             FacturaRecepcionDetalle detalle = FacturaRecepcionDetalle.builder()
                 .facturaRecepcion(factura)
                 .numeroLinea(Integer.parseInt(
                     Objects.requireNonNull(getElementValue(linea, "NumeroLinea"))))
                 .codigoCabys(getElementValue(linea, "CodigoCABYS"))
-                .detalle(getElementValue(linea, "Detalle"))
+                .descripcion(detalleTexto)  // 👈 ESTE es el NOT NULL
+                .detalle(detalleTexto)      // 👈 También guardarlo aquí (opcional)
                 .cantidad(parseBigDecimal(getElementValue(linea, "Cantidad")))
                 .unidadMedida(UnidadMedida.fromCodigo(getElementValue(linea, "UnidadMedida")))
                 .unidadMedidaComercial(getElementValue(linea, "UnidadMedidaComercial"))

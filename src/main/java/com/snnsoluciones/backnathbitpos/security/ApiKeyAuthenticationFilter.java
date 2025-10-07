@@ -23,31 +23,32 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private boolean apiKeyEnabled;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, 
-                                  HttpServletResponse response, 
-                                  FilterChain filterChain) throws ServletException, IOException {
-        
+    protected void doFilterInternal(HttpServletRequest request,
+        HttpServletResponse response,
+        FilterChain filterChain) throws ServletException, IOException {
+
         String path = request.getRequestURI();
-        
-        // Solo aplicar a endpoints específicos de MailReceptor
-        if (path.startsWith("/api/facturas-recepcion/") || 
+
+        // 👇 SOLO estos endpoints específicos del MailReceptor requieren API Key
+        if (path.equals("/api/facturas-recepcion/procesar") ||
+            path.startsWith("/api/facturas-recepcion/webhook") ||
             path.contains("/buscar-por-cedula-email")) {
-            
+
             if (apiKeyEnabled) {
                 String apiKey = request.getHeader(API_KEY_HEADER);
-                
+
                 if (apiKey == null || apiKey.isEmpty()) {
                     sendErrorResponse(response, "API Key requerida");
                     return;
                 }
-                
+
                 if (!validApiKey.equals(apiKey)) {
                     sendErrorResponse(response, "API Key inválida");
                     return;
                 }
             }
         }
-        
+
         filterChain.doFilter(request, response);
     }
     

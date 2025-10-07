@@ -10,6 +10,9 @@ import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.RecepcionReque
 import com.snnsoluciones.backnathbitpos.repository.EmpresaConfigHaciendaRepository;
 import java.io.StringReader;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -165,6 +168,9 @@ public class HaciendaClient {
    * @param xmlMensajeReceptor XML del mensaje receptor firmado
    * @return Respuesta de Hacienda
    */
+  /**
+   * Enviar mensaje receptor a Hacienda
+   */
   public String enviarMensajeReceptor(Long empresaId, String xmlMensajeReceptor) {
     log.info("Enviando mensaje receptor a Hacienda para empresa: {}", empresaId);
 
@@ -175,10 +181,11 @@ public class HaciendaClient {
           .orElseThrow(() -> new RuntimeException(
               "No hay configuración de Hacienda para la empresa: " + empresaId));
 
-      // 2. Obtener token de acceso
+      // 2. Obtener token de acceso (SIEMPRE PRODUCCIÓN)
       HaciendaAuthParams authParams = HaciendaAuthParams.builder()
           .username(config.getUsuarioHacienda())
           .password(config.getClaveHacienda())
+          .clientId("api-prod")
           .sandbox(false)
           .build();
 
@@ -186,9 +193,13 @@ public class HaciendaClient {
       String accessToken = tokenResponse.getAccessToken();
 
       // 3. Construir payload del mensaje receptor
+      ZonedDateTime ahora = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
+// Formato: 2025-10-06T22:48:47-06:00 (sin milisegundos/microsegundos)
+      DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+
       RecepcionRequest payload = RecepcionRequest.builder()
           .clave(extraerClaveDeXml(xmlMensajeReceptor))
-          .fecha(LocalDateTime.now().toString())
+          .fecha(ahora.format(formatter))  // 👈 SIN microsegundos
           .emisor(IdentificacionDTO.builder()
               .tipoIdentificacion(config.getEmpresa().getTipoIdentificacion().getCodigo())
               .numeroIdentificacion(config.getEmpresa().getIdentificacion())
@@ -197,7 +208,17 @@ public class HaciendaClient {
               xmlMensajeReceptor.getBytes(StandardCharsets.UTF_8)))
           .build();
 
-      // 4. Enviar a Hacienda
+      // 👇 AGREGAR ESTE LOG PARA DEBUG
+      log.info("=== REQUEST A HACIENDA ===");
+      log.info("Clave: {}", payload.getClave());
+      log.info("Fecha: {}", payload.getFecha());
+      log.info("Emisor tipo: {}", payload.getEmisor().getTipoIdentificacion());
+      log.info("Emisor identificacion: {}", payload.getEmisor().getNumeroIdentificacion());
+      log.info("XML (primeros 200 chars): {}", xmlMensajeReceptor.substring(0, Math.min(200, xmlMensajeReceptor.length())));
+      log.info("XML Base64 (primeros 100 chars): {}", payload.getComprobanteXml().substring(0, Math.min(100, payload.getComprobanteXml().length())));
+      log.info("==========================");
+
+      // 4. Enviar a Hacienda (PRODUCCIÓN)
       ResponseEntity<Void> response = postMensajeReceptor(
           accessToken,
           true,

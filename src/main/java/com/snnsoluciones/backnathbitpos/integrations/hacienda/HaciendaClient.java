@@ -211,7 +211,8 @@ public class HaciendaClient {
 
       ObjectMapper om = new ObjectMapper();
       om.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-      log.info("Payload MR → {}", om.writeValueAsString(payload));
+      log.info("=== TOKEN === {}", accessToken);
+      log.info("=== JSON HACIA HACIENDA === {}", new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(payload));
 
       ResponseEntity<Void> response = postMensajeReceptor(accessToken, true, payload);
       if (response.getStatusCode().is2xxSuccessful() || // por si devuelven 200/201/202

@@ -835,6 +835,8 @@ public class FacturaRecepcionService {
           .numeroIdentificacion(factura.getProveedorIdentificacion())
           .build();
 
+      log.info("=== XML MENSAJE RECEPTOR GENERADO ===\n{}", xmlMensaje);
+
       haciendaClient.enviarMensajeReceptor(
           factura.getEmpresa().getId(),
           xmlMensaje,

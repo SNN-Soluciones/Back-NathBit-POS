@@ -10,9 +10,11 @@ import com.snnsoluciones.backnathbitpos.enums.mh.EstadoCompra;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoCompra;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.HaciendaClient;
+import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.IdentificacionDTO;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.scheduler.FacturaRecepcionXMLParserService;
 import com.snnsoluciones.backnathbitpos.sign.SignerService;
+import java.io.ByteArrayInputStream;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -218,7 +220,8 @@ public class FacturaRecepcionService {
       }
 
       if (request.getMontoIvaAceptado() == null) {
-        throw new RuntimeException("El monto de IVA aceptado es obligatorio para aceptación parcial");
+        throw new RuntimeException(
+            "El monto de IVA aceptado es obligatorio para aceptación parcial");
       }
 
       // Validar que no excedan los montos originales
@@ -263,34 +266,58 @@ public class FacturaRecepcionService {
     // ==================== CONSTRUIR Y ENVIAR MENSAJE ====================
 
     try {
-
-      log.info("Tipo de mensaje receptor: {}", tipoMensaje);
       // 1. Construir XML mensaje receptor
       String xmlSinFirmar = construirXmlMensajeReceptor(factura, tipoMensaje, request);
 
-      // 2. Firmar XML (si aplica)
+      // 2. Firmar XML
       byte[] xmlFirmado = signerService.signXmlForEmpresa(
           xmlSinFirmar.getBytes(StandardCharsets.UTF_8),
           factura.getEmpresa().getId(),
-          TipoDocumento.MENSAJE_RECEPTOR  // 👈 Usar el enum correcto
+          TipoDocumento.MENSAJE_RECEPTOR
       );
 
       String xmlMensajeFirmado = new String(xmlFirmado, StandardCharsets.UTF_8);
 
       // 3. Enviar a Hacienda
+      IdentificacionDTO receptor = IdentificacionDTO.builder()
+          .tipoIdentificacion(factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
+          .numeroIdentificacion(factura.getProveedorIdentificacion())
+          .build();
+
       String respuestaHacienda = haciendaClient.enviarMensajeReceptor(
           factura.getEmpresa().getId(),
-          xmlMensajeFirmado  // 👈 Enviar el firmado
+          xmlMensajeFirmado,
+          receptor
       );
 
-      // 4. Actualizar factura
+      // 4. ✅ Subir XML firmado (usa sobrecarga byte[])
+      String pathXmlFirmado = subirArchivoS3(
+          factura.getEmpresa().getNombreRazonSocial(),
+          "MENSAJE_RECEPTOR",
+          factura.getClave() + "-mensaje",
+          "xml",
+          xmlFirmado  // ✅ byte[] directo
+      );
+
+      // 5. ✅ Subir respuesta de Hacienda (usa sobrecarga String)
+      String pathXmlRespuestaMh = subirArchivoS3(
+          factura.getEmpresa().getNombreRazonSocial(),
+          "RESPUESTA_MH",
+          factura.getClave() + "-respuesta",
+          "xml",
+          respuestaHacienda  // ✅ String directo
+      );
+
+      // 6. Actualizar factura con las rutas
       factura.setMensajeReceptorEnviado(true);
       factura.setTipoMensajeReceptor(tipoMensaje);
+      factura.setXmlMensajeReceptorPath(pathXmlFirmado);  // 👈 AGREGAR CAMPO
+      factura.setXmlRespuestaHaciendaPath(pathXmlRespuestaMh);  // 👈 AGREGAR CAMPO
 
-      // 5. Guardar
-      factura = facturaRecepcionRepository.save(factura);
+      facturaRecepcionRepository.save(factura);
 
-      log.info("✅ Mensaje receptor enviado exitosamente. Factura ID: {}", factura.getId());
+      log.info("✅ Mensaje receptor enviado. XML firmado: {}, Respuesta MH: {}",
+          pathXmlFirmado, pathXmlRespuestaMh);
 
       return MensajeReceptorResponse.builder()
           .exitoso(true)
@@ -423,6 +450,36 @@ public class FacturaRecepcionService {
     return key;
   }
 
+  private String subirArchivoS3(String razonSocial, String tipoDoc, String clave,
+      String extension, byte[] contenido) throws IOException {
+    String carpeta = String.format("%s/compras/%s/%s/",
+        razonSocial,
+        tipoDoc,
+        LocalDate.now().getYear()
+    );
+    String key = carpeta + clave + "." + extension;
+
+    storageService.uploadFile(
+        new ByteArrayInputStream(contenido),
+        key,
+        "application/xml", // Content type para XML
+        (long) contenido.length
+    );
+
+    return key;
+  }
+
+  private String subirArchivoS3(String razonSocial, String tipoDoc, String clave,
+      String extension, String contenido) throws IOException {
+    return subirArchivoS3(
+        razonSocial,
+        tipoDoc,
+        clave,
+        extension,
+        contenido.getBytes(StandardCharsets.UTF_8)
+    );
+  }
+
   private Proveedor buscarOCrearProveedor(FacturaRecepcion factura, Empresa empresa,
       boolean crearSiNoExiste) {
     Proveedor proveedor = proveedorRepository
@@ -449,30 +506,22 @@ public class FacturaRecepcionService {
   }
 
   private String construirXmlMensajeReceptor(FacturaRecepcion factura,
-      TipoMensajeReceptor tipo,
-      DecisionMensajeRequest request) {
+      TipoMensajeReceptor tipo, DecisionMensajeRequest request) {
 
-    // ✅ Usar ZonedDateTime con zona horaria de Costa Rica
-    ZonedDateTime fechaEmision = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
-    String fechaFormateada = fechaEmision.format(
-        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
-    );
+    ZonedDateTime ahoraCR = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
+    String fechaFormateada = ahoraCR.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"));
 
-    // Determinar código de mensaje según tipo
-    String codigoMensaje = tipo.getCodigo(); // 1=Aceptado, 2=Parcial, 3=Rechazado
+    String codigoMensaje = tipo.getCodigo();
 
-    // Detalle del mensaje (obligatorio para rechazo y parcial)
     String detalleMensaje = "";
     if (tipo == TipoMensajeReceptor.RECHAZADO || tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
-      detalleMensaje = request != null && request.getRazon() != null
-          ? request.getRazon()
-          : "Sin detalle";
+      String razon = request != null ? request.getRazon() : null;
+      detalleMensaje = (razon != null && razon.length() >= 5 && razon.length() <= 160)
+          ? razon : "Detalle requerido";
     }
 
-    // Montos para aceptación parcial
     BigDecimal montoTotalImpuesto = BigDecimal.ZERO;
     BigDecimal totalFactura = BigDecimal.ZERO;
-
     if (tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL && request != null) {
       montoTotalImpuesto = Optional.ofNullable(request.getMontoIvaAceptado())
           .orElse(factura.getTotalImpuesto());
@@ -480,46 +529,60 @@ public class FacturaRecepcionService {
           .orElse(factura.getTotalComprobante());
     }
 
-    // Construir XML según estructura oficial de Hacienda
+    // Genera tu consecutivo de receptor (20 chars). Ajusta a tu lógica real.
+    String numConsecutivoReceptor = generarConsecutivoReceptor(factura); // <= implementa abajo
+
     StringBuilder xml = new StringBuilder();
     xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    xml.append("<MensajeReceptor xmlns=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor\" ");
-    xml.append("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ");
-    xml.append("xsi:schemaLocation=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor MensajeReceptor_4.4.xsd\">\n");
+    xml.append("<MensajeReceptor ")
+        .append("xmlns=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor\" ")
+        .append("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ")
+        .append("xsi:schemaLocation=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor MensajeReceptor_4.4.xsd\">\n");
 
-    // Clave del comprobante (50 dígitos)
+    // Clave del comprobante original (NO generar otra)
     xml.append("  <Clave>").append(factura.getClave()).append("</Clave>\n");
 
-    // Número de cédula del emisor (del XML original)
+    // Emisor del comprobante original (proveedor)
     xml.append("  <NumeroCedulaEmisor>").append(factura.getProveedorIdentificacion()).append("</NumeroCedulaEmisor>\n");
 
-    // Fecha y hora de emisión del mensaje
-    xml.append("  <FechaEmisionDoc>").append(fechaFormateada).append("</FechaEmisionDoc>\n");
+    // Receptor del comprobante original (tu empresa/cliente)
+    xml.append("  <NumeroCedulaReceptor>").append(factura.getReceptorIdentificacion()).append("</NumeroCedulaReceptor>\n");
 
-    // Código del mensaje (1, 2 o 3)
+    // Tu numeración interna para el MR (20 posiciones)
+    xml.append("  <NumConsecutivoReceptor>").append(numConsecutivoReceptor).append("</NumConsecutivoReceptor>\n");
+
+    xml.append("  <FechaEmisionDoc>").append(fechaFormateada).append("</FechaEmisionDoc>\n");
     xml.append("  <Mensaje>").append(codigoMensaje).append("</Mensaje>\n");
 
-    // Detalle del mensaje (obligatorio para rechazo y parcial)
     if (tipo == TipoMensajeReceptor.RECHAZADO || tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
       xml.append("  <DetalleMensaje>").append(escapeXml(detalleMensaje)).append("</DetalleMensaje>\n");
     }
 
-    // Montos (solo para aceptación parcial)
     if (tipo == TipoMensajeReceptor.ACEPTADO_PARCIAL) {
       xml.append("  <MontoTotalImpuesto>").append(montoTotalImpuesto).append("</MontoTotalImpuesto>\n");
       xml.append("  <TotalFactura>").append(totalFactura).append("</TotalFactura>\n");
     }
 
     xml.append("</MensajeReceptor>");
-
     return xml.toString();
+  }
+
+  // Ejemplo simple: arma 20 caracteres. Adapta a tu formato real (sucursal/terminal/seq).
+  private String generarConsecutivoReceptor(FacturaRecepcion factura) {
+    // p.ej: 0010000101 + leftPad(seq, 10, '0') = 20 chars
+    long seq = System.currentTimeMillis() % 1_000_000_000L; // ejemplo
+    String prefijo = "0010000101";
+    String sufijo = String.format("%010d", seq);
+    return (prefijo + sufijo).substring(0, 20);
   }
 
   /**
    * Escapar caracteres especiales XML
    */
   private String escapeXml(String text) {
-    if (text == null) return "";
+    if (text == null) {
+      return "";
+    }
     return text
         .replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -767,9 +830,15 @@ public class FacturaRecepcionService {
       );
 
       // 2. Enviar a Hacienda
+      IdentificacionDTO receptor = IdentificacionDTO.builder()
+          .tipoIdentificacion(factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
+          .numeroIdentificacion(factura.getProveedorIdentificacion())
+          .build();
+
       haciendaClient.enviarMensajeReceptor(
           factura.getEmpresa().getId(),
-          xmlMensaje
+          xmlMensaje,
+          receptor
       );
 
       // 3. Actualizar estado

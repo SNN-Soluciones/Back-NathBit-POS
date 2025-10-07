@@ -345,6 +345,9 @@ public class FacturaRecepcion {
     @Column(name = "xml_mensaje_receptor_path", length = 500)
     private String xmlMensajeReceptorPath;
 
+    @Column(name = "xml_respuesta_hacienda_path")
+    private String xmlRespuestaHaciendaPath;
+
     /**
      * Ruta del PDF (si viene adjunto)
      */

@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.integrations.hacienda;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaConfigHacienda;
 import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.ConsultaEstadoResponse;
@@ -171,17 +172,16 @@ public class HaciendaClient {
   /**
    * Enviar mensaje receptor a Hacienda
    */
-  public String enviarMensajeReceptor(Long empresaId, String xmlMensajeReceptor) {
-    log.info("Enviando mensaje receptor a Hacienda para empresa: {}", empresaId);
+  public String enviarMensajeReceptor(Long empresaId,
+      String xmlMensajeReceptor,
+      IdentificacionDTO receptor) {
+    log.info("Enviando MR a Hacienda para empresa: {}", empresaId);
 
     try {
-      // 1. Obtener configuración de Hacienda
       EmpresaConfigHacienda config = empresaConfigHaciendaRepository
           .findByEmpresaId(empresaId)
-          .orElseThrow(() -> new RuntimeException(
-              "No hay configuración de Hacienda para la empresa: " + empresaId));
+          .orElseThrow(() -> new RuntimeException("No hay config MH para empresa: " + empresaId));
 
-      // 2. Obtener token de acceso (SIEMPRE PRODUCCIÓN)
       HaciendaAuthParams authParams = HaciendaAuthParams.builder()
           .username(config.getUsuarioHacienda())
           .password(config.getClaveHacienda())
@@ -192,49 +192,39 @@ public class HaciendaClient {
       HaciendaTokenResponse tokenResponse = getToken(authParams);
       String accessToken = tokenResponse.getAccessToken();
 
-      // 3. Construir payload del mensaje receptor
       ZonedDateTime ahora = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
-// Formato: 2025-10-06T22:48:47-06:00 (sin milisegundos/microsegundos)
-      DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+      DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
       RecepcionRequest payload = RecepcionRequest.builder()
           .clave(extraerClaveDeXml(xmlMensajeReceptor))
-          .fecha(ahora.format(formatter))  // 👈 SIN microsegundos
+          .fecha(ahora.format(fmt))
+          // Emisor = TU empresa (quien envía el MensajeReceptor)
           .emisor(IdentificacionDTO.builder()
-              .tipoIdentificacion(config.getEmpresa().getTipoIdentificacion().getCodigo())
+              .tipoIdentificacion(config.getEmpresa().getTipoIdentificacion().getCodigo()) // 01/02/03/...
               .numeroIdentificacion(config.getEmpresa().getIdentificacion())
               .build())
+          // Receptor = proveedor (emisor del comprobante original)
+          .receptor(receptor)
           .comprobanteXml(Base64.getEncoder().encodeToString(
               xmlMensajeReceptor.getBytes(StandardCharsets.UTF_8)))
           .build();
 
-      // 👇 AGREGAR ESTE LOG PARA DEBUG
-      log.info("=== REQUEST A HACIENDA ===");
-      log.info("Clave: {}", payload.getClave());
-      log.info("Fecha: {}", payload.getFecha());
-      log.info("Emisor tipo: {}", payload.getEmisor().getTipoIdentificacion());
-      log.info("Emisor identificacion: {}", payload.getEmisor().getNumeroIdentificacion());
-      log.info("XML (primeros 200 chars): {}", xmlMensajeReceptor.substring(0, Math.min(200, xmlMensajeReceptor.length())));
-      log.info("XML Base64 (primeros 100 chars): {}", payload.getComprobanteXml().substring(0, Math.min(100, payload.getComprobanteXml().length())));
-      log.info("==========================");
+      ObjectMapper om = new ObjectMapper();
+      om.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+      log.info("Payload MR → {}", om.writeValueAsString(payload));
 
-      // 4. Enviar a Hacienda (PRODUCCIÓN)
-      ResponseEntity<Void> response = postMensajeReceptor(
-          accessToken,
-          true,
-          payload
-      );
-
-      if (response.getStatusCode() == HttpStatus.CREATED) {
+      ResponseEntity<Void> response = postMensajeReceptor(accessToken, true, payload);
+      if (response.getStatusCode().is2xxSuccessful() || // por si devuelven 200/201/202
+          response.getStatusCode() == HttpStatus.CREATED ||
+          response.getStatusCode() == HttpStatus.ACCEPTED) {
         String location = response.getHeaders().getFirst(HttpHeaders.LOCATION);
-        log.info("Mensaje receptor enviado exitosamente. Location: {}", location);
+        log.info("MR enviado. Location: {}", location);
         return "Mensaje receptor enviado exitosamente";
       } else {
         throw new RuntimeException("Respuesta inesperada de Hacienda: " + response.getStatusCode());
       }
-
     } catch (Exception e) {
-      log.error("Error enviando mensaje receptor a Hacienda", e);
+      log.error("Error enviando MR a Hacienda", e);
       throw new RuntimeException("Error enviando mensaje receptor: " + e.getMessage(), e);
     }
   }

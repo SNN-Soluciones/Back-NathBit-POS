@@ -4,6 +4,13 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
 import com.snnsoluciones.backnathbitpos.service.EmailService;
+import java.io.InputStream;
+import java.net.URL;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoField;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +38,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class FacturaRecepcionXMLParserService {
 
+    private static final ZoneId ZONA_CR = ZoneId.of("America/Costa_Rica");
+
+
     private final EmailService emailService;
 
     /**
@@ -52,13 +62,13 @@ public class FacturaRecepcionXMLParserService {
             Document doc = builder.parse(new InputSource(new StringReader(xmlContent)));
             doc.getDocumentElement().normalize();
 
-            // 2. Validar contra XSD (opcional pero recomendado)
-            try {
-                validarContraXSD(doc, xmlContent);
-            } catch (Exception e) {
-                log.warn("Advertencia en validación XSD: {}", e.getMessage());
-                // Continuamos aunque falle validación
-            }
+//            // 2. Validar contra XSD (opcional pero recomendado)
+//            try {
+//                validarContraXSD(doc, xmlContent);
+//            } catch (Exception e) {
+//                log.warn("Advertencia en validación XSD: {}", e.getMessage());
+//                // Continuamos aunque falle validación
+//            }
 
             // 3. Crear entidad principal
             FacturaRecepcion factura = new FacturaRecepcion();
@@ -421,53 +431,91 @@ public class FacturaRecepcionXMLParserService {
      */
     private void parsearReferencias(Element root, FacturaRecepcion factura) {
         NodeList referencias = root.getElementsByTagName("InformacionReferencia");
-        List<FacturaRecepcionReferencia> listaRefs = new ArrayList<>();
 
         for (int i = 0; i < referencias.getLength(); i++) {
             Element ref = (Element) referencias.item(i);
-            
-            FacturaRecepcionReferencia referencia = FacturaRecepcionReferencia.builder()
-                .facturaRecepcion(factura)
-                .tipoDocReferencia(TipoDocumento.fromCodigo(getElementValue(ref, "TipoDocIR")))
+
+            // Algunos emisores usan "TipoDocumento" en vez de "TipoDoc"
+            String tipoDocTxt = getAny(ref, "TipoDoc", "TipoDocumento", "TipoDocReferencia");
+
+            // Si no viene, asumimos que referencia una FE (ajusta si prefieres otra política)
+            com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento tipoRef =
+                (tipoDocTxt != null) ? com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento.fromCodigo(tipoDocTxt)
+                    : com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento.FACTURA_ELECTRONICA;
+
+            if (tipoRef == null) {
+                // Último salvavidas: evita NULL en DB
+                log.warn("TipoDoc ausente o no reconocido en InformacionReferencia. Usando FACTURA_ELECTRONICA por defecto.");
+                tipoRef = com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento.FACTURA_ELECTRONICA;
+            }
+
+            // FechaEmision puede venir vacía: no la fuerces si no está
+            String fechaRefTxt = getAny(ref, "FechaEmision", "FechaEmisionReferencia");
+            String fechaRefNormalizada = null;
+            if (fechaRefTxt != null && !fechaRefTxt.isBlank()) {
+                var ldt = parseDateTime(fechaRefTxt); // tu parser flexible
+                fechaRefNormalizada = (ldt != null) ? ldt.toString() : null;
+            }
+
+            FacturaRecepcionReferencia r = FacturaRecepcionReferencia.builder()
+                .tipoDocReferencia(tipoRef)                                 // 🔴 NUNCA NULL
                 .numeroDocumentoReferencia(getElementValue(ref, "Numero"))
-                .fechaEmisionReferencia(String.valueOf(parseDateTime(getElementValue(ref, "FechaEmisionIR"))))
-                .codigoReferencia(getElementValue(ref, "Codigo"))
+                .fechaEmisionReferencia(fechaRefNormalizada)                // puede ser null
+                .codigoReferencia(getElementValue(ref, "Codigo"))           // 99 en tu caso
                 .razonReferencia(getElementValue(ref, "Razon"))
                 .build();
 
-            listaRefs.add(referencia);
+            // usa el helper del aggregate para asegurar numero_linea y relación
+            factura.addReferencia(r); // ✅ setea numeroLinea = size()+1
         }
-
-        factura.setReferencias(listaRefs);
     }
+
+    private String getAny(Element parent, String... tagNames) {
+        for (String t : tagNames) {
+            String v = getElementValue(parent, t);
+            if (v != null && !v.isBlank()) return v;
+        }
+        return null;
+    }
+
 
     /**
      * Validar XML contra XSD de Hacienda
      */
     private void validarContraXSD(Document doc, String xmlContent) throws Exception {
-        // Determinar el XSD según el tipo de documento
+        // Asegúrate de haber parseado el Document con namespaceAware=true
         String tipoDoc = doc.getDocumentElement().getLocalName();
+
         String xsdUrl = getXSDUrl(tipoDoc);
 
         SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-        Schema schema = factory.newSchema(new StreamSource(xsdUrl));
-        Validator validator = schema.newValidator();
-        validator.validate(new StreamSource(new StringReader(xmlContent)));
-        
+
+        // 2) Permitir cargar XSD externos por HTTPS
+        factory.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "https");
+        factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "https");
+
+        // 3) Pasar systemId correcto para que resuelva includes relativos
+        try (InputStream in = new URL(xsdUrl).openStream()) {
+            StreamSource source = new StreamSource(in, xsdUrl); // nota el segundo argumento (systemId)
+            Schema schema = factory.newSchema(source);
+            Validator validator = schema.newValidator();
+            validator.validate(new StreamSource(new StringReader(xmlContent)));
+        }
+
         log.info("XML validado exitosamente contra XSD: {}", xsdUrl);
     }
 
-    /**
-     * Obtener URL del XSD según tipo de documento
-     */
+    /** Map correcto de URLs 4.4 (ojo mayúsculas y nombres) */
     private String getXSDUrl(String tipoDocumento) {
-        String baseUrl = "https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/";
+        String base = "https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/";
         return switch (tipoDocumento) {
-            case "FacturaElectronica" -> baseUrl + "facturaElectronica_V.4.4.xsd";
-            case "NotaCreditoElectronica" -> baseUrl + "NotaCreditoElectronica_V4.4.xsd";
-            case "NotaDebitoElectronica" -> baseUrl + "NotaDebitoElectronica_V4.4.xsd";
-            case "TiqueteElectronico" -> baseUrl + "TiqueteElectronico_V4.4.xsd";
-            default -> baseUrl + "facturaElectronica_V.4.4.xsd";
+            case "FacturaElectronica"        -> base + "FacturaElectronica_V4.4.xsd";
+            case "NotaCreditoElectronica"    -> base + "NotaCreditoElectronica_V4.4.xsd";
+            case "NotaDebitoElectronica"     -> base + "NotaDebitoElectronica_V4.4.xsd";
+            case "TiqueteElectronico"        -> base + "TiqueteElectronico_V4.4.xsd";
+            case "MensajeReceptor"           -> base + "MensajeReceptor_V4.4.xsd"; // útil si validas MR
+            // agrega otros que uses: FacturaElectronicaCompra, etc., con el nombre exacto
+            default -> base + "FacturaElectronica_V4.4.xsd";
         };
     }
 
@@ -534,17 +582,28 @@ public class FacturaRecepcionXMLParserService {
         }
     }
 
+
     private LocalDateTime parseDateTime(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
+        if (value == null || value.isBlank()) return null;
+
+        // 1) Intento con offset/Z (ej: 2025-09-13T14:45:50-06:00 o ...Z)
         try {
-            // Parsear formato ISO con zona horaria
-            ZonedDateTime zdt = ZonedDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME);
-            return zdt.toLocalDateTime();
-        } catch (Exception e) {
-            log.warn("Error parseando fecha: {}", value);
-            return null;
-        }
+            OffsetDateTime odt = OffsetDateTime.parse(value, DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+            // Normaliza a la zona CR
+            return odt.atZoneSameInstant(ZONA_CR).toLocalDateTime();
+        } catch (DateTimeParseException ignore) {}
+
+        // 2) Sin offset (ej: 2025-09-13T14:45:50 o con fracciones 2025-09-13T14:45:50.123)
+        DateTimeFormatter flexSinOffset = new DateTimeFormatterBuilder()
+            .append(DateTimeFormatter.ISO_LOCAL_DATE)
+            .appendLiteral('T')
+            .appendPattern("HH:mm")
+            .optionalStart().appendPattern(":ss").optionalEnd()
+            .optionalStart().appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true).optionalEnd()
+            .toFormatter();
+
+        LocalDateTime ldt = LocalDateTime.parse(value, flexSinOffset);
+        // Interpretamos que el emisor emitió en hora local CR (ajusta si prefieres otra política)
+        return ldt;
     }
 }

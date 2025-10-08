@@ -31,6 +31,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
         // 👇 SOLO estos endpoints específicos del MailReceptor requieren API Key
         if (path.equals("/api/facturas-recepcion/procesar") ||
+            path.equals("/api/facturas-recepcion/procesar-email") ||
             path.startsWith("/api/facturas-recepcion/webhook") ||
             path.contains("/buscar-por-cedula-email")) {
 

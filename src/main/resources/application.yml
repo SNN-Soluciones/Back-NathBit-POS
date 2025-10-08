@@ -30,7 +30,7 @@ spring:
 
 app:
   mailreceptor:
-    api-key: ${MAILRECEPTOR_API_KEY:nathbit-mailreceptor-2024-secure-key-change-this}
+    api-key: nathbit-mailreceptor-2024-secure-key-change-this
     enabled: true
   encryption:
     master-key: ${ENCRYPTION_MASTER_KEY:TuLlaveMaestraSeguraDe32Caracteres!!}

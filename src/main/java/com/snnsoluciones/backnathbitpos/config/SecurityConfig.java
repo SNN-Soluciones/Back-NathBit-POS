@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.config;
 
+import com.snnsoluciones.backnathbitpos.security.ApiKeyAuthenticationFilter;
 import com.snnsoluciones.backnathbitpos.security.ContextHeaderFilter;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtAuthenticationEntryPoint;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtAuthenticationFilter;
@@ -34,6 +35,7 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
     private final JwtAuthenticationFilter authenticationFilter;
     private final ContextHeaderFilter contextHeaderFilter;
+    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -52,6 +54,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             // Deshabilitar CSRF ya que usamos JWT
             .csrf(AbstractHttpConfigurer::disable)
+            .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             // Configurar manejo de excepciones
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint(authenticationEntryPoint)
@@ -65,6 +68,7 @@ public class SecurityConfig {
                 // Endpoints públicos
                 .requestMatchers(
                     "/api/auth/login",
+                    "/api/facturas-recepcion/procesar-email",
                     "/nathbit/api/auth/login",
                     "/api/auth/refresh",
                     "/api/test/**",

@@ -200,47 +200,30 @@ public class FacturaRecepcionController {
         }
     }
 
-    /**
-     * Endpoint MÁSCARA para MailReceptor - USA API KEY
-     */
     @PostMapping(value = "/procesar-email", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Procesar factura desde MailReceptor (API Key)",
-        description = "Endpoint protegido con API Key para uso exclusivo del MailReceptor")
     public ResponseEntity<ApiResponse<FacturaRecepcionResponse>> procesarDesdeEmail(
         @RequestParam Long empresaId,
         @RequestParam Long sucursalId,
         @RequestPart("xmlFile") MultipartFile xmlFile,
-        @RequestPart(value = "pdfFile", required = false) MultipartFile pdfFile,
-        @RequestParam(defaultValue = "true") boolean crearProveedorSiNoExiste,
-        @RequestParam(defaultValue = "true") boolean aceptarAutomaticamente) {
-
-        log.info("POST /api/facturas-recepcion/procesar-email - empresa: {}, sucursal: {}",
-            empresaId, sucursalId);
+        @RequestPart(value = "pdfFile", required = false) MultipartFile pdfFile) {
 
         try {
-            // Usa el MISMO servicio que /subir-xml
             SubirXmlRequest request = SubirXmlRequest.builder()
                 .empresaId(empresaId)
                 .sucursalId(sucursalId)
                 .xmlFile(xmlFile)
                 .pdfFile(pdfFile)
-                .crearProveedorSiNoExiste(crearProveedorSiNoExiste)
-                .aceptarAutomaticamente(aceptarAutomaticamente)
+                .crearProveedorSiNoExiste(true)
                 .build();
 
-            FacturaRecepcionResponse response = facturaRecepcionService.subirYProcesarCompleto(request);
+            FacturaRecepcionResponse response = facturaRecepcionService.guardarDesdeEmail(request);
 
-            String mensaje = response.isConvertidaACompra()
-                ? "✅ Factura procesada y compra #" + response.getCompraId() + " registrada"
-                : "⚠️ Factura guardada pero requiere revisión";
-
-            return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(mensaje, response));
+            return ResponseEntity.ok(ApiResponse.success("OK", response));
 
         } catch (Exception e) {
-            log.error("Error procesando factura desde email", e);
+            log.error("Error: {}", e.getMessage());
             return ResponseEntity.badRequest()
-                .body(ApiResponse.error("Error: " + e.getMessage()));
+                .body(ApiResponse.error(e.getMessage()));
         }
     }
 

@@ -18,6 +18,7 @@ import java.io.ByteArrayInputStream;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -281,7 +282,8 @@ public class FacturaRecepcionService {
 
       // 3. Enviar a Hacienda
       IdentificacionDTO receptor = IdentificacionDTO.builder()
-          .tipoIdentificacion(factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
+          .tipoIdentificacion(
+              factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
           .numeroIdentificacion(factura.getProveedorIdentificacion())
           .build();
 
@@ -494,7 +496,11 @@ public class FacturaRecepcionService {
       proveedor.setTipoIdentificacion(factura.getProveedorTipoIdentificacion());
       proveedor.setNumeroIdentificacion(factura.getProveedorIdentificacion());
       proveedor.setRazonSocial(factura.getProveedorNombre());
-      proveedor.setNombreComercial(factura.getProveedorNombreComercial()); // 👈 PUEDE SER NULL
+      String nombreComercial = factura.getProveedorNombreComercial();
+      if (nombreComercial == null || nombreComercial.trim().isEmpty()) {
+        nombreComercial = factura.getProveedorNombre();
+      }// 👈 PUEDE SER NULL
+      proveedor.setNombreComercial(nombreComercial);
       proveedor.setEmail(factura.getProveedorEmail());
       proveedor.setTelefono(factura.getProveedorTelefono());
       proveedor.setActivo(true);
@@ -574,9 +580,11 @@ public class FacturaRecepcionService {
     StringBuilder xml = new StringBuilder();
     xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     xml.append("<MensajeReceptor ")
-        .append("xmlns=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor\" ")
+        .append(
+            "xmlns=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor\" ")
         .append("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ")
-        .append("xsi:schemaLocation=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor MensajeReceptor_4.4.xsd\">\n");
+        .append(
+            "xsi:schemaLocation=\"https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor MensajeReceptor_4.4.xsd\">\n");
 
     // ==================== ORDEN SEGÚN EJEMPLO REAL ====================
 
@@ -595,7 +603,8 @@ public class FacturaRecepcionService {
     xml.append("  <Mensaje>").append(codigoMensaje).append("</Mensaje>\n");
 
     // 5. DetalleMensaje (SIEMPRE incluir)
-    xml.append("  <DetalleMensaje>").append(escapeXml(detalleMensaje)).append("</DetalleMensaje>\n");
+    xml.append("  <DetalleMensaje>").append(escapeXml(detalleMensaje))
+        .append("</DetalleMensaje>\n");
 
     // 6. MontoTotalImpuesto (si existe)
     if (montoTotalImpuesto != null && montoTotalImpuesto.compareTo(BigDecimal.ZERO) > 0) {
@@ -636,9 +645,11 @@ public class FacturaRecepcionService {
         .append(formatearCedulaConPadding(factura.getReceptorIdentificacion()))
         .append("</NumeroCedulaReceptor>\n");
 
-    String consecutivo = terminalService.generarNumeroConsecutivo(1L, TipoDocumento.MENSAJE_RECEPTOR);
+    String consecutivo = terminalService.generarNumeroConsecutivo(1L,
+        TipoDocumento.MENSAJE_RECEPTOR);
     // 13. NumConsecutivoReceptor (20 dígitos)
-    xml.append("  <NumConsecutivoReceptor>").append(consecutivo).append("</NumConsecutivoReceptor>\n");
+    xml.append("  <NumConsecutivoReceptor>").append(consecutivo)
+        .append("</NumConsecutivoReceptor>\n");
 
     xml.append("</MensajeReceptor>");
     return xml.toString();
@@ -646,11 +657,9 @@ public class FacturaRecepcionService {
 
 
   /**
-   * Formatear cédula con padding a 12 caracteres
-   * Ejemplos:
-   * - 3101752961 (10 dígitos) → 003101752961 (12 dígitos)
-   * - 123456789 (9 dígitos)   → 000123456789 (12 dígitos)
-   * - 123456789012 (12)       → 123456789012 (sin cambio)
+   * Formatear cédula con padding a 12 caracteres Ejemplos: - 3101752961 (10 dígitos) → 003101752961
+   * (12 dígitos) - 123456789 (9 dígitos)   → 000123456789 (12 dígitos) - 123456789012 (12)       →
+   * 123456789012 (sin cambio)
    */
   private String formatearCedulaConPadding(String cedula) {
     if (cedula == null || cedula.isEmpty()) {
@@ -671,8 +680,7 @@ public class FacturaRecepcionService {
 
 
   /**
-   * Formatear monto a formato decimal 18,5
-   * Ejemplo: 113.10000
+   * Formatear monto a formato decimal 18,5 Ejemplo: 113.10000
    */
   private String formatearMonto(BigDecimal monto) {
     if (monto == null) {
@@ -853,6 +861,101 @@ public class FacturaRecepcionService {
   }
 
   /**
+   * SOLO para MailReceptor - Guarda sin procesar
+   */
+  @Transactional
+  public FacturaRecepcionResponse guardarDesdeEmail(SubirXmlRequest request) {
+    log.info("Guardando factura desde email para empresa: {}, sucursal: {}",
+        request.getEmpresaId(), request.getSucursalId());
+
+    try {
+      // 1. Validar empresa y sucursal
+      Empresa empresa = empresaRepository.findById(request.getEmpresaId())
+          .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+
+      Sucursal sucursal = sucursalRepository.findById(request.getSucursalId())
+          .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
+
+      // 2. Parsear XML para extraer la clave
+      // 2. Parsear XML - LIMPIAR BOM
+      byte[] xmlBytes = request.getXmlFile().getBytes();
+
+      // Remover BOM si existe
+      if (xmlBytes.length >= 3 &&
+          xmlBytes[0] == (byte) 0xEF &&
+          xmlBytes[1] == (byte) 0xBB &&
+          xmlBytes[2] == (byte) 0xBF) {
+        // Tiene BOM UTF-8, saltarlo
+        xmlBytes = Arrays.copyOfRange(xmlBytes, 3, xmlBytes.length);
+      }
+
+      String xmlContent = new String(xmlBytes, StandardCharsets.UTF_8).trim();
+      FacturaRecepcion factura = xmlParserService.parsearXML(xmlContent, empresa, sucursal);
+
+      // 3. Si existe, retornar la existente
+      Optional<FacturaRecepcion> facturaExistente =
+          facturaRecepcionRepository.findByClave(factura.getClave());
+
+      if (facturaExistente.isPresent()) {
+        log.info("⚠️ Factura ya registrada anteriormente: {}", factura.getClave());
+        return mapearAResponse(facturaExistente.get());
+      }
+
+      // 4. Subir archivos a S3
+      String rutaXml = subirArchivoS3(
+          empresa.getNombreRazonSocial(),
+          factura.getTipoDocumento().name(),
+          factura.getClave(),
+          "xml",
+          request.getXmlFile()
+      );
+      factura.setXmlOriginalPath(rutaXml);
+
+      if (request.getPdfFile() != null && !request.getPdfFile().isEmpty()) {
+        String rutaPdf = subirArchivoS3(
+            empresa.getNombreRazonSocial(),
+            factura.getTipoDocumento().name(),
+            factura.getClave(),
+            "pdf",
+            request.getPdfFile()
+        );
+        factura.setPdfPath(rutaPdf);
+      }
+
+      factura.setFechaRecepcion(LocalDateTime.now());
+
+      // 5. Buscar o crear proveedor
+      if (request.isCrearProveedorSiNoExiste()) {
+        Proveedor proveedor = buscarOCrearProveedor(factura, empresa, true);
+        factura.setProveedor(proveedor);
+
+        // ✅ ACTUALIZAR PLAZO DE CRÉDITO si viene en la factura
+        if (factura.getPlazoCredito() != null && factura.getPlazoCredito() > 0) {
+          proveedor.setDiasCredito(factura.getPlazoCredito());
+          proveedorRepository.save(proveedor);
+          log.info("📅 Plazo de crédito actualizado: {} días para proveedor {}, {}",
+              factura.getPlazoCredito(), proveedor.getNumeroIdentificacion(), proveedor.getNombreComercial());
+        }
+      }
+
+      // 6. Guardar como PENDIENTE
+      factura.setEstadoInterno(EstadoFacturaRecepcion.PENDIENTE_DECISION);
+      factura.setMensajeReceptorEnviado(false);
+      factura.setConvertidaCompra(false);
+
+      factura = facturaRecepcionRepository.save(factura);
+
+      log.info("✅ Factura guardada como PENDIENTE. ID: {}", factura.getId());
+
+      return mapearAResponse(factura);
+
+    } catch (IOException e) {
+      log.error("Error leyendo archivo XML", e);
+      throw new RuntimeException("Error leyendo archivo: " + e.getMessage());
+    }
+  }
+
+  /**
    * Subir XML y procesar COMPLETAMENTE en un solo paso
    */
   @Transactional
@@ -937,7 +1040,8 @@ public class FacturaRecepcionService {
 
       // 2. Enviar a Hacienda
       IdentificacionDTO receptor = IdentificacionDTO.builder()
-          .tipoIdentificacion(factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
+          .tipoIdentificacion(
+              factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
           .numeroIdentificacion(factura.getProveedorIdentificacion())
           .build();
 
@@ -1054,9 +1158,17 @@ public class FacturaRecepcionService {
 
       // Cantidades y unidades
       detalle.setCantidad(detFact.getCantidad());
-      detalle.setUnidadMedida(detFact.getUnidadMedida() != null ?
-          detFact.getUnidadMedida().name() : "Unid");
-      detalle.setUnidadMedidaComercial(detFact.getUnidadMedidaComercial());
+
+      String unidadMedida = detFact.getUnidadMedida() != null
+          ? detFact.getUnidadMedida().name()
+          : "Unid";
+      detalle.setUnidadMedida(unidadMedida);
+
+      String unidadComercial = detFact.getUnidadMedidaComercial();
+      if (unidadComercial == null || unidadComercial.trim().isEmpty()) {
+        unidadComercial = unidadMedida;  // Usar la unidad medida normal
+      }
+      detalle.setUnidadMedidaComercial(unidadComercial);
 
       // Es servicio?
       detalle.setEsServicio(false); // TODO: Determinar según código CABYS

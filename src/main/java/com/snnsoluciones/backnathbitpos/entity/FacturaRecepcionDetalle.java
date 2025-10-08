@@ -59,13 +59,13 @@ public class FacturaRecepcionDetalle {
     @Column(name = "codigo_cabys", length = 13)
     private String codigoCabys;
 
-    @Column(name = "tipo_codigo_comercial", length = 2)
+    @Column(name = "tipo_codigo_comercial", length = 20)
     private String tipoCodigoComercial;
 
     /**
      * Código comercial del proveedor
      */
-    @Column(name = "codigo_comercial", length = 50)
+    @Column(name = "codigo_comercial", length = 100)
     private String codigoComercial;
 
     /**
@@ -77,7 +77,7 @@ public class FacturaRecepcionDetalle {
     /**
      * Detalle adicional
      */
-    @Column(name = "detalle", length = 200)
+    @Column(name = "detalle", length = 300)
     private String detalle;
 
     /**
@@ -93,11 +93,11 @@ public class FacturaRecepcionDetalle {
     private BigDecimal cantidad;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "unidad_medida", length = 20, nullable = false)
+    @Column(name = "unidad_medida", length = 40, nullable = false)
     @Builder.Default
     private UnidadMedida unidadMedida = UnidadMedida.UNIDAD;
 
-    @Column(name = "unidad_medida_comercial", length = 50)
+    @Column(name = "unidad_medida_comercial", length = 100)
     private String unidadMedidaComercial;
 
     // ==================== PRECIOS Y MONTOS ====================
@@ -148,5 +148,19 @@ public class FacturaRecepcionDetalle {
     public void removeImpuesto(FacturaRecepcionDetalleImpuesto impuesto) {
         impuestos.remove(impuesto);
         impuesto.setFacturaRecepcionDetalle(null);
+    }
+
+    @PrePersist
+    @PreUpdate
+    public void validarCampos() {
+        // Fallback para unidad medida
+        if (unidadMedida == null) {
+            unidadMedida = UnidadMedida.UNIDAD;
+        }
+
+        // Fallback para unidad comercial
+        if (unidadMedidaComercial == null || unidadMedidaComercial.trim().isEmpty()) {
+            unidadMedidaComercial = unidadMedida.name();
+        }
     }
 }

@@ -176,126 +176,128 @@ public class HaciendaClient {
   public String enviarMensajeReceptor(Long empresaId,
       String xmlMensajeReceptor,
       IdentificacionDTO receptorDelComprobante) {
-    log.info("=== INICIANDO ENVÍO MR A HACIENDA ===");
-    log.info("Empresa ID: {}", empresaId);
+
+    final boolean PRODUCCION = true;
 
     try {
-      // 1. Obtener configuración
+      // 1) Config empresa
       EmpresaConfigHacienda config = empresaConfigHaciendaRepository
           .findByEmpresaId(empresaId)
           .orElseThrow(() -> new RuntimeException("No hay config MH para empresa: " + empresaId));
 
-      log.info("Config encontrada para empresa: {}", config.getEmpresa().getIdentificacion());
-
-      // 2. Obtener token OAuth2
       HaciendaAuthParams authParams = HaciendaAuthParams.builder()
           .username(config.getUsuarioHacienda())
           .password(config.getClaveHacienda())
           .clientId("api-prod")
-          .sandbox(false)
+          .sandbox(!PRODUCCION)
           .build();
 
-      log.info("Obteniendo token OAuth2...");
+      // 2) Token
       HaciendaTokenResponse tokenResponse = getToken(authParams);
       String accessToken = tokenResponse.getAccessToken();
-      log.info("✅ Token obtenido: {}...", accessToken.substring(0, Math.min(50, accessToken.length())));
 
-      // 3. Preparar fecha
-      ZonedDateTime ahora = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));
-      DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
-      String fechaFormateada = ahora.format(fmt);
-      log.info("Fecha del mensaje: {}", fechaFormateada);
-
-      // 4. Extraer clave del XML
+      // 3) Fecha y clave
+      String fechaFormateada = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"))
+          .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"));
       String clave = extraerClaveDeXml(xmlMensajeReceptor);
-      log.info("Clave extraída: {}", clave);
 
-      // 5. Validar XML
-      log.info("=== VALIDACIÓN XML ===");
-      log.info("Tamaño XML: {} bytes", xmlMensajeReceptor.length());
-      log.info("Contiene <ds:Signature>: {}", xmlMensajeReceptor.contains("<ds:Signature"));
-      log.info("Contiene </MensajeReceptor>: {}", xmlMensajeReceptor.contains("</MensajeReceptor>"));
-
-      // 6. Preparar identificaciones
-      log.info("=== IDENTIFICACIONES ===");
-      log.info("EMISOR (Proveedor): tipo={}, numero={}",
-          receptorDelComprobante.getTipoIdentificacion(),
-          receptorDelComprobante.getNumeroIdentificacion());
-      log.info("RECEPTOR (Tu empresa): tipo={}, numero={}",
-          config.getEmpresa().getTipoIdentificacion().getCodigo(),
-          config.getEmpresa().getIdentificacion());
-
-      // 7. Construir payload
+      // 4) Payload POST /recepcion
       String base64Xml = Base64.getEncoder().encodeToString(
           xmlMensajeReceptor.getBytes(StandardCharsets.UTF_8));
-
-      log.info("Base64 XML generado: {} caracteres", base64Xml.length());
 
       RecepcionRequest payload = RecepcionRequest.builder()
           .clave(clave)
           .fecha(fechaFormateada)
-          // EMISOR = Proveedor (emisor del comprobante original)
-          .emisor(receptorDelComprobante)
-          // RECEPTOR = Tu empresa (receptor del comprobante original)
-          .receptor(IdentificacionDTO.builder()
+          .emisor(receptorDelComprobante) // EMISOR = proveedor del comprobante original
+          .receptor(IdentificacionDTO.builder() // RECEPTOR = tu empresa
               .tipoIdentificacion(config.getEmpresa().getTipoIdentificacion().getCodigo())
               .numeroIdentificacion(config.getEmpresa().getIdentificacion())
               .build())
           .comprobanteXml(base64Xml)
           .build();
 
-      // 8. Log del payload completo
-      ObjectMapper om = new ObjectMapper();
-      om.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-      String payloadJson = om.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
-
-      log.info("=== PAYLOAD JSON COMPLETO ===");
-      log.info(payloadJson);
-      log.info("=== FIN PAYLOAD ===");
-
-      // 9. Enviar a Hacienda
-      log.info("Enviando POST a /recepcion...");
-      ResponseEntity<Void> response = postMensajeReceptor(accessToken, true, payload);
-
-      // 10. Procesar respuesta
-      log.info("=== RESPUESTA HACIENDA ===");
-      log.info("Status Code: {}", response.getStatusCode());
-      log.info("Status Code Value: {}", response.getStatusCode().value());
-      log.info("Headers: {}", response.getHeaders());
-
+      // 5) POST /recepcion
+      ResponseEntity<Void> response = postMensajeReceptor(accessToken, PRODUCCION, payload);
       if (response.getStatusCode().is2xxSuccessful()) {
-        String location = response.getHeaders().getFirst(HttpHeaders.LOCATION);
-        log.info("✅ MR ENVIADO EXITOSAMENTE");
-        log.info("Location: {}", location);
         return "Mensaje receptor enviado exitosamente";
       }
-
-      log.warn("⚠️ Respuesta no exitosa: {}", response.getStatusCode());
+      // Si no fue 2xx, cae abajo al catch para manejo homogéneo
       throw new RuntimeException("Error enviando MR: " + response.getStatusCode());
 
     } catch (HttpClientErrorException e) {
-      log.error("=== ERROR HTTP CLIENT (4xx) ===");
-      log.error("Status Code: {}", e.getStatusCode());
-      log.error("Status Code Value: {}", e.getStatusCode().value());
-      log.error("Status Text: {}", e.getStatusText());
-      log.error("Response Headers: {}", e.getResponseHeaders());
-      log.error("Response Body: {}", e.getResponseBodyAsString());
-      log.error("=== FIN ERROR ===");
-      throw new RuntimeException("Error HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+      // Manejo idempotente: si es 400, consultamos estado por clave
+      if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
+        try {
+          // Extrae clave de nuevo (del XML original)
+          String clave = extraerClaveDeXml(xmlMensajeReceptor);
+
+          // 1er intento con token actual
+          ConsultaEstadoResponse est = null;
+          try {
+            est = getEstado(/*accessToken=*/getToken(HaciendaAuthParams.builder()
+                    .username(empresaConfigHaciendaRepository.findByEmpresaId(empresaId)
+                        .orElseThrow().getUsuarioHacienda())
+                    .password(empresaConfigHaciendaRepository.findByEmpresaId(empresaId)
+                        .orElseThrow().getClaveHacienda())
+                    .clientId("api-prod")
+                    .sandbox(false)
+                    .build()).getAccessToken(),
+                /*sandbox=*/false, clave);
+          } catch (HttpClientErrorException ex1) {
+            if (ex1.getStatusCode() == HttpStatus.BAD_REQUEST) {
+              // Refresca token y reintenta 1 vez
+              HaciendaTokenResponse nuevo = getToken(HaciendaAuthParams.builder()
+                  .username(empresaConfigHaciendaRepository.findByEmpresaId(empresaId)
+                      .orElseThrow().getUsuarioHacienda())
+                  .password(empresaConfigHaciendaRepository.findByEmpresaId(empresaId)
+                      .orElseThrow().getClaveHacienda())
+                  .clientId("api-prod")
+                  .sandbox(false)
+                  .build());
+              est = getEstado(nuevo.getAccessToken(), false, clave);
+            } else {
+              throw ex1;
+            }
+          }
+
+          if (est != null && est.getIndEstado() != null) {
+            String ind = est.getIndEstado().toLowerCase();
+
+            // Si ya está aceptado/recibido/procesando en MH, devolvemos respuesta y “seguimos”
+            if (ind.equals("aceptado") || ind.equals("recibido") || ind.equals("procesando")) {
+              // Si viene respuesta-xml (base64), devuélvela para que el caller la suba a S3
+              if (est.getRespuestaXmlBase64() != null && !est.getRespuestaXmlBase64().isBlank()) {
+                String xmlResp = new String(Base64.getDecoder()
+                    .decode(est.getRespuestaXmlBase64()), StandardCharsets.UTF_8);
+                return xmlResp; // el service la tratará como XML de respuesta MH
+              }
+              // Si no hay XML, retorna marcador de estado
+              return "MH-ESTADO:" + ind;
+            }
+
+            // Si está rechazado, falla explícitamente
+            if (ind.equals("rechazado")) {
+              throw new RuntimeException("MR rechazado por MH (consulta estado)");
+            }
+          }
+
+          // Si no logramos determinar estado, relanza el error original
+          throw new RuntimeException("POST 400 y no se pudo confirmar estado en MH: "
+              + e.getResponseBodyAsString(), e);
+
+        } catch (Exception q) {
+          throw new RuntimeException("POST 400 y GET estado falló: " + q.getMessage(), q);
+        }
+      }
+
+      // Otros 4xx: relanzar con detalle
+      throw new RuntimeException("Error HTTP " + e.getStatusCode() + ": "
+          + e.getResponseBodyAsString(), e);
 
     } catch (HttpServerErrorException e) {
-      log.error("=== ERROR HTTP SERVER (5xx) ===");
-      log.error("Status Code: {}", e.getStatusCode());
-      log.error("Response Body: {}", e.getResponseBodyAsString());
-      log.error("=== FIN ERROR ===");
       throw new RuntimeException("Error servidor Hacienda: " + e.getResponseBodyAsString(), e);
 
     } catch (Exception e) {
-      log.error("=== ERROR GENERAL ===");
-      log.error("Tipo: {}", e.getClass().getName());
-      log.error("Mensaje: {}", e.getMessage());
-      log.error("Stack trace:", e);
-      log.error("=== FIN ERROR ===");
       throw new RuntimeException("Error enviando mensaje receptor: " + e.getMessage(), e);
     }
   }

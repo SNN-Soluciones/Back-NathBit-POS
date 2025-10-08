@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoField;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -87,7 +88,7 @@ public class FacturaRecepcionXMLParserService {
             // Elementos comunes
             factura.setClave(getElementValue(root, "Clave"));
             factura.setNumeroConsecutivo(getElementValue(root, "NumeroConsecutivo"));
-            factura.setCodigoActividad(getElementValue(root, "CodigoActividadEmisor"));
+            factura.setCodigoActividad(getElementValue(root, "CodigoActividadReceptor"));
             factura.setFechaEmision(parseDateTime(getElementValue(root, "FechaEmision")));
 
             // Emisor (proveedor)
@@ -103,8 +104,13 @@ public class FacturaRecepcionXMLParserService {
             }
 
             String plazo = getElementValue(root, "PlazoCredito");
-            if (plazo != null) {
-                factura.setPlazoCredito(Integer.parseInt(plazo));
+            if (plazo != null && !plazo.isBlank()) {
+                try {
+                    factura.setPlazoCredito(Integer.parseInt(plazo.trim()));
+                } catch (NumberFormatException e) {
+                    log.warn("Valor inválido en PlazoCredito: '{}'", plazo);
+                    factura.setPlazoCredito(0);
+                }
             }
 
             // Detalles de líneas
@@ -304,7 +310,11 @@ public class FacturaRecepcionXMLParserService {
             FacturaRecepcionDetalleImpuesto impuesto = FacturaRecepcionDetalleImpuesto.builder()
                 .facturaRecepcionDetalle(detalle)
                 .codigoImpuesto(getElementValue(imp, "Codigo"))
-                .codigoTarifa(getElementValue(imp, "CodigoTarifaIVA"))
+                .codigoTarifa(
+                    Optional.ofNullable(getAny(imp, "CodigoTarifaIVA", "CodigoTarifa"))
+                        .filter(s -> !s.isBlank())
+                        .orElse("01") // o "00" si prefieres
+                )
                 .tarifa(parseBigDecimal(getElementValue(imp, "Tarifa")))
                 .monto(parseBigDecimal(getElementValue(imp, "Monto")))
                 .montoExoneracion(parseBigDecimal(getElementValue(imp, "MontoExoneracion")))
@@ -317,11 +327,11 @@ public class FacturaRecepcionXMLParserService {
                 // Guardar como JSON string
                 String exonJson = String.format(
                     "{\"tipoDocumento\":\"%s\",\"numeroDocumento\":\"%s\",\"institucion\":\"%s\",\"fechaEmision\":\"%s\",\"porcentaje\":\"%s\"}",
-                    getElementValue(exoneracion, "TipoDocumentoEX1"),
-                    getElementValue(exoneracion, "NumeroDocumento"),
-                    getElementValue(exoneracion, "NombreInstitucion"),
-                    getElementValue(exoneracion, "FechaEmisionEX"),
-                    getElementValue(exoneracion, "TarifaExonerada")
+                    getAny(exoneracion, "TipoDocumentoEX1", "TipoDocumento"),
+                    getAny(exoneracion, "NumeroDocumento"),
+                    getAny(exoneracion, "NombreInstitucion"),
+                    getAny(exoneracion, "FechaEmisionEX", "FechaEmision"),
+                    getAny(exoneracion, "TarifaExonerada", "PorcentajeExoneracion")
                 );
                 impuesto.setExoneracion(exonJson);
             }
@@ -341,9 +351,12 @@ public class FacturaRecepcionXMLParserService {
 
         for (int i = 0; i < otrosCargos.getLength(); i++) {
             Element cargo = (Element) otrosCargos.item(i);
-            
+
             FacturaRecepcionOtroCargo otroCargo = FacturaRecepcionOtroCargo.builder()
                 .facturaRecepcion(factura)
+                .detalle(getElementValue(cargo, "Detalle"))
+                .nombreCargo(getElementValue(cargo, "Detalle"))   // si es NOT NULL en DB
+                .montoCargo(parseBigDecimal(getElementValue(cargo, "MontoCargo")))
                 .tipoDocumentoOC(getElementValue(cargo, "TipoDocumento"))
                 .terceroNumeroIdentificacion(getElementValue(cargo, "NumeroIdentidadTercero"))
                 .terceroNombre(getElementValue(cargo, "NombreTercero"))
@@ -352,6 +365,7 @@ public class FacturaRecepcionXMLParserService {
                 .montoCargo(parseBigDecimal(getElementValue(cargo, "MontoCargo")))
                 .build();
 
+            otroCargo.setNumeroLinea(i + 1);   // <-- CRÍTICO: usa setter
             listaCargos.add(otroCargo);
         }
 

@@ -37,6 +37,66 @@ public class FacturaController {
     private final FacturaService facturaService;
     private final FacturaResponseBuilder responseBuilder;
 
+    /**
+     * Genera un reporte Excel de ventas para Hacienda en un rango de fechas
+     *
+     * GET /api/facturas/reporte-hacienda?empresaId=1&sucursalId=1&fechaInicio=2025-01-01&fechaFin=2025-01-31
+     *
+     * @param empresaId ID de la empresa
+     * @param sucursalId ID de la sucursal
+     * @param fechaInicio Fecha de inicio del rango (formato: yyyy-MM-dd)
+     * @param fechaFin Fecha de fin del rango (formato: yyyy-MM-dd)
+     * @return Archivo Excel descargable
+     */
+    @GetMapping("/reporte-ventas-hacienda")
+    public ResponseEntity<byte[]> generarReporteHacienda(
+        @RequestParam Long empresaId,
+        @RequestParam Long sucursalId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
+    ) {
+        log.info("🚀 Generando reporte de ventas para Hacienda - Empresa: {}, Sucursal: {}, Rango: {} a {}",
+            empresaId, sucursalId, fechaInicio, fechaFin);
+
+        // Validaciones
+        if (fechaInicio.isAfter(fechaFin)) {
+            log.warn("❌ Fecha inicio es posterior a fecha fin");
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Validar rango no mayor a 1 año (opcional, por performance)
+        if (fechaInicio.plusYears(1).isBefore(fechaFin)) {
+            log.warn("❌ Rango de fechas excede 1 año");
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            // Generar Excel
+            byte[] excelBytes = facturaService.generarReporteHacienda(empresaId, sucursalId, fechaInicio, fechaFin);
+
+            // Nombre del archivo
+            String filename = String.format("Ventas_Hacienda_%s_%s.xlsx",
+                fechaInicio.format(DateTimeFormatter.BASIC_ISO_DATE),
+                fechaFin.format(DateTimeFormatter.BASIC_ISO_DATE));
+
+            // Headers para descarga
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", filename);
+            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+            log.info("✅ Reporte Excel generado exitosamente: {} bytes", excelBytes.length);
+
+            return ResponseEntity.ok()
+                .headers(headers)
+                .body(excelBytes);
+
+        } catch (Exception e) {
+            log.error("❌ Error generando reporte Excel", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     @Operation(summary = "Crear nueva factura",
         description = "Crea una factura con soporte para otros cargos, descuentos y múltiples monedas")
     @PostMapping
@@ -235,66 +295,6 @@ public class FacturaController {
             log.error("Error al buscar facturas para referencia: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Error al buscar facturas: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * Genera un reporte Excel de ventas para Hacienda en un rango de fechas
-     *
-     * GET /api/facturas/reporte-hacienda?empresaId=1&sucursalId=1&fechaInicio=2025-01-01&fechaFin=2025-01-31
-     *
-     * @param empresaId ID de la empresa
-     * @param sucursalId ID de la sucursal
-     * @param fechaInicio Fecha de inicio del rango (formato: yyyy-MM-dd)
-     * @param fechaFin Fecha de fin del rango (formato: yyyy-MM-dd)
-     * @return Archivo Excel descargable
-     */
-    @GetMapping("/reporte-ventas-hacienda")
-    public ResponseEntity<byte[]> generarReporteHacienda(
-        @RequestParam Long empresaId,
-        @RequestParam Long sucursalId,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
-    ) {
-        log.info("🚀 Generando reporte de ventas para Hacienda - Empresa: {}, Sucursal: {}, Rango: {} a {}",
-            empresaId, sucursalId, fechaInicio, fechaFin);
-
-        // Validaciones
-        if (fechaInicio.isAfter(fechaFin)) {
-            log.warn("❌ Fecha inicio es posterior a fecha fin");
-            return ResponseEntity.badRequest().build();
-        }
-
-        // Validar rango no mayor a 1 año (opcional, por performance)
-        if (fechaInicio.plusYears(1).isBefore(fechaFin)) {
-            log.warn("❌ Rango de fechas excede 1 año");
-            return ResponseEntity.badRequest().build();
-        }
-
-        try {
-            // Generar Excel
-            byte[] excelBytes = facturaService.generarReporteHacienda(empresaId, sucursalId, fechaInicio, fechaFin);
-
-            // Nombre del archivo
-            String filename = String.format("Ventas_Hacienda_%s_%s.xlsx",
-                fechaInicio.format(DateTimeFormatter.BASIC_ISO_DATE),
-                fechaFin.format(DateTimeFormatter.BASIC_ISO_DATE));
-
-            // Headers para descarga
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            headers.setContentDispositionFormData("attachment", filename);
-            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
-
-            log.info("✅ Reporte Excel generado exitosamente: {} bytes", excelBytes.length);
-
-            return ResponseEntity.ok()
-                .headers(headers)
-                .body(excelBytes);
-
-        } catch (Exception e) {
-            log.error("❌ Error generando reporte Excel", e);
-            return ResponseEntity.internalServerError().build();
         }
     }
 }

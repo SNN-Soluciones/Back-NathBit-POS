@@ -50,4 +50,26 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
       Long sucursalId,
       EstadoFacturaRecepcion estadoInterno
   );
+
+  /**
+   * Buscar facturas ACEPTADAS en rango de fechas para reporte Excel
+   * Con EAGER fetch de detalles e impuestos para calcular IVA por tarifa
+   *
+   * @param fechaInicio Inicio del rango (inclusive)
+   * @param fechaFin Fin del rango (inclusive)
+   * @return Lista de facturas ordenadas por fecha de emisión
+   */
+  @Query("""
+    SELECT DISTINCT fr FROM FacturaRecepcion fr
+    LEFT JOIN FETCH fr.detalles d
+    LEFT JOIN FETCH d.impuestos
+    WHERE fr.estadoInterno = 'ACEPTADA'
+    AND fr.fechaEmision >= :fechaInicio
+    AND fr.fechaEmision <= :fechaFin
+    ORDER BY fr.fechaEmision ASC
+    """)
+  List<FacturaRecepcion> findAceptadasParaReporte(
+      @Param("fechaInicio") LocalDateTime fechaInicio,
+      @Param("fechaFin") LocalDateTime fechaFin
+  );
 }

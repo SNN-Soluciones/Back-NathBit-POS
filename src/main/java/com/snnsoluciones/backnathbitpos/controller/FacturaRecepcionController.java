@@ -11,6 +11,7 @@ import com.snnsoluciones.backnathbitpos.service.ProveedorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.format.DateTimeFormatter;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -265,6 +267,65 @@ public class FacturaRecepcionController {
             log.error("Error procesando XML", e);
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error("Error procesando factura: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Genera un reporte Excel de facturas aceptadas en un rango de fechas
+     *
+     * GET /api/facturas-recepcion/reporte-excel?fechaInicio=2025-01-01&fechaFin=2025-01-31
+     *
+     * @param fechaInicio Fecha de inicio del rango (formato: yyyy-MM-dd)
+     * @param fechaFin Fecha de fin del rango (formato: yyyy-MM-dd)
+     * @return Archivo Excel descargable
+     */
+    @GetMapping("/reporte-excel")
+    public ResponseEntity<byte[]> generarReporteExcel(
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
+    ) {
+        log.info("🚀 Generando reporte Excel - Rango: {} a {}", fechaInicio, fechaFin);
+
+        // Validaciones
+        if (fechaInicio.isAfter(fechaFin)) {
+            log.warn("❌ Fecha inicio es posterior a fecha fin");
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Validar rango no mayor a 1 año (opcional, por performance)
+        if (fechaInicio.plusYears(1).isBefore(fechaFin)) {
+            log.warn("❌ Rango de fechas excede 1 año");
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            // Generar Excel
+            byte[] excelBytes = facturaRecepcionService.generarReporteExcel(fechaInicio, fechaFin);
+
+            // Nombre del archivo
+            String filename = String.format("Facturas_Aceptadas_%s_%s.xlsx",
+                fechaInicio.format(DateTimeFormatter.BASIC_ISO_DATE),
+                fechaFin.format(DateTimeFormatter.BASIC_ISO_DATE)
+            );
+
+            // Headers HTTP
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ));
+            headers.setContentDispositionFormData("attachment", filename);
+            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+            headers.setContentLength(excelBytes.length);
+
+            log.info("✅ Reporte Excel generado exitosamente: {} bytes", excelBytes.length);
+
+            return ResponseEntity.ok()
+                .headers(headers)
+                .body(excelBytes);
+
+        } catch (Exception e) {
+            log.error("❌ Error generando reporte Excel", e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 

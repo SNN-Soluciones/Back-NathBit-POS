@@ -1,6 +1,5 @@
 package com.snnsoluciones.backnathbitpos.service;
 
-import com.snnsoluciones.backnathbitpos.dto.auth.Contexto;
 import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.*;
 import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.DecisionMensajeRequest.TipoDecision;
 import com.snnsoluciones.backnathbitpos.entity.*;
@@ -19,14 +18,13 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -61,6 +59,7 @@ public class FacturaRecepcionService {
   private final StorageService storageService;
   private final HaciendaClient haciendaClient;
   private final SignerService signerService;
+  private final FacturaRecepcionExcelService facturaRecepcionExcelService;
 
   public Optional<FacturaRecepcion> buscarPorId(Long id) {
     return facturaRecepcionRepository.findById(id);
@@ -170,6 +169,7 @@ public class FacturaRecepcionService {
     switch (request.getDecision()) {
       case ACEPTAR:
         factura.setEstadoInterno(EstadoFacturaRecepcion.ACEPTADA);
+        factura.setMotivoRespuesta(request.getRazon());
         tipoMensaje = TipoMensajeReceptor.ACEPTADO;
         break;
 
@@ -1160,5 +1160,171 @@ public class FacturaRecepcionService {
         .convertidaACompra(fr.getConvertidaCompra())
 
         .build();
+  }
+
+  /**
+   * Genera un reporte Excel de facturas aceptadas en un rango de fechas
+   *
+   * @param fechaInicio Fecha inicio del rango (LocalDate)
+   * @param fechaFin Fecha fin del rango (LocalDate)
+   * @return Archivo Excel como byte array
+   */
+  public byte[] generarReporteExcel(LocalDate fechaInicio, LocalDate fechaFin) {
+    log.info("Generando reporte Excel de facturas aceptadas - Rango: {} a {}", fechaInicio, fechaFin);
+
+    // Convertir LocalDate a LocalDateTime (inicio y fin del día)
+    LocalDateTime inicio = fechaInicio.atStartOfDay();
+    LocalDateTime fin = fechaFin.atTime(23, 59, 59);
+
+    // Ejecutar query
+    List<FacturaRecepcion> facturas = facturaRecepcionRepository.findAceptadasParaReporte(inicio, fin);
+
+    log.info("Se encontraron {} facturas aceptadas en el rango", facturas.size());
+
+    // Transformar a DTO con signo calculado
+    List<FacturaRecepcionReporteDTO> datos = facturas.stream()
+        .map(this::toReporteDTO)
+        .collect(Collectors.toList());
+
+    // Llamar al generador de Excel
+    return facturaRecepcionExcelService.generarExcel(datos, fechaInicio, fechaFin);
+  }
+
+  /**
+   * Mapea una FacturaRecepcion a DTO para reporte
+   * Calcula el signo según el tipo de documento
+   * Calcula el desglose de IVA por tarifa
+   */
+  private FacturaRecepcionReporteDTO toReporteDTO(FacturaRecepcion fr) {
+    // Determinar signo según tipo
+    int signo = calcularSigno(fr.getTipoDocumento());
+
+    // Calcular IVAs por tarifa
+    Map<String, BigDecimal> ivasPorTarifa = calcularIVAPorTarifa(fr);
+
+    return FacturaRecepcionReporteDTO.builder()
+        .tipoDocumento(getTipoAbreviado(fr.getTipoDocumento()))
+        .cedulaEmisor(fr.getProveedorIdentificacion())
+        .nombreEmisor(fr.getProveedorNombre())
+        .fechaEmision(fr.getFechaEmision())
+        .clave(fr.getClave())
+        .motivoRespuesta(fr.getMotivoRespuesta() != null ? fr.getMotivoRespuesta() : "")
+        // SERVICIOS
+        .totalServiciosGravados(fr.getTotalServGravados() != null ? fr.getTotalServGravados() : BigDecimal.ZERO)
+        .totalServiciosExentos(fr.getTotalServExentos() != null ? fr.getTotalServExentos() : BigDecimal.ZERO)
+        .totalServiciosNoSujetos(fr.getTotalServNoSujeto() != null ? fr.getTotalServNoSujeto() : BigDecimal.ZERO)
+        // MERCANCÍAS
+        .totalMercanciasGravadas(fr.getTotalMercGravada() != null ? fr.getTotalMercGravada() : BigDecimal.ZERO)
+        .totalMercanciasExentas(fr.getTotalMercExenta() != null ? fr.getTotalMercExenta() : BigDecimal.ZERO)
+        .totalMercanciasNoSujetas(fr.getTotalMercNoSujeta() != null ? fr.getTotalMercNoSujeta() : BigDecimal.ZERO)
+        // TOTALES
+        .totalVentaNeta(fr.getTotalVentaNeta())
+        .totalImpuesto(fr.getTotalImpuesto())
+        // IVA POR TARIFA
+        .iva0(ivasPorTarifa.getOrDefault("0", BigDecimal.ZERO))
+        .iva1(ivasPorTarifa.getOrDefault("1", BigDecimal.ZERO))
+        .iva2(ivasPorTarifa.getOrDefault("2", BigDecimal.ZERO))
+        .iva4(ivasPorTarifa.getOrDefault("4", BigDecimal.ZERO))
+        .iva8(ivasPorTarifa.getOrDefault("8", BigDecimal.ZERO))
+        .iva13(ivasPorTarifa.getOrDefault("13", BigDecimal.ZERO))
+        // OTROS TOTALES
+        .totalDescuentos(fr.getTotalDescuentos() != null ? fr.getTotalDescuentos() : BigDecimal.ZERO)
+        .totalOtrosCargos(fr.getTotalOtrosCargos() != null ? fr.getTotalOtrosCargos() : BigDecimal.ZERO)
+        .totalIVADevuelto(fr.getTotalIVADevuelto() != null ? fr.getTotalIVADevuelto() : BigDecimal.ZERO)
+        .totalExonerado(fr.getTotalExonerado() != null ? fr.getTotalExonerado() : BigDecimal.ZERO)
+        .totalComprobante(fr.getTotalComprobante())
+        .signo(signo)
+        .build();
+  }
+
+  /**
+   * Calcula el IVA agrupado por tarifa desde los detalles
+   *
+   * @param fr Factura de recepción
+   * @return Map con key = tarifa (0, 1, 2, 4, 8, 13) y value = monto total
+   */
+  private Map<String, BigDecimal> calcularIVAPorTarifa(FacturaRecepcion fr) {
+    Map<String, BigDecimal> ivasPorTarifa = new HashMap<>();
+
+    // Inicializar todas las tarifas en 0
+    ivasPorTarifa.put("0", BigDecimal.ZERO);
+    ivasPorTarifa.put("1", BigDecimal.ZERO);
+    ivasPorTarifa.put("2", BigDecimal.ZERO);
+    ivasPorTarifa.put("4", BigDecimal.ZERO);
+    ivasPorTarifa.put("8", BigDecimal.ZERO);
+    ivasPorTarifa.put("13", BigDecimal.ZERO);
+
+    // Recorrer detalles
+    for (FacturaRecepcionDetalle detalle : fr.getDetalles()) {
+      // Recorrer impuestos del detalle
+      for (FacturaRecepcionDetalleImpuesto impuesto : detalle.getImpuestos()) {
+        // Solo procesar IVA (código 01)
+        if ("01".equals(impuesto.getCodigoImpuesto())) {
+          // Obtener el monto a usar (considerar exoneraciones)
+          BigDecimal montoIVA = impuesto.getMontoExoneracion() != null
+              && impuesto.getMontoExoneracion().compareTo(BigDecimal.ZERO) > 0
+              ? impuesto.getImpuestoNeto()  // Si hay exoneración, usar neto
+              : impuesto.getMonto();         // Si no, usar monto completo
+
+          // Determinar la tarifa según código
+          String tarifaKey = mapearCodigoTarifaAKey(impuesto.getCodigoTarifa());
+
+          // Acumular
+          BigDecimal acumulado = ivasPorTarifa.getOrDefault(tarifaKey, BigDecimal.ZERO);
+          ivasPorTarifa.put(tarifaKey, acumulado.add(montoIVA));
+        }
+      }
+    }
+
+    return ivasPorTarifa;
+  }
+
+  /**
+   * Mapea el código de tarifa de Hacienda a la key del Map
+   *
+   * @param codigoTarifa Código de tarifa (01-11)
+   * @return Key para el map ("0", "1", "2", "4", "8", "13")
+   */
+  private String mapearCodigoTarifaAKey(String codigoTarifa) {
+    return switch (codigoTarifa) {
+      case "02" -> "1";   // 1%
+      case "03" -> "2";   // 2%
+      case "04", "06" -> "4";  // 4%
+      case "07" -> "8";   // 8%
+      case "08" -> "13";  // 13% (General)
+      default -> "0";     // 0% (01, 05, 10, 11)
+    };
+  }
+
+  /**
+   * Calcula el signo para el cálculo de totales
+   * Facturas y Tiquetes suman (+1)
+   * Notas de Crédito restan (-1)
+   *
+   * @param tipo Tipo de documento
+   * @return 1 para sumar, -1 para restar
+   */
+  private int calcularSigno(TipoDocumento tipo) {
+    return switch (tipo) {
+      case FACTURA_ELECTRONICA, TIQUETE_ELECTRONICO, NOTA_DEBITO -> 1;
+      case NOTA_CREDITO -> -1;
+      default -> 1;
+    };
+  }
+
+  /**
+   * Obtiene la abreviación del tipo de documento
+   *
+   * @param tipo Tipo de documento
+   * @return Abreviación (FE, TE, NC, ND)
+   */
+  private String getTipoAbreviado(TipoDocumento tipo) {
+    return switch (tipo) {
+      case FACTURA_ELECTRONICA -> "FE";
+      case TIQUETE_ELECTRONICO -> "TE";
+      case NOTA_CREDITO -> "NC";
+      case NOTA_DEBITO -> "ND";
+      default -> tipo.name();
+    };
   }
 }

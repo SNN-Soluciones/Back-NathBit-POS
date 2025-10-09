@@ -249,7 +249,7 @@ public class FacturaController {
      * @param fechaFin Fecha de fin del rango (formato: yyyy-MM-dd)
      * @return Archivo Excel descargable
      */
-    @GetMapping("/reporte-hacienda")
+    @GetMapping("/reporte-ventas-hacienda")
     public ResponseEntity<byte[]> generarReporteHacienda(
         @RequestParam Long empresaId,
         @RequestParam Long sucursalId,

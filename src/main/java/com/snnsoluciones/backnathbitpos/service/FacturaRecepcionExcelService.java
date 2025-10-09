@@ -67,8 +67,8 @@ public class FacturaRecepcionExcelService {
             // TOTALES
             createTotalsRow(sheet, rowNum, datos, totalStyle, currencyStyle);
 
-            // Auto-size columnas (ahora son 25 columnas)
-            autoSizeColumns(sheet, 25);
+            // Auto-size columnas (ahora son 27 columnas)
+            autoSizeColumns(sheet, 27);
 
             workbook.write(out);
 
@@ -103,12 +103,22 @@ public class FacturaRecepcionExcelService {
         Row headerRow = sheet.createRow(rowNum++);
 
         String[] headers = {
-            "Tipo", "Cédula", "Nombre Emisor", "Fecha", "Clave", "Motivo",
-            "Serv. Gravados", "Serv. Exentos", "Serv. No Suj.",
-            "Merc. Gravadas", "Merc. Exentas", "Merc. No Suj.",
-            "Subtotal", "IVA Total",
+            // Identificación (6)
+            "Tipo", "Cédula", "Nombre Emisor", "Fecha", "Clave", "Tipo de Compra",
+
+            // Impuestos (8)
             "IVA 0%", "IVA 1%", "IVA 2%", "IVA 4%", "IVA 8%", "IVA 13%",
-            "Descuentos", "Otros Cargos", "IVA Devuelto", "Exonerado", "Total"
+            "IVA Total", "Otros Impuestos",
+
+            // Servicios (3)
+            "Serv. Gravados", "Serv. Exentos", "Serv. No Suj.",
+
+            // Mercancías (3)
+            "Merc. Gravadas", "Merc. Exentas", "Merc. No Suj.",
+
+            // Subtotal y totales (7)
+            "Subtotal", "Impuestos Totales", "Descuentos", "Otros Cargos",
+            "IVA Devuelto", "Exonerado", "Total"
         };
 
         for (int i = 0; i < headers.length; i++) {
@@ -127,49 +137,41 @@ public class FacturaRecepcionExcelService {
             Row row = sheet.createRow(rowNum++);
             int colNum = 0;
 
-            // Tipo
+            // IDENTIFICACIÓN (6 columnas)
             createCell(row, colNum++, dto.getTipoDocumento(), dataStyle);
-
-            // Cédula
             createCell(row, colNum++, dto.getCedulaEmisor(), dataStyle);
-
-            // Nombre Emisor
             createCell(row, colNum++, dto.getNombreEmisor(), dataStyle);
 
-            // Fecha
             Cell dateCell = row.createCell(colNum++);
             dateCell.setCellValue(dto.getFechaEmision().format(DATETIME_FORMATTER));
             dateCell.setCellStyle(dateStyle);
 
-            // Clave (completa - no truncar)
             createCell(row, colNum++, dto.getClave(), dataStyle);
+            createCell(row, colNum++, dto.getTipoCompra(), dataStyle);  // ← CAMBIO AQUÍ
 
-            // Motivo Respuesta
-            createCell(row, colNum++, dto.getMotivoRespuesta(), dataStyle);
-
-            // SERVICIOS
-            createCurrencyCell(row, colNum++, dto.getTotalServiciosGravados(), currencyStyle);
-            createCurrencyCell(row, colNum++, dto.getTotalServiciosExentos(), currencyStyle);
-            createCurrencyCell(row, colNum++, dto.getTotalServiciosNoSujetos(), currencyStyle);
-
-            // MERCANCÍAS
-            createCurrencyCell(row, colNum++, dto.getTotalMercanciasGravadas(), currencyStyle);
-            createCurrencyCell(row, colNum++, dto.getTotalMercanciasExentas(), currencyStyle);
-            createCurrencyCell(row, colNum++, dto.getTotalMercanciasNoSujetas(), currencyStyle);
-
-            // TOTALES
-            createCurrencyCell(row, colNum++, dto.getTotalVentaNeta(), currencyStyle);
-            createCurrencyCell(row, colNum++, dto.getTotalImpuesto(), currencyStyle);
-
-            // IVA POR TARIFA
+            // IMPUESTOS (8 columnas)
             createCurrencyCell(row, colNum++, dto.getIva0(), currencyStyle);
             createCurrencyCell(row, colNum++, dto.getIva1(), currencyStyle);
             createCurrencyCell(row, colNum++, dto.getIva2(), currencyStyle);
             createCurrencyCell(row, colNum++, dto.getIva4(), currencyStyle);
             createCurrencyCell(row, colNum++, dto.getIva8(), currencyStyle);
             createCurrencyCell(row, colNum++, dto.getIva13(), currencyStyle);
+            createCurrencyCell(row, colNum++, dto.getTotalSoloIVA(), currencyStyle);  // ← CALCULADO
+            createCurrencyCell(row, colNum++, dto.getOtrosImpuestos(), currencyStyle);  // ← NUEVO
 
-            // OTROS TOTALES
+            // SERVICIOS (3 columnas)
+            createCurrencyCell(row, colNum++, dto.getTotalServiciosGravados(), currencyStyle);
+            createCurrencyCell(row, colNum++, dto.getTotalServiciosExentos(), currencyStyle);
+            createCurrencyCell(row, colNum++, dto.getTotalServiciosNoSujetos(), currencyStyle);
+
+            // MERCANCÍAS (3 columnas)
+            createCurrencyCell(row, colNum++, dto.getTotalMercanciasGravadas(), currencyStyle);
+            createCurrencyCell(row, colNum++, dto.getTotalMercanciasExentas(), currencyStyle);
+            createCurrencyCell(row, colNum++, dto.getTotalMercanciasNoSujetas(), currencyStyle);
+
+            // SUBTOTAL Y TOTALES (7 columnas)
+            createCurrencyCell(row, colNum++, dto.getTotalVentaNeta(), currencyStyle);
+            createCurrencyCell(row, colNum++, dto.getTotalTodosImpuestos(), currencyStyle);  // ← CALCULADO
             createCurrencyCell(row, colNum++, dto.getTotalDescuentos(), currencyStyle);
             createCurrencyCell(row, colNum++, dto.getTotalOtrosCargos(), currencyStyle);
             createCurrencyCell(row, colNum++, dto.getTotalIVADevuelto(), currencyStyle);
@@ -184,96 +186,60 @@ public class FacturaRecepcionExcelService {
         CellStyle totalStyle, CellStyle currencyStyle) {
 
         Row totalRow = sheet.createRow(rowNum);
-
-        // Etiqueta
         Cell labelCell = totalRow.createCell(0);
-        labelCell.setCellValue("TOTALES CONSOLIDADOS");
+        labelCell.setCellValue("TOTALES");
         labelCell.setCellStyle(totalStyle);
+
+        // Merge primeras 6 columnas para "TOTALES"
         sheet.addMergedRegion(new CellRangeAddress(rowNum, rowNum, 0, 5));
 
-        // Calcular totales con signo
-        BigDecimal totalServGrav = BigDecimal.ZERO;
-        BigDecimal totalServExent = BigDecimal.ZERO;
-        BigDecimal totalServNoSuj = BigDecimal.ZERO;
-        BigDecimal totalMercGrav = BigDecimal.ZERO;
-        BigDecimal totalMercExent = BigDecimal.ZERO;
-        BigDecimal totalMercNoSuj = BigDecimal.ZERO;
-        BigDecimal totalSubtotal = BigDecimal.ZERO;
-        BigDecimal totalIVA = BigDecimal.ZERO;
+        int colNum = 6;
 
-        // IVA por tarifa
-        BigDecimal totalIVA0 = BigDecimal.ZERO;
-        BigDecimal totalIVA1 = BigDecimal.ZERO;
-        BigDecimal totalIVA2 = BigDecimal.ZERO;
-        BigDecimal totalIVA4 = BigDecimal.ZERO;
-        BigDecimal totalIVA8 = BigDecimal.ZERO;
-        BigDecimal totalIVA13 = BigDecimal.ZERO;
+        // IVA 0%
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getIva0), currencyStyle);
+        // IVA 1%
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getIva1), currencyStyle);
+        // IVA 2%
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getIva2), currencyStyle);
+        // IVA 4%
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getIva4), currencyStyle);
+        // IVA 8%
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getIva8), currencyStyle);
+        // IVA 13%
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getIva13), currencyStyle);
+        // IVA Total
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalSoloIVA), currencyStyle);
+        // Otros Impuestos
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getOtrosImpuestos), currencyStyle);
 
-        // Otros
-        BigDecimal totalDescuentos = BigDecimal.ZERO;
-        BigDecimal totalOtrosCargos = BigDecimal.ZERO;
-        BigDecimal totalIVADevuelto = BigDecimal.ZERO;
-        BigDecimal totalExonerado = BigDecimal.ZERO;
-        BigDecimal totalFinal = BigDecimal.ZERO;
+        // Servicios
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalServiciosGravados), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalServiciosExentos), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalServiciosNoSujetos), currencyStyle);
 
-        for (FacturaRecepcionReporteDTO dto : datos) {
-            BigDecimal signo = new BigDecimal(dto.getSigno());
+        // Mercancías
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalMercanciasGravadas), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalMercanciasExentas), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalMercanciasNoSujetas), currencyStyle);
 
-            totalServGrav = totalServGrav.add(dto.getTotalServiciosGravados().multiply(signo));
-            totalServExent = totalServExent.add(dto.getTotalServiciosExentos().multiply(signo));
-            totalServNoSuj = totalServNoSuj.add(dto.getTotalServiciosNoSujetos().multiply(signo));
-            totalMercGrav = totalMercGrav.add(dto.getTotalMercanciasGravadas().multiply(signo));
-            totalMercExent = totalMercExent.add(dto.getTotalMercanciasExentas().multiply(signo));
-            totalMercNoSuj = totalMercNoSuj.add(dto.getTotalMercanciasNoSujetas().multiply(signo));
-            totalSubtotal = totalSubtotal.add(dto.getTotalVentaNeta().multiply(signo));
-            totalIVA = totalIVA.add(dto.getTotalImpuesto().multiply(signo));
-
-            // IVA por tarifa
-            totalIVA0 = totalIVA0.add(dto.getIva0().multiply(signo));
-            totalIVA1 = totalIVA1.add(dto.getIva1().multiply(signo));
-            totalIVA2 = totalIVA2.add(dto.getIva2().multiply(signo));
-            totalIVA4 = totalIVA4.add(dto.getIva4().multiply(signo));
-            totalIVA8 = totalIVA8.add(dto.getIva8().multiply(signo));
-            totalIVA13 = totalIVA13.add(dto.getIva13().multiply(signo));
-
-            // Otros
-            totalDescuentos = totalDescuentos.add(dto.getTotalDescuentos().multiply(signo));
-            totalOtrosCargos = totalOtrosCargos.add(dto.getTotalOtrosCargos().multiply(signo));
-            totalIVADevuelto = totalIVADevuelto.add(dto.getTotalIVADevuelto().multiply(signo));
-            totalExonerado = totalExonerado.add(dto.getTotalExonerado().multiply(signo));
-            totalFinal = totalFinal.add(dto.getTotalComprobante().multiply(signo));
-        }
-
-        // Crear celdas de totales
-        CellStyle totalCurrencyStyle = createTotalCurrencyStyle(sheet.getWorkbook());
-
-        int colNum = 6; // Columna 6: Primera columna de datos numéricos (Serv. Gravados)
-        createCurrencyCell(totalRow, colNum++, totalServGrav, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalServExent, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalServNoSuj, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalMercGrav, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalMercExent, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalMercNoSuj, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalSubtotal, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalIVA, totalCurrencyStyle);
-
-        // IVA por tarifa
-        createCurrencyCell(totalRow, colNum++, totalIVA0, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalIVA1, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalIVA2, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalIVA4, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalIVA8, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalIVA13, totalCurrencyStyle);
-
-        // Otros
-        createCurrencyCell(totalRow, colNum++, totalDescuentos, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalOtrosCargos, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalIVADevuelto, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalExonerado, totalCurrencyStyle);
-        createCurrencyCell(totalRow, colNum++, totalFinal, totalCurrencyStyle);
+        // Subtotal y totales
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalVentaNeta), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalTodosImpuestos), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalDescuentos), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalOtrosCargos), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalIVADevuelto), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalExonerado), currencyStyle);
+        createCurrencyCell(totalRow, colNum++, sumar(datos, FacturaRecepcionReporteDTO::getTotalComprobante), currencyStyle);
     }
 
     // ==================== HELPERS ====================
+
+    private BigDecimal sumar(List<FacturaRecepcionReporteDTO> datos,
+        java.util.function.Function<FacturaRecepcionReporteDTO, BigDecimal> getter) {
+        return datos.stream()
+            .map(getter)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
     private void createCell(Row row, int colNum, String value, CellStyle style) {
         Cell cell = row.createCell(colNum);
@@ -290,9 +256,6 @@ public class FacturaRecepcionExcelService {
     private void autoSizeColumns(Sheet sheet, int numColumns) {
         for (int i = 0; i < numColumns; i++) {
             sheet.autoSizeColumn(i);
-            // Ajustar un poco más para que no quede tan apretado
-            int currentWidth = sheet.getColumnWidth(i);
-            sheet.setColumnWidth(i, (int) (currentWidth * 1.1));
         }
     }
 

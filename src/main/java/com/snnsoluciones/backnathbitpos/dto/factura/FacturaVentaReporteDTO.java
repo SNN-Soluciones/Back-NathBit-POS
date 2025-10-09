@@ -1,4 +1,4 @@
-package com.snnsoluciones.backnathbitpos.dto.facturarecepcion;
+package com.snnsoluciones.backnathbitpos.dto.factura;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,16 +9,16 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * DTO para el reporte Excel de facturas de recepción aceptadas
- * Contiene todos los totales segregados según normativa Hacienda v4.4
- *
+ * DTO para el reporte Excel de ventas para Hacienda
+ * Estructura idéntica al reporte de recepción
+ * 
  * Arquitectura La Jachuda 🚀
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class FacturaRecepcionReporteDTO {
+public class FacturaVentaReporteDTO {
 
     // ==================== IDENTIFICACIÓN ====================
 
@@ -28,14 +28,14 @@ public class FacturaRecepcionReporteDTO {
     private String tipoDocumento;
 
     /**
-     * Cédula/identificación del emisor (proveedor)
+     * Cédula/identificación del cliente
      */
-    private String cedulaEmisor;
+    private String cedulaCliente;
 
     /**
-     * Nombre comercial o razón social del emisor
+     * Nombre comercial o razón social del cliente
      */
-    private String nombreEmisor;
+    private String nombreCliente;
 
     /**
      * Fecha de emisión del comprobante
@@ -48,167 +48,104 @@ public class FacturaRecepcionReporteDTO {
     private String clave;
 
     /**
-     * Tipo de compra / Motivo del mensaje receptor
-     * Ejemplo: "COMPRAS", "CREDITO FISCAL", etc.
+     * Consecutivo de la factura
      */
-    private String tipoCompra;
+    private String consecutivo;
 
     // ==================== DESGLOSE DE IVA POR TARIFA ====================
 
-    /**
-     * IVA con tarifa 0% (códigos: 01, 05, 10, 11)
-     */
     @Builder.Default
     private BigDecimal iva0 = BigDecimal.ZERO;
 
-    /**
-     * IVA con tarifa 1% (código: 02)
-     */
     @Builder.Default
     private BigDecimal iva1 = BigDecimal.ZERO;
 
-    /**
-     * IVA con tarifa 2% (código: 03)
-     */
     @Builder.Default
     private BigDecimal iva2 = BigDecimal.ZERO;
 
-    /**
-     * IVA con tarifa 4% (códigos: 04, 06)
-     */
     @Builder.Default
     private BigDecimal iva4 = BigDecimal.ZERO;
 
-    /**
-     * IVA con tarifa 8% (código: 07)
-     */
     @Builder.Default
     private BigDecimal iva8 = BigDecimal.ZERO;
 
-    /**
-     * IVA con tarifa 13% (código: 08) - Tarifa general
-     */
     @Builder.Default
     private BigDecimal iva13 = BigDecimal.ZERO;
 
     /**
      * Otros impuestos (ISC, Combustibles, Tabaco, etc.)
-     * Códigos: 02, 03, 04, 05, 06, 12, 99
      */
     @Builder.Default
     private BigDecimal otrosImpuestos = BigDecimal.ZERO;
 
     // ==================== TOTALES SEGREGADOS - SERVICIOS ====================
 
-    /**
-     * Total de servicios gravados con IVA
-     */
     @Builder.Default
     private BigDecimal totalServiciosGravados = BigDecimal.ZERO;
 
-    /**
-     * Total de servicios exentos de IVA
-     */
     @Builder.Default
     private BigDecimal totalServiciosExentos = BigDecimal.ZERO;
 
-    /**
-     * Total de servicios no sujetos a IVA
-     */
     @Builder.Default
     private BigDecimal totalServiciosNoSujetos = BigDecimal.ZERO;
 
     // ==================== TOTALES SEGREGADOS - MERCANCÍAS ====================
 
-    /**
-     * Total de mercancías gravadas con IVA
-     */
     @Builder.Default
     private BigDecimal totalMercanciasGravadas = BigDecimal.ZERO;
 
-    /**
-     * Total de mercancías exentas de IVA
-     */
     @Builder.Default
     private BigDecimal totalMercanciasExentas = BigDecimal.ZERO;
 
-    /**
-     * Total de mercancías no sujetas a IVA
-     */
     @Builder.Default
     private BigDecimal totalMercanciasNoSujetas = BigDecimal.ZERO;
 
     // ==================== TOTALES GENERALES ====================
 
-    /**
-     * Total venta neta (después de descuentos)
-     */
     private BigDecimal totalVentaNeta;
 
-    /**
-     * Total de impuestos (IVA + Otros)
-     */
     private BigDecimal totalImpuesto;
 
     // ==================== OTROS TOTALES ====================
 
-    /**
-     * Total de descuentos aplicados
-     */
     @Builder.Default
     private BigDecimal totalDescuentos = BigDecimal.ZERO;
 
-    /**
-     * Total de otros cargos
-     */
     @Builder.Default
     private BigDecimal totalOtrosCargos = BigDecimal.ZERO;
 
-    /**
-     * Total de IVA devuelto (servicios médicos en tarjeta)
-     */
     @Builder.Default
     private BigDecimal totalIVADevuelto = BigDecimal.ZERO;
 
-    /**
-     * Total exonerado
-     */
     @Builder.Default
     private BigDecimal totalExonerado = BigDecimal.ZERO;
 
-    /**
-     * Total final del comprobante
-     */
     private BigDecimal totalComprobante;
 
     // ==================== CONTROL ====================
 
     /**
      * Signo para cálculo de totales:
-     * +1 para Facturas y Tiquetes (se suman)
-     * -1 para Notas de Crédito (se restan)
+     * +1 para Facturas y Tiquetes
+     * -1 para Notas de Crédito
      */
     private int signo;
 
     // ==================== MÉTODOS CALCULADOS ====================
 
     /**
-     * Calcula el total SOLO de IVA (suma de todas las tarifas)
-     *
-     * @return Suma de iva0 + iva1 + iva2 + iva4 + iva8 + iva13
+     * Total solo de IVA (suma de todas las tarifas)
      */
     public BigDecimal getTotalSoloIVA() {
         return iva0.add(iva1)
-            .add(iva2)
-            .add(iva4)
-            .add(iva8)
-            .add(iva13);
+                  .add(iva2)
+                  .add(iva4)
+                  .add(iva8)
+                  .add(iva13);
     }
 
     /**
-     * Calcula el total de TODOS los impuestos (IVA + Otros)
-     *
-     * @return IVA Total + Otros Impuestos
+     * Total de TODOS los impuestos (IVA + Otros)
      */
     public BigDecimal getTotalTodosImpuestos() {
         return getTotalSoloIVA().add(otrosImpuestos);

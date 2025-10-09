@@ -9,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.CuentaPorCobrarService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
+import com.snnsoluciones.backnathbitpos.service.FacturaVentaExcelService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import io.hypersistence.utils.common.StringUtils;
 import jakarta.persistence.EntityNotFoundException;
@@ -17,9 +18,12 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -58,6 +62,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final FacturaBitacoraRepository bitacoraRepository;
   private final ClienteService clienteService;
   private final CuentaPorCobrarService cuentaPorCobrarService;
+  private final FacturaVentaExcelService facturaVentaExcelService;
 
   @Override
   @Transactional
@@ -1183,5 +1188,186 @@ public class FacturaServiceImpl implements FacturaService {
       return false;
     }
     return a.subtract(b).abs().compareTo(tolerancia) <= 0;
+  }
+
+  /**
+   * Genera un reporte Excel de ventas para Hacienda en un rango de fechas
+   *
+   * @param empresaId ID de la empresa
+   * @param sucursalId ID de la sucursal
+   * @param fechaInicio Fecha inicio del rango (LocalDate)
+   * @param fechaFin Fecha fin del rango (LocalDate)
+   * @return Archivo Excel como byte array
+   */
+  @Override
+  public byte[] generarReporteHacienda(Long empresaId, Long sucursalId, LocalDate fechaInicio, LocalDate fechaFin) {
+    log.info("✅ Generando reporte de ventas para Hacienda - Empresa: {}, Sucursal: {}, Rango: {} a {}",
+        empresaId, sucursalId, fechaInicio, fechaFin);
+
+    // Convertir LocalDate a LocalDateTime (inicio y fin del día)
+    LocalDateTime inicio = fechaInicio.atStartOfDay();
+    LocalDateTime fin = fechaFin.atTime(23, 59, 59);
+
+    // 1️⃣ Obtener facturas con detalles (SIN impuestos todavía)
+    List<Factura> facturas = facturaRepository.findVentasParaReporte(empresaId, sucursalId, inicio, fin);
+    log.info("📦 Se encontraron {} facturas en el rango", facturas.size());
+
+    // 2️⃣ Si hay facturas, cargar impuestos en query separada
+    if (!facturas.isEmpty()) {
+      List<Long> facturaIds = facturas.stream()
+          .map(Factura::getId)
+          .collect(Collectors.toList());
+
+      log.info("🔍 Cargando impuestos para {} facturas...", facturaIds.size());
+      facturaRepository.cargarImpuestosDeDetalles(facturaIds);
+      log.info("✅ Impuestos cargados en sesión Hibernate");
+    }
+
+    // 3️⃣ Transformar a DTO con datos YA cargados
+    List<FacturaVentaReporteDTO> datos = facturas.stream()
+        .map(this::toReporteVentaDTO)
+        .collect(Collectors.toList());
+
+    // 4️⃣ Llamar al generador de Excel
+    return facturaVentaExcelService.generarExcel(datos, fechaInicio, fechaFin);
+  }
+
+  /**
+   * Mapea una Factura a DTO para reporte
+   * Calcula el signo según el tipo de documento
+   * Calcula el desglose de impuestos por tipo
+   */
+  private FacturaVentaReporteDTO toReporteVentaDTO(Factura factura) {
+    // Determinar signo según tipo
+    int signo = calcularSignoVenta(factura.getTipoDocumento());
+
+    // Calcular desglose de impuestos
+    Map<String, BigDecimal> desglose = calcularDesglosImpuestosVenta(factura);
+
+    return FacturaVentaReporteDTO.builder()
+        .tipoDocumento(getTipoAbreviadoVenta(factura.getTipoDocumento()))
+        .cedulaCliente(factura.getCliente().getNumeroIdentificacion() != null ? factura.getCliente().getNumeroIdentificacion() : "")
+        .nombreCliente(factura.getCliente().getRazonSocial() != null ? factura.getCliente().getRazonSocial() : "Cliente General")
+        .fechaEmision(LocalDateTime.parse(factura.getFechaEmision()))
+        .clave(factura.getClave())
+        .consecutivo(factura.getConsecutivo())
+        // IVA POR TARIFA
+        .iva0(desglose.getOrDefault("0", BigDecimal.ZERO))
+        .iva1(desglose.getOrDefault("1", BigDecimal.ZERO))
+        .iva2(desglose.getOrDefault("2", BigDecimal.ZERO))
+        .iva4(desglose.getOrDefault("4", BigDecimal.ZERO))
+        .iva8(desglose.getOrDefault("8", BigDecimal.ZERO))
+        .iva13(desglose.getOrDefault("13", BigDecimal.ZERO))
+        .otrosImpuestos(desglose.getOrDefault("OTROS", BigDecimal.ZERO))
+        // SERVICIOS
+        .totalServiciosGravados(factura.getTotalServiciosGravados() != null ? factura.getTotalServiciosGravados() : BigDecimal.ZERO)
+        .totalServiciosExentos(factura.getTotalServiciosExentos() != null ? factura.getTotalServiciosExentos() : BigDecimal.ZERO)
+        .totalServiciosNoSujetos(factura.getTotalServiciosNoSujetos() != null ? factura.getTotalServiciosNoSujetos() : BigDecimal.ZERO)
+        // MERCANCÍAS
+        .totalMercanciasGravadas(factura.getTotalMercanciasGravadas() != null ? factura.getTotalMercanciasGravadas() : BigDecimal.ZERO)
+        .totalMercanciasExentas(factura.getTotalMercanciasExentas() != null ? factura.getTotalMercanciasExentas() : BigDecimal.ZERO)
+        .totalMercanciasNoSujetas(factura.getTotalMercanciasNoSujetas() != null ? factura.getTotalMercanciasNoSujetas() : BigDecimal.ZERO)
+        // TOTALES
+        .totalVentaNeta(factura.getTotalVentaNeta())
+        .totalImpuesto(factura.getTotalImpuesto())
+        // OTROS TOTALES
+        .totalDescuentos(factura.getTotalDescuentos() != null ? factura.getTotalDescuentos() : BigDecimal.ZERO)
+        .totalOtrosCargos(factura.getTotalOtrosCargos() != null ? factura.getTotalOtrosCargos() : BigDecimal.ZERO)
+        .totalIVADevuelto(factura.getTotalIVADevuelto() != null ? factura.getTotalIVADevuelto() : BigDecimal.ZERO)
+        .totalExonerado(factura.getTotalExonerado() != null ? factura.getTotalExonerado() : BigDecimal.ZERO)
+        .totalComprobante(factura.getTotalComprobante())
+        .signo(signo)
+        .build();
+  }
+
+  /**
+   * Calcula el desglose completo de impuestos desde los detalles
+   * - IVA por tarifa (0%, 1%, 2%, 4%, 8%, 13%)
+   * - Otros impuestos (ISC, Combustibles, Tabaco, etc.)
+   */
+  private Map<String, BigDecimal> calcularDesglosImpuestosVenta(Factura factura) {
+    Map<String, BigDecimal> desglose = new HashMap<>();
+
+    // Inicializar todas las categorías en 0
+    desglose.put("0", BigDecimal.ZERO);
+    desglose.put("1", BigDecimal.ZERO);
+    desglose.put("2", BigDecimal.ZERO);
+    desglose.put("4", BigDecimal.ZERO);
+    desglose.put("8", BigDecimal.ZERO);
+    desglose.put("13", BigDecimal.ZERO);
+    desglose.put("OTROS", BigDecimal.ZERO);
+
+    // Recorrer detalles
+    for (FacturaDetalle detalle : factura.getDetalles()) {
+      // Recorrer impuestos del detalle
+      for (FacturaDetalleImpuesto impuesto : detalle.getImpuestos()) {
+
+        // Obtener el monto a usar (considerar exoneraciones)
+        BigDecimal montoImpuesto = impuesto.getMontoExoneracion() != null
+            && impuesto.getMontoExoneracion().compareTo(BigDecimal.ZERO) > 0
+            ? impuesto.getImpuestoNeto() // Si hay exoneración, usar neto
+            : impuesto.getMontoImpuesto(); // Si no hay exoneración, usar monto total
+
+        // Clasificar según código de impuesto
+        if ("01".equals(impuesto.getCodigoImpuesto())) {
+          // IVA - clasificar por tarifa
+          String tarifaKey = mapearCodigoTarifaVenta(impuesto.getCodigoTarifaIVA());
+          BigDecimal montoActual = desglose.get(tarifaKey);
+          desglose.put(tarifaKey, montoActual.add(montoImpuesto));
+
+        } else {
+          // Otros impuestos (ISC, Combustibles, Tabaco, etc.)
+          BigDecimal otrosActual = desglose.get("OTROS");
+          desglose.put("OTROS", otrosActual.add(montoImpuesto));
+        }
+      }
+    }
+
+    return desglose;
+  }
+
+  /**
+   * Mapea el código de tarifa de Hacienda al porcentaje usado en el reporte
+   */
+  private String mapearCodigoTarifaVenta(String codigoTarifa) {
+    if (codigoTarifa == null) return "13"; // Default
+
+    return switch (codigoTarifa) {
+      case "01", "05", "10", "11" -> "0";   // 0%
+      case "02" -> "1";                      // 1%
+      case "03" -> "2";                      // 2%
+      case "04", "06" -> "4";                // 4%
+      case "07" -> "8";                      // 8%
+      case "08" -> "13";                     // 13% (Tarifa general)
+      default -> {
+        log.warn("⚠️ Código de tarifa desconocido: {}. Asignando a 13%", codigoTarifa);
+        yield "13";
+      }
+    };
+  }
+
+  /**
+   * Calcula el signo según el tipo de documento
+   */
+  private int calcularSignoVenta(TipoDocumento tipo) {
+    return switch (tipo) {
+      case FACTURA_ELECTRONICA, TIQUETE_ELECTRONICO -> 1;  // Se suma
+      case NOTA_CREDITO -> -1;  // Se resta
+      case NOTA_DEBITO -> 1;    // Se suma
+      default -> 1;
+    };
+  }
+
+  /**
+   * Obtiene la abreviatura del tipo de documento
+   */
+  private String getTipoAbreviadoVenta(TipoDocumento tipo) {
+    return switch (tipo) {
+      case FACTURA_ELECTRONICA -> "FE";
+      case TIQUETE_ELECTRONICO -> "TE";
+      case NOTA_CREDITO -> "NC";
+      case NOTA_DEBITO -> "ND";
+      default -> tipo.name();
+    };
   }
 }

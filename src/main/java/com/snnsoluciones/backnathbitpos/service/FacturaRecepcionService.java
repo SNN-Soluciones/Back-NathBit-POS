@@ -860,7 +860,8 @@ public class FacturaRecepcionService {
           proveedor.setDiasCredito(factura.getPlazoCredito());
           proveedorRepository.save(proveedor);
           log.info("📅 Plazo de crédito actualizado: {} días para proveedor {}, {}",
-              factura.getPlazoCredito(), proveedor.getNumeroIdentificacion(), proveedor.getNombreComercial());
+              factura.getPlazoCredito(), proveedor.getNumeroIdentificacion(),
+              proveedor.getNombreComercial());
         }
       }
 
@@ -1166,41 +1167,51 @@ public class FacturaRecepcionService {
    * Genera un reporte Excel de facturas aceptadas en un rango de fechas
    *
    * @param fechaInicio Fecha inicio del rango (LocalDate)
-   * @param fechaFin Fecha fin del rango (LocalDate)
+   * @param fechaFin    Fecha fin del rango (LocalDate)
    * @return Archivo Excel como byte array
    */
   public byte[] generarReporteExcel(LocalDate fechaInicio, LocalDate fechaFin) {
-    log.info("Generando reporte Excel de facturas aceptadas - Rango: {} a {}", fechaInicio, fechaFin);
+    log.info("✅ Generando reporte Excel de facturas aceptadas - Rango: {} a {}", fechaInicio,
+        fechaFin);
 
     // Convertir LocalDate a LocalDateTime (inicio y fin del día)
     LocalDateTime inicio = fechaInicio.atStartOfDay();
     LocalDateTime fin = fechaFin.atTime(23, 59, 59);
 
-    // Ejecutar query
-    List<FacturaRecepcion> facturas = facturaRecepcionRepository.findAceptadasParaReporte(inicio, fin);
+    // 1️⃣ Obtener facturas con detalles (SIN impuestos todavía)
+    List<FacturaRecepcion> facturas = facturaRecepcionRepository.findAceptadasParaReporte(inicio,
+        fin);
+    log.info("📦 Se encontraron {} facturas aceptadas en el rango", facturas.size());
 
-    log.info("Se encontraron {} facturas aceptadas en el rango", facturas.size());
+    // 2️⃣ Si hay facturas, cargar impuestos en query separada
+    if (!facturas.isEmpty()) {
+      List<Long> facturaIds = facturas.stream()
+          .map(FacturaRecepcion::getId)
+          .collect(Collectors.toList());
 
-    // Transformar a DTO con signo calculado
+      log.info("🔍 Cargando impuestos para {} facturas...", facturaIds.size());
+      facturaRecepcionRepository.cargarImpuestosDeDetalles(facturaIds);
+    }
+
+    // 3️⃣ Transformar a DTO con datos YA cargados
     List<FacturaRecepcionReporteDTO> datos = facturas.stream()
         .map(this::toReporteDTO)
         .collect(Collectors.toList());
 
-    // Llamar al generador de Excel
+    // 4️⃣ Llamar al generador de Excel
     return facturaRecepcionExcelService.generarExcel(datos, fechaInicio, fechaFin);
   }
 
   /**
-   * Mapea una FacturaRecepcion a DTO para reporte
-   * Calcula el signo según el tipo de documento
-   * Calcula el desglose de IVA por tarifa
+   * Mapea una FacturaRecepcion a DTO para reporte Calcula el signo según el tipo de documento
+   * Calcula el desglose de impuestos por tipo
    */
   private FacturaRecepcionReporteDTO toReporteDTO(FacturaRecepcion fr) {
     // Determinar signo según tipo
     int signo = calcularSigno(fr.getTipoDocumento());
 
-    // Calcular IVAs por tarifa
-    Map<String, BigDecimal> ivasPorTarifa = calcularIVAPorTarifa(fr);
+    // Calcular desglose de impuestos
+    Map<String, BigDecimal> desglose = calcularDesglosImpuestos(fr);
 
     return FacturaRecepcionReporteDTO.builder()
         .tipoDocumento(getTipoAbreviado(fr.getTipoDocumento()))
@@ -1208,29 +1219,40 @@ public class FacturaRecepcionService {
         .nombreEmisor(fr.getProveedorNombre())
         .fechaEmision(fr.getFechaEmision())
         .clave(fr.getClave())
-        .motivoRespuesta(fr.getMotivoRespuesta() != null ? fr.getMotivoRespuesta() : "")
+        .tipoCompra(
+            fr.getMotivoRespuesta() != null ? fr.getMotivoRespuesta() : "")  // ← CAMBIO AQUÍ
+        // IVA POR TARIFA
+        .iva0(desglose.getOrDefault("0", BigDecimal.ZERO))
+        .iva1(desglose.getOrDefault("1", BigDecimal.ZERO))
+        .iva2(desglose.getOrDefault("2", BigDecimal.ZERO))
+        .iva4(desglose.getOrDefault("4", BigDecimal.ZERO))
+        .iva8(desglose.getOrDefault("8", BigDecimal.ZERO))
+        .iva13(desglose.getOrDefault("13", BigDecimal.ZERO))
+        .otrosImpuestos(desglose.getOrDefault("OTROS", BigDecimal.ZERO))  // ← NUEVO
         // SERVICIOS
-        .totalServiciosGravados(fr.getTotalServGravados() != null ? fr.getTotalServGravados() : BigDecimal.ZERO)
-        .totalServiciosExentos(fr.getTotalServExentos() != null ? fr.getTotalServExentos() : BigDecimal.ZERO)
-        .totalServiciosNoSujetos(fr.getTotalServNoSujeto() != null ? fr.getTotalServNoSujeto() : BigDecimal.ZERO)
+        .totalServiciosGravados(
+            fr.getTotalServGravados() != null ? fr.getTotalServGravados() : BigDecimal.ZERO)
+        .totalServiciosExentos(
+            fr.getTotalServExentos() != null ? fr.getTotalServExentos() : BigDecimal.ZERO)
+        .totalServiciosNoSujetos(
+            fr.getTotalServNoSujeto() != null ? fr.getTotalServNoSujeto() : BigDecimal.ZERO)
         // MERCANCÍAS
-        .totalMercanciasGravadas(fr.getTotalMercGravada() != null ? fr.getTotalMercGravada() : BigDecimal.ZERO)
-        .totalMercanciasExentas(fr.getTotalMercExenta() != null ? fr.getTotalMercExenta() : BigDecimal.ZERO)
-        .totalMercanciasNoSujetas(fr.getTotalMercNoSujeta() != null ? fr.getTotalMercNoSujeta() : BigDecimal.ZERO)
+        .totalMercanciasGravadas(
+            fr.getTotalMercGravada() != null ? fr.getTotalMercGravada() : BigDecimal.ZERO)
+        .totalMercanciasExentas(
+            fr.getTotalMercExenta() != null ? fr.getTotalMercExenta() : BigDecimal.ZERO)
+        .totalMercanciasNoSujetas(
+            fr.getTotalMercNoSujeta() != null ? fr.getTotalMercNoSujeta() : BigDecimal.ZERO)
         // TOTALES
         .totalVentaNeta(fr.getTotalVentaNeta())
         .totalImpuesto(fr.getTotalImpuesto())
-        // IVA POR TARIFA
-        .iva0(ivasPorTarifa.getOrDefault("0", BigDecimal.ZERO))
-        .iva1(ivasPorTarifa.getOrDefault("1", BigDecimal.ZERO))
-        .iva2(ivasPorTarifa.getOrDefault("2", BigDecimal.ZERO))
-        .iva4(ivasPorTarifa.getOrDefault("4", BigDecimal.ZERO))
-        .iva8(ivasPorTarifa.getOrDefault("8", BigDecimal.ZERO))
-        .iva13(ivasPorTarifa.getOrDefault("13", BigDecimal.ZERO))
         // OTROS TOTALES
-        .totalDescuentos(fr.getTotalDescuentos() != null ? fr.getTotalDescuentos() : BigDecimal.ZERO)
-        .totalOtrosCargos(fr.getTotalOtrosCargos() != null ? fr.getTotalOtrosCargos() : BigDecimal.ZERO)
-        .totalIVADevuelto(fr.getTotalIVADevuelto() != null ? fr.getTotalIVADevuelto() : BigDecimal.ZERO)
+        .totalDescuentos(
+            fr.getTotalDescuentos() != null ? fr.getTotalDescuentos() : BigDecimal.ZERO)
+        .totalOtrosCargos(
+            fr.getTotalOtrosCargos() != null ? fr.getTotalOtrosCargos() : BigDecimal.ZERO)
+        .totalIVADevuelto(
+            fr.getTotalIVADevuelto() != null ? fr.getTotalIVADevuelto() : BigDecimal.ZERO)
         .totalExonerado(fr.getTotalExonerado() != null ? fr.getTotalExonerado() : BigDecimal.ZERO)
         .totalComprobante(fr.getTotalComprobante())
         .signo(signo)
@@ -1238,68 +1260,78 @@ public class FacturaRecepcionService {
   }
 
   /**
-   * Calcula el IVA agrupado por tarifa desde los detalles
+   * Calcula el desglose completo de impuestos desde los detalles - IVA por tarifa (0%, 1%, 2%, 4%,
+   * 8%, 13%) - Otros impuestos (ISC, Combustibles, Tabaco, etc.)
    *
    * @param fr Factura de recepción
-   * @return Map con key = tarifa (0, 1, 2, 4, 8, 13) y value = monto total
+   * @return Map con keys: "0", "1", "2", "4", "8", "13", "OTROS"
    */
-  private Map<String, BigDecimal> calcularIVAPorTarifa(FacturaRecepcion fr) {
-    Map<String, BigDecimal> ivasPorTarifa = new HashMap<>();
+  private Map<String, BigDecimal> calcularDesglosImpuestos(FacturaRecepcion fr) {
+    Map<String, BigDecimal> desglose = new HashMap<>();
 
-    // Inicializar todas las tarifas en 0
-    ivasPorTarifa.put("0", BigDecimal.ZERO);
-    ivasPorTarifa.put("1", BigDecimal.ZERO);
-    ivasPorTarifa.put("2", BigDecimal.ZERO);
-    ivasPorTarifa.put("4", BigDecimal.ZERO);
-    ivasPorTarifa.put("8", BigDecimal.ZERO);
-    ivasPorTarifa.put("13", BigDecimal.ZERO);
+    // Inicializar todas las categorías en 0
+    desglose.put("0", BigDecimal.ZERO);
+    desglose.put("1", BigDecimal.ZERO);
+    desglose.put("2", BigDecimal.ZERO);
+    desglose.put("4", BigDecimal.ZERO);
+    desglose.put("8", BigDecimal.ZERO);
+    desglose.put("13", BigDecimal.ZERO);
+    desglose.put("OTROS", BigDecimal.ZERO);
 
     // Recorrer detalles
     for (FacturaRecepcionDetalle detalle : fr.getDetalles()) {
       // Recorrer impuestos del detalle
       for (FacturaRecepcionDetalleImpuesto impuesto : detalle.getImpuestos()) {
-        // Solo procesar IVA (código 01)
+
+        // Obtener el monto a usar (considerar exoneraciones)
+        BigDecimal montoImpuesto = impuesto.getMontoExoneracion() != null
+            && impuesto.getMontoExoneracion().compareTo(BigDecimal.ZERO) > 0
+            ? impuesto.getImpuestoNeto() // Si hay exoneración, usar neto
+            : impuesto.getMonto();       // Si no hay exoneración, usar monto total
+
+        // Clasificar según código de impuesto
         if ("01".equals(impuesto.getCodigoImpuesto())) {
-          // Obtener el monto a usar (considerar exoneraciones)
-          BigDecimal montoIVA = impuesto.getMontoExoneracion() != null
-              && impuesto.getMontoExoneracion().compareTo(BigDecimal.ZERO) > 0
-              ? impuesto.getImpuestoNeto()  // Si hay exoneración, usar neto
-              : impuesto.getMonto();         // Si no, usar monto completo
+          // IVA - clasificar por tarifa
+          String tarifaKey = mapearCodigoTarifa(impuesto.getCodigoTarifa());
+          BigDecimal montoActual = desglose.get(tarifaKey);
+          desglose.put(tarifaKey, montoActual.add(montoImpuesto));
 
-          // Determinar la tarifa según código
-          String tarifaKey = mapearCodigoTarifaAKey(impuesto.getCodigoTarifa());
-
-          // Acumular
-          BigDecimal acumulado = ivasPorTarifa.getOrDefault(tarifaKey, BigDecimal.ZERO);
-          ivasPorTarifa.put(tarifaKey, acumulado.add(montoIVA));
+        } else {
+          // Otros impuestos (ISC, Combustibles, Tabaco, etc.)
+          BigDecimal otrosActual = desglose.get("OTROS");
+          desglose.put("OTROS", otrosActual.add(montoImpuesto));
         }
       }
     }
 
-    return ivasPorTarifa;
+    return desglose;
   }
 
   /**
-   * Mapea el código de tarifa de Hacienda a la key del Map
+   * Mapea el código de tarifa de Hacienda al porcentaje usado en el reporte
    *
-   * @param codigoTarifa Código de tarifa (01-11)
-   * @return Key para el map ("0", "1", "2", "4", "8", "13")
+   * @param codigoTarifa Código de 2 dígitos (01, 02, 03, 04, 06, 07, 08, etc.)
+   * @return String con el porcentaje: "0", "1", "2", "4", "8", "13"
    */
-  private String mapearCodigoTarifaAKey(String codigoTarifa) {
+  private String mapearCodigoTarifa(String codigoTarifa) {
+    // Mapeo según Anexos Hacienda v4.4 - Nota 8.1
     return switch (codigoTarifa) {
-      case "02" -> "1";   // 1%
-      case "03" -> "2";   // 2%
-      case "04", "06" -> "4";  // 4%
-      case "07" -> "8";   // 8%
-      case "08" -> "13";  // 13% (General)
-      default -> "0";     // 0% (01, 05, 10, 11)
+      case "01", "05", "10", "11" -> "0";   // 0% (Exento, Varios)
+      case "02" -> "1";                      // 1%
+      case "03" -> "2";                      // 2%
+      case "04", "06" -> "4";                // 4%
+      case "07" -> "8";                      // 8%
+      case "08" -> "13";                     // 13% (Tarifa general)
+      default -> {
+        log.warn("⚠️ Código de tarifa desconocido: {}. Asignando a 13%", codigoTarifa);
+        yield "13"; // Default a tarifa general si no se reconoce
+      }
     };
   }
 
   /**
-   * Calcula el signo para el cálculo de totales
-   * Facturas y Tiquetes suman (+1)
-   * Notas de Crédito restan (-1)
+   * Calcula el signo para el cálculo de totales Facturas y Tiquetes suman (+1) Notas de Crédito
+   * restan (-1)
    *
    * @param tipo Tipo de documento
    * @return 1 para sumar, -1 para restar

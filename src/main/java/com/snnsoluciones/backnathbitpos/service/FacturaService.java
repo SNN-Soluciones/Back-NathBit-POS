@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.dto.factura.FacturaReferenciaDto;
 import com.snnsoluciones.backnathbitpos.dto.factura.ValidacionTotalesRequest;
 import com.snnsoluciones.backnathbitpos.dto.factura.ValidacionTotalesResponse;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -65,4 +66,6 @@ public interface FacturaService {
      * Buscar facturas para ser usadas como referencia
      */
     Page<FacturaReferenciaDto> buscarParaReferencia(BuscarFacturaReferenciaRequest request);
+
+    byte[] generarReporteHacienda(Long empresaId, Long sucursalId, LocalDate fechaInicio, LocalDate fechaFin);
 }

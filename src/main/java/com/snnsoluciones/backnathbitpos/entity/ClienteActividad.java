@@ -1,29 +1,18 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
 import java.time.LocalDateTime;
+import lombok.NoArgsConstructor;
 
+@Data
 @Entity
-@Table(name = "cliente_actividades",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_cliente_actividad",
-            columnNames = {"cliente_id", "codigo_actividad"}
-        )
-    },
-    indexes = {
-        @Index(name = "idx_cliente_actividades_cliente", columnList = "cliente_id"),
-        @Index(name = "idx_cliente_actividades_codigo", columnList = "codigo_actividad")
-    }
-)
-@Getter
-@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Table(name = "cliente_actividades")
 public class ClienteActividad {
 
     @Id
@@ -31,16 +20,34 @@ public class ClienteActividad {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_id", insertable = false, updatable = false)
+    @JoinColumn(name = "cliente_id", nullable = false, insertable = false, updatable = false)
     private Cliente cliente;
 
-    @Column(name = "codigo_actividad", nullable = false, length = 10)
+    @Column(name = "codigo_actividad", length = 10)
     private String codigoActividad;
 
-    @Column(name = "descripcion", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "codigo_ciiu4", length = 20)
+    private String codigoCiiu4;
+
+    @Column(name = "codigo_ciiu3", length = 20)
+    private String codigoCiiu3;
+
+    @Column(name = "tipo", length = 1)
+    private String tipo;
+
+    @Column(name = "estado", length = 1)
+    private String estado;
+
+    @Column(name = "descripcion", columnDefinition = "TEXT")
     private String descripcion;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }

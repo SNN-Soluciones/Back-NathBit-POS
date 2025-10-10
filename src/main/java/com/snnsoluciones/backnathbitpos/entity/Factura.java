@@ -256,6 +256,10 @@ public class Factura {
   @Builder.Default
   private List<FacturaResumenImpuesto> resumenImpuestos = new ArrayList<>();
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "plataforma_digital_id")
+  private PlataformaDigitalConfig plataformaDigital;
+
   // ========== AUDITORÍA ==========
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)

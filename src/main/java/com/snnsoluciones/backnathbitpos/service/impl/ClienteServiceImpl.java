@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteEmailDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ExoneracionClienteDto;
+import com.snnsoluciones.backnathbitpos.entity.ActividadEconomica;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteActividad;
 import com.snnsoluciones.backnathbitpos.entity.ClienteEmail;
@@ -17,6 +18,8 @@ import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumentoExoneracion;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoIdentificacion;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
+import com.snnsoluciones.backnathbitpos.repository.ActividadEconomicaRepository;
+import com.snnsoluciones.backnathbitpos.repository.ClienteActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionCabysRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
@@ -29,6 +32,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -44,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.regex.Pattern;
+import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @Service
@@ -59,6 +64,9 @@ public class ClienteServiceImpl implements ClienteService {
   private final UbicacionService ubicacionService;
   private final EmpresaService empresaService;
   private final ModularHelperService modularHelper;
+  private final ClienteActividadRepository clienteActividadRepository;
+  private final ActividadEconomicaRepository actividadEconomicaRepository;
+  private final RestTemplate restTemplate;
 
   private static final Pattern EMAIL_PATTERN = Pattern.compile(
       "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$"
@@ -1047,5 +1055,116 @@ public class ClienteServiceImpl implements ClienteService {
 
     log.warn("Cliente {} desbloqueado manualmente. Motivo: {}",
         cliente.getRazonSocial(), motivo);
+  }
+
+  @Override
+  @Transactional
+  public List<ActividadEconomicaDto> actualizarActividadesDesdeHacienda(Long clienteId) {
+    log.info("🔄 Actualizando actividades desde Hacienda para cliente: {}", clienteId);
+
+    Cliente cliente = clienteRepository.findById(clienteId)
+        .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
+
+    if (!cliente.getInscritoHacienda()) {
+      throw new RuntimeException("Cliente no está inscrito en Hacienda");
+    }
+
+    String identificacion = cliente.getNumeroIdentificacion();
+    String url = "https://api.hacienda.go.cr/fe/ae?identificacion=" + identificacion;
+
+    try {
+      log.info("📡 Consultando Hacienda: {}", url);
+
+      Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+      if (response == null || !response.containsKey("actividades")) {
+        throw new RuntimeException("No se obtuvieron actividades desde Hacienda");
+      }
+
+      // ELIMINAR anteriores
+      clienteActividadRepository.deleteByClienteId(clienteId);
+
+      // Limpiar colección del cliente
+      if (cliente.getActividades() != null) {
+        cliente.getActividades().clear();
+      } else {
+        cliente.setActividades(new HashSet<>());
+      }
+
+      log.info("🗑️ Actividades anteriores eliminadas");
+
+      // Procesar nuevas
+      List<Map<String, Object>> actividadesHacienda =
+          (List<Map<String, Object>>) response.get("actividades");
+
+      log.info("📥 Procesando {} actividades", actividadesHacienda.size());
+
+      for (Map<String, Object> actData : actividadesHacienda) {
+        String codigoCiiu4 = (String) actData.get("codigo");
+        String descripcion = (String) actData.get("descripcion");
+        String tipo = (String) actData.get("tipo");
+        String estado = (String) actData.get("estado");
+
+        // Extraer CIIU3 con manejo seguro
+        String codigoCiiu3 = null;
+        if (actData.containsKey("ciiu3") && actData.get("ciiu3") != null) {
+          Object ciiu3Obj = actData.get("ciiu3");
+
+          if (ciiu3Obj instanceof Map) {
+            Map<String, Object> ciiu3Data = (Map<String, Object>) ciiu3Obj;
+            codigoCiiu3 = (String) ciiu3Data.get("codigo");
+          }
+        }
+
+        // Solo activas
+        if (!"A".equals(estado)) {
+          log.debug("⏭️ Saltando actividad inactiva: {}", codigoCiiu4);
+          continue;
+        }
+
+        // ✅ CREAR con Builder
+        ClienteActividad ca = ClienteActividad.builder()
+            .codigoCiiu4(codigoCiiu4)
+            .codigoCiiu3(codigoCiiu3)
+            .codigoActividad(codigoCiiu3 != null ? codigoCiiu3 : codigoCiiu4)
+            .descripcion(descripcion != null ? descripcion.trim() : null)
+            .tipo(tipo)
+            .estado(estado)
+            .build();
+
+        // ✅ IMPORTANTE: Agregar al Set del cliente (esto hace que JPA maneje el cliente_id)
+        cliente.getActividades().add(ca);
+        ca.setCliente(cliente); // Relación bidireccional
+
+        log.debug("✅ Agregada: {} - {} - {}", tipo, codigoCiiu4, descripcion);
+      }
+
+      // Guardar cliente (cascade guardará las actividades)
+      clienteRepository.save(cliente);
+
+      log.info("✅ Actividades actualizadas correctamente");
+
+      // Retornar lista actualizada
+      return listarActividadesCliente(clienteId);
+
+    } catch (Exception e) {
+      log.error("❌ Error consultando Hacienda: {}", e.getMessage(), e);
+      throw new RuntimeException("Error al consultar Hacienda: " + e.getMessage());
+    }
+  }
+
+  // Helper privado
+  private List<ActividadEconomicaDto> listarActividadesCliente(Long clienteId) {
+    List<ClienteActividad> actividades = clienteActividadRepository.findByClienteId(clienteId);
+
+    return actividades.stream()
+        .map(ca -> {
+          ActividadEconomicaDto dto = new ActividadEconomicaDto();
+          dto.setCodigo(ca.getTipo()); // "P" o "S"
+          dto.setCodigo(ca.getCodigoCiiu4()); // Usar CIIU4 nuevo
+          dto.setDescripcion(ca.getDescripcion());
+          return dto;
+        })
+        .collect(Collectors.toList());
   }
 }

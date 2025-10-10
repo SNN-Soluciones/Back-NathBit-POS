@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service;
 
+import com.snnsoluciones.backnathbitpos.dto.cliente.ActividadEconomicaDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
@@ -64,4 +65,6 @@ public interface ClienteService {
     boolean puedeComprarACredito(Long clienteId, BigDecimal montoNuevaVenta);
 
     void desbloquearCredito(Long clienteId, String motivo);
+
+    List<ActividadEconomicaDto> actualizarActividadesDesdeHacienda(Long clienteId);
 }

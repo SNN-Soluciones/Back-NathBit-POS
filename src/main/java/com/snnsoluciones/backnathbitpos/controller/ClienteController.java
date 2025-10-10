@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.controller;
 
+import com.snnsoluciones.backnathbitpos.dto.cliente.ActividadEconomicaDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteBusquedaDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteCreditoDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteDTO;
@@ -8,10 +9,12 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteResumenDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUpdateDTO;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
+import com.snnsoluciones.backnathbitpos.entity.ClienteActividad;
 import com.snnsoluciones.backnathbitpos.entity.CuentaPorCobrar;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.enums.EstadoCuenta;
 import com.snnsoluciones.backnathbitpos.mappers.ClienteMapper;
+import com.snnsoluciones.backnathbitpos.repository.ClienteActividadRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
 import com.snnsoluciones.backnathbitpos.repository.CuentaPorCobrarRepository;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
@@ -52,6 +55,7 @@ public class ClienteController {
   private final ClienteMapper clienteMapper;
   private final EmpresaService empresaService;
   private final CuentaPorCobrarRepository cuentaPorCobrarRepository;
+  private final ClienteActividadRepository clienteActividadRepository;
 
   // Helper para obtener el userId del token JWT
   private Long getCurrentUserId(Authentication auth) {
@@ -385,5 +389,46 @@ public class ClienteController {
     });
 
     return ResponseEntity.ok(ApiResponse.success("Clientes", resultado));
+  }
+
+  @Operation(summary = "Actualizar actividades económicas desde Hacienda")
+  @PostMapping("/{clienteId}/actualizar-actividades")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+  public ResponseEntity<ApiResponse<List<ActividadEconomicaDto>>> actualizarActividadesDesdeHacienda(
+      @PathVariable Long clienteId) {
+
+    try {
+      List<ActividadEconomicaDto> actividades =
+          clienteService.actualizarActividadesDesdeHacienda(clienteId);
+
+      return ResponseEntity.ok(ApiResponse.ok(
+          "Actividades actualizadas correctamente",
+          actividades
+      ));
+    } catch (RuntimeException e) {
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error(e.getMessage()));
+    }
+  }
+
+  @Operation(summary = "Obtener actividades económicas del cliente")
+  @GetMapping("/{clienteId}/actividades")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO')")
+  public ResponseEntity<ApiResponse<List<ActividadEconomicaDto>>> obtenerActividades(
+      @PathVariable Long clienteId) {
+
+    List<ClienteActividad> actividades = clienteActividadRepository.findByClienteId(clienteId);
+
+    List<ActividadEconomicaDto> dtos = actividades.stream()
+        .map(ca -> {
+          ActividadEconomicaDto dto = new ActividadEconomicaDto();
+          dto.setCodigo(ca.getTipo());
+          dto.setCodigo(ca.getCodigoCiiu4());
+          dto.setDescripcion(ca.getDescripcion());
+          return dto;
+        })
+        .collect(Collectors.toList());
+
+    return ResponseEntity.ok(ApiResponse.ok("Actividades obtenidas", dtos));
   }
 }

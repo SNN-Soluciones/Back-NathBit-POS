@@ -96,6 +96,10 @@ public class FacturaInterna {
     @Builder.Default
     private List<FacturaInternaDetalle> detalles = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plataforma_digital_id")
+    private PlataformaDigitalConfig plataformaDigital;
+
     // ===== MEDIOS DE PAGO =====
     @OneToMany(mappedBy = "facturaInterna", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

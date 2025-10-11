@@ -35,6 +35,9 @@ public class CrearFacturaInternaRequest {
     @DecimalMin(value = "0.0", message = "El descuento no puede ser negativo")
     private BigDecimal descuento;
 
+    private String numeroViper;
+
+
     // Medios de pago
     @NotEmpty(message = "Debe incluir al menos un medio de pago")
     private List<MedioPagoInternoRequest> mediosPago;

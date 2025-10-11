@@ -121,6 +121,9 @@ public class Factura {
   @Column(name = "plazo_credito")
   private Integer plazoCredito;
 
+  @Column(name = "numero_viper", length = 50)
+  private String numeroViper;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "codigo_moneda", length = 3, nullable = false)
   @Builder.Default

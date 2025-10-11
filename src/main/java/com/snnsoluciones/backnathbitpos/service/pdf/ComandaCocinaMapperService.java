@@ -44,6 +44,7 @@ public class ComandaCocinaMapperService {
         // Información básica de la orden
         parametros.put("numero_orden", facturaInterna.getNumero());
         parametros.put("mesa", obtenerNumeroMesa(facturaInterna)); // Por ahora null, luego lo expandimos
+        parametros.put("numero_viper", facturaInterna.getNumeroViper()); // ✅ AGREGAR ESTA LÍNEA
         parametros.put("fecha_hora", facturaInterna.getFecha().format(FECHA_FORMATO));
         parametros.put("mesero", obtenerNombreMesero(facturaInterna));
         parametros.put("sucursal", facturaInterna.getSucursal().getNombre());

@@ -65,7 +65,7 @@ public class TiqueteInternoPdfMapperService {
     parametros.put("empresa_identificacion", formatearIdentificacion(empresa));
     parametros.put("email_empresa", sucursal.getEmail() != null ? sucursal.getEmail()
         : empresa.getEmail() != null ? empresa.getEmail() : "");
-    parametros.put("empresa_telefono", sucursal.getTelefono() != null ? sucursal.getTelefono()
+    parametros.put("telefono_empresa", sucursal.getTelefono() != null ? sucursal.getTelefono()
         : empresa.getTelefono() != null ? empresa.getTelefono() : "");
     parametros.put("empresa_direccion", obtenerDireccionEmpresa(empresa));
 
@@ -90,6 +90,7 @@ public class TiqueteInternoPdfMapperService {
     parametros.put("terminal",
         "Terminal 01"); // FacturaInterna no tiene terminal, usar valor por defecto
     parametros.put("cajero_nombre", obtenerNombreCajero(facturaInterna));
+    parametros.put("numero_viper", facturaInterna.getNumeroViper());
 
     // Cliente
     if (facturaInterna.getCliente() != null) {

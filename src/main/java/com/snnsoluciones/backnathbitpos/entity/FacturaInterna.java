@@ -66,6 +66,9 @@ public class FacturaInterna {
     @Column(name = "total", nullable = false, precision = 15, scale = 2)
     private BigDecimal total; // subtotal - descuento
 
+    @Column(name = "numero_viper", length = 50)
+    private String numeroViper;
+
     // ===== PAGO =====
     @Column(name = "pago_recibido", precision = 15, scale = 2)
     private BigDecimal pagoRecibido; // Para calcular vuelto

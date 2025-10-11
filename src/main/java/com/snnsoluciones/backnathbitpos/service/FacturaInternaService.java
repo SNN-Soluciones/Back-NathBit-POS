@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import java.math.RoundingMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -115,6 +116,8 @@ public class FacturaInternaService {
         } else if (nombreCliente != null) {
             factura.setNombreCliente(nombreCliente);
         }
+        factura.setNumeroViper(request.getNumeroViper());
+
 
         // ===== 5) Detalles de la factura =====
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -130,7 +133,15 @@ public class FacturaInternaService {
                 .build();
 
             detalle.setearDatosProducto(producto, detalleReq);
-            detalle.calcularTotales();
+
+                // ✅ HOTFIX: Si viene subtotal en el request, usarlo directamente
+            if (detalleReq.getSubtotal() != null) {
+                detalle.setPrecioUnitario(detalleReq.getSubtotal().divide(detalleReq.getCantidad(), 2, RoundingMode.HALF_UP));
+                detalle.setSubtotal(detalleReq.getSubtotal());
+                detalle.setTotal(detalleReq.getSubtotal().subtract(detalle.getDescuento()));
+            } else {
+                detalle.calcularTotales(); // Fallback para compatibilidad
+            }
 
             factura.agregarDetalle(detalle);
             subtotal = subtotal.add(detalle.getTotal());

@@ -159,6 +159,7 @@ public class FacturaServiceImpl implements FacturaService {
         request.getTipoDocumento()
     );
     factura.setConsecutivo(consecutivo);
+    factura.setNumeroViper(request.getNumeroViper());
 
     // PASO 12: Establecer fecha de emisión (hora de Costa Rica)
     ZonedDateTime fechaEmisionCR = ZonedDateTime.now(ZoneId.of("America/Costa_Rica"));

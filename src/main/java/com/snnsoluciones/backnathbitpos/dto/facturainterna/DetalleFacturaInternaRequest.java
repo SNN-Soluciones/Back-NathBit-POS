@@ -23,4 +23,6 @@ public class DetalleFacturaInternaRequest {
     private BigDecimal precioUnitario;
     
     private String notas;
+
+    private BigDecimal subtotal;
 }

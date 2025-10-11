@@ -6,6 +6,7 @@
 	<property name="com.jaspersoft.studio.unit.pageHeight" value="mm"/>
 	<parameter name="numero_orden" class="java.lang.String"/>
 	<parameter name="mesa" class="java.lang.String"/>
+	<parameter name="numero_viper" class="java.lang.String"/>
 	<parameter name="fecha_hora" class="java.lang.String"/>
 	<parameter name="mesero" class="java.lang.String"/>
 	<parameter name="sucursal" class="java.lang.String"/>
@@ -42,7 +43,11 @@
 				<textElement textAlignment="Right">
 					<font fontName="DejaVu Sans" size="11" isBold="true"/>
 				</textElement>
-				<textFieldExpression><![CDATA["Mesa: " + ($P{mesa} != null ? $P{mesa} : "---")]]></textFieldExpression>
+				<textFieldExpression><![CDATA[$P{mesa} != null && !$P{mesa}.trim().isEmpty() ? 
+			            "Mesa: " + $P{mesa} : 
+			            ($P{numero_viper} != null && !$P{numero_viper}.trim().isEmpty() ? 
+			                "🔔 VIPER: " + $P{numero_viper} : 
+			                "---")]]></textFieldExpression>
 			</textField>
 			<textField>
 				<reportElement x="0" y="52" width="206" height="12" uuid="e5f6a7b8-c901-2345-6789-012345ef1234"/>

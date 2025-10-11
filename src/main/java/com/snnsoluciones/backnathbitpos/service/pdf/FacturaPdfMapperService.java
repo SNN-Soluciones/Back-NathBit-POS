@@ -164,6 +164,14 @@ public class FacturaPdfMapperService {
     params.put("consecutivo", factura.getConsecutivo());
     params.put("numero_interno", factura.getId().toString());
 
+    if (factura.getNumeroViper() != null && !factura.getNumeroViper().isEmpty()) {
+      params.put("numero_viper", factura.getNumeroViper());
+      params.put("tiene_viper", true);
+    } else {
+      params.put("numero_viper", "");
+      params.put("tiene_viper", false);
+    }
+
     // Tipo de documento
     params.put("tipo_documento", obtenerNombreTipoDocumento(factura.getTipoDocumento()));
 

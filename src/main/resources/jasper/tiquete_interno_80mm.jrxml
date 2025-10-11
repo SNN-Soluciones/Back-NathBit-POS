@@ -22,6 +22,7 @@
 	<parameter name="terminal" class="java.lang.String"/>
 	<parameter name="cajero_nombre" class="java.lang.String"/>
 	<parameter name="cliente_referencia" class="java.lang.String"/>
+	<parameter name="numero_viper" class="java.lang.String"/>
 	<parameter name="subtotal" class="java.lang.String"/>
 	<parameter name="descuentos" class="java.lang.String"/>
 	<parameter name="iva" class="java.lang.String"/>
@@ -97,20 +98,20 @@
 	<pageHeader>
 		<band>
 			<line>
-				<reportElement x="0" y="-21" width="206" height="1" uuid="c9d0e1f2-a3b4-56c7-89ab-890123456789"/>
+				<reportElement x="0" y="-14" width="206" height="1" uuid="c9d0e1f2-a3b4-56c7-89ab-890123456789"/>
 				<graphicElement>
 					<pen lineStyle="Dotted"/>
 				</graphicElement>
 			</line>
 			<staticText>
-				<reportElement x="0" y="-19" width="204" height="10" uuid="d0e1f2a3-b4c5-67d8-9abc-901234567890"/>
+				<reportElement x="0" y="-12" width="204" height="10" uuid="d0e1f2a3-b4c5-67d8-9abc-901234567890"/>
 				<textElement textAlignment="Left">
 					<font fontName="DejaVu Sans" size="7" isBold="true"/>
 				</textElement>
 				<text><![CDATA[PRODUCTOS:]]></text>
 			</staticText>
 			<line>
-				<reportElement x="0" y="-9" width="206" height="1" uuid="e1f2a3b4-c5d6-789e-abcd-012345678901"/>
+				<reportElement x="0" y="-1" width="206" height="1" uuid="e1f2a3b4-c5d6-789e-abcd-012345678901"/>
 				<graphicElement>
 					<pen lineStyle="Dotted"/>
 				</graphicElement>
@@ -118,7 +119,7 @@
 		</band>
 	</pageHeader>
 	<detail>
-		<band height="163" splitType="Stretch">
+		<band height="171" splitType="Stretch">
 			<subreport isUsingCache="false">
 				<reportElement x="0" y="5" width="204" height="30" uuid="f2a3b4c5-d6e7-89af-bcde-123456789012"/>
 				<dataSourceExpression><![CDATA[$P{datasource_detalles}]]></dataSourceExpression>
@@ -192,45 +193,52 @@
 				<textFieldExpression><![CDATA["Cajero: " + $P{cajero_nombre}]]></textFieldExpression>
 			</textField>
 			<textField>
-				<reportElement positionType="Float" x="0" y="104" width="206" height="10" uuid="a5b6c7d8-e9f0-1a2b-cdef-456789012345"/>
+				<reportElement positionType="Float" x="0" y="116" width="206" height="10" uuid="a5b6c7d8-e9f0-1a2b-cdef-456789012345"/>
 				<textElement textAlignment="Left">
 					<font fontName="DejaVu Sans" size="8"/>
 				</textElement>
 				<textFieldExpression><![CDATA["Cliente: " + $P{cliente_referencia}]]></textFieldExpression>
 			</textField>
 			<line>
-				<reportElement positionType="Float" x="0" y="116" width="205" height="1" uuid="b6c7d8e9-f0a1-2b3c-defa-567890123456"/>
+				<reportElement positionType="Float" x="0" y="128" width="205" height="1" uuid="b6c7d8e9-f0a1-2b3c-defa-567890123456"/>
 				<graphicElement>
 					<pen lineWidth="2.0" lineStyle="Solid"/>
 				</graphicElement>
 			</line>
 			<staticText>
-				<reportElement positionType="Float" x="0" y="120" width="206" height="12" uuid="c7d8e9f0-1234-56ab-cdef-789012345678"/>
+				<reportElement positionType="Float" x="0" y="132" width="206" height="12" uuid="c7d8e9f0-1234-56ab-cdef-789012345678"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="9" isBold="true"/>
 				</textElement>
 				<text><![CDATA[¡GRACIAS POR SU VISITA!]]></text>
 			</staticText>
 			<line>
-				<reportElement positionType="Float" x="0" y="133" width="205" height="1" uuid="d8e9f012-3456-78bc-def0-890123456789"/>
+				<reportElement positionType="Float" x="0" y="145" width="205" height="1" uuid="d8e9f012-3456-78bc-def0-890123456789"/>
 				<graphicElement>
 					<pen lineWidth="2.0" lineStyle="Solid"/>
 				</graphicElement>
 			</line>
 			<staticText>
-				<reportElement positionType="Float" x="0" y="135" width="206" height="8" uuid="e9f01234-5678-9abc-ef01-901234567890"/>
+				<reportElement positionType="Float" x="0" y="147" width="206" height="8" uuid="e9f01234-5678-9abc-ef01-901234567890"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="6"/>
 				</textElement>
 				<text><![CDATA[NathBit POS]]></text>
 			</staticText>
 			<staticText>
-				<reportElement positionType="Float" x="0" y="144" width="206" height="8" uuid="f0123456-789a-bcde-f012-012345678901"/>
+				<reportElement positionType="Float" x="0" y="156" width="206" height="8" uuid="f0123456-789a-bcde-f012-012345678901"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="6"/>
 				</textElement>
 				<text><![CDATA[www.nathbit.com]]></text>
 			</staticText>
+			<textField>
+				<reportElement x="0" y="103" width="204" height="12" uuid="17185de1-8872-442f-acd1-234d88a48dd2"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<font size="7"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Viper: " +$P{numero_viper}]]></textFieldExpression>
+			</textField>
 		</band>
 	</detail>
 </jasperReport>

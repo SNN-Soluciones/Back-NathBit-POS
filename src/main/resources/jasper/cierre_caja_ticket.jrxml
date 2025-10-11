@@ -27,6 +27,7 @@
 	<parameter name="TOTAL_TRANSFERENCIA" class="java.math.BigDecimal"/>
 	<parameter name="TOTAL_SINPE" class="java.math.BigDecimal"/>
 	<parameter name="OBSERVACIONES" class="java.lang.String"/>
+	<parameter name="PLATAFORMAS_TEXTO" class="java.lang.String"/>
 	<parameter name="DENOMINACIONES_DS" class="net.sf.jasperreports.engine.data.JRBeanCollectionDataSource"/>
 	<title>
 		<band height="80">
@@ -60,7 +61,7 @@
 		</band>
 	</title>
 	<detail>
-		<band height="326">
+		<band height="365">
 			<staticText>
 				<reportElement style="base" x="0" y="5" width="60" height="10" uuid="41baefe4-c619-48ec-bd82-7b3e408cb5c0"/>
 				<text><![CDATA[Apertura:]]></text>
@@ -176,20 +177,31 @@
 				<textFieldExpression><![CDATA[$P{TOTAL_SINPE}]]></textFieldExpression>
 			</textField>
 			<staticText>
-				<reportElement style="bold" x="0" y="198" width="216" height="10" uuid="a83a013c-f062-4fc5-9aeb-951b030b45a3"/>
+				<reportElement style="bold" x="-1" y="199" width="216" height="12" uuid="c853a2eb-5362-454d-8966-47637b73f876"/>
+				<text><![CDATA[PLATAFORMAS DIGITALES]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="base" x="0" y="210" width="216" height="60" uuid="c853a2eb-5362-454d-8966-47637b73f877"/>
+				<textElement>
+					<font fontName="Monospaced" size="7"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{PLATAFORMAS_TEXTO}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="bold" x="-1" y="270" width="216" height="10" uuid="a83a013c-f062-4fc5-9aeb-951b030b45a3"/>
 				<text><![CDATA[OBSERVACIONES:]]></text>
 			</staticText>
 			<textField isBlankWhenNull="true">
-				<reportElement style="base" x="0" y="210" width="216" height="30" uuid="09ae3839-81b8-428e-934e-deaf3c31ebde"/>
+				<reportElement style="base" x="-1" y="280" width="216" height="30" uuid="09ae3839-81b8-428e-934e-deaf3c31ebde"/>
 				<textFieldExpression><![CDATA[$P{OBSERVACIONES} != null ? $P{OBSERVACIONES} : "Sin observaciones"]]></textFieldExpression>
 			</textField>
 			<staticText>
-				<reportElement style="base" x="0" y="290" width="216" height="10" uuid="b3aaea21-dcdc-480f-8478-f85758655646"/>
+				<reportElement style="base" x="-1" y="330" width="216" height="10" uuid="b3aaea21-dcdc-480f-8478-f85758655646"/>
 				<textElement textAlignment="Center"/>
 				<text><![CDATA[_____________________________]]></text>
 			</staticText>
 			<staticText>
-				<reportElement style="base" x="0" y="305" width="216" height="10" uuid="52210584-7236-41b7-8924-eec091c6baa6"/>
+				<reportElement style="base" x="0" y="340" width="216" height="10" uuid="52210584-7236-41b7-8924-eec091c6baa6"/>
 				<textElement textAlignment="Center"/>
 				<text><![CDATA[Firma del Cajero]]></text>
 			</staticText>

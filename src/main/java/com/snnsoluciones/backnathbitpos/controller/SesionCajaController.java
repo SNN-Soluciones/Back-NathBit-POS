@@ -566,6 +566,21 @@ public class SesionCajaController {
 
       // Obtener denominaciones
       var denoms = sesionCajaDenominacionRepository.findBySesionCajaId(id);
+      ResumenCajaDetalladoDTO resumen = sesionCajaService.obtenerResumenDetallado(id);
+
+      StringBuilder plataformasTexto = new StringBuilder();
+      if (resumen.getVentasPlataformas() != null && !resumen.getVentasPlataformas().isEmpty()) {
+        plataformasTexto.append("\n--- PLATAFORMAS DIGITALES ---\n");
+        BigDecimal totalPlat = BigDecimal.ZERO;
+        for (ResumenCajaDetalladoDTO.VentaPlataformaDTO plat : resumen.getVentasPlataformas()) {
+          plataformasTexto.append(String.format("%-15s ₡%,10.2f\n",
+              "[" + plat.getPlataformaCodigo() + "] " + plat.getPlataformaNombre(),
+              plat.getTotalVentas()));
+          plataformasTexto.append(String.format("  (%d pedidos)\n", plat.getCantidadTransacciones()));
+          totalPlat = totalPlat.add(plat.getTotalVentas());
+        }
+        plataformasTexto.append(String.format("Total Plataformas: ₡%,10.2f\n", totalPlat));
+      }
 
       // Preparar parámetros del reporte
       var params = new java.util.HashMap<String,Object>();
@@ -599,6 +614,7 @@ public class SesionCajaController {
       params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
       params.put("TOTAL_SINPE", sesion.getTotalOtros());
       params.put("OBSERVACIONES", sesion.getObservacionesCierre());
+      params.put("PLATAFORMAS_TEXTO", plataformasTexto.toString());
 
       // Datasource para denominaciones
       JRBeanCollectionDataSource denominacionesDS = null;

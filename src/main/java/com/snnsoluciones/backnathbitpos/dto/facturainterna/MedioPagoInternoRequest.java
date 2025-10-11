@@ -11,9 +11,11 @@ import java.math.BigDecimal;
 public class MedioPagoInternoRequest {
     
     @NotBlank(message = "El tipo de pago es requerido")
-    @Pattern(regexp = "EFECTIVO|TARJETA|SINPE|TRANSFERENCIA|CHEQUE", 
-             message = "Tipo de pago inválido")
+    @NotBlank(message = "El tipo de pago es requerido")
+    @Pattern(regexp = "EFECTIVO|TARJETA|SINPE|TRANSFERENCIA|CHEQUE|PLATAFORMA_DIGITAL",  // ⭐ AGREGAR
+        message = "Tipo de pago inválido")
     private String tipoPago;
+
     
     @NotNull(message = "El monto es requerido")
     @DecimalMin(value = "0.01", message = "El monto debe ser mayor a 0")

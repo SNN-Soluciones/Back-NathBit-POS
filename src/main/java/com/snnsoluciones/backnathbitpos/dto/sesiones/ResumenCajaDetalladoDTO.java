@@ -35,6 +35,9 @@ public class ResumenCajaDetalladoDTO {
     private BigDecimal ventasTransferencia;
     private BigDecimal ventasOtros;
 
+    @Builder.Default
+    private List<VentaPlataformaDTO> ventasPlataformas = new ArrayList<>();
+
     // Movimientos de caja
     private BigDecimal entradasAdicionales;
     private BigDecimal vales;
@@ -44,11 +47,14 @@ public class ResumenCajaDetalladoDTO {
     private Integer cantidadFacturas;
     private Integer cantidadTiquetes;
     private Integer cantidadNotasCredito;
+    private Integer cantidadVentasInternas;
 
     // Totales por tipo de documento
     private BigDecimal totalFacturas;
     private BigDecimal totalTiquetes;
     private BigDecimal totalNotasCredito;
+    private BigDecimal totalVentasInternas;
+
 
     // NUEVO: Lista detallada de documentos
     @Builder.Default
@@ -89,5 +95,17 @@ public class ResumenCajaDetalladoDTO {
         private String autorizadoPor;
         private LocalDateTime fecha;
         private String tipo;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VentaPlataformaDTO {
+        private Long plataformaId;
+        private String plataformaNombre;
+        private String plataformaCodigo;
+        private BigDecimal totalVentas;
+        private Integer cantidadTransacciones;
     }
 }

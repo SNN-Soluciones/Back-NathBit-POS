@@ -20,6 +20,7 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
+import com.snnsoluciones.backnathbitpos.repository.PlataformaDigitalConfigRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaDenominacionRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
@@ -27,6 +28,8 @@ import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +60,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   private final FacturaInternaRepository facturaInternaRepository;
   private final SesionCajaDenominacionRepository sesionCajaDenominacionRepository;
   private final SucursalRepository sucursalRepository;
+  private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
 
   @Override
   public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
@@ -300,6 +304,9 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       throw new RuntimeException("No tiene permisos para ver esta sesión");
     }
 
+    int cantVentasInternas = 0;
+    BigDecimal totalVentasInternas = BigDecimal.ZERO;
+
     // Construir resumen básico
     ResumenCajaDetalladoDTO resumen = new ResumenCajaDetalladoDTO();
     resumen.setSesionId(sesion.getId());
@@ -341,6 +348,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
     // PROCESAR FACTURAS ELECTRÓNICAS
     List<Factura> facturas = facturaRepository.findBySesionCajaId(sesionId);
+    Map<Long, BigDecimal[]> ventasPorPlataforma = new HashMap<>();
 
     for (Factura f : facturas) {
       // Solo contar documentos válidos
@@ -395,6 +403,17 @@ public class SesionCajaServiceImpl implements SesionCajaService {
               totalTransferencia = totalTransferencia.add(medioPago.getMonto());
               break;
           }
+
+          if (medioPago.getPlataformaDigital() != null) {
+            Long plataformaId = medioPago.getPlataformaDigital().getId();
+            BigDecimal[] datos = ventasPorPlataforma.getOrDefault(
+                plataformaId,
+                new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO}
+            );
+            datos[0] = datos[0].add(medioPago.getMonto());
+            datos[1] = datos[1].add(BigDecimal.ONE);
+            ventasPorPlataforma.put(plataformaId, datos);
+          }
         }
       }
     }
@@ -442,8 +461,39 @@ public class SesionCajaServiceImpl implements SesionCajaService {
               totalSinpe = totalSinpe.add(mp.getMonto());
               break;
           }
+
+          if (mp.getPlataformaDigital() != null) {
+            Long plataformaId = mp.getPlataformaDigital().getId();
+            BigDecimal[] datos = ventasPorPlataforma.getOrDefault(
+                plataformaId,
+                new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO}
+            );
+            datos[0] = datos[0].add(mp.getMonto());
+            datos[1] = datos[1].add(BigDecimal.ONE);
+            ventasPorPlataforma.put(plataformaId, datos);
+          }
         }
       }
+      cantVentasInternas++;
+      totalVentasInternas = totalVentasInternas.add(fi.getTotal());
+    }
+
+    List<ResumenCajaDetalladoDTO.VentaPlataformaDTO> ventasPlataformas = new ArrayList<>();
+    for (Map.Entry<Long, BigDecimal[]> entry : ventasPorPlataforma.entrySet()) {
+      Long plataformaId = entry.getKey();
+      BigDecimal[] datos = entry.getValue();
+
+      plataformaDigitalConfigRepository.findById(plataformaId).ifPresent(plataforma -> {
+        ResumenCajaDetalladoDTO.VentaPlataformaDTO ventaPlataforma =
+            ResumenCajaDetalladoDTO.VentaPlataformaDTO.builder()
+                .plataformaId(plataformaId)
+                .plataformaNombre(plataforma.getNombre())
+                .plataformaCodigo(plataforma.getCodigo())
+                .totalVentas(datos[0])
+                .cantidadTransacciones(datos[1].intValue())
+                .build();
+        ventasPlataformas.add(ventaPlataforma);
+      });
     }
 
     // Asignar totales por tipo de pago
@@ -451,16 +501,22 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     resumen.setVentasTarjeta(totalTarjeta);
     resumen.setVentasTransferencia(totalTransferencia);
     resumen.setVentasOtros(totalSinpe);
+    ventasPlataformas.sort((a, b) -> b.getTotalVentas().compareTo(a.getTotalVentas()));
+
+// Luego donde asignas los valores al resumen:
+    resumen.setVentasPlataformas(ventasPlataformas);
 
     // Establecer contadores
     resumen.setCantidadFacturas(cantFacturas);
     resumen.setCantidadTiquetes(cantTiquetes);
     resumen.setCantidadNotasCredito(cantNC);
+    resumen.setCantidadVentasInternas(cantVentasInternas);
 
     // Establecer totales
     resumen.setTotalFacturas(totalFacturas);
     resumen.setTotalTiquetes(totalTiquetes);
     resumen.setTotalNotasCredito(totalNC);
+    resumen.setTotalVentasInternas(totalVentasInternas);
 
     // Establecer lista de documentos
     resumen.setDocumentos(documentos);

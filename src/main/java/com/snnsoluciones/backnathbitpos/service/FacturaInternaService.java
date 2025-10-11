@@ -35,6 +35,7 @@ public class FacturaInternaService {
     private final UsuarioRepository usuarioRepository;
     private final SesionCajaRepository sesionCajaRepository;
     private final OrdenService ordenService;
+    private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
 
     /**
      * Crear una nueva factura interna
@@ -150,6 +151,15 @@ public class FacturaInternaService {
                 .banco(medioPagoReq.getBanco())
                 .notas(medioPagoReq.getNumeroAutorizacion())
                 .build();
+
+            if (medioPagoReq.getPlataformaDigitalId() != null) {
+                PlataformaDigitalConfig plataforma = plataformaDigitalConfigRepository
+                    .findById(medioPagoReq.getPlataformaDigitalId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                        "Plataforma digital no encontrada: " + medioPagoReq.getPlataformaDigitalId()));
+
+                medioPago.setPlataformaDigital(plataforma);
+            }
 
             factura.agregarMedioPago(medioPago);
             totalPagos = totalPagos.add(medioPagoReq.getMonto());

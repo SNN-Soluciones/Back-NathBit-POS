@@ -27,4 +27,7 @@ public class MedioPagoRequest {
     
     // Banco o emisor de tarjeta
     private String banco;
+
+    private Long plataformaDigitalId;
+
 }

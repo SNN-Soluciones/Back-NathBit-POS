@@ -9,4 +9,6 @@ public interface EmpresaCABySService {
     EmpresaCABySDto asignar(Long empresaId, Long codigoCabysId);
     List<EmpresaCABySDto> listarPorEmpresa(Long empresaId);
     void quitar(Long id);
+    List<EmpresaCABySDto> listarPorSucursal(Long sucursalId);
+
 }

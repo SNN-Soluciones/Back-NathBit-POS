@@ -10,7 +10,9 @@ import com.snnsoluciones.backnathbitpos.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -193,22 +195,76 @@ public class FacturaInternaService {
     }
 
     /**
-     * Buscar facturas con filtros
+     * Buscar facturas con filtros - VERSION FLEXIBLE
      */
     @Transactional(readOnly = true)
-    public Page<FacturaInternaListResponse> buscar(Long empresaId, Long sucursalId, String estado, Pageable pageable) {
+    public Page<FacturaInternaListResponse> buscar(
+        Long empresaId,
+        Long sucursalId,
+        String estado,
+        String fechaDesdeStr,
+        String fechaHastaStr,
+        String busqueda,
+        Pageable pageable) {
+
+        log.info("📋 Buscando facturas - empresa: {}, sucursal: {}, fechaDesde: {}, fechaHasta: {}, busqueda: '{}'",
+            empresaId, sucursalId, fechaDesdeStr, fechaHastaStr, busqueda);
+
+        // Crear Pageable con ordenamiento
+        Pageable pageableOrdenado = PageRequest.of(
+            pageable.getPageNumber(),
+            pageable.getPageSize(),
+            Sort.by(Sort.Direction.DESC, "fecha")
+        );
+
         Page<FacturaInterna> facturas;
 
-        if (sucursalId != null) {
-            facturas = facturaInternaRepository.findBySucursalId(sucursalId, pageable);
-        } else if (empresaId != null && estado != null) {
-            facturas = facturaInternaRepository.findByEmpresaIdAndEstado(empresaId, estado, pageable);
-        } else if (empresaId != null) {
-            facturas = facturaInternaRepository.findByEmpresaId(empresaId, pageable);
-        } else {
-            facturas = facturaInternaRepository.findAll(pageable);
+        // CASO 1: Búsqueda completa con fechas
+        if (empresaId != null && sucursalId != null &&
+            fechaDesdeStr != null && !fechaDesdeStr.isEmpty() &&
+            fechaHastaStr != null && !fechaHastaStr.isEmpty()) {
+
+            try {
+                LocalDateTime fechaDesde = LocalDate.parse(fechaDesdeStr).atStartOfDay();
+                LocalDateTime fechaHasta = LocalDate.parse(fechaHastaStr).atTime(23, 59, 59);
+
+                if (busqueda != null && !busqueda.trim().isEmpty()) {
+                    log.info("✅ Búsqueda CON filtro de texto");
+                    facturas = facturaInternaRepository.buscarConFiltros(
+                        empresaId, sucursalId, fechaDesde, fechaHasta, busqueda.trim(), pageableOrdenado);
+                } else {
+                    log.info("✅ Búsqueda por fechas solamente");
+                    facturas = facturaInternaRepository.buscarPorFechas(
+                        empresaId, sucursalId, fechaDesde, fechaHasta, pageableOrdenado);
+                }
+            } catch (Exception e) {
+                log.error("❌ Error parseando fechas: {}", e.getMessage());
+                // Fallback sin fechas
+                facturas = facturaInternaRepository.findBySucursalId(sucursalId, pageableOrdenado);
+            }
+        }
+        // CASO 2: Solo sucursal (sin fechas)
+        else if (sucursalId != null) {
+            log.info("✅ Búsqueda solo por sucursal");
+            facturas = facturaInternaRepository.findBySucursalId(sucursalId, pageableOrdenado);
+        }
+        // CASO 3: Empresa + Estado
+        else if (empresaId != null && estado != null) {
+            log.info("✅ Búsqueda por empresa y estado");
+            facturas = facturaInternaRepository.findByEmpresaIdAndEstado(empresaId, estado, pageableOrdenado);
+        }
+        // CASO 4: Solo empresa
+        else if (empresaId != null) {
+            log.info("✅ Búsqueda solo por empresa");
+            facturas = facturaInternaRepository.findByEmpresaId(empresaId, pageableOrdenado);
+        }
+        // CASO 5: Sin filtros (todas)
+        else {
+            log.info("✅ Listando todas las facturas");
+            facturas = facturaInternaRepository.findAll(pageableOrdenado);
         }
 
+        log.info("📊 Resultados encontrados: {}", facturas.getTotalElements());
         return facturas.map(this::mapToListResponse);
     }
 

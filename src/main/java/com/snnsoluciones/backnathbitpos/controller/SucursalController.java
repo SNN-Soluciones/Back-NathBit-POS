@@ -159,6 +159,7 @@ public class SucursalController extends BaseController {
     // === NUEVOS CAMPOS DE IMPRESIÓN ===
     response.setModoImpresion(sucursal.getModoImpresion());
     response.setIpOrquestador(sucursal.getIpOrquestador());
+    response.setMetodoImpresion(sucursal.getMetodoImpresion());
 
     // Campos de empresa
     response.setEmpresaId(sucursal.getEmpresa().getId());

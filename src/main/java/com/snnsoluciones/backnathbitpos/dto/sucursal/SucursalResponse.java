@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.sucursal;
 
+import com.snnsoluciones.backnathbitpos.enums.MetodoImpresion;
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import com.snnsoluciones.backnathbitpos.enums.ModoImpresion;
 import lombok.Data;
@@ -16,6 +17,7 @@ public class SucursalResponse {
     private Boolean activa;
     private Long empresaId;
     private ModoFacturacion modoFacturacion = ModoFacturacion.ELECTRONICO;
+    private MetodoImpresion metodoImpresion;
     private String empresaNombre;
     private ModoImpresion modoImpresion;
     private String ipOrquestador;

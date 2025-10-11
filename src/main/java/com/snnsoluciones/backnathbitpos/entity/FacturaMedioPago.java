@@ -45,6 +45,10 @@ public class FacturaMedioPago {
     @Column(length = 50)
     private String banco; // Para transferencias o tarjetas
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plataforma_digital_id")
+    private PlataformaDigitalConfig plataformaDigital;
+
     @Override
     public final boolean equals(Object o) {
         if (this == o) {

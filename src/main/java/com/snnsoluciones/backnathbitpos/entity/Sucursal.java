@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.MetodoImpresion;
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import com.snnsoluciones.backnathbitpos.enums.ModoImpresion;
 import jakarta.persistence.*;
@@ -121,6 +122,10 @@ public class Sucursal {
     @JdbcType(PostgreSQLEnumJdbcType.class)
     @Builder.Default
     private ModoImpresion modoImpresion = ModoImpresion.LOCAL;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_impresion")
+    private MetodoImpresion metodoImpresion;
 
     /**
      * IP y puerto del orquestador de impresoras

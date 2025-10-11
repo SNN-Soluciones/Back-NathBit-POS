@@ -111,6 +111,8 @@ public class SecurityConfig {
             "http://localhost:8080",
             "http://127.0.0.1:4200",
             "http://192.168.0.79:4200",
+            "http://192.168.0.155:4200",
+            "http://192.168.0.155",
             "https://nathbit.com",
             "https://www.nathbit.com",
             "http://45.32.164.243:4200"// Por si pruebas desde otro puerto

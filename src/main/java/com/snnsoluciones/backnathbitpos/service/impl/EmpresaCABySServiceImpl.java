@@ -5,9 +5,11 @@ import com.snnsoluciones.backnathbitpos.dto.cabys.EmpresaCABySDto;
 import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.EmpresaCAByS;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.repository.CodigoCABySRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaCABySRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
+import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.service.EmpresaCABySService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ public class EmpresaCABySServiceImpl implements EmpresaCABySService {
     private final EmpresaCABySRepository empresaCABySRepository;
     private final CodigoCABySRepository codigoCABySRepository;
     private final EmpresaRepository empresaRepository;
+    private final SucursalRepository sucursalRepository;
     
     @Override
     @Transactional(readOnly = true)
@@ -83,6 +86,17 @@ public class EmpresaCABySServiceImpl implements EmpresaCABySService {
         
         empresaCAByS.setActivo(false);
         empresaCABySRepository.save(empresaCAByS);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EmpresaCABySDto> listarPorSucursal(Long sucursalId) {
+        // Primero obtener la sucursal para sacar su empresa
+        Sucursal sucursal = sucursalRepository.findById(sucursalId)
+            .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
+
+        // Buscar por empresa (los CABYS siempre se asignan a nivel de empresa)
+        return listarPorEmpresa(sucursal.getEmpresa().getId());
     }
     
     // Métodos de conversión

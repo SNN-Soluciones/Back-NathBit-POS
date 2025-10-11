@@ -60,29 +60,6 @@ public class FacturaInternaController {
     }
 
     /**
-     * Listar facturas con filtros
-     */
-    @GetMapping
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
-    public ResponseEntity<ApiResponse<Page<FacturaInternaListResponse>>> listar(
-            @RequestParam(required = false) Long empresaId,
-            @RequestParam(required = false) Long sucursalId,
-            @RequestParam(required = false) String estado,
-            Pageable pageable) {
-        log.info("GET /api/facturas-internas - Listando facturas");
-        
-        try {
-            Page<FacturaInternaListResponse> facturas = facturaInternaService.buscar(
-                    empresaId, sucursalId, estado, pageable);
-            return ResponseEntity.ok(ApiResponse.success("Facturas encontradas", facturas));
-        } catch (Exception e) {
-            log.error("Error al listar facturas: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Error al obtener facturas"));
-        }
-    }
-
-    /**
      * Anular factura
      */
     @PostMapping("/{id}/anular/{usuarioId}")
@@ -112,5 +89,31 @@ public class FacturaInternaController {
     public ResponseEntity<ApiResponse<String>> siguienteNumero() {
         // TODO: Implementar en el service si es necesario
         return ResponseEntity.ok(ApiResponse.success("Siguiente número", "INT-2024-00001"));
+    }
+
+    /**
+     * Listar facturas con filtros
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+    public ResponseEntity<ApiResponse<Page<FacturaInternaListResponse>>> listar(
+        @RequestParam(required = false) Long empresaId,
+        @RequestParam(required = false) Long sucursalId,
+        @RequestParam(required = false) String estado,
+        @RequestParam(required = false) String fechaDesde,  // ⬅️ NUEVO
+        @RequestParam(required = false) String fechaHasta,  // ⬅️ NUEVO
+        @RequestParam(required = false) String busqueda,    // ⬅️ NUEVO
+        Pageable pageable) {
+        log.info("GET /api/facturas-internas - Listando facturas con filtros");
+
+        try {
+            Page<FacturaInternaListResponse> facturas = facturaInternaService.buscar(
+                empresaId, sucursalId, estado, fechaDesde, fechaHasta, busqueda, pageable);
+            return ResponseEntity.ok(ApiResponse.success("Facturas encontradas", facturas));
+        } catch (Exception e) {
+            log.error("Error al listar facturas: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Error al obtener facturas"));
+        }
     }
 }

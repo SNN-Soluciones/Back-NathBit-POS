@@ -42,4 +42,41 @@ public interface FacturaInternaRepository extends JpaRepository<FacturaInterna, 
     @Query("SELECT fi FROM FacturaInterna fi WHERE fi.sesionCaja.id = :sesionId ORDER BY fi.fecha DESC")
     List<FacturaInterna> findBySesionCajaId(@Param("sesionId") Long sesionId);
 
+    // src/main/java/com/snnsoluciones/backnathbitpos/repository/FacturaInternaRepository.java
+
+    /**
+     * Buscar facturas por empresa, sucursal y término de búsqueda (número o cliente)
+     */
+    @Query("SELECT f FROM FacturaInterna f " +
+        "WHERE f.empresa.id = :empresaId " +
+        "AND f.sucursal.id = :sucursalId " +
+        "AND f.fecha BETWEEN :fechaDesde AND :fechaHasta " +
+        "AND (LOWER(f.numero) LIKE LOWER(CONCAT('%', :busqueda, '%')) " +
+        "     OR LOWER(f.nombreCliente) LIKE LOWER(CONCAT('%', :busqueda, '%'))) " +
+        "ORDER BY f.fecha DESC")
+    Page<FacturaInterna> buscarConFiltros(
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("fechaDesde") LocalDateTime fechaDesde,
+        @Param("fechaHasta") LocalDateTime fechaHasta,
+        @Param("busqueda") String busqueda,
+        Pageable pageable
+    );
+
+    /**
+     * Buscar facturas por empresa, sucursal y rango de fechas (sin búsqueda)
+     */
+    @Query("SELECT f FROM FacturaInterna f " +
+        "WHERE f.empresa.id = :empresaId " +
+        "AND f.sucursal.id = :sucursalId " +
+        "AND f.fecha BETWEEN :fechaDesde AND :fechaHasta " +
+        "ORDER BY f.fecha DESC")
+    Page<FacturaInterna> buscarPorFechas(
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("fechaDesde") LocalDateTime fechaDesde,
+        @Param("fechaHasta") LocalDateTime fechaHasta,
+        Pageable pageable
+    );
+
 }

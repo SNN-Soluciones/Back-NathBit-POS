@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
+import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.CuentaPorCobrarService;
@@ -63,6 +64,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final ClienteService clienteService;
   private final CuentaPorCobrarService cuentaPorCobrarService;
   private final FacturaVentaExcelService facturaVentaExcelService;
+  private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
 
   @Override
   @Transactional
@@ -689,6 +691,15 @@ public class FacturaServiceImpl implements FacturaService {
       medioPago.setMonto(mpReq.getMonto());
       medioPago.setReferencia(mpReq.getReferencia());
       medioPago.setBanco(mpReq.getBanco());
+
+      if (mpReq.getPlataformaDigitalId() != null) {
+        PlataformaDigitalConfig plataforma = plataformaDigitalConfigRepository
+            .findById(mpReq.getPlataformaDigitalId())
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Plataforma digital no encontrada: " + mpReq.getPlataformaDigitalId()));
+
+        medioPago.setPlataformaDigital(plataforma);
+      }
 
       factura.agregarMedioPago(medioPago);
     }

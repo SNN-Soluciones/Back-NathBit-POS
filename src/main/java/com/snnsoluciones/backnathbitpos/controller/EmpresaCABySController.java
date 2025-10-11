@@ -74,4 +74,14 @@ public class EmpresaCABySController {
                     .body(ApiResponse.error(e.getMessage()));
         }
     }
+
+    @Operation(summary = "Listar CAByS de sucursal")
+    @GetMapping("/sucursal/{sucursalId}")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+    public ResponseEntity<ApiResponse<List<EmpresaCABySDto>>> listarPorSucursal(
+        @PathVariable Long sucursalId) {
+
+        List<EmpresaCABySDto> lista = service.listarPorSucursal(sucursalId);
+        return ResponseEntity.ok(ApiResponse.ok("CAByS asignados: " + lista.size(), lista));
+    }
 }

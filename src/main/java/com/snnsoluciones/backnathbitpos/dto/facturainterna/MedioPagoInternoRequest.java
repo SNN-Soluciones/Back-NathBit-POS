@@ -23,4 +23,6 @@ public class MedioPagoInternoRequest {
     private String banco; // Para tarjetas o transferencias
     private String numeroAutorizacion;
     private String descripcionPago;
+
+    private Long plataformaDigitalId;
 }

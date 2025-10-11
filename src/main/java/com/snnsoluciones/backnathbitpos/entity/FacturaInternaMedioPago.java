@@ -40,4 +40,8 @@ public class FacturaInternaMedioPago {
 
     @Column(name = "notas", length = 200)
     private String notas;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plataforma_digital_id")
+    private PlataformaDigitalConfig plataformaDigital;
 }

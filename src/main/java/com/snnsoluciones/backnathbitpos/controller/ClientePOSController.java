@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/pos/clientes")
 @RequiredArgsConstructor
 @Tag(name = "POS - Clientes", description = "Búsqueda rápida de clientes para punto de venta")
-@PreAuthorize("hasAnyRole('CAJERO', 'MESERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+@PreAuthorize("hasAnyRole('CAJERO', 'MESERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
 public class ClientePOSController {
 
   private final ClienteService clienteService;

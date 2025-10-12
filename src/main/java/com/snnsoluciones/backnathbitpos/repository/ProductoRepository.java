@@ -52,17 +52,42 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
   // Búsqueda general
   @Query("""
-      SELECT p FROM Producto p
-      WHERE p.empresa.id = :empresaId
-        AND p.activo = true
-        AND (
-            LOWER(p.codigoInterno) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
-            LOWER(p.codigoBarras)  LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
-            LOWER(p.nombre)        LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
-            LOWER(p.descripcion)   LIKE LOWER(CONCAT('%', :busqueda, '%'))
-        )
-      """)
+    SELECT DISTINCT p FROM Producto p
+    WHERE p.empresa.id = :empresaId
+      AND p.activo = true
+      AND (
+          LOWER(p.codigoInterno) = LOWER(:busqueda) OR
+          LOWER(p.codigoInterno) LIKE LOWER(CONCAT(:busqueda, '%')) OR
+          LOWER(p.codigoBarras) = LOWER(:busqueda) OR
+          LOWER(p.codigoBarras) LIKE LOWER(CONCAT(:busqueda, '%')) OR
+          LOWER(p.nombre) LIKE LOWER(CONCAT(:busqueda, ' %')) OR
+          LOWER(p.nombre) LIKE LOWER(CONCAT('% ', :busqueda, ' %')) OR
+          LOWER(p.nombre) LIKE LOWER(CONCAT('% ', :busqueda)) OR
+          LOWER(p.nombre) = LOWER(:busqueda) OR
+          LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :busqueda, '%'))
+      )
+    """)
   Page<Producto> buscarPorEmpresa(@Param("empresaId") Long empresaId,
+      @Param("busqueda") String busqueda,
+      Pageable pageable);
+
+  @Query("""
+    SELECT DISTINCT p FROM Producto p
+    WHERE p.sucursal.id = :sucursalId
+      AND p.activo = true
+      AND (
+          LOWER(p.codigoInterno) = LOWER(:busqueda) OR
+          LOWER(p.codigoInterno) LIKE LOWER(CONCAT(:busqueda, '%')) OR
+          LOWER(p.codigoBarras) = LOWER(:busqueda) OR
+          LOWER(p.codigoBarras) LIKE LOWER(CONCAT(:busqueda, '%')) OR
+          LOWER(p.nombre) LIKE LOWER(CONCAT(:busqueda, ' %')) OR
+          LOWER(p.nombre) LIKE LOWER(CONCAT('% ', :busqueda, ' %')) OR
+          LOWER(p.nombre) LIKE LOWER(CONCAT('% ', :busqueda)) OR
+          LOWER(p.nombre) = LOWER(:busqueda) OR
+          LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :busqueda, '%'))
+      )
+    """)
+  Page<Producto> buscarPorSucursal(@Param("sucursalId") Long sucursalId,
       @Param("busqueda") String busqueda,
       Pageable pageable);
 

@@ -39,4 +39,9 @@ public interface ProductoServiceV2 {
     Page<ProductoDto> listarPorEmpresa(Long empresaId, Pageable pageable);
 
     Page<ProductoDto> listarPorSucursal(Long sucursalId, Pageable pageable);
+
+    Page<ProductoDto> buscarPorEmpresaConTermino(Long empresaId, String termino, Pageable pageable);
+
+    Page<ProductoDto> buscarPorSucursalConTermino(Long sucursalId, String termino, Pageable pageable);
+
 }

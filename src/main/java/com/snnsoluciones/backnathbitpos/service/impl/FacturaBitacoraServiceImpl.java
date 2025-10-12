@@ -24,6 +24,7 @@ import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.text.DecimalFormat;
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -61,6 +62,98 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
     private final FacturaPdfService facturaPdfService;
     private final EmailAuditLogRepository emailAuditLogRepository;
     private final EmailService emailService;
+
+    // FacturaBitacoraServiceImpl.java
+
+    @Override
+    public Page<FacturaBitacoraListResponse> buscarSimple(
+        String busqueda,
+        String fechaDesde,
+        String fechaHasta,
+        String tipoDocumento,
+        int page,
+        int size
+    ) {
+        log.info("Búsqueda simple bitácora");
+
+        Specification<FacturaBitacora> spec = crearEspecificacionSimple(
+            busqueda, fechaDesde, fechaHasta, tipoDocumento
+        );
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<FacturaBitacora> bitacoras = bitacoraRepository.findAll(spec, pageable);
+
+        return bitacoras.map(this::convertirAListResponse);
+    }
+
+    /**
+     * ✅ Especificación SIMPLE - MVP Style
+     */
+    private Specification<FacturaBitacora> crearEspecificacionSimple(
+        String busqueda,
+        String fechaDesde,
+        String fechaHasta,
+        String tipoDocumento
+    ) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // ✅ 1. BÚSQUEDA GENERAL (clave, consecutivo, cliente)
+            if (busqueda != null && !busqueda.trim().isEmpty()) {
+                String searchTerm = "%" + busqueda.toLowerCase().trim() + "%";
+
+                Join<FacturaBitacora, Factura> facturaJoin = root.join("factura", JoinType.LEFT);
+                Join<Factura, Cliente> clienteJoin = facturaJoin.join("cliente", JoinType.LEFT);
+
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("clave")), searchTerm),
+                    cb.like(cb.lower(facturaJoin.get("consecutivo")), searchTerm),
+                    cb.like(cb.lower(clienteJoin.get("nombreRazonSocial")), searchTerm),
+                    cb.like(cb.lower(clienteJoin.get("email")), searchTerm)
+                ));
+            }
+
+            // ✅ 2. FECHA DESDE
+            if (fechaDesde != null && !fechaDesde.isEmpty()) {
+                LocalDateTime fechaDesdeTime = LocalDate.parse(fechaDesde).atStartOfDay();
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fechaDesdeTime));
+            }
+
+            // ✅ 3. FECHA HASTA
+            if (fechaHasta != null && !fechaHasta.isEmpty()) {
+                LocalDateTime fechaHastaTime = LocalDate.parse(fechaHasta).atTime(23, 59, 59);
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), fechaHastaTime));
+            }
+
+            // ✅ 4. TIPO DE DOCUMENTO (extraído de la clave)
+            if (tipoDocumento != null && !tipoDocumento.isEmpty()) {
+                // La clave tiene formato: 50612345678901001000000100000000000000001
+                // Posición 29-30 indica el tipo: 01=FE, 02=ND, 03=NC, 04=TE, etc.
+                String codigoTipo = mapearTipoDocumentoACodigo(tipoDocumento);
+                if (codigoTipo != null) {
+                    predicates.add(cb.like(root.get("clave"), "%" + codigoTipo + "%"));
+                }
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
+     * Mapea tipo de documento a código en clave
+     */
+    private String mapearTipoDocumentoACodigo(String tipoDocumento) {
+        return switch (tipoDocumento.toUpperCase()) {
+            case "FE" -> "01";  // Factura Electrónica
+            case "ND" -> "02";  // Nota de Débito
+            case "NC" -> "03";  // Nota de Crédito
+            case "TE" -> "04";  // Tiquete Electrónico
+            case "FEE" -> "05"; // Factura Electrónica de Exportación
+            case "FEC" -> "06"; // Factura Electrónica de Compra
+            default -> null;
+        };
+    }
 
     @Override
     public Page<FacturaBitacoraListResponse> buscarConFiltros(FacturaBitacoraFilterRequest filtros) {

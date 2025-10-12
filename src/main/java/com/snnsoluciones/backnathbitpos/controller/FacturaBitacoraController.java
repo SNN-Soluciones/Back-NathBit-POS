@@ -27,24 +27,32 @@ public class FacturaBitacoraController {
 
     private final FacturaBitacoraService bitacoraService;
 
-    @Operation(summary = "Listar bitácoras con filtros",
-        description = "Obtiene lista paginada de bitácoras aplicando filtros opcionales")
-    @PostMapping("/buscar")
+    // FacturaBitacoraController.java
+
+    @Operation(summary = "Buscar bitácoras (MVP - simple)")
+    @GetMapping("/buscar-simple")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE', 'JEFE_CAJAS')")
-    public ResponseEntity<ApiResponse<Page<FacturaBitacoraListResponse>>> buscarBitacoras(
-            @Valid @RequestBody FacturaBitacoraFilterRequest filtros) {
-        
+    public ResponseEntity<ApiResponse<Page<FacturaBitacoraListResponse>>> buscarSimple(
+        @RequestParam(required = false) String busqueda,        // ✅ Clave, consecutivo o cliente
+        @RequestParam(required = false) String fechaDesde,      // ✅ Formato: 2025-01-01
+        @RequestParam(required = false) String fechaHasta,      // ✅ Formato: 2025-01-31
+        @RequestParam(required = false) String tipoDocumento,   // ✅ FE, TE, NC, ND
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
+    ) {
         try {
-            log.info("Buscando bitácoras con filtros: {}", filtros);
-            Page<FacturaBitacoraListResponse> resultado = bitacoraService.buscarConFiltros(filtros);
-            
-            return ResponseEntity.ok(
-                ApiResponse.ok("Bitácoras encontradas", resultado)
+            log.info("Búsqueda simple - busqueda: {}, fechaDesde: {}, fechaHasta: {}, tipoDocumento: {}",
+                busqueda, fechaDesde, fechaHasta, tipoDocumento);
+
+            Page<FacturaBitacoraListResponse> resultado = bitacoraService.buscarSimple(
+                busqueda, fechaDesde, fechaHasta, tipoDocumento, page, size
             );
+
+            return ResponseEntity.ok(ApiResponse.ok("Bitácoras encontradas", resultado));
         } catch (Exception e) {
-            log.error("Error al buscar bitácoras", e);
+            log.error("Error en búsqueda simple", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("Error al buscar bitácoras: " + e.getMessage()));
+                .body(ApiResponse.error("Error al buscar: " + e.getMessage()));
         }
     }
 

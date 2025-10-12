@@ -968,4 +968,23 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
     // Convertir a DTO
     return productos.map(producto -> modelMapper.map(producto, ProductoDto.class));
   }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<ProductoDto> buscarPorEmpresaConTermino(Long empresaId, String termino, Pageable pageable) {
+    log.info("Buscando productos por empresa {} con término: '{}'", empresaId, termino);
+
+    return productoRepository.buscarPorEmpresa(empresaId, termino, pageable)
+        .map(producto -> modelMapper.map(producto, ProductoDto.class));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<ProductoDto> buscarPorSucursalConTermino(Long sucursalId, String termino, Pageable pageable) {
+    log.info("Buscando productos por sucursal {} con término: '{}'", sucursalId, termino);
+
+    // ⚠️ Necesitas agregar este método en el repository
+    return productoRepository.buscarPorSucursal(sucursalId, termino, pageable)
+        .map(producto -> modelMapper.map(producto, ProductoDto.class));
+  }
 }

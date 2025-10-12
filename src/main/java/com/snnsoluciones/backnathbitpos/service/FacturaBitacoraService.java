@@ -16,6 +16,15 @@ import org.springframework.http.ResponseEntity;
  */
 public interface FacturaBitacoraService {
 
+    Page<FacturaBitacoraListResponse> buscarSimple(
+        String busqueda,
+        String fechaDesde,
+        String fechaHasta,
+        String tipoDocumento,
+        int page,
+        int size
+    );
+
     /**
      * Busca bitácoras aplicando filtros
      * @param filtros Criterios de búsqueda

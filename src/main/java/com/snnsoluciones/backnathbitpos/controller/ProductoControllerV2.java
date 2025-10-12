@@ -104,30 +104,49 @@ public class ProductoControllerV2 {
     }
   }
 
-  @Operation
-  @GetMapping("/empresa-o-sucursal/{parametro}/id/{id}")
+  // ProductoControllerV2.java
+  @Operation(summary = "Buscar productos por término (empresa o sucursal según contexto)")
+  @GetMapping("/buscar")
   @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
-  public ResponseEntity<ApiResponse<Page<ProductoDto>>> obtenerPorParametro(
-      @PathVariable String parametro,
-      @PathVariable Long id,
+  public ResponseEntity<ApiResponse<Page<ProductoDto>>> buscarProductos(
+      @RequestParam(required = false) String termino,  // ✅ Término de búsqueda (opcional)
+      @RequestParam Long empresaId,                     // ✅ Siempre requerido
+      @RequestParam(required = false) Long sucursalId,  // ✅ Opcional - si viene, busca por sucursal
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "id") String sortBy,
       @RequestParam(defaultValue = "ASC") String sortDirection) {
 
-    log.info("REST V2 - Buscando producto por parametro: {} y ID: {}", parametro, id);
+    log.info("REST V2 - Buscando productos - empresaId: {}, sucursalId: {}, termino: '{}'",
+        empresaId, sucursalId, termino);
 
-    Sort.Direction direction = sortDirection.equalsIgnoreCase("DESC") ? Sort.Direction.DESC : Sort.Direction.ASC;
+    Sort.Direction direction = sortDirection.equalsIgnoreCase("DESC")
+        ? Sort.Direction.DESC : Sort.Direction.ASC;
     Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-    if (parametro.equals("empresa")) {
-      return ResponseEntity.ok().body(ApiResponse.ok(productoServiceV2.buscarPorEmpresa(id, pageable)));
-    }
-    if(parametro.equals("sucursal")) {
-      return ResponseEntity.ok().body(ApiResponse.ok(productoServiceV2.buscarPorSucursal(id, pageable)));
+    Page<ProductoDto> resultado;
+
+    // ✅ Si viene sucursalId, buscar por sucursal
+    if (sucursalId != null) {
+      if (termino != null && !termino.trim().isEmpty()) {
+        // Buscar por sucursal CON término
+        resultado = productoServiceV2.buscarPorSucursalConTermino(sucursalId, termino, pageable);
+      } else {
+        // Listar todos de la sucursal
+        resultado = productoServiceV2.buscarPorSucursal(sucursalId, pageable);
+      }
+    } else {
+      // ✅ Buscar por empresa
+      if (termino != null && !termino.trim().isEmpty()) {
+        // Buscar por empresa CON término
+        resultado = productoServiceV2.buscarPorEmpresaConTermino(empresaId, termino, pageable);
+      } else {
+        // Listar todos de la empresa
+        resultado = productoServiceV2.buscarPorEmpresa(empresaId, pageable);
+      }
     }
 
-    return ResponseEntity.badRequest().body(ApiResponse.error("Parametro incorrecto"));
+    return ResponseEntity.ok(ApiResponse.ok(resultado));
   }
 
   @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

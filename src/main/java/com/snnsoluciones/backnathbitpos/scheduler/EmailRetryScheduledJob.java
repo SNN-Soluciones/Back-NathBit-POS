@@ -52,7 +52,7 @@ public class EmailRetryScheduledJob {
 
     private void ejecutarProceso() {
         log.info("🔄 ===== INICIANDO ENVÍO PENDIENTE DE FACTURAS (Tipo 01) =====");
-        final LocalDateTime fechaDesde = LocalDate.of(2024, 9, 2).atStartOfDay();
+        final LocalDateTime fechaDesde = LocalDate.of(2024, 10, 1).atStartOfDay();
         final LocalDateTime fechaHasta = LocalDateTime.now();
         log.info("📅 Rango: {} → {}", fechaDesde, fechaHasta);
 

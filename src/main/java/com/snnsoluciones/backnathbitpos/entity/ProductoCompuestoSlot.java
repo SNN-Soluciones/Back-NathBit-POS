@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -80,10 +81,41 @@ public class ProductoCompuestoSlot {
     private Integer orden = 0;
 
     /**
-     * Opciones disponibles para este slot
+     * Indica si este slot usa una familia de productos
+     * true = Las opciones se cargan dinámicamente de la familia
+     * false = Las opciones son manuales (como antes)
      */
-    @OneToMany(mappedBy = "slot", cascade = CascadeType.ALL, 
-               orphanRemoval = true, fetch = FetchType.LAZY)
+    @Column(name = "usa_familia", nullable = false)
+    @Builder.Default
+    private Boolean usaFamilia = false;
+
+    /**
+     * Familia de productos asociada (nullable)
+     * Si usaFamilia=true, este campo NO puede ser null
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "familia_id",
+        nullable = true,
+        foreignKey = @ForeignKey(name = "fk_slot_familia")
+    )
+    private FamiliaProducto familia;
+
+    /**
+     * Precio adicional por cada opción de la familia
+     * Se suma al precio de cada producto de la familia
+     * Si es 0 o null, las opciones son gratuitas
+     * Ejemplo: Bebida +₡500
+     */
+    @Column(name = "precio_adicional_por_opcion", precision = 18, scale = 5)
+    private BigDecimal precioAdicionalPorOpcion;
+
+    /**
+     * Opciones disponibles para este slot
+     * SOLO se usa si usaFamilia = false
+     */
+    @OneToMany(mappedBy = "slot", cascade = CascadeType.ALL,
+        orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("orden ASC, id ASC")
     @Builder.Default
     private List<ProductoCompuestoOpcion> opciones = new ArrayList<>();
@@ -159,4 +191,73 @@ public class ProductoCompuestoSlot {
     public int hashCode() {
         return getClass().hashCode();
     }
+
+    /**
+     * Verifica si el slot usa familia
+     */
+    public boolean usaFamilia() {
+        return Boolean.TRUE.equals(this.usaFamilia);
+    }
+
+    /**
+     * Verifica si el slot usa opciones manuales
+     */
+    public boolean usaOpcionesManuales() {
+        return !usaFamilia();
+    }
+
+    /**
+     * Obtiene el nombre de la familia (si usa familia)
+     */
+    public String getNombreFamilia() {
+        if (usaFamilia() && familia != null) {
+            return familia.getNombre();
+        }
+        return null;
+    }
+
+    /**
+     * Verifica si tiene precio adicional
+     */
+    public boolean tienePrecioAdicional() {
+        return precioAdicionalPorOpcion != null &&
+            precioAdicionalPorOpcion.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    /**
+     * Obtiene el precio adicional formateado
+     */
+    public BigDecimal getPrecioAdicionalODefault() {
+        return precioAdicionalPorOpcion != null ?
+            precioAdicionalPorOpcion : BigDecimal.ZERO;
+    }
+
+    /**
+     * Valida la configuración del slot
+     * @throws IllegalStateException si la configuración es inválida
+     */
+    public void validarConfiguracion() {
+        if (usaFamilia()) {
+            // Si usa familia, debe tener familia asignada
+            if (familia == null) {
+                throw new IllegalStateException(
+                    "Slot '" + nombre + "' usa familia pero no tiene familia asignada"
+                );
+            }
+            // Si usa familia, no debe tener opciones manuales
+            if (opciones != null && !opciones.isEmpty()) {
+                throw new IllegalStateException(
+                    "Slot '" + nombre + "' usa familia pero también tiene opciones manuales"
+                );
+            }
+        } else {
+            // Si no usa familia, debe tener opciones manuales
+            if (opciones == null || opciones.isEmpty()) {
+                throw new IllegalStateException(
+                    "Slot '" + nombre + "' no usa familia pero tampoco tiene opciones manuales"
+                );
+            }
+        }
+    }
+
 }

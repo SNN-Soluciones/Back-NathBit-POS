@@ -48,6 +48,12 @@ public class ProductoCreateDto {
     @JsonProperty("categoriaIds")
     private List<Long> categoriaIds;
 
+    /**
+     * ID de la familia de productos (opcional)
+     * Permite agrupar este producto en una familia
+     */
+    private Long familiaId;
+
     @NotNull(message = "Unidad de medida es requerida")
     private UnidadMedida unidadMedida;  // ENUM directamente
 

@@ -57,6 +57,7 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   private final ProductoRecetaRepository recetaRepository;
   private final FacturaDetalleRepository facturaDetalleRepository;
   private final CategoriaProductoService categoriaService;
+  private final FamiliaProductoRepository familiaProductoRepository;
 
   // ========== CRUD CON IMÁGENES ==========
 
@@ -146,6 +147,12 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
           categorias.add(categoria);
         }
+      }
+
+      if (dto.getFamiliaId() != null) {
+        log.debug("Asignando familia {} al producto", dto.getFamiliaId());
+        FamiliaProducto familia = validarYObtenerFamilia(dto.getFamiliaId(), empresaId);
+        producto.setFamilia(familia);
       }
 
       // Asignar categorías antes de guardar
@@ -471,6 +478,25 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         producto.setActivo(dto.getActivo());
       }
 
+      // ✅ ============================================================
+      // ✅ AGREGAR AQUÍ: Actualizar familia (DESPUÉS de campos básicos)
+      // ✅ ============================================================
+      if (dto.getFamiliaId() != null) {
+        // Usuario quiere asignar o cambiar familia
+        log.debug("Actualizando familia a {} para producto {}",
+            dto.getFamiliaId(), productoId);
+        FamiliaProducto familia = validarYObtenerFamilia(dto.getFamiliaId(), empresaId);
+        producto.setFamilia(familia);
+      } else {
+        // Si el DTO viene con familiaId null y el producto tiene familia,
+        // se interpreta como "quitar la familia"
+        if (producto.getFamilia() != null) {
+          log.debug("Quitando familia del producto {}", productoId);
+          producto.setFamilia(null);
+        }
+      }
+      // ✅ ============================================================
+
       // 5. Actualizar precios
       if (dto.getPrecioVenta() != null) {
         // Validar precio para materia prima
@@ -595,8 +621,11 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
       log.info("Producto {} actualizado exitosamente", productoId);
 
+      // ✅ ============================================================
+      // ✅ MODIFICAR: Usar convertirADto() en vez de modelMapper directo
+      // ✅ ============================================================
       // 11. Convertir y retornar
-      return modelMapper.map(producto, ProductoDto.class);
+      return convertirADto(producto); // ✅ CAMBIAR ESTA LÍNEA
 
     } catch (BusinessException | ResourceNotFoundException e) {
       log.error("Error de negocio actualizando producto: {}", e.getMessage());
@@ -986,5 +1015,37 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
     // ⚠️ Necesitas agregar este método en el repository
     return productoRepository.buscarPorSucursal(sucursalId, termino, pageable)
         .map(producto -> modelMapper.map(producto, ProductoDto.class));
+  }
+
+  /**
+   * Valida y retorna la familia si existe
+   * @param familiaId ID de la familia
+   * @param empresaId ID de la empresa
+   * @return FamiliaProducto o null si familiaId es null
+   */
+  private FamiliaProducto validarYObtenerFamilia(Long familiaId, Long empresaId) {
+    if (familiaId == null) {
+      return null; // Familia es opcional
+    }
+
+    log.debug("Validando familia {} para empresa {}", familiaId, empresaId);
+
+    FamiliaProducto familia = familiaProductoRepository.findById(familiaId)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Familia no encontrada con ID: " + familiaId));
+
+    // Validar que la familia pertenece a la misma empresa
+    if (!familia.getEmpresa().getId().equals(empresaId)) {
+      throw new BusinessException(
+          "La familia no pertenece a la misma empresa");
+    }
+
+    // Validar que la familia está activa
+    if (!familia.getActiva()) {
+      throw new BusinessException(
+          "La familia " + familia.getNombre() + " está inactiva");
+    }
+
+    return familia;
   }
 }

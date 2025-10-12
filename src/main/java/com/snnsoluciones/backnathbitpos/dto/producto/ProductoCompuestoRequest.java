@@ -38,6 +38,12 @@ public class ProductoCompuestoRequest {
 
         private Integer orden;
 
+        private Boolean usaFamilia;
+
+        private Long familiaId;
+
+        private BigDecimal precioAdicionalPorOpcion;
+
         private List<OpcionRequest> opciones;
     }
 

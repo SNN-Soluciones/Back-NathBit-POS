@@ -40,6 +40,8 @@ public class ProductoUpdateDto {
     private Long empresaCabysId;
     
     private Long categoriaId;
+
+    private Long familiaId;
     
     @NotNull(message = "Unidad de medida es requerida")
     private UnidadMedida unidadMedida;  // ENUM directamente

@@ -68,6 +68,19 @@ public class Producto {
   @JoinColumn(name = "empresa_cabys_id")
   private EmpresaCAByS empresaCabys;
 
+  /**
+   * Familia de productos a la que pertenece (opcional)
+   * Permite agrupar productos similares
+   * Ejemplo: BEBIDAS, PROTEÍNAS, EXTRAS
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(
+      name = "familia_id",
+      nullable = true,
+      foreignKey = @ForeignKey(name = "fk_producto_familia")
+  )
+  private FamiliaProducto familia;
+
   // Categorías
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
@@ -244,5 +257,19 @@ public class Producto {
    */
   public boolean esCompuesto() {
     return tipo == TipoProducto.COMPUESTO;
+  }
+
+  /**
+   * Verifica si el producto tiene familia asignada
+   */
+  public boolean tieneFamilia() {
+    return this.familia != null;
+  }
+
+  /**
+   * Obtiene el nombre de la familia o un valor por defecto
+   */
+  public String getNombreFamilia() {
+    return tieneFamilia() ? familia.getNombre() : "Sin Familia";
   }
 }

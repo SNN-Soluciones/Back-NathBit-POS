@@ -24,6 +24,27 @@ public class ProductoDto {
     private String descripcion;
     private EmpresaCABySSelectDto empresaCabys;
     private Set<CategoriaProductoDto> categorias; // Info de categorías
+    // ========== NUEVOS CAMPOS DE FAMILIA ==========
+    /**
+     * ID de la familia de productos (nullable)
+     */
+    private Long familiaId;
+
+    /**
+     * Nombre de la familia de productos (nullable)
+     */
+    private String familiaNombre;
+
+    /**
+     * Código de la familia de productos (nullable)
+     */
+    private String familiaCodigo;
+
+    /**
+     * Color de la familia en formato hex (nullable)
+     */
+    private String familiaColor;
+    // ===============================================
     private UnidadMedida unidadMedida;
     private Moneda moneda;
     private BigDecimal precioVenta;

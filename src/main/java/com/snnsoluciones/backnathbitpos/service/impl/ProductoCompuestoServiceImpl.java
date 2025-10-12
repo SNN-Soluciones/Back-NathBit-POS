@@ -40,7 +40,8 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     private final ModelMapper modelMapper;
     private final SucursalRepository sucursalRepository;
     private final ProductoInventarioService productoInventarioService;
-    
+    private final FamiliaProductoRepository familiaProductoRepository;
+
     @Override
     @Transactional
     public ProductoCompuestoDto crear(Long empresaId, Long productoId, ProductoCompuestoRequest request) {
@@ -564,5 +565,62 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
 
         log.info("Filtrados {} compuestos con disponibilidad", compuestosFiltrados.size());
         return compuestosFiltrados;
+    }
+
+    /**
+     * Valida la configuración de un slot con familia
+     */
+    private void validarSlotConFamilia(ProductoCompuestoRequest.SlotRequest slotRequest, Long empresaId) {
+        Boolean usaFamilia = slotRequest.getUsaFamilia();
+
+        // Si no especifica, asume opciones manuales
+        if (usaFamilia == null || !usaFamilia) {
+            // Slot manual: debe tener opciones
+            if (slotRequest.getOpciones() == null || slotRequest.getOpciones().isEmpty()) {
+                throw new BusinessException(
+                    "El slot '" + slotRequest.getNombre() +
+                        "' debe tener al menos una opción o usar una familia"
+                );
+            }
+            return;
+        }
+
+        // Slot con familia: validaciones específicas
+        if (slotRequest.getFamiliaId() == null) {
+            throw new BusinessException(
+                "El slot '" + slotRequest.getNombre() +
+                    "' está configurado para usar familia pero no tiene familiaId"
+            );
+        }
+
+        // Verificar que la familia existe y está activa
+        FamiliaProducto familia = familiaProductoRepository
+            .findById(slotRequest.getFamiliaId())
+            .orElseThrow(() -> new BusinessException(
+                "Familia no encontrada con ID: " + slotRequest.getFamiliaId()
+            ));
+
+        if (!familia.getEmpresa().getId().equals(empresaId)) {
+            throw new BusinessException(
+                "La familia no pertenece a la misma empresa"
+            );
+        }
+
+        if (!familia.getActiva()) {
+            throw new BusinessException(
+                "La familia '" + familia.getNombre() + "' está inactiva"
+            );
+        }
+
+        // Si usa familia, NO debe tener opciones manuales
+        if (slotRequest.getOpciones() != null && !slotRequest.getOpciones().isEmpty()) {
+            throw new BusinessException(
+                "El slot '" + slotRequest.getNombre() +
+                    "' no puede tener opciones manuales y familia al mismo tiempo"
+            );
+        }
+
+        log.debug("✅ Slot '{}' validado correctamente con familia '{}'",
+            slotRequest.getNombre(), familia.getNombre());
     }
 }

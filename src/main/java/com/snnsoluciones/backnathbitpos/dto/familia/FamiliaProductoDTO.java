@@ -19,6 +19,8 @@ public class FamiliaProductoDTO {
     
     private Long id;
     private Long empresaId;
+    private Long sucursalId;  // NULL = familia global de empresa
+    private String sucursalNombre;
     private String nombre;
     private String descripcion;
     private String codigo;
@@ -31,4 +33,8 @@ public class FamiliaProductoDTO {
     
     // Campo adicional útil para el frontend
     private Long cantidadProductos; // Cantidad de productos en esta familia
+
+    public boolean esGlobal() {
+        return sucursalId == null;
+    }
 }

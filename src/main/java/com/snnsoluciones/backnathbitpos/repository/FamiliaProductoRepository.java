@@ -11,61 +11,93 @@ import java.util.Optional;
 
 /**
  * Repository para gestionar las Familias de Productos
- * Provee métodos para CRUD y consultas especializadas
+ * Soporta búsquedas por empresa y por sucursal
  */
 @Repository
 public interface FamiliaProductoRepository extends JpaRepository<FamiliaProducto, Long> {
 
     /**
-     * Buscar todas las familias de una empresa ordenadas por orden
+     * Buscar familias por empresa y opcionalmente por sucursal
+     * Si sucursalId es null o 0, busca solo por empresa (familias globales + todas las de sucursales)
+     * Si sucursalId tiene valor, busca familias globales de la empresa + las específicas de esa sucursal
      */
-    List<FamiliaProducto> findByEmpresaIdOrderByOrdenAsc(Long empresaId);
-
-    /**
-     * Buscar familias activas de una empresa
-     */
-    List<FamiliaProducto> findByEmpresaIdAndActivaTrueOrderByOrdenAsc(Long empresaId);
-
-    /**
-     * Verificar si existe una familia con el mismo código en la empresa
-     */
-    boolean existsByCodigoAndEmpresaId(String codigo, Long empresaId);
-
-    /**
-     * Verificar si existe una familia con el mismo código en la empresa, excluyendo un ID
-     * Útil para validaciones en actualización
-     */
-    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END " +
-        "FROM FamiliaProducto f " +
-        "WHERE f.codigo = :codigo " +
-        "AND f.empresa.id = :empresaId " +
-        "AND f.id <> :id")
-    boolean existsByCodigoAndEmpresaIdAndIdNot(
-        @Param("codigo") String codigo,
+    @Query("SELECT f FROM FamiliaProducto f " +
+        "WHERE f.empresa.id = :empresaId " +
+        "AND (:sucursalId = 0L OR f.sucursal.id = :sucursalId OR f.sucursal IS NULL) " +
+        "ORDER BY f.orden ASC")
+    List<FamiliaProducto> findByEmpresaAndSucursal(
         @Param("empresaId") Long empresaId,
-        @Param("id") Long id
+        @Param("sucursalId") Long sucursalId
     );
 
     /**
-     * Buscar familia por código y empresa
+     * Buscar familias activas por empresa y opcionalmente por sucursal
      */
-    Optional<FamiliaProducto> findByCodigoAndEmpresaId(String codigo, Long empresaId);
-
-    /**
-     * Buscar familia por ID y empresa (seguridad - valida que pertenezca a la empresa)
-     */
-    Optional<FamiliaProducto> findByIdAndEmpresaId(Long id, Long empresaId);
+    @Query("SELECT f FROM FamiliaProducto f " +
+        "WHERE f.empresa.id = :empresaId " +
+        "AND f.activa = true " +
+        "AND (:sucursalId = 0L OR f.sucursal.id = :sucursalId OR f.sucursal IS NULL) " +
+        "ORDER BY f.orden ASC")
+    List<FamiliaProducto> findActivasByEmpresaAndSucursal(
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId
+    );
 
     /**
      * Buscar familias con búsqueda por nombre o código
      */
     @Query("SELECT f FROM FamiliaProducto f " +
         "WHERE f.empresa.id = :empresaId " +
+        "AND (:sucursalId = 0L OR f.sucursal.id = :sucursalId OR f.sucursal IS NULL) " +
         "AND (LOWER(f.nombre) LIKE LOWER(CONCAT('%', :busqueda, '%')) " +
         "OR LOWER(f.codigo) LIKE LOWER(CONCAT('%', :busqueda, '%'))) " +
         "ORDER BY f.orden ASC")
-    List<FamiliaProducto> buscarPorEmpresa(
+    List<FamiliaProducto> buscarPorEmpresaAndSucursal(
         @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
         @Param("busqueda") String busqueda
+    );
+
+    /**
+     * Verificar si existe una familia con el mismo código en la empresa/sucursal
+     */
+    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END " +
+        "FROM FamiliaProducto f " +
+        "WHERE f.codigo = :codigo " +
+        "AND f.empresa.id = :empresaId " +
+        "AND (:sucursalId = 0L OR f.sucursal.id = :sucursalId OR f.sucursal IS NULL)")
+    boolean existsByCodigoAndEmpresaAndSucursal(
+        @Param("codigo") String codigo,
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId
+    );
+
+    /**
+     * Verificar si existe una familia con el mismo código, excluyendo un ID
+     */
+    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END " +
+        "FROM FamiliaProducto f " +
+        "WHERE f.codigo = :codigo " +
+        "AND f.empresa.id = :empresaId " +
+        "AND (:sucursalId = 0L OR f.sucursal.id = :sucursalId OR f.sucursal IS NULL) " +
+        "AND f.id <> :id")
+    boolean existsByCodigoAndEmpresaAndSucursalAndIdNot(
+        @Param("codigo") String codigo,
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId,
+        @Param("id") Long id
+    );
+
+    /**
+     * Buscar familia por ID, empresa y opcionalmente sucursal
+     */
+    @Query("SELECT f FROM FamiliaProducto f " +
+        "WHERE f.id = :id " +
+        "AND f.empresa.id = :empresaId " +
+        "AND (:sucursalId = 0L OR f.sucursal.id = :sucursalId OR f.sucursal IS NULL)")
+    Optional<FamiliaProducto> findByIdAndEmpresaAndSucursal(
+        @Param("id") Long id,
+        @Param("empresaId") Long empresaId,
+        @Param("sucursalId") Long sucursalId
     );
 }

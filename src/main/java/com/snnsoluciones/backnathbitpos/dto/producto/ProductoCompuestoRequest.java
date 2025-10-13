@@ -49,8 +49,8 @@ public class ProductoCompuestoRequest {
 
     @Data
     public static class OpcionRequest {
-        @NotNull(message = "El producto es requerido")
-        private Long productoId;
+        private Long productoId;      // ⭐ Ahora es opcional
+        private String nombre;         // ⭐ Requerido si productoId es null
 
         @NotNull(message = "El precio adicional es requerido")
         private BigDecimal precioAdicional; // Puede ser negativo!

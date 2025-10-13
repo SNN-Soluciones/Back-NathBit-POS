@@ -10,13 +10,17 @@ import java.time.LocalDateTime;
 
 /**
  * Representa una opción disponible dentro de un slot de personalización
- * Ej: "Papa Francesa", "Pollo", "Salsa Ranch"
+ *
+ * ACTUALIZADO: Ahora soporta dos modos:
+ * 1. Opción con producto (para slots normales)
+ * 2. Opción sin producto (para slot maestro - solo trigger)
  */
 @Entity
 @Table(name = "producto_compuesto_opcion",
     indexes = {
         @Index(name = "idx_slot_opciones", columnList = "slot_id"),
-        @Index(name = "idx_opcion_producto", columnList = "producto_id")
+        @Index(name = "idx_opcion_producto", columnList = "producto_id"),
+        @Index(name = "idx_opcion_nombre", columnList = "nombre")
     }
 )
 @Getter
@@ -40,11 +44,24 @@ public class ProductoCompuestoOpcion {
 
     /**
      * Producto que representa esta opción
-     * Debe ser un producto existente (puede ser MIXTO o MATERIA_PRIMA)
+     * NULLABLE: Para slot maestro, no necesita producto (solo nombre)
+     * NO NULL: Para slots normales, debe tener producto asociado
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "producto_id", nullable = false)
+    @JoinColumn(name = "producto_id", nullable = true) // ⭐ AHORA ES NULLABLE
     private Producto producto;
+
+    /**
+     * Nombre de la opción
+     * - Si tiene producto: Se usa el nombre del producto (este campo puede ser null)
+     * - Si NO tiene producto: Este campo es REQUERIDO (caso slot maestro)
+     *
+     * Ejemplos:
+     * - Slot maestro "Sabor": nombre = "Melocotón", producto = null
+     * - Slot normal "Tamaño": nombre = null, producto = "Fuze Tea Large"
+     */
+    @Column(name = "nombre", length = 100)
+    private String nombre;
 
     /**
      * Precio adicional por esta opción
@@ -64,7 +81,6 @@ public class ProductoCompuestoOpcion {
 
     /**
      * Indica si la opción está disponible
-     * Se puede desactivar temporalmente sin eliminar
      */
     @Column(nullable = false)
     @Builder.Default
@@ -81,7 +97,26 @@ public class ProductoCompuestoOpcion {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // Métodos helper
+    // ==================== MÉTODOS HELPER ====================
+
+    /**
+     * Obtiene el nombre efectivo de la opción
+     * - Si tiene nombre propio, usa ese
+     * - Si no, usa el nombre del producto
+     */
+    public String getNombreEfectivo() {
+        if (nombre != null && !nombre.isBlank()) {
+            return nombre;
+        }
+        return producto != null ? producto.getNombre() : "Sin nombre";
+    }
+
+    /**
+     * Verifica si es una opción de slot maestro (sin producto)
+     */
+    public boolean esOpcionMaestra() {
+        return producto == null;
+    }
 
     /**
      * Verifica si tiene cargo adicional
@@ -91,50 +126,18 @@ public class ProductoCompuestoOpcion {
     }
 
     /**
-     * Obtiene el nombre para mostrar
+     * Valida que la opción sea válida antes de guardar
      */
-    public String getNombreDisplay() {
-        if (producto == null) return "";
-        
-        String nombre = producto.getNombre();
-        if (tieneCargoAdicional()) {
-            nombre += " (+" + precioAdicional + ")";
+    @PrePersist
+    @PreUpdate
+    private void validar() {
+        // Si no tiene producto, DEBE tener nombre
+        if (producto == null && (nombre == null || nombre.isBlank())) {
+            throw new IllegalStateException(
+                "Una opción sin producto debe tener un nombre definido (slot maestro)"
+            );
         }
-        return nombre;
-    }
 
-    /**
-     * Verifica si el producto tiene stock disponible
-     */
-    public boolean tieneStockDisponible(Long sucursalId) {
-        if (producto == null) return false;
-        
-        // Si el producto no requiere inventario, siempre está disponible
-        if (producto.getTipoInventario() == TipoInventario.NINGUNO) {
-            return true;
-        }
-        
-        // TODO: Verificar stock real en la sucursal
-        return true;
-    }
-
-    /**
-     * Calcula el precio total de esta opción
-     */
-    public BigDecimal calcularPrecio() {
-        return precioAdicional != null ? precioAdicional : BigDecimal.ZERO;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof ProductoCompuestoOpcion)) return false;
-        ProductoCompuestoOpcion that = (ProductoCompuestoOpcion) o;
-        return id != null && id.equals(that.getId());
-    }
-
-    @Override
-    public int hashCode() {
-        return getClass().hashCode();
+        // Si tiene producto, el nombre es opcional (se usa el del producto)
     }
 }

@@ -190,35 +190,51 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     return opcion;
   }
 
-  private void agregarOpcionASlot(ProductoCompuestoSlot slot,
-      ProductoCompuestoRequest.OpcionRequest opcionRequest, Long empresaId, int orden) {
-    // Validar y obtener el producto que será la opción
-    Producto productoOpcion = productoRepository.findById(opcionRequest.getProductoId())
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "Producto opción no encontrado: " + opcionRequest.getProductoId()));
-
-    // Validar que el producto pertenezca a la misma empresa
-    if (!productoOpcion.getEmpresa().getId().equals(empresaId)) {
-      throw new BusinessException("El producto opción no pertenece a la empresa");
-    }
-
-    // Validar tipo de producto - solo MIXTO, MATERIA_PRIMA o VENTA pueden ser opciones
-    if (productoOpcion.getTipo() == TipoProducto.COMPUESTO
-        || productoOpcion.getTipo() == TipoProducto.COMBO) {
-      throw new BusinessException(
-          "Un producto compuesto o combo fijo no puede ser opción de otro compuesto");
-    }
-
-    // Crear la opción
+  private void agregarOpcionASlot(
+      ProductoCompuestoSlot slot,
+      ProductoCompuestoRequest.OpcionRequest opcionRequest,
+      Long empresaId,
+      int orden
+  ) {
     ProductoCompuestoOpcion opcion = new ProductoCompuestoOpcion();
     opcion.setSlot(slot);
-    opcion.setProducto(productoOpcion); // ⚠️ AQUÍ ESTABA EL ERROR - No se asignaba el producto
-    opcion.setPrecioAdicional(opcionRequest.getPrecioAdicional());
+    opcion.setOrden(orden);
+    opcion.setPrecioAdicional(
+        opcionRequest.getPrecioAdicional() != null
+            ? opcionRequest.getPrecioAdicional()
+            : BigDecimal.ZERO
+    );
     opcion.setEsDefault(
-        opcionRequest.getEsDefault() != null ? opcionRequest.getEsDefault() : false);
+        opcionRequest.getEsDefault() != null
+            ? opcionRequest.getEsDefault()
+            : false
+    );
     opcion.setDisponible(
-        opcionRequest.getDisponible() != null ? opcionRequest.getDisponible() : true);
-    opcion.setOrden(opcionRequest.getOrden() != null ? opcionRequest.getOrden() : orden);
+        opcionRequest.getDisponible() != null
+            ? opcionRequest.getDisponible()
+            : true
+    );
+
+    // ⭐ MANEJO DE PRODUCTO VS NOMBRE
+    if (opcionRequest.getProductoId() != null) {
+      // Caso normal: tiene producto asociado
+      Producto producto = productoRepository.findById(opcionRequest.getProductoId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Producto no encontrado con ID: " + opcionRequest.getProductoId()
+          ));
+      opcion.setProducto(producto);
+      // Nombre opcional si viene en request
+      opcion.setNombre(opcionRequest.getNombre());
+    } else {
+      // Caso slot maestro: solo nombre, sin producto
+      if (opcionRequest.getNombre() == null || opcionRequest.getNombre().isBlank()) {
+        throw new BusinessException(
+            "Las opciones sin producto deben tener un nombre (slot maestro)"
+        );
+      }
+      opcion.setProducto(null);
+      opcion.setNombre(opcionRequest.getNombre());
+    }
 
     opcionRepository.save(opcion);
   }
@@ -1048,12 +1064,33 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
 
     ProductoCompuestoSlot slot = slotConfig.getSlot();
 
+    // ========== CALCULAR VALORES EFECTIVOS (originales + overrides) ==========
+
+    Integer cantidadMinimaEfectiva = slotConfig.getCantidadMinimaOverride() != null
+        ? slotConfig.getCantidadMinimaOverride()
+        : slot.getCantidadMinima();
+
+    Integer cantidadMaximaEfectiva = slotConfig.getCantidadMaximaOverride() != null
+        ? slotConfig.getCantidadMaximaOverride()
+        : slot.getCantidadMaxima();
+
+    Boolean esRequeridoEfectivo = slotConfig.getEsRequeridoOverride() != null
+        ? slotConfig.getEsRequeridoOverride()
+        : slot.getEsRequerido();
+
+    BigDecimal precioAdicionalEfectivo = slotConfig.getPrecioAdicionalOverride() != null
+        ? slotConfig.getPrecioAdicionalOverride()
+        : (slot.getUsaFamilia() ? slot.getPrecioAdicionalPorOpcion() : null);
+
+    // ========== CONSTRUIR DTO BASE ==========
+
     SlotConfiguracionDTO dto = SlotConfiguracionDTO.builder()
         .id(slotConfig.getId())
         .slotId(slot.getId())
         .slotNombre(slot.getNombre())
         .slotDescripcion(slot.getDescripcion())
         .orden(slotConfig.getOrden())
+
         // Valores originales del slot
         .cantidadMinimaOriginal(slot.getCantidadMinima())
         .cantidadMaximaOriginal(slot.getCantidadMaxima())
@@ -1061,22 +1098,113 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         .precioAdicionalOriginal(
             slot.getUsaFamilia() ? slot.getPrecioAdicionalPorOpcion() : null
         )
+
         // Overrides de esta configuración
         .cantidadMinimaOverride(slotConfig.getCantidadMinimaOverride())
         .cantidadMaximaOverride(slotConfig.getCantidadMaximaOverride())
         .esRequeridoOverride(slotConfig.getEsRequeridoOverride())
         .precioAdicionalOverride(slotConfig.getPrecioAdicionalOverride())
+
+        // ⭐ VALORES EFECTIVOS (los que se deben usar)
+        .cantidadMinima(cantidadMinimaEfectiva)
+        .cantidadMaxima(cantidadMaximaEfectiva)
+        .esRequerido(esRequeridoEfectivo)
+        .precioAdicional(precioAdicionalEfectivo)
+
         // Info de familia
         .usaFamilia(slot.getUsaFamilia())
         .familiaId(slot.getFamilia() != null ? slot.getFamilia().getId() : null)
         .familiaNombre(slot.getFamilia() != null ? slot.getFamilia().getNombre() : null)
         .build();
 
-    log.debug("Slot '{}' convertido - Tiene overrides: {}",
-        slot.getNombre(),
-        dto.getTieneOverrides());
+    // ========== CARGAR OPCIONES DINÁMICAMENTE ==========
+
+    try {
+      // Obtener sucursal
+      Sucursal sucursal = sucursalRepository.findById(sucursalId)
+          .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+
+      List<OpcionSlotDTO> opciones;
+
+      if (Boolean.TRUE.equals(slot.getUsaFamilia()) && slot.getFamilia() != null) {
+        // ✅ CARGAR DESDE FAMILIA CON PRECIO EFECTIVO
+        log.debug("Cargando opciones de familia {} para slot {}",
+            slot.getFamilia().getNombre(), slot.getNombre());
+
+        opciones = cargarOpcionesDesdeFamiliaConPrecio(
+            slot.getFamilia(),
+            sucursal,
+            precioAdicionalEfectivo != null ? precioAdicionalEfectivo : BigDecimal.ZERO
+        );
+      } else {
+        // ✅ CARGAR OPCIONES MANUALES
+        log.debug("Cargando opciones manuales para slot {}", slot.getNombre());
+        opciones = cargarOpcionesManuales(slot, sucursal);
+      }
+
+      dto.setOpciones(opciones);
+      log.debug("Slot '{}' tiene {} opciones cargadas", slot.getNombre(), opciones.size());
+
+    } catch (Exception e) {
+      log.error("Error cargando opciones para slot {}: {}", slot.getNombre(), e.getMessage());
+      dto.setOpciones(List.of());
+    }
 
     return dto;
+  }
+
+  /**
+   * Carga opciones desde familia con precio específico
+   */
+  private List<OpcionSlotDTO> cargarOpcionesDesdeFamiliaConPrecio(
+      FamiliaProducto familia,
+      Sucursal sucursal,
+      BigDecimal precioAdicional
+  ) {
+    List<OpcionSlotDTO> opciones = new ArrayList<>();
+
+    // Obtener todos los productos activos de la familia
+    List<Producto> productos = productoRepository.findByFamiliaIdAndActivoTrue(familia.getId());
+
+    log.debug("Familia {} tiene {} productos activos", familia.getNombre(), productos.size());
+
+    int orden = 0;
+    for (Producto producto : productos) {
+      // Verificar stock en sucursal
+      boolean tieneStock = verificarStockProducto(producto.getId(), sucursal.getId());
+      Integer stockDisponible = obtenerStockDisponible(producto.getId(), sucursal.getId());
+
+      boolean esGratuita = precioAdicional.compareTo(BigDecimal.ZERO) == 0;
+
+      // Crear DTO
+      OpcionSlotDTO opcion = OpcionSlotDTO.builder()
+          .opcionId(null)  // No hay opción manual en familia
+          .productoId(producto.getId())
+          .nombre(producto.getNombre())
+          .codigoInterno(producto.getCodigoInterno())
+          .imagen(producto.getImagenUrl())
+          .precioBase(producto.getPrecioBase() != null ? producto.getPrecioBase() : BigDecimal.ZERO)
+          .precioAdicional(precioAdicional)
+          .esGratuita(esGratuita)
+          .disponible(tieneStock)
+          .esDefault(false)
+          .stockDisponible(stockDisponible)
+          .orden(orden++)
+          .origen("FAMILIA")
+          .build();
+
+      opciones.add(opcion);
+    }
+
+    // Ordenar: disponibles primero, luego por nombre
+    opciones.sort((a, b) -> {
+      if (!a.getDisponible().equals(b.getDisponible())) {
+        return a.getDisponible() ? -1 : 1;
+      }
+      return a.getNombre().compareTo(b.getNombre());
+    });
+
+    return opciones;
   }
 
   // Agregar a ProductoCompuestoServiceImpl.java

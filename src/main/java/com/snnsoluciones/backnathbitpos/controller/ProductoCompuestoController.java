@@ -60,12 +60,31 @@ public class ProductoCompuestoController {
       @RequestParam Long empresaId,
       @PathVariable Long productoId) {
 
+    log.info("GET compuesto - productoId: {}, empresaId: {}", productoId, empresaId);
+
     try {
       ProductoCompuestoDto compuesto = compuestoService.buscarPorProductoId(empresaId, productoId);
       return ResponseEntity.ok(ApiResponse.ok("Configuración obtenida", compuesto));
+
+    } catch (ResourceNotFoundException e) {
+      log.info("Producto {} no tiene configuración de compuesto", productoId);
+      return ResponseEntity.ok(
+          ApiResponse.<ProductoCompuestoDto>builder()
+              .success(true)
+              .message("Sin configuración previa")
+              .data(null)
+              .build()
+      );
+
+    } catch (BusinessException e) {
+      log.warn("Error de negocio: {}", e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(ApiResponse.error(e.getMessage()));
+
     } catch (Exception e) {
-      return ResponseEntity.status(HttpStatus.NOT_FOUND)
-          .body(ApiResponse.error("No encontrado: " + e.getMessage()));
+      log.error("Error obteniendo configuración de compuesto", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(ApiResponse.error("Error al obtener configuración: " + e.getMessage()));
     }
   }
 

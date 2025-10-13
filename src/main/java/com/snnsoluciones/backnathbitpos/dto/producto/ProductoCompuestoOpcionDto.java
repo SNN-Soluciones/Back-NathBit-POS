@@ -1,11 +1,15 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor   // ⭐ AGREGAR ESTO
+@AllArgsConstructor
 public class ProductoCompuestoOpcionDto {
     private Long id;
     private Long productoId;

@@ -1,5 +1,9 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.compuesto.ActualizarConfiguracionRequest;
+import com.snnsoluciones.backnathbitpos.dto.compuesto.CrearConfiguracionRequest;
+import com.snnsoluciones.backnathbitpos.dto.compuesto.ProductoCompuestoConfiguracionDTO;
+import com.snnsoluciones.backnathbitpos.dto.compuesto.SlotConfiguracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.producto.CalculoPrecioResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
@@ -42,6 +46,8 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   private final SucursalRepository sucursalRepository;
   private final ProductoInventarioService productoInventarioService;
   private final FamiliaProductoRepository familiaProductoRepository;
+  private final ProductoCompuestoConfiguracionRepository configuracionRepository;
+  private final ProductoCompuestoSlotConfiguracionRepository slotConfigRepository;
 
   @Override
   @Transactional
@@ -947,5 +953,549 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
       log.warn("Error obteniendo stock disponible para producto {}: {}", productoId, e.getMessage());
       return 0;
     }
+  }
+
+  // Agregar a ProductoCompuestoServiceImpl.java
+
+  @Override
+  @Transactional(readOnly = true)
+  public ProductoCompuestoConfiguracionDTO obtenerConfiguracionPorOpcion(Long productoId, Long opcionId) {
+    log.info("Obteniendo configuración para producto {} con opción {}", productoId, opcionId);
+
+    // 1. Validar que el producto existe
+    Producto producto = productoRepository.findById(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+
+    // 2. Validar que es tipo COMPUESTO
+    if (producto.getTipo() != TipoProducto.COMPUESTO) {
+      throw new BusinessException("El producto debe ser tipo COMPUESTO");
+    }
+
+    // 3. Obtener el compuesto
+    ProductoCompuesto compuesto = compuestoRepository.findByProductoId(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException("Configuración de compuesto no encontrada"));
+
+    // 4. Buscar configuración por opcionTriggerId
+    ProductoCompuestoConfiguracion configuracion = configuracionRepository.findByOpcionTriggerId(opcionId)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "No existe configuración para la opción seleccionada. " +
+                "Debe configurar qué slots mostrar cuando se elige esta opción."
+        ));
+
+    // 5. Validar que la configuración pertenece a este compuesto
+    if (!configuracion.getCompuesto().getId().equals(compuesto.getId())) {
+      throw new BusinessException("La configuración no pertenece a este producto compuesto");
+    }
+
+    // 6. Validar que la configuración está activa
+    if (!configuracion.getActiva()) {
+      throw new BusinessException("La configuración está inactiva");
+    }
+
+    log.info("Configuración encontrada: {} con {} slots",
+        configuracion.getNombre(),
+        configuracion.getSlots().size());
+
+    // 7. Convertir a DTO
+    return convertirConfiguracionADto(configuracion, producto.getSucursal().getId());
+  }
+
+  /**
+   * Convierte ProductoCompuestoConfiguracion a DTO
+   * Carga las opciones dinámicamente para cada slot
+   */
+  private ProductoCompuestoConfiguracionDTO convertirConfiguracionADto(
+      ProductoCompuestoConfiguracion configuracion,
+      Long sucursalId) {
+
+    ProductoCompuestoOpcion opcionTrigger = configuracion.getOpcionTrigger();
+
+    ProductoCompuestoConfiguracionDTO dto = ProductoCompuestoConfiguracionDTO.builder()
+        .id(configuracion.getId())
+        .compuestoId(configuracion.getCompuesto().getId())
+        .nombre(configuracion.getNombre())
+        .descripcion(configuracion.getDescripcion())
+        .orden(configuracion.getOrden())
+        .activa(configuracion.getActiva())
+        .opcionTriggerId(opcionTrigger.getId())
+        .opcionTriggerNombre(opcionTrigger.getProducto().getNombre())
+        .opcionTriggerProductoId(opcionTrigger.getProducto().getId())
+        .opcionTriggerProductoNombre(opcionTrigger.getProducto().getNombre())
+        .createdAt(configuracion.getCreatedAt())
+        .updatedAt(configuracion.getUpdatedAt())
+        .build();
+
+    // Cargar slots con sus opciones
+    List<SlotConfiguracionDTO> slotsDto = configuracion.getSlots().stream()
+        .sorted(Comparator.comparingInt(ProductoCompuestoSlotConfiguracion::getOrden))
+        .map(slotConfig -> convertirSlotConfigADto(slotConfig, sucursalId))
+        .collect(Collectors.toList());
+
+    dto.setSlots(slotsDto);
+
+    log.debug("Configuración DTO creado con {} slots", slotsDto.size());
+
+    return dto;
+  }
+
+  /**
+   * Convierte ProductoCompuestoSlotConfiguracion a DTO
+   * Incluye valores originales y overrides
+   */
+  private SlotConfiguracionDTO convertirSlotConfigADto(
+      ProductoCompuestoSlotConfiguracion slotConfig,
+      Long sucursalId) {
+
+    ProductoCompuestoSlot slot = slotConfig.getSlot();
+
+    SlotConfiguracionDTO dto = SlotConfiguracionDTO.builder()
+        .id(slotConfig.getId())
+        .slotId(slot.getId())
+        .slotNombre(slot.getNombre())
+        .slotDescripcion(slot.getDescripcion())
+        .orden(slotConfig.getOrden())
+        // Valores originales del slot
+        .cantidadMinimaOriginal(slot.getCantidadMinima())
+        .cantidadMaximaOriginal(slot.getCantidadMaxima())
+        .esRequeridoOriginal(slot.getEsRequerido())
+        .precioAdicionalOriginal(
+            slot.getUsaFamilia() ? slot.getPrecioAdicionalPorOpcion() : null
+        )
+        // Overrides de esta configuración
+        .cantidadMinimaOverride(slotConfig.getCantidadMinimaOverride())
+        .cantidadMaximaOverride(slotConfig.getCantidadMaximaOverride())
+        .esRequeridoOverride(slotConfig.getEsRequeridoOverride())
+        .precioAdicionalOverride(slotConfig.getPrecioAdicionalOverride())
+        // Info de familia
+        .usaFamilia(slot.getUsaFamilia())
+        .familiaId(slot.getFamilia() != null ? slot.getFamilia().getId() : null)
+        .familiaNombre(slot.getFamilia() != null ? slot.getFamilia().getNombre() : null)
+        .build();
+
+    log.debug("Slot '{}' convertido - Tiene overrides: {}",
+        slot.getNombre(),
+        dto.getTieneOverrides());
+
+    return dto;
+  }
+
+  // Agregar a ProductoCompuestoServiceImpl.java
+
+  @Override
+  @Transactional
+  public ProductoCompuestoConfiguracionDTO crearConfiguracion(
+      Long productoId,
+      CrearConfiguracionRequest request) {
+
+    log.info("Creando configuración '{}' para producto {}", request.getNombre(), productoId);
+
+    // 1. Validar que el producto existe y es COMPUESTO
+    Producto producto = productoRepository.findById(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+
+    if (producto.getTipo() != TipoProducto.COMPUESTO) {
+      throw new BusinessException("El producto debe ser tipo COMPUESTO");
+    }
+
+    // 2. Obtener el compuesto
+    ProductoCompuesto compuesto = compuestoRepository.findByProductoId(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "El producto no tiene configuración de compuesto. Debe crear la configuración base primero."
+        ));
+
+    // 3. Validar que opcionTrigger existe y pertenece a este compuesto
+    ProductoCompuestoOpcion opcionTrigger = opcionRepository.findById(request.getOpcionTriggerId())
+        .orElseThrow(() -> new ResourceNotFoundException("La opción trigger no existe"));
+
+    // Validar que la opción pertenece a un slot de este compuesto
+    boolean opcionPerteneceAlCompuesto = compuesto.getSlots().stream()
+        .anyMatch(slot -> slot.getOpciones().stream()
+            .anyMatch(opcion -> opcion.getId().equals(request.getOpcionTriggerId()))
+        );
+
+    if (!opcionPerteneceAlCompuesto) {
+      throw new BusinessException(
+          "La opción trigger no pertenece a ningún slot de este producto compuesto"
+      );
+    }
+
+    // 4. Validar que opcionTrigger NO esté usada por otra configuración
+    if (configuracionRepository.existsByOpcionTriggerId(request.getOpcionTriggerId())) {
+      throw new BusinessException(
+          "Ya existe una configuración para esta opción. " +
+              "Una opción solo puede activar una configuración."
+      );
+    }
+
+    // 5. Validar que tenga al menos 1 slot
+    if (request.getSlots() == null || request.getSlots().isEmpty()) {
+      throw new BusinessException("Debe incluir al menos un slot en la configuración");
+    }
+
+    // 6. Validar que todos los slots pertenecen al compuesto
+    for (CrearConfiguracionRequest.SlotConfigRequest slotReq : request.getSlots()) {
+      ProductoCompuestoSlot slot = slotRepository.findById(slotReq.getSlotId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Slot con ID " + slotReq.getSlotId() + " no encontrado"
+          ));
+
+      if (!slot.getCompuesto().getId().equals(compuesto.getId())) {
+        throw new BusinessException(
+            "El slot '" + slot.getNombre() + "' no pertenece a este producto compuesto"
+        );
+      }
+
+      // Validar overrides si existen
+      validarOverrides(slotReq, slot);
+    }
+
+    // 7. Crear la configuración
+    ProductoCompuestoConfiguracion configuracion = ProductoCompuestoConfiguracion.builder()
+        .compuesto(compuesto)
+        .nombre(request.getNombre())
+        .descripcion(request.getDescripcion())
+        .opcionTrigger(opcionTrigger)
+        .orden(request.getOrden() != null ? request.getOrden() : 0)
+        .activa(request.getActiva() != null ? request.getActiva() : true)
+        .build();
+
+    configuracion = configuracionRepository.save(configuracion);
+
+    log.info("Configuración creada con ID: {}", configuracion.getId());
+
+    // 8. Crear los slots de la configuración
+    int orden = 0;
+    for (CrearConfiguracionRequest.SlotConfigRequest slotReq : request.getSlots()) {
+      ProductoCompuestoSlot slot = slotRepository.findById(slotReq.getSlotId()).get();
+
+      ProductoCompuestoSlotConfiguracion slotConfig = ProductoCompuestoSlotConfiguracion.builder()
+          .configuracion(configuracion)
+          .slot(slot)
+          .orden(slotReq.getOrden() != null ? slotReq.getOrden() : orden++)
+          .cantidadMinimaOverride(slotReq.getCantidadMinimaOverride())
+          .cantidadMaximaOverride(slotReq.getCantidadMaximaOverride())
+          .esRequeridoOverride(slotReq.getEsRequeridoOverride())
+          .precioAdicionalOverride(slotReq.getPrecioAdicionalOverride())
+          .build();
+
+      configuracion.agregarSlot(slotConfig);
+      slotConfigRepository.save(slotConfig);
+
+      log.debug("Slot '{}' agregado a configuración - Overrides: {}",
+          slot.getNombre(),
+          slotReq.getCantidadMinimaOverride() != null ||
+              slotReq.getCantidadMaximaOverride() != null ||
+              slotReq.getEsRequeridoOverride() != null ||
+              slotReq.getPrecioAdicionalOverride() != null
+      );
+    }
+
+    log.info("Configuración '{}' creada exitosamente con {} slots",
+        configuracion.getNombre(),
+        configuracion.getSlots().size());
+
+    // 9. Convertir a DTO y retornar
+    return convertirConfiguracionADto(configuracion, producto.getSucursal().getId());
+  }
+
+  /**
+   * Valida que los overrides sean válidos
+   */
+  private void validarOverrides(
+      CrearConfiguracionRequest.SlotConfigRequest slotReq,
+      ProductoCompuestoSlot slot) {
+
+    // Validar cantidades si hay overrides
+    if (slotReq.getCantidadMinimaOverride() != null || slotReq.getCantidadMaximaOverride() != null) {
+
+      Integer minima = slotReq.getCantidadMinimaOverride() != null
+          ? slotReq.getCantidadMinimaOverride()
+          : slot.getCantidadMinima();
+
+      Integer maxima = slotReq.getCantidadMaximaOverride() != null
+          ? slotReq.getCantidadMaximaOverride()
+          : slot.getCantidadMaxima();
+
+      if (maxima < minima) {
+        throw new BusinessException(
+            "En slot '" + slot.getNombre() + "': " +
+                "cantidadMaxima (" + maxima + ") no puede ser menor que " +
+                "cantidadMinima (" + minima + ")"
+        );
+      }
+    }
+
+    // Validar que si es requerido, cantidadMinima sea >= 1
+    Boolean esRequerido = slotReq.getEsRequeridoOverride() != null
+        ? slotReq.getEsRequeridoOverride()
+        : slot.getEsRequerido();
+
+    Integer cantidadMinima = slotReq.getCantidadMinimaOverride() != null
+        ? slotReq.getCantidadMinimaOverride()
+        : slot.getCantidadMinima();
+
+    if (Boolean.TRUE.equals(esRequerido) && cantidadMinima < 1) {
+      throw new BusinessException(
+          "En slot '" + slot.getNombre() + "': " +
+              "Si es requerido, la cantidad mínima debe ser al menos 1"
+      );
+    }
+
+    // Validar precio adicional no negativo
+    if (slotReq.getPrecioAdicionalOverride() != null &&
+        slotReq.getPrecioAdicionalOverride().compareTo(BigDecimal.ZERO) < 0) {
+      throw new BusinessException(
+          "En slot '" + slot.getNombre() + "': " +
+              "El precio adicional no puede ser negativo"
+      );
+    }
+  }
+
+  // Agregar a ProductoCompuestoServiceImpl.java
+
+  @Override
+  @Transactional
+  public ProductoCompuestoConfiguracionDTO actualizarConfiguracion(
+      Long configId,
+      ActualizarConfiguracionRequest request) {
+
+    log.info("Actualizando configuración {}", configId);
+
+    // 1. Buscar configuración existente
+    ProductoCompuestoConfiguracion configuracion = configuracionRepository.findById(configId)
+        .orElseThrow(() -> new ResourceNotFoundException("Configuración no encontrada"));
+
+    ProductoCompuesto compuesto = configuracion.getCompuesto();
+
+    // 2. Actualizar campos básicos si vienen en el request
+    if (request.getNombre() != null) {
+      configuracion.setNombre(request.getNombre());
+    }
+
+    if (request.getDescripcion() != null) {
+      configuracion.setDescripcion(request.getDescripcion());
+    }
+
+    if (request.getOrden() != null) {
+      configuracion.setOrden(request.getOrden());
+    }
+
+    if (request.getActiva() != null) {
+      configuracion.setActiva(request.getActiva());
+    }
+
+    // 3. Actualizar opcionTrigger si viene en el request
+    if (request.getOpcionTriggerId() != null) {
+      // Validar que la nueva opción existe
+      ProductoCompuestoOpcion nuevaOpcion = opcionRepository.findById(request.getOpcionTriggerId())
+          .orElseThrow(() -> new ResourceNotFoundException("La opción trigger no existe"));
+
+      // Validar que la opción pertenece a un slot de este compuesto
+      boolean opcionPerteneceAlCompuesto = compuesto.getSlots().stream()
+          .anyMatch(slot -> slot.getOpciones().stream()
+              .anyMatch(opcion -> opcion.getId().equals(request.getOpcionTriggerId()))
+          );
+
+      if (!opcionPerteneceAlCompuesto) {
+        throw new BusinessException(
+            "La opción trigger no pertenece a ningún slot de este producto compuesto"
+        );
+      }
+
+      // Validar que la nueva opción NO esté usada por OTRA configuración
+      configuracionRepository.findByOpcionTriggerId(request.getOpcionTriggerId())
+          .ifPresent(configExistente -> {
+            // Si existe y NO es la configuración actual, es un error
+            if (!configExistente.getId().equals(configId)) {
+              throw new BusinessException(
+                  "Ya existe otra configuración para esta opción. " +
+                      "Una opción solo puede activar una configuración."
+              );
+            }
+          });
+
+      configuracion.setOpcionTrigger(nuevaOpcion);
+      log.info("OpcionTrigger actualizada a: {}", nuevaOpcion.getProducto().getNombre());
+    }
+
+    // 4. Actualizar slots si vienen en el request
+    if (request.getSlots() != null) {
+
+      // Validar que tenga al menos 1 slot
+      if (request.getSlots().isEmpty()) {
+        throw new BusinessException("Debe incluir al menos un slot en la configuración");
+      }
+
+      // Validar que todos los slots pertenecen al compuesto
+      for (ActualizarConfiguracionRequest.SlotConfigRequest slotReq : request.getSlots()) {
+        ProductoCompuestoSlot slot = slotRepository.findById(slotReq.getSlotId())
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Slot con ID " + slotReq.getSlotId() + " no encontrado"
+            ));
+
+        if (!slot.getCompuesto().getId().equals(compuesto.getId())) {
+          throw new BusinessException(
+              "El slot '" + slot.getNombre() + "' no pertenece a este producto compuesto"
+          );
+        }
+
+        // Validar overrides si existen
+        validarOverridesActualizacion(slotReq, slot);
+      }
+
+      // Eliminar slots existentes (enfoque simple)
+      log.info("Eliminando {} slots antiguos", configuracion.getSlots().size());
+      slotConfigRepository.deleteByConfiguracionId(configId);
+      configuracion.getSlots().clear();
+
+      // Crear nuevos slots
+      int orden = 0;
+      for (ActualizarConfiguracionRequest.SlotConfigRequest slotReq : request.getSlots()) {
+        ProductoCompuestoSlot slot = slotRepository.findById(slotReq.getSlotId()).get();
+
+        ProductoCompuestoSlotConfiguracion slotConfig = ProductoCompuestoSlotConfiguracion.builder()
+            .configuracion(configuracion)
+            .slot(slot)
+            .orden(slotReq.getOrden() != null ? slotReq.getOrden() : orden++)
+            .cantidadMinimaOverride(slotReq.getCantidadMinimaOverride())
+            .cantidadMaximaOverride(slotReq.getCantidadMaximaOverride())
+            .esRequeridoOverride(slotReq.getEsRequeridoOverride())
+            .precioAdicionalOverride(slotReq.getPrecioAdicionalOverride())
+            .build();
+
+        configuracion.agregarSlot(slotConfig);
+        slotConfigRepository.save(slotConfig);
+
+        log.debug("Slot '{}' agregado a configuración", slot.getNombre());
+      }
+
+      log.info("Configuración actualizada con {} slots nuevos", configuracion.getSlots().size());
+    }
+
+    // 5. Guardar cambios
+    configuracion = configuracionRepository.save(configuracion);
+
+    log.info("Configuración '{}' actualizada exitosamente", configuracion.getNombre());
+
+    // 6. Convertir a DTO y retornar
+    return convertirConfiguracionADto(
+        configuracion,
+        compuesto.getProducto().getSucursal().getId()
+    );
+  }
+
+  /**
+   * Valida overrides en actualización (similar a crear pero sin throw en algunos casos)
+   */
+  private void validarOverridesActualizacion(
+      ActualizarConfiguracionRequest.SlotConfigRequest slotReq,
+      ProductoCompuestoSlot slot) {
+
+    // Validar cantidades si hay overrides
+    if (slotReq.getCantidadMinimaOverride() != null || slotReq.getCantidadMaximaOverride() != null) {
+
+      Integer minima = slotReq.getCantidadMinimaOverride() != null
+          ? slotReq.getCantidadMinimaOverride()
+          : slot.getCantidadMinima();
+
+      Integer maxima = slotReq.getCantidadMaximaOverride() != null
+          ? slotReq.getCantidadMaximaOverride()
+          : slot.getCantidadMaxima();
+
+      if (maxima < minima) {
+        throw new BusinessException(
+            "En slot '" + slot.getNombre() + "': " +
+                "cantidadMaxima (" + maxima + ") no puede ser menor que " +
+                "cantidadMinima (" + minima + ")"
+        );
+      }
+    }
+
+    // Validar que si es requerido, cantidadMinima sea >= 1
+    Boolean esRequerido = slotReq.getEsRequeridoOverride() != null
+        ? slotReq.getEsRequeridoOverride()
+        : slot.getEsRequerido();
+
+    Integer cantidadMinima = slotReq.getCantidadMinimaOverride() != null
+        ? slotReq.getCantidadMinimaOverride()
+        : slot.getCantidadMinima();
+
+    if (Boolean.TRUE.equals(esRequerido) && cantidadMinima < 1) {
+      throw new BusinessException(
+          "En slot '" + slot.getNombre() + "': " +
+              "Si es requerido, la cantidad mínima debe ser al menos 1"
+      );
+    }
+
+    // Validar precio adicional no negativo
+    if (slotReq.getPrecioAdicionalOverride() != null &&
+        slotReq.getPrecioAdicionalOverride().compareTo(BigDecimal.ZERO) < 0) {
+      throw new BusinessException(
+          "En slot '" + slot.getNombre() + "': " +
+              "El precio adicional no puede ser negativo"
+      );
+    }
+  }
+
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<ProductoCompuestoConfiguracionDTO> obtenerConfiguraciones(Long productoId) {
+    log.info("Obteniendo todas las configuraciones del producto {}", productoId);
+
+    // 1. Validar que el producto existe y es COMPUESTO
+    Producto producto = productoRepository.findById(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+
+    if (producto.getTipo() != TipoProducto.COMPUESTO) {
+      throw new BusinessException("El producto debe ser tipo COMPUESTO");
+    }
+
+    // 2. Obtener el compuesto
+    ProductoCompuesto compuesto = compuestoRepository.findByProductoId(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "El producto no tiene configuración de compuesto"
+        ));
+
+    // 3. Buscar todas las configuraciones del compuesto ordenadas
+    List<ProductoCompuestoConfiguracion> configuraciones =
+        configuracionRepository.findByCompuestoIdOrderByOrden(compuesto.getId());
+
+    log.info("Se encontraron {} configuraciones", configuraciones.size());
+
+    // 4. Convertir a DTOs
+    Long sucursalId = producto.getSucursal() != null ? producto.getSucursal().getId() : null;
+
+    List<ProductoCompuestoConfiguracionDTO> dtos = configuraciones.stream()
+        .map(config -> convertirConfiguracionADto(config, sucursalId))
+        .collect(Collectors.toList());
+
+    log.debug("Configuraciones convertidas a DTOs exitosamente");
+
+    return dtos;
+  }
+
+  // Agregar a ProductoCompuestoServiceImpl.java
+
+  @Override
+  @Transactional
+  public void eliminarConfiguracion(Long configId) {
+    log.info("Eliminando configuración {}", configId);
+
+    // 1. Buscar configuración
+    ProductoCompuestoConfiguracion configuracion = configuracionRepository.findById(configId)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Configuración no encontrada con ID: " + configId
+        ));
+
+    String nombreConfig = configuracion.getNombre();
+    int cantidadSlots = configuracion.getSlots().size();
+
+    // 2. Eliminar (cascade automático eliminará los slots asociados)
+    configuracionRepository.delete(configuracion);
+
+    log.info("Configuración '{}' eliminada exitosamente (tenía {} slots)",
+        nombreConfig,
+        cantidadSlots);
   }
 }

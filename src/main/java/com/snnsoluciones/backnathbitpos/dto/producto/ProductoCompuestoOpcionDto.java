@@ -1,9 +1,11 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
 
 @Data
+@Builder
 public class ProductoCompuestoOpcionDto {
     private Long id;
     private Long productoId;

@@ -5,9 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.producto.CalculoPrecioResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 public interface ProductoCompuestoService {
     

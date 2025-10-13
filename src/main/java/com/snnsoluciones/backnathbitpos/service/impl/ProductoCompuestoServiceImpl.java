@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoSlotDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoOpcionDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
+import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
@@ -742,5 +743,209 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     }
 
     return slot;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<OpcionSlotDTO> obtenerOpcionesSlot(Long slotId, Long sucursalId) {
+    log.info("Obteniendo opciones para slot {} en sucursal {}", slotId, sucursalId);
+
+    // 1. Obtener el slot
+    ProductoCompuestoSlot slot = slotRepository.findById(slotId)
+        .orElseThrow(() -> new ResourceNotFoundException("Slot no encontrado"));
+
+    // 2. Validar sucursal
+    Sucursal sucursal = sucursalRepository.findById(sucursalId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+
+    List<OpcionSlotDTO> opciones;
+
+    // 3. Decidir origen de opciones
+    if (Boolean.TRUE.equals(slot.getUsaFamilia()) && slot.getFamilia() != null) {
+      // ========== CARGAR DESDE FAMILIA ==========
+      log.info("Cargando opciones desde familia: {}", slot.getFamilia().getNombre());
+      opciones = cargarOpcionesDesdeFamilia(slot, sucursal);
+    } else {
+      // ========== CARGAR OPCIONES MANUALES ==========
+      log.info("Cargando opciones manuales del slot");
+      opciones = cargarOpcionesManuales(slot, sucursal);
+    }
+
+    // 4. Ordenar por disponibilidad y luego por orden
+    opciones.sort((a, b) -> {
+      // Primero las disponibles
+      if (!a.getDisponible().equals(b.getDisponible())) {
+        return a.getDisponible() ? -1 : 1;
+      }
+      // Luego por orden
+      return Integer.compare(a.getOrden(), b.getOrden());
+    });
+
+    log.info("Se encontraron {} opciones para el slot", opciones.size());
+    return opciones;
+  }
+
+  /**
+   * Carga opciones desde una familia de productos
+   */
+  private List<OpcionSlotDTO> cargarOpcionesDesdeFamilia(
+      ProductoCompuestoSlot slot,
+      Sucursal sucursal
+  ) {
+    List<OpcionSlotDTO> opciones = new ArrayList<>();
+
+    // Obtener todos los productos activos de la familia
+    List<Producto> productos = productoRepository.findByFamiliaIdAndActivoTrue(
+        slot.getFamilia().getId()
+    );
+
+    log.info("Familia {} tiene {} productos activos",
+        slot.getFamilia().getNombre(), productos.size());
+
+    int orden = 0;
+    for (Producto producto : productos) {
+      // Verificar stock en sucursal
+      boolean tieneStock = verificarStockProducto(producto.getId(), sucursal.getId());
+      Integer stockDisponible = obtenerStockDisponible(producto.getId(), sucursal.getId());
+
+      // Calcular precio adicional
+      BigDecimal precioAdicional = slot.getPrecioAdicionalPorOpcion() != null
+          ? slot.getPrecioAdicionalPorOpcion()
+          : BigDecimal.ZERO;
+
+      boolean esGratuita = precioAdicional.compareTo(BigDecimal.ZERO) == 0;
+
+      // Crear DTO
+      OpcionSlotDTO opcion = OpcionSlotDTO.builder()
+          .opcionId(null)  // No hay opción manual
+          .productoId(producto.getId())
+          .nombre(producto.getNombre())
+          .codigoInterno(producto.getCodigoInterno())
+          .imagen(producto.getImagenUrl())
+          .precioBase(producto.getPrecioBase() != null ? producto.getPrecioBase() : BigDecimal.ZERO)
+          .precioAdicional(precioAdicional)
+          .esGratuita(esGratuita)
+          .disponible(tieneStock)
+          .esDefault(false)  // Las opciones de familia no tienen default
+          .stockDisponible(stockDisponible)
+          .orden(orden++)
+          .origen("FAMILIA")
+          .build();
+
+      opciones.add(opcion);
+
+      log.debug("Producto {} - Stock: {}, Disponible: {}",
+          producto.getNombre(), stockDisponible, tieneStock);
+    }
+
+    return opciones;
+  }
+
+  /**
+   * Carga opciones manuales del slot
+   */
+  private List<OpcionSlotDTO> cargarOpcionesManuales(
+      ProductoCompuestoSlot slot,
+      Sucursal sucursal
+  ) {
+    List<OpcionSlotDTO> opciones = new ArrayList<>();
+
+    // Obtener opciones manuales ordenadas
+    List<ProductoCompuestoOpcion> opcionesManuales = slot.getOpciones()
+        .stream()
+        .sorted(Comparator.comparingInt(ProductoCompuestoOpcion::getOrden))
+        .toList();
+
+    log.info("Slot tiene {} opciones manuales", opcionesManuales.size());
+
+    for (ProductoCompuestoOpcion opcionManual : opcionesManuales) {
+      Producto producto = opcionManual.getProducto();
+
+      // Verificar stock en sucursal
+      boolean tieneStock = verificarStockProducto(producto.getId(), sucursal.getId());
+      Integer stockDisponible = obtenerStockDisponible(producto.getId(), sucursal.getId());
+
+      // La disponibilidad final es: disponible en config Y tiene stock
+      boolean disponibleFinal = opcionManual.getDisponible() && tieneStock;
+
+      BigDecimal precioAdicional = opcionManual.getPrecioAdicional() != null
+          ? opcionManual.getPrecioAdicional()
+          : BigDecimal.ZERO;
+
+      boolean esGratuita = precioAdicional.compareTo(BigDecimal.ZERO) == 0;
+
+      // Crear DTO
+      OpcionSlotDTO opcion = OpcionSlotDTO.builder()
+          .opcionId(opcionManual.getId())
+          .productoId(producto.getId())
+          .nombre(producto.getNombre())
+          .codigoInterno(producto.getCodigoInterno())
+          .imagen(producto.getImagenUrl())
+          .precioBase(producto.getPrecioBase() != null ? producto.getPrecioBase() : BigDecimal.ZERO)
+          .precioAdicional(precioAdicional)
+          .esGratuita(esGratuita)
+          .disponible(disponibleFinal)
+          .esDefault(opcionManual.getEsDefault())
+          .stockDisponible(stockDisponible)
+          .orden(opcionManual.getOrden())
+          .origen("MANUAL")
+          .build();
+
+      opciones.add(opcion);
+
+      log.debug("Opción manual {} - Stock: {}, Disponible config: {}, Final: {}",
+          producto.getNombre(), stockDisponible, opcionManual.getDisponible(), disponibleFinal);
+    }
+
+    return opciones;
+  }
+
+  /**
+   * Verifica si un producto tiene stock disponible en sucursal
+   */
+  private boolean verificarStockProducto(Long productoId, Long sucursalId) {
+    try {
+      Integer stock = obtenerStockDisponible(productoId, sucursalId);
+      return stock != null && stock > 0;
+    } catch (Exception e) {
+      log.warn("Error verificando stock para producto {}: {}", productoId, e.getMessage());
+      return false;  // En caso de error, marcar como no disponible
+    }
+  }
+  /**
+   * Obtiene la cantidad de stock disponible para un producto en una sucursal
+   * Stock disponible = cantidad actual - cantidad bloqueada
+   */
+  private Integer obtenerStockDisponible(Long productoId, Long sucursalId) {
+    try {
+      // Llamar al servicio de inventario para obtener el inventario
+      ProductoInventario inventario = productoInventarioService.obtenerInventario(productoId, sucursalId);
+
+      if (inventario == null) {
+        log.debug("No existe inventario para producto {} en sucursal {}", productoId, sucursalId);
+        return 0;
+      }
+
+      // Calcular stock disponible (actual - bloqueado)
+      BigDecimal cantidadActual = inventario.getCantidadActual() != null
+          ? inventario.getCantidadActual()
+          : BigDecimal.ZERO;
+
+      BigDecimal cantidadBloqueada = inventario.getCantidadBloqueada() != null
+          ? inventario.getCantidadBloqueada()
+          : BigDecimal.ZERO;
+
+      BigDecimal stockDisponible = cantidadActual.subtract(cantidadBloqueada);
+
+      // Convertir a Integer (redondeando hacia abajo)
+      return stockDisponible.intValue();
+
+    } catch (ResourceNotFoundException e) {
+      log.debug("No existe inventario para producto {} en sucursal {}", productoId, sucursalId);
+      return 0;
+    } catch (Exception e) {
+      log.warn("Error obteniendo stock disponible para producto {}: {}", productoId, e.getMessage());
+      return 0;
+    }
   }
 }

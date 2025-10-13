@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.producto.CalculoPrecioResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
+import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import java.util.List;
 
 public interface ProductoCompuestoService {
@@ -36,4 +37,6 @@ public interface ProductoCompuestoService {
      * Filtra compuestos por disponibilidad en sucursal
      */
     List<ProductoCompuestoDto> filtrarPorDisponibilidadSucursal(List<ProductoCompuestoDto> compuestos, Long sucursalId);
+
+    List<OpcionSlotDTO> obtenerOpcionesSlot(Long slotId, Long sucursalId);
 }

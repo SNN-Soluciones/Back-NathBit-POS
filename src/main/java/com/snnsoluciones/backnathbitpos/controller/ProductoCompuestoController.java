@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
+import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import com.snnsoluciones.backnathbitpos.service.ProductoCompuestoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -100,6 +101,27 @@ public class ProductoCompuestoController {
             compuestoService.eliminar(empresaId, productoId);
             return ResponseEntity.ok(ApiResponse.ok("Configuración eliminada", null));
         } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/slots/{slotId}/opciones")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO', 'MESERO')")
+    @Operation(summary = "Obtener opciones de un slot",
+        description = "Obtiene opciones dinámicas (familia) o manuales según configuración del slot")
+    public ResponseEntity<ApiResponse<List<OpcionSlotDTO>>> obtenerOpcionesSlot(
+        @PathVariable Long productoId,
+        @PathVariable Long slotId,
+        @RequestParam Long sucursalId) {
+
+        log.info("Obteniendo opciones para slot {} en sucursal {}", slotId, sucursalId);
+
+        try {
+            List<OpcionSlotDTO> opciones = compuestoService.obtenerOpcionesSlot(slotId, sucursalId);
+            return ResponseEntity.ok(ApiResponse.ok("Opciones obtenidas", opciones));
+        } catch (Exception e) {
+            log.error("Error obteniendo opciones del slot", e);
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error("Error: " + e.getMessage()));
         }

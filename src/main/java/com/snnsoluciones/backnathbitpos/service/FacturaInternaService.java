@@ -36,6 +36,7 @@ public class FacturaInternaService {
     private final UsuarioRepository usuarioRepository;
     private final SesionCajaRepository sesionCajaRepository;
     private final OrdenService ordenService;
+    private final MetricaProductoVendidoService metricaProductoService;
     private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
 
     /**
@@ -182,6 +183,7 @@ public class FacturaInternaService {
         // Guardar
         factura = facturaInternaRepository.save(factura);
         log.info("Factura interna creada: {}", factura.getNumero());
+        metricaProductoService.actualizarDesdeFacturaInterna(factura);
 
         return mapToResponse(factura);
     }

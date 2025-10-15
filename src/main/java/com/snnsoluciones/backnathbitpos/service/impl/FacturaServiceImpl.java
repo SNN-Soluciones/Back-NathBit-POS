@@ -11,6 +11,7 @@ import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.CuentaPorCobrarService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.FacturaVentaExcelService;
+import com.snnsoluciones.backnathbitpos.service.MetricaProductoVendidoService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import io.hypersistence.utils.common.StringUtils;
 import jakarta.persistence.EntityNotFoundException;
@@ -64,6 +65,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final ClienteService clienteService;
   private final CuentaPorCobrarService cuentaPorCobrarService;
   private final FacturaVentaExcelService facturaVentaExcelService;
+  private final MetricaProductoVendidoService metricaProductoService;
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
 
   @Override
@@ -273,6 +275,7 @@ public class FacturaServiceImpl implements FacturaService {
     }
 
     // PASO 24: Retornar la factura creada
+    metricaProductoService.actualizarDesdeFactura(facturaGuardada);
     return facturaGuardada;
   }
 

@@ -93,54 +93,114 @@ public class ReporteVentasTipoPagoServiceImpl implements ReporteVentasTipoPagoSe
     Sucursal sucursal = sucursalRepository.findById(request.getSucursalId())
         .orElseThrow(() -> new EntityNotFoundException("Sucursal no encontrada"));
 
-    // 2) Rango [desde 00:00, hasta+1d 00:00)
+    // 2) Rango [desde 00:00, hasta 23:59:59]
     var desde = request.getFechaDesde().atStartOfDay();
-    var hastaExclusive = request.getFechaHasta().plusDays(1).atStartOfDay();
+    var hasta = request.getFechaHasta().atTime(23, 59, 59);  // 👈 CAMBIO: inclusivo
 
-    // 3) Sumar por medio normalizado
+    // 3) SQL MEJORADO: Facturas electrónicas (solo ACEPTADAS) + Facturas internas
     String sql = """
-        WITH facturas_rango AS (
+        WITH 
+        -- 👉 Facturas ELECTRÓNICAS (solo ACEPTADAS en Hacienda)
+        facturas_electronicas AS (
           SELECT f.id
           FROM facturas f
+          JOIN factura_bitacora fb 
+            ON fb.factura_id = f.id 
+           AND fb.estado = 'ACEPTADA'                    -- 🆕 Solo facturas aceptadas
           WHERE f.sucursal_id = ?
             AND f.fecha_emision >= ?
-            AND f.fecha_emision <  ?
+            AND f.fecha_emision <= ?                     -- 👈 CAMBIO: <= inclusivo
             AND f.tipo_documento IN ('FACTURA_ELECTRONICO','TIQUETE_ELECTRONICO')
-            AND f.estado NOT IN ('ANULADA','RECHAZADA')
         ),
-        agg AS (
-          SELECT
+        
+        -- 🆕 Facturas INTERNAS (no anuladas)
+        facturas_internas AS (
+          SELECT fi.id
+          FROM factura_interna fi
+          WHERE fi.sucursal_id = ?
+            AND fi.fecha >= ?
+            AND fi.fecha <= ?                            -- 👈 CAMBIO: <= inclusivo
+            AND fi.estado != 'ANULADA'
+        ),
+        
+        -- 👉 Medios de pago de ELECTRÓNICAS
+        medios_electronicas AS (
+          SELECT 
             CASE
               WHEN p.medio_pago IN ('SINPE','SINPE_MOVIL') THEN 'SINPE_MOVIL'
               WHEN p.medio_pago IN ('DEPOSITO','TRANSFERENCIA_BANCARIA') THEN 'TRANSFERENCIA'
               ELSE p.medio_pago
             END AS medio_norm,
-            COUNT(DISTINCT p.factura_id) AS cantidad_documentos,
-            SUM(p.monto)                 AS monto_total
+            p.factura_id AS documento_id,
+            p.monto
           FROM factura_medios_pago p
-          JOIN facturas_rango fr ON fr.id = p.factura_id
+          JOIN facturas_electronicas fe ON fe.id = p.factura_id
+        ),
+        
+        -- 🆕 Medios de pago de INTERNAS
+        medios_internos AS (
+          SELECT 
+            CASE
+              WHEN mp.tipo IN ('SINPE','SINPE_MOVIL') THEN 'SINPE_MOVIL'
+              WHEN mp.tipo IN ('DEPOSITO','TRANSFERENCIA_BANCARIA','TRANSFERENCIA') THEN 'TRANSFERENCIA'
+              ELSE UPPER(mp.tipo)
+            END AS medio_norm,
+            mp.factura_interna_id AS documento_id,
+            mp.monto
+          FROM factura_interna_medios_pago mp
+          JOIN facturas_internas fi ON fi.id = mp.factura_interna_id
+        ),
+        
+        -- 🔗 UNIÓN de ambos tipos
+        medios_todos AS (
+          SELECT medio_norm, documento_id, monto FROM medios_electronicas
+          UNION ALL
+          SELECT medio_norm, documento_id, monto FROM medios_internos
+        ),
+        
+        -- 📊 Agregación final
+        agg AS (
+          SELECT
+            medio_norm,
+            COUNT(DISTINCT documento_id) AS cantidad_documentos,
+            SUM(monto) AS monto_total
+          FROM medios_todos
           GROUP BY medio_norm
         )
-        SELECT m.medio_pago,
-               COALESCE(agg.cantidad_documentos, 0) AS cantidad_documentos,
-               COALESCE(agg.monto_total, 0)         AS monto_total
-        FROM (VALUES ('EFECTIVO'),
-                     ('TARJETA'),
-                     ('TRANSFERENCIA'),
-                     ('SINPE_MOVIL')) AS m(medio_pago)
+        
+        SELECT 
+          m.medio_pago,
+          COALESCE(agg.cantidad_documentos, 0) AS cantidad_documentos,
+          COALESCE(agg.monto_total, 0) AS monto_total
+        FROM (VALUES 
+          ('EFECTIVO'),
+          ('TARJETA'),
+          ('TRANSFERENCIA'),
+          ('SINPE_MOVIL')
+        ) AS m(medio_pago)
         LEFT JOIN agg ON agg.medio_norm = m.medio_pago
-        ORDER BY ARRAY_POSITION(ARRAY['EFECTIVO','TARJETA','TRANSFERENCIA','SINPE_MOVIL'], m.medio_pago)
+        ORDER BY ARRAY_POSITION(
+          ARRAY['EFECTIVO','TARJETA','TRANSFERENCIA','SINPE_MOVIL'], 
+          m.medio_pago
+        )
         """;
 
+    // 4) Ejecutar query con 6 parámetros
     List<VentasPorTipoPagoDTO> detalles = jdbcTemplate.query(
         sql,
         ps -> {
+          // Parámetros para facturas ELECTRÓNICAS
           ps.setLong(1, request.getSucursalId());
           ps.setTimestamp(2, Timestamp.valueOf(desde));
-          ps.setTimestamp(3, Timestamp.valueOf(hastaExclusive));
+          ps.setTimestamp(3, Timestamp.valueOf(hasta));      // 👈 CAMBIO: usa 'hasta'
+
+          // Parámetros para facturas INTERNAS
+          ps.setLong(4, request.getSucursalId());
+          ps.setTimestamp(5, Timestamp.valueOf(desde));
+          ps.setTimestamp(6, Timestamp.valueOf(hasta));      // 👈 CAMBIO: usa 'hasta'
         },
         (rs, i) -> {
-          String medioEnum = rs.getString("medio_pago");                // EFECTIVO | TARJETA | ...
+          String medioEnum = rs.getString("medio_pago");
           int cantidad = rs.getInt("cantidad_documentos");
           BigDecimal monto = rs.getBigDecimal("monto_total");
 
@@ -153,7 +213,7 @@ public class ReporteVentasTipoPagoServiceImpl implements ReporteVentasTipoPagoSe
         }
     );
 
-    // 4) Totales y %
+    // 5) Totales y porcentajes
     BigDecimal totalGeneral = detalles.stream()
         .map(VentasPorTipoPagoDTO::getMontoTotal)
         .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -172,23 +232,49 @@ public class ReporteVentasTipoPagoServiceImpl implements ReporteVentasTipoPagoSe
       }
     });
 
-    // 5) Total de documentos (distinct facturas con mismos filtros)
+    // 6) 🆕 NUEVO: Contar documentos de AMBOS tipos con mismo criterio
     String countSql = """
-      SELECT COUNT(DISTINCT f.id)
-      FROM facturas f
-      WHERE f.sucursal_id = ?
-        AND f.fecha_emision >= ?
-        AND f.fecha_emision <  ?
-        AND f.tipo_documento IN ('FACTURA_ELECTRONICO','TIQUETE_ELECTRONICO')
-        AND f.estado NOT IN ('ANULADA','RECHAZADA')
+      SELECT 
+        (
+          -- Contar facturas ELECTRÓNICAS (solo ACEPTADAS)
+          SELECT COUNT(DISTINCT f.id)
+          FROM facturas f
+          JOIN factura_bitacora fb 
+            ON fb.factura_id = f.id 
+           AND fb.estado = 'ACEPTADA'                    -- 🆕 Solo aceptadas
+          WHERE f.sucursal_id = ?
+            AND f.fecha_emision >= ?
+            AND f.fecha_emision <= ?                     -- 👈 CAMBIO: <= inclusivo
+            AND f.tipo_documento IN ('FACTURA_ELECTRONICO','TIQUETE_ELECTRONICO')
+        )
+        +
+        (
+          -- Contar facturas INTERNAS (no anuladas)
+          SELECT COUNT(DISTINCT fi.id)
+          FROM factura_interna fi
+          WHERE fi.sucursal_id = ?
+            AND fi.fecha >= ?
+            AND fi.fecha <= ?                            -- 👈 CAMBIO: <= inclusivo
+            AND fi.estado != 'ANULADA'
+        ) AS total_documentos
       """;
+
     Integer totalDocs = jdbcTemplate.queryForObject(
         countSql,
-        new Object[]{ request.getSucursalId(), Timestamp.valueOf(desde), Timestamp.valueOf(hastaExclusive) },
+        new Object[]{
+            // Parámetros para electrónicas
+            request.getSucursalId(),
+            Timestamp.valueOf(desde),
+            Timestamp.valueOf(hasta),                      // 👈 CAMBIO: usa 'hasta'
+            // Parámetros para internas
+            request.getSucursalId(),
+            Timestamp.valueOf(desde),
+            Timestamp.valueOf(hasta)                       // 👈 CAMBIO: usa 'hasta'
+        },
         Integer.class
     );
 
-    // 6) Usuario que genera
+    // 7) Usuario que genera
     String usuarioActual;
     try {
       Usuario usuario = securityContextService.getCurrentUser();
@@ -197,7 +283,7 @@ public class ReporteVentasTipoPagoServiceImpl implements ReporteVentasTipoPagoSe
       usuarioActual = SecurityUtils.getCurrentUserLogin();
     }
 
-    // 7) Armar response
+    // 8) Armar response
     DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     return ReporteVentasTipoPagoResponse.builder()
         .sucursalNombre(sucursal.getNombre())

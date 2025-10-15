@@ -591,12 +591,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
     );
 
-    // Calcular monto esperado
-    BigDecimal esperado = resumen.getMontoInicial()
-        .add(resumen.getVentasEfectivo())
-        .add(resumen.getEntradasAdicionales())
-        .subtract(resumen.getVales())
-        .subtract(resumen.getDepositos());
+    BigDecimal esperado = calcularMontoEsperado(sesion);
     resumen.setMontoEsperado(esperado);
 
     resumen.setMontoCierre(sesion.getMontoCierre());

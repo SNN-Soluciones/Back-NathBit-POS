@@ -113,15 +113,7 @@ public class SecurityConfig {
         ));
 
         // Headers permitidos
-        configuration.setAllowedHeaders(Arrays.asList(
-            "Authorization",
-            "Content-Type",
-            "X-Requested-With",
-            "Accept",
-            "Origin",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers"
-        ));
+        configuration.setAllowedHeaders(List.of("*"));
 
         // Headers expuestos (que el cliente puede leer)
         configuration.setExposedHeaders(Arrays.asList(

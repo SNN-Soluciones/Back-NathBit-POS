@@ -274,20 +274,66 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
   @Override
   public BigDecimal calcularMontoEsperado(SesionCaja sesion) {
-    // Monto inicial
+    log.debug("Calculando monto esperado para sesión: {}", sesion.getId());
+
+    // 1. Monto inicial
     BigDecimal montoEsperado = sesion.getMontoInicial();
+    log.debug("  Monto inicial: {}", montoEsperado);
 
-    // + Ventas en efectivo
+    // 2. + Ventas en efectivo
     montoEsperado = montoEsperado.add(sesion.getTotalEfectivo());
+    log.debug("  + Total efectivo (ventas): {} = {}", sesion.getTotalEfectivo(), montoEsperado);
 
-    // + Entradas adicionales (si agregaron más efectivo durante el día)
+    // 3. + Entradas adicionales de efectivo
     BigDecimal entradas = movimientoCajaRepository
         .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.ENTRADA_ADICIONAL);
+    if (entradas == null) entradas = BigDecimal.ZERO;
     montoEsperado = montoEsperado.add(entradas);
+    log.debug("  + Entradas adicionales: {} = {}", entradas, montoEsperado);
 
-    // - Salidas (vales y depósitos)
-    BigDecimal salidas = movimientoCajaRepository.sumSalidasBySesionId(sesion.getId());
-    montoEsperado = montoEsperado.subtract(salidas);
+    // 4. + Entradas de efectivo (NUEVO TIPO)
+    BigDecimal entradasEfectivo = movimientoCajaRepository
+        .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.ENTRADA_EFECTIVO);
+    if (entradasEfectivo == null) entradasEfectivo = BigDecimal.ZERO;
+    montoEsperado = montoEsperado.add(entradasEfectivo);
+    log.debug("  + Entradas efectivo: {} = {}", entradasEfectivo, montoEsperado);
+
+    // 5. - Vales (LEGACY - mantener compatibilidad)
+    BigDecimal vales = movimientoCajaRepository
+        .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_VALE);
+    if (vales == null) vales = BigDecimal.ZERO;
+    montoEsperado = montoEsperado.subtract(vales);
+    log.debug("  - Vales: {} = {}", vales, montoEsperado);
+
+    // 6. - Depósitos
+    BigDecimal depositos = movimientoCajaRepository
+        .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_DEPOSITO);
+    if (depositos == null) depositos = BigDecimal.ZERO;
+    montoEsperado = montoEsperado.subtract(depositos);
+    log.debug("  - Depósitos: {} = {}", depositos, montoEsperado);
+
+    // 7. 🆕 - Arqueos
+    BigDecimal arqueos = movimientoCajaRepository
+        .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_ARQUEO);
+    if (arqueos == null) arqueos = BigDecimal.ZERO;
+    montoEsperado = montoEsperado.subtract(arqueos);
+    log.debug("  - Arqueos: {} = {}", arqueos, montoEsperado);
+
+    // 8. 🆕 - Pagos a proveedores
+    BigDecimal pagosProveedores = movimientoCajaRepository
+        .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_PAGO_PROVEEDOR);
+    if (pagosProveedores == null) pagosProveedores = BigDecimal.ZERO;
+    montoEsperado = montoEsperado.subtract(pagosProveedores);
+    log.debug("  - Pagos proveedores: {} = {}", pagosProveedores, montoEsperado);
+
+    // 9. 🆕 - Otros gastos
+    BigDecimal otros = movimientoCajaRepository
+        .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_OTROS);
+    if (otros == null) otros = BigDecimal.ZERO;
+    montoEsperado = montoEsperado.subtract(otros);
+    log.debug("  - Otros gastos: {} = {}", otros, montoEsperado);
+
+    log.info("Monto esperado final para sesión {}: {}", sesion.getId(), montoEsperado);
 
     return montoEsperado;
   }
@@ -396,7 +442,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
             case TARJETA:
               totalTarjeta = totalTarjeta.add(medioPago.getMonto());
               break;
-            case CHEQUE:
+            case SINPE_MOVIL:
               totalSinpe = totalSinpe.add(medioPago.getMonto());
               break;
             case TRANSFERENCIA:
@@ -457,7 +503,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
             case "TRANSFERENCIA":
               totalTransferencia = totalTransferencia.add(mp.getMonto());
               break;
-            case "SINPE":
+            case "SINPE_MOVIL":
               totalSinpe = totalSinpe.add(mp.getMonto());
               break;
           }

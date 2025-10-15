@@ -42,7 +42,7 @@ public class SucursalController extends BaseController {
 
   @Operation(summary = "Listar sucursales por empresa")
   @GetMapping("/empresa/{empresaId}")
-  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'CAJERO', 'COCINA', 'ADMIN', 'JEFE_CAJAS', 'MESERO')")
   public ResponseEntity<ApiResponse<List<SucursalResponse>>> listarPorEmpresa(
       @PathVariable Long empresaId) {
 

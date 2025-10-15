@@ -1,5 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,6 +21,7 @@ import lombok.Data;
 @Data
 @Entity
 @Table(name = "movimientos_caja")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "sesionCaja"})
 public class MovimientoCaja {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,6 +29,7 @@ public class MovimientoCaja {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sesion_caja_id", nullable = false)
+    @JsonIgnore
     private SesionCaja sesionCaja;
 
     @Enumerated(EnumType.STRING)

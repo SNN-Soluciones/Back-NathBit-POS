@@ -122,6 +122,15 @@ dependencies {
     implementation 'org.apache.poi:poi:5.2.4'
     implementation 'org.apache.poi:poi-ooxml:5.2.4'
 
+    // Flying Saucer para generar PDF desde HTML (usando iText5)
+    implementation 'org.xhtmlrenderer:flying-saucer-pdf-itext5:9.1.22'
+
+    // Spring Boot Mail (para envío de correos)
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // Thymeleaf (para templates HTML)
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+
     // ================== Documentation ==================
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 

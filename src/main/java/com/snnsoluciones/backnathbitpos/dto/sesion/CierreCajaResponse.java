@@ -19,6 +19,8 @@ public class CierreCajaResponse {
     private BigDecimal totalVales;
     private BigDecimal montoEsperado;
     private BigDecimal montoCierre;
+    private BigDecimal montoRetirado;
+    private BigDecimal fondoCaja;
     private BigDecimal diferencia;
     private Integer cantidadFacturas;
     private Integer cantidadTiquetes;

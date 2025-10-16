@@ -155,6 +155,7 @@ public class SucursalController extends BaseController {
     response.setEmail(sucursal.getEmail());
     response.setActiva(sucursal.getActiva());
     response.setModoFacturacion(sucursal.getModoFacturacion());
+    response.setNumeroSucursal(sucursal.getNumeroSucursal());
 
     // === NUEVOS CAMPOS DE IMPRESIÓN ===
     response.setModoImpresion(sucursal.getModoImpresion());

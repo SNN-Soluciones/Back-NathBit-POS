@@ -93,4 +93,9 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
   List<SesionCaja> findByEstado(EstadoSesion estado);
 
   Page<SesionCaja> findByTerminalSucursalId(Long sucursalId, Pageable pageable);
+
+  Optional<SesionCaja> findTopByTerminalIdAndEstadoOrderByFechaHoraCierreDesc(
+      Long terminalId,
+      EstadoSesion estado
+  );
 }

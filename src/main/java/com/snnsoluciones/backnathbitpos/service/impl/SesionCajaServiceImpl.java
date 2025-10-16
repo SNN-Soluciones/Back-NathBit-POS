@@ -1,8 +1,10 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
+import com.snnsoluciones.backnathbitpos.dto.sesion.OpcionesImpresionCierreDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
+import com.snnsoluciones.backnathbitpos.entity.CierreDatafono;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
 import com.snnsoluciones.backnathbitpos.entity.FacturaInternaMedioPago;
@@ -17,6 +19,7 @@ import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
+import com.snnsoluciones.backnathbitpos.repository.CierreDatafonoRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
 import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
@@ -26,15 +29,25 @@ import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
+import com.snnsoluciones.backnathbitpos.service.EmailService;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
+import com.snnsoluciones.backnathbitpos.service.ThymeleafService;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.util.ByteArrayDataSource;
+import java.io.ByteArrayOutputStream;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +57,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import org.xhtmlrenderer.pdf.ITextRenderer;
 
 @Slf4j
 @Service
@@ -61,6 +75,13 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   private final SesionCajaDenominacionRepository sesionCajaDenominacionRepository;
   private final SucursalRepository sucursalRepository;
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
+  private final CierreDatafonoRepository cierreDatafonoRepository;
+  private final EmailService emailService;
+  private final ThymeleafService thymeleafService;
+  private final JavaMailSender javaMailSender;
+
+  @Value("${spring.mail.username}")
+  private String emailFrom;
 
   @Override
   public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
@@ -131,6 +152,31 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     sesion.setObservacionesCierre(observaciones);
     sesion.setFechaHoraCierre(LocalDateTime.now());
 
+    // 🆕 Validar y guardar nuevos campos
+    BigDecimal montoRetirado = request.getMontoRetirado();
+    BigDecimal fondoCaja = request.getFondoCaja();
+
+// Validación: fondoCaja debe ser = montoCierre - montoRetirado
+    BigDecimal fondoCalculado = montoCierre.subtract(montoRetirado);
+    if (fondoCaja.compareTo(fondoCalculado) != 0) {
+      throw new RuntimeException(String.format(
+          "El fondo de caja no coincide. Esperado: ₡%.2f (₡%.2f - ₡%.2f), Recibido: ₡%.2f",
+          fondoCalculado, montoCierre, montoRetirado, fondoCaja
+      ));
+    }
+
+// Validación: montoRetirado no puede ser mayor que montoCierre
+    if (montoRetirado.compareTo(montoCierre) > 0) {
+      throw new RuntimeException(String.format(
+          "No puedes retirar más dinero del que hay en caja. Cierre: ₡%.2f, Retiro: ₡%.2f",
+          montoCierre, montoRetirado
+      ));
+    }
+
+// Guardar los nuevos campos
+    sesion.setMontoRetirado(montoRetirado);
+    sesion.setFondoCaja(fondoCaja);
+
     // guarda desglose
     sesionCajaDenominacionRepository.deleteAll(
         sesionCajaDenominacionRepository.findBySesionCajaId(id)); // limpia previos si reintentan
@@ -151,6 +197,24 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     sesion.setTotalTarjeta(request.getTotalTarjeta());
     sesion.setTotalTransferencia(request.getTotalTransferencia());
     sesion.setTotalOtros(request.getTotalSinpe());
+
+    if (request.getDatafonos() != null && !request.getDatafonos().isEmpty()) {
+      // Limpiar datafonos previos (por si reintentan)
+      cierreDatafonoRepository.deleteBySesionCajaId(id);
+
+      // Guardar nuevos datafonos
+      List<CierreDatafono> datafonos = request.getDatafonos().stream()
+          .map(dto -> CierreDatafono.builder()
+              .sesionCaja(sesion)
+              .datafono(dto.getDatafono())
+              .monto(dto.getMonto())
+              .build())
+          .toList();
+
+      cierreDatafonoRepository.saveAll(datafonos);
+
+      log.info("Guardados {} datafonos para sesión {}", datafonos.size(), id);
+    }
 
     sesion.setEstado(EstadoSesion.CERRADA);
 
@@ -218,6 +282,28 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
     // Convertir a DTOs
     return sesiones.map(this::convertirADTO);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Optional<SesionCaja> buscarUltimaSesionCerrada(Long terminalId) {
+    log.info("Buscando última sesión cerrada para terminal: {}", terminalId);
+
+    Optional<SesionCaja> ultimaSesion = sesionCajaRepository
+        .findTopByTerminalIdAndEstadoOrderByFechaHoraCierreDesc(
+            terminalId,
+            EstadoSesion.CERRADA
+        );
+
+    if (ultimaSesion.isPresent()) {
+      log.info("Última sesión encontrada - ID: {}, Fondo Caja: {}",
+          ultimaSesion.get().getId(),
+          ultimaSesion.get().getFondoCaja());
+    } else {
+      log.info("No se encontró sesión cerrada previa para terminal: {}", terminalId);
+    }
+
+    return ultimaSesion;
   }
 
   private SesionCajaDTO convertirADTO(SesionCaja sesion) {
@@ -591,6 +677,8 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
     );
 
+    sesion.setTotalEfectivo(totalEfectivo);
+
     BigDecimal esperado = calcularMontoEsperado(sesion);
     resumen.setMontoEsperado(esperado);
 
@@ -655,6 +743,258 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         montoCierre.subtract(calcularMontoEsperado(sesion)));
 
     return sesion;
+  }
+
+  /**
+   * 🖨️ Genera PDF del cierre de caja con opciones personalizadas
+   *
+   * @param sesionId ID de la sesión cerrada
+   * @param opciones Opciones de qué incluir en el PDF
+   * @return Bytes del PDF generado
+   */
+  @Override
+  @Transactional(readOnly = true)
+  public byte[] generarPdfCierre(Long sesionId, OpcionesImpresionCierreDTO opciones) {
+    log.info("📄 Generando PDF de cierre para sesión {} con opciones: {}", sesionId, opciones);
+
+    // 1. Obtener sesión
+    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
+
+    // 2. Validar que esté cerrada
+    if (sesion.getEstado() != EstadoSesion.CERRADA) {
+      throw new IllegalStateException("La sesión debe estar cerrada para generar el PDF");
+    }
+
+    // 3. Obtener resumen detallado
+    ResumenCajaDetalladoDTO resumen = obtenerResumenDetallado(sesionId);
+
+    // 4. Generar HTML usando Thymeleaf
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("sesion", sesion);
+    variables.put("resumen", resumen);
+    variables.put("opciones", opciones);
+    variables.put("empresa", sesion.getTerminal().getSucursal().getEmpresa());
+    variables.put("sucursal", sesion.getTerminal().getSucursal());
+    variables.put("fechaGeneracion", LocalDateTime.now());
+
+    String htmlContent = thymeleafService.processTemplate("cierre-caja", variables);
+
+    // 5. Convertir HTML a PDF usando Flying Saucer o similar
+    try {
+      return convertirHtmlAPdf(htmlContent);
+    } catch (Exception e) {
+      log.error("Error convirtiendo HTML a PDF: {}", e.getMessage(), e);
+      throw new RuntimeException("Error generando PDF: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * 📧 Envía el cierre de caja por email
+   *
+   * @param sesionId ID de la sesión cerrada
+   * @param opciones Opciones de envío (emails, qué incluir)
+   */
+  @Transactional
+  @Override
+  public void enviarCierrePorEmail(Long sesionId, OpcionesImpresionCierreDTO opciones) {
+    log.info("📧 Enviando cierre por email para sesión {}", sesionId);
+
+    // 1. Obtener sesión
+    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
+
+    // 2. Validar que esté cerrada
+    if (sesion.getEstado() != EstadoSesion.CERRADA) {
+      throw new IllegalStateException("La sesión debe estar cerrada para enviar email");
+    }
+
+    // 3. Obtener resumen
+    ResumenCajaDetalladoDTO resumen = obtenerResumenDetallado(sesionId);
+
+    // 4. Generar PDF
+    byte[] pdfBytes = generarPdfCierre(sesionId, opciones);
+
+    // 5. Obtener emails destino
+    List<String> destinatarios = new ArrayList<>();
+
+    // Email de la sucursal (automático)
+    Sucursal sucursal = sesion.getTerminal().getSucursal();
+    if (sucursal.getEmail() != null && !sucursal.getEmail().isBlank()) {
+      destinatarios.add(sucursal.getEmail());
+    } else if (sucursal.getEmpresa().getEmail() != null) {
+      destinatarios.add(sucursal.getEmpresa().getEmail());
+    }
+
+    // Emails adicionales del formulario
+    if (opciones.getCorreosAdicionales() != null) {
+      destinatarios.addAll(opciones.getCorreosAdicionales());
+    }
+
+    // 6. Generar HTML del email
+    String htmlEmail = generarHtmlEmailCierre(sesion, resumen, opciones);
+
+    // 7. Enviar a cada destinatario
+    for (String email : destinatarios) {
+      try {
+        enviarEmailCierreIndividual(email, sesion, htmlEmail, pdfBytes);
+        log.info("✅ Email enviado a: {}", email);
+      } catch (Exception e) {
+        log.error("❌ Error enviando email a {}: {}", email, e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * 📨 Envía email individual con el cierre
+   */
+  private void enviarEmailCierreIndividual(
+      String destinatario,
+      SesionCaja sesion,
+      String htmlContent,
+      byte[] pdfBytes) {
+
+    try {
+      MimeMessage message = javaMailSender.createMimeMessage();
+      MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+      // Configurar
+      helper.setFrom(emailFrom);
+      helper.setTo(destinatario);
+      helper.setSubject(String.format(
+          "Cierre de Caja - %s - %s",
+          sesion.getTerminal().getNombre(),
+          LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+      ));
+
+      // HTML
+      helper.setText(htmlContent, true);
+
+      // Adjuntar PDF
+      helper.addAttachment(
+          String.format("cierre_caja_%s.pdf", sesion.getId()),
+          new ByteArrayDataSource(pdfBytes, "application/pdf")
+      );
+
+      // Enviar
+      javaMailSender.send(message);
+
+    } catch (MessagingException e) {
+      log.error("Error enviando email a {}: {}", destinatario, e.getMessage());
+      throw new RuntimeException("Error al enviar email", e);
+    }
+  }
+
+  /**
+   * 🎨 Genera HTML del email de cierre
+   */
+  private String generarHtmlEmailCierre(
+      SesionCaja sesion,
+      ResumenCajaDetalladoDTO resumen,
+      OpcionesImpresionCierreDTO opciones) {
+
+    StringBuilder html = new StringBuilder();
+
+    html.append("<!DOCTYPE html>");
+    html.append("<html>");
+    html.append("<head>");
+    html.append("<meta charset='UTF-8'>");
+    html.append("<style>");
+    html.append("body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }");
+    html.append(".container { max-width: 600px; margin: 20px auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }");
+    html.append(".header { background: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%); padding: 30px; text-align: center; color: white; }");
+    html.append(".header h1 { margin: 0; font-size: 24px; }");
+    html.append(".content { padding: 30px; }");
+    html.append(".info-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7C3AED; }");
+    html.append(".info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #dee2e6; }");
+    html.append(".info-label { font-weight: 600; color: #6c757d; }");
+    html.append(".info-value { color: #212529; font-weight: 600; }");
+    html.append(".footer { background-color: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #6c757d; }");
+    html.append("</style>");
+    html.append("</head>");
+    html.append("<body>");
+    html.append("<div class='container'>");
+
+    // Header
+    html.append("<div class='header'>");
+    html.append("<h1>🔒 Cierre de Caja</h1>");
+    html.append("<p style='margin: 10px 0 0; opacity: 0.9;'>").append(sesion.getTerminal().getNombre()).append("</p>");
+    html.append("</div>");
+
+    // Content
+    html.append("<div class='content'>");
+    html.append("<p>Se adjunta el cierre de caja con el detalle completo de la sesión.</p>");
+
+    // Info Box
+    html.append("<div class='info-box'>");
+
+    html.append("<div class='info-row'>");
+    html.append("<span class='info-label'>Terminal:</span>");
+    html.append("<span class='info-value'>").append(sesion.getTerminal().getNombre()).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row'>");
+    html.append("<span class='info-label'>Cajero:</span>");
+    html.append("<span class='info-value'>").append(sesion.getUsuario().getNombre().concat(sesion.getUsuario().getApellidos())).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row'>");
+    html.append("<span class='info-label'>Fecha:</span>");
+    html.append("<span class='info-value'>").append(
+        sesion.getFechaHoraApertura().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+    ).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row' style='border-bottom: none; margin-top: 10px;'>");
+    html.append("<span class='info-label'>Monto Esperado:</span>");
+    html.append("<span class='info-value' style='color: #7C3AED; font-size: 18px;'>₡")
+        .append(String.format("%,.0f", resumen.getMontoEsperado()))
+        .append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row' style='border-bottom: none;'>");
+    html.append("<span class='info-label'>Monto de Cierre:</span>");
+    html.append("<span class='info-value' style='color: #7C3AED; font-size: 18px;'>₡")
+        .append(String.format("%,.0f", sesion.getMontoCierre()))
+        .append("</span>");
+    html.append("</div>");
+
+    html.append("</div>");
+
+    html.append("<p>Adjunto encontrará el PDF con el detalle completo del cierre.</p>");
+    html.append("</div>");
+
+    // Footer
+    html.append("<div class='footer'>");
+    html.append("<p><strong>").append(sesion.getTerminal().getSucursal().getEmpresa().getNombreComercial()).append("</strong></p>");
+    html.append("<p>Este es un correo automático del sistema NathBit POS</p>");
+    html.append("</div>");
+
+    html.append("</div>");
+    html.append("</body>");
+    html.append("</html>");
+
+    return html.toString();
+  }
+
+  /**
+   * 📄 Convierte HTML a PDF usando Flying Saucer
+   */
+  private byte[] convertirHtmlAPdf(String htmlContent) throws Exception {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+    try {
+      // Usar Flying Saucer (ya debes tenerlo en dependencies)
+      ITextRenderer renderer = new ITextRenderer();
+      renderer.setDocumentFromString(htmlContent);
+      renderer.layout();
+      renderer.createPDF(outputStream);
+
+      return outputStream.toByteArray();
+
+    } finally {
+      outputStream.close();
+    }
   }
 
   // Agregar este método en SesionCajaServiceImpl

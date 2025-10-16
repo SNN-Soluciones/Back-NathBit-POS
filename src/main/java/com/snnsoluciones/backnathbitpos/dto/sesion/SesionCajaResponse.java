@@ -18,4 +18,6 @@ public class SesionCajaResponse {
     private BigDecimal totalVentas;
     private String estado;
     private Integer cantidadFacturas;
+    private BigDecimal montoRetirado;
+    private BigDecimal fondoCaja;
 }

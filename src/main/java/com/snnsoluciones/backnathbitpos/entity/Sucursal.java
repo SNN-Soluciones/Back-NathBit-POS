@@ -117,15 +117,20 @@ public class Sucursal {
     /**
      * Define si imprime LOCAL (navegador) u ORQUESTADOR (La Chismosa)
      */
-    @Column(name = "modo_impresion", nullable = false)
+    @Column(name = "modo_impresion", nullable = false, columnDefinition = "modo_impresion_enum")
     @Enumerated(EnumType.STRING)
     @JdbcType(PostgreSQLEnumJdbcType.class)
     @Builder.Default
     private ModoImpresion modoImpresion = ModoImpresion.LOCAL;
 
+    /**
+     * AUTO, IFRAME, SHARE_API o NUEVA_PESTANA
+     */
+    @Column(name = "metodo_impresion", nullable = false, columnDefinition = "metodo_impresion_enum")
     @Enumerated(EnumType.STRING)
-    @Column(name = "metodo_impresion")
-    private MetodoImpresion metodoImpresion;
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Builder.Default
+    private MetodoImpresion metodoImpresion = MetodoImpresion.AUTO;
 
     /**
      * IP y puerto del orquestador de impresoras

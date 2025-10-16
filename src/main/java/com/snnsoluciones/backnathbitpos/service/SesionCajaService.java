@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
+import com.snnsoluciones.backnathbitpos.dto.sesion.OpcionesImpresionCierreDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
@@ -43,4 +44,15 @@ public interface SesionCajaService {
         List<CerrarSesionRequest.DenominacionDTO> denominaciones);
 
     Page<SesionCajaDTO> listarPorSucursal(Long sucursalId, Pageable pageable);
+
+    /**
+     * 🆕 Busca el fondo de caja de la última sesión cerrada de una terminal
+     * Útil para sugerir el montoInicial al abrir nueva sesión
+     *
+     * @param terminalId ID de la terminal
+     * @return Optional con la última sesión cerrada
+     */
+    Optional<SesionCaja> buscarUltimaSesionCerrada(Long terminalId);
+    byte[] generarPdfCierre(Long sesionId, OpcionesImpresionCierreDTO opciones);
+    void enviarCierrePorEmail(Long sesionId, OpcionesImpresionCierreDTO opciones);
 }

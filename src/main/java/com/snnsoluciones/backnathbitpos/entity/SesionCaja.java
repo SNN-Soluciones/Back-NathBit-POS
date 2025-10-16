@@ -37,6 +37,12 @@ public class SesionCaja {
     
     @Column(name = "monto_cierre", precision = 18, scale = 2)
     private BigDecimal montoCierre;
+
+    @Column(name = "monto_retirado", precision = 18, scale = 2)
+    private BigDecimal montoRetirado;
+
+    @Column(name = "fondo_caja", precision = 18, scale = 2)
+    private BigDecimal fondoCaja;
     
     // Montos de operación
     @Column(name = "total_ventas", precision = 18, scale = 2)

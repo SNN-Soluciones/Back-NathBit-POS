@@ -53,6 +53,5 @@ public interface SesionCajaService {
      * @return Optional con la última sesión cerrada
      */
     Optional<SesionCaja> buscarUltimaSesionCerrada(Long terminalId);
-    byte[] generarPdfCierre(Long sesionId, OpcionesImpresionCierreDTO opciones);
-    void enviarCierrePorEmail(Long sesionId, OpcionesImpresionCierreDTO opciones);
+    String generarHtmlCierre(Long sesionId, OpcionesImpresionCierreDTO opciones);
 }

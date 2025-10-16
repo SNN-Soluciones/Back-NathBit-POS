@@ -110,122 +110,6 @@ public class SesionCajaController {
     }
   }
 
-  // ==========================================
-// ENDPOINTS DE IMPRESIÓN Y ENVÍO DE CIERRE
-// ==========================================
-
-  /**
-   * 🖨️ Imprimir cierre de caja con opciones personalizadas
-   */
-  @PostMapping("/{sesionId}/cierre/imprimir")
-  @PreAuthorize("hasAnyRole('ROOT', 'CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
-  @Operation(summary = "Imprimir cierre de caja con opciones personalizadas")
-  public ResponseEntity<byte[]> imprimirCierreCaja(
-      @PathVariable Long sesionId,
-      @RequestBody OpcionesImpresionCierreDTO opciones) {
-
-    log.info("🖨️ Generando PDF de cierre para sesión {} con opciones: {}", sesionId, opciones);
-
-    try {
-      byte[] pdfBytes = sesionCajaService.generarPdfCierre(sesionId, opciones);
-
-      HttpHeaders headers = new HttpHeaders();
-      headers.setContentType(MediaType.APPLICATION_PDF);
-      headers.setContentDisposition(
-          ContentDisposition.builder("inline")
-              .filename("cierre_caja_" + sesionId + ".pdf")
-              .build()
-      );
-      headers.setContentLength(pdfBytes.length);
-
-      log.info("✅ PDF generado exitosamente para sesión {}", sesionId);
-
-      return ResponseEntity.ok()
-          .headers(headers)
-          .body(pdfBytes);
-
-    } catch (Exception e) {
-      log.error("❌ Error generando PDF de cierre para sesión {}: {}", sesionId, e.getMessage(), e);
-      return ResponseEntity.internalServerError().build();
-    }
-  }
-
-  /**
-   * 📧 Enviar cierre de caja por email
-   */
-  @PostMapping("/{sesionId}/cierre/enviar-email")
-  @PreAuthorize("hasAnyRole('ROOT', 'CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
-  @Operation(summary = "Enviar cierre de caja por email")
-  public ResponseEntity<ApiResponse<Void>> enviarCierrePorEmail(
-      @PathVariable Long sesionId,
-      @RequestBody OpcionesImpresionCierreDTO opciones) {
-
-    log.info("📧 Enviando cierre de caja {} por email a: {}", sesionId, opciones.getCorreosAdicionales());
-
-    try {
-      sesionCajaService.enviarCierrePorEmail(sesionId, opciones);
-
-      log.info("✅ Email de cierre enviado exitosamente para sesión {}", sesionId);
-
-      return ResponseEntity.ok(
-          ApiResponse.success("Email enviado exitosamente", null)
-      );
-
-    } catch (Exception e) {
-      log.error("❌ Error enviando email de cierre para sesión {}: {}", sesionId, e.getMessage(), e);
-      return ResponseEntity.ok(
-          ApiResponse.error("Error al enviar email: " + e.getMessage())
-      );
-    }
-  }
-
-  /**
-   * 🖨️📧 Imprimir Y enviar cierre de caja (acción combinada)
-   */
-  @PostMapping("/{sesionId}/cierre/imprimir-y-enviar")
-  @PreAuthorize("hasAnyRole('ROOT', 'CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
-  @Operation(summary = "Imprimir y enviar cierre de caja")
-  public ResponseEntity<byte[]> imprimirYEnviarCierre(
-      @PathVariable Long sesionId,
-      @RequestBody OpcionesImpresionCierreDTO opciones) {
-
-    log.info("🖨️📧 Imprimiendo y enviando cierre para sesión {} con opciones: {}", sesionId, opciones);
-
-    try {
-      // 1. Generar PDF
-      byte[] pdfBytes = sesionCajaService.generarPdfCierre(sesionId, opciones);
-
-      // 2. Enviar email de forma asíncrona (no bloqueante)
-      CompletableFuture.runAsync(() -> {
-        try {
-          sesionCajaService.enviarCierrePorEmail(sesionId, opciones);
-          log.info("✅ Email enviado exitosamente en background para sesión {}", sesionId);
-        } catch (Exception e) {
-          log.error("❌ Error enviando email en background: {}", e.getMessage(), e);
-        }
-      });
-
-      // 3. Retornar PDF inmediatamente
-      HttpHeaders headers = new HttpHeaders();
-      headers.setContentType(MediaType.APPLICATION_PDF);
-      headers.setContentDisposition(
-          ContentDisposition.builder("inline")
-              .filename("cierre_caja_" + sesionId + ".pdf")
-              .build()
-      );
-      headers.setContentLength(pdfBytes.length);
-
-      log.info("✅ PDF generado y email programado para sesión {}", sesionId);
-
-      return ResponseEntity.ok()
-          .headers(headers)
-          .body(pdfBytes);
-
-    } catch (Exception e) {
-      log.error("❌ Error en proceso combinado para sesión {}: {}", sesionId, e.getMessage(), e);
-      return ResponseEntity.internalServerError().build();
-    }
-  }
 
   @PostMapping("/{id}/cerrar")
   @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
@@ -623,6 +507,19 @@ public class SesionCajaController {
       return ResponseEntity.badRequest()
           .body(ApiResponse.error("Error al obtener sesiones: " + e.getMessage()));
     }
+  }
+
+  @GetMapping("/{id}/cierre/html")
+  public ResponseEntity<String> obtenerHtmlCierre(@PathVariable Long id) {
+    OpcionesImpresionCierreDTO opciones = new OpcionesImpresionCierreDTO();
+    opciones.setIncluirMovimientos(true);
+    opciones.setIncluirFacturas(true);
+
+    String html = sesionCajaService.generarHtmlCierre(id, opciones);
+
+    return ResponseEntity.ok()
+        .contentType(MediaType.TEXT_HTML)
+        .body(html);
   }
 
   @Operation(summary = "Obtener sesiones por estado (Admin)")

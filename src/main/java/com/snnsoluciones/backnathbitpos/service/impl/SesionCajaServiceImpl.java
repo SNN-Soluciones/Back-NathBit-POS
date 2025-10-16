@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.lowagie.text.pdf.BaseFont;
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesion.OpcionesImpresionCierreDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
@@ -31,11 +32,16 @@ import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.EmailService;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
-import com.snnsoluciones.backnathbitpos.service.ThymeleafService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.util.ByteArrayDataSource;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,6 +50,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -57,6 +64,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import org.xhtmlrenderer.pdf.ITextFontResolver;
 import org.xhtmlrenderer.pdf.ITextRenderer;
 
 @Slf4j
@@ -77,7 +85,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
   private final CierreDatafonoRepository cierreDatafonoRepository;
   private final EmailService emailService;
-  private final ThymeleafService thymeleafService;
   private final JavaMailSender javaMailSender;
 
   @Value("${spring.mail.username}")
@@ -746,106 +753,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   }
 
   /**
-   * 🖨️ Genera PDF del cierre de caja con opciones personalizadas
-   *
-   * @param sesionId ID de la sesión cerrada
-   * @param opciones Opciones de qué incluir en el PDF
-   * @return Bytes del PDF generado
-   */
-  @Override
-  @Transactional(readOnly = true)
-  public byte[] generarPdfCierre(Long sesionId, OpcionesImpresionCierreDTO opciones) {
-    log.info("📄 Generando PDF de cierre para sesión {} con opciones: {}", sesionId, opciones);
-
-    // 1. Obtener sesión
-    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
-        .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
-
-    // 2. Validar que esté cerrada
-    if (sesion.getEstado() != EstadoSesion.CERRADA) {
-      throw new IllegalStateException("La sesión debe estar cerrada para generar el PDF");
-    }
-
-    // 3. Obtener resumen detallado
-    ResumenCajaDetalladoDTO resumen = obtenerResumenDetallado(sesionId);
-
-    // 4. Generar HTML usando Thymeleaf
-    Map<String, Object> variables = new HashMap<>();
-    variables.put("sesion", sesion);
-    variables.put("resumen", resumen);
-    variables.put("opciones", opciones);
-    variables.put("empresa", sesion.getTerminal().getSucursal().getEmpresa());
-    variables.put("sucursal", sesion.getTerminal().getSucursal());
-    variables.put("fechaGeneracion", LocalDateTime.now());
-
-    String htmlContent = thymeleafService.processTemplate("cierre-caja", variables);
-
-    // 5. Convertir HTML a PDF usando Flying Saucer o similar
-    try {
-      return convertirHtmlAPdf(htmlContent);
-    } catch (Exception e) {
-      log.error("Error convirtiendo HTML a PDF: {}", e.getMessage(), e);
-      throw new RuntimeException("Error generando PDF: " + e.getMessage(), e);
-    }
-  }
-
-  /**
-   * 📧 Envía el cierre de caja por email
-   *
-   * @param sesionId ID de la sesión cerrada
-   * @param opciones Opciones de envío (emails, qué incluir)
-   */
-  @Transactional
-  @Override
-  public void enviarCierrePorEmail(Long sesionId, OpcionesImpresionCierreDTO opciones) {
-    log.info("📧 Enviando cierre por email para sesión {}", sesionId);
-
-    // 1. Obtener sesión
-    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
-        .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
-
-    // 2. Validar que esté cerrada
-    if (sesion.getEstado() != EstadoSesion.CERRADA) {
-      throw new IllegalStateException("La sesión debe estar cerrada para enviar email");
-    }
-
-    // 3. Obtener resumen
-    ResumenCajaDetalladoDTO resumen = obtenerResumenDetallado(sesionId);
-
-    // 4. Generar PDF
-    byte[] pdfBytes = generarPdfCierre(sesionId, opciones);
-
-    // 5. Obtener emails destino
-    List<String> destinatarios = new ArrayList<>();
-
-    // Email de la sucursal (automático)
-    Sucursal sucursal = sesion.getTerminal().getSucursal();
-    if (sucursal.getEmail() != null && !sucursal.getEmail().isBlank()) {
-      destinatarios.add(sucursal.getEmail());
-    } else if (sucursal.getEmpresa().getEmail() != null) {
-      destinatarios.add(sucursal.getEmpresa().getEmail());
-    }
-
-    // Emails adicionales del formulario
-    if (opciones.getCorreosAdicionales() != null) {
-      destinatarios.addAll(opciones.getCorreosAdicionales());
-    }
-
-    // 6. Generar HTML del email
-    String htmlEmail = generarHtmlEmailCierre(sesion, resumen, opciones);
-
-    // 7. Enviar a cada destinatario
-    for (String email : destinatarios) {
-      try {
-        enviarEmailCierreIndividual(email, sesion, htmlEmail, pdfBytes);
-        log.info("✅ Email enviado a: {}", email);
-      } catch (Exception e) {
-        log.error("❌ Error enviando email a {}: {}", email, e.getMessage());
-      }
-    }
-  }
-
-  /**
    * 📨 Envía email individual con el cierre
    */
   private void enviarEmailCierreIndividual(
@@ -977,24 +884,146 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     return html.toString();
   }
 
-  /**
-   * 📄 Convierte HTML a PDF usando Flying Saucer
-   */
-  private byte[] convertirHtmlAPdf(String htmlContent) throws Exception {
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+  private static File cpToTempFile(String classpath, String prefix) throws IOException {
+    ClassPathResource res = new ClassPathResource(classpath);
+    if (!res.exists()) {
+      throw new FileNotFoundException("No existe en classpath: " + classpath);
+    }
+    File tmp = File.createTempFile(prefix, ".ttf");
+    tmp.deleteOnExit();
+    try (InputStream in = res.getInputStream(); OutputStream out = new FileOutputStream(tmp)) {
+      in.transferTo(out);
+    }
+    return tmp;
+  }
 
-    try {
-      // Usar Flying Saucer (ya debes tenerlo en dependencies)
+  private byte[] convertirHtmlAPdf(String htmlContent) {
+    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
       ITextRenderer renderer = new ITextRenderer();
-      renderer.setDocumentFromString(htmlContent);
+
+      // Base URL para recursos relativos (si los tienes en /templates o /static)
+      // Usa setDocumentFromString(html, baseUrl) para que <img src="..."> relativos funcionen
+      String baseUrl = this.getClass().getResource("/templates/") != null
+          ? this.getClass().getResource("/templates/").toString()
+          : this.getClass().getResource("/static/") != null
+              ? this.getClass().getResource("/static/").toString()
+              : null;
+
+      // Registrar fuentes desde classpath -> temp file (funciona dentro de JAR)
+      ITextFontResolver fontResolver = renderer.getFontResolver();
+      fontResolver.addFont(cpToTempFile("fonts/NotoSans-Regular.ttf",     "noto-regular").getAbsolutePath(),
+          BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+      fontResolver.addFont(cpToTempFile("fonts/NotoSans-Bold.ttf",        "noto-bold").getAbsolutePath(),
+          BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+      fontResolver.addFont(cpToTempFile("fonts/NotoSans-Italic.ttf",      "noto-italic").getAbsolutePath(),
+          BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+      fontResolver.addFont(cpToTempFile("fonts/NotoSans-BoldItalic.ttf",  "noto-bolditalic").getAbsolutePath(),
+          BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+
+      if (baseUrl != null) {
+        renderer.setDocumentFromString(htmlContent, baseUrl);
+      } else {
+        renderer.setDocumentFromString(htmlContent);
+      }
+
       renderer.layout();
       renderer.createPDF(outputStream);
-
       return outputStream.toByteArray();
-
-    } finally {
-      outputStream.close();
+    } catch (Exception e) {
+      log.error("❌ Error en conversión HTML a PDF: {}", e.getMessage(), e);
+      throw new RuntimeException("Error generando PDF: " + e.getMessage(), e);
     }
+  }
+
+
+  @Override
+  public String generarHtmlCierre(Long sesionId, OpcionesImpresionCierreDTO opciones) {
+    log.info("📄 Generando HTML de cierre para sesión {}", sesionId);
+
+    // 1. Obtener sesión
+    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
+
+    // 2. Obtener resumen
+    ResumenCajaDetalladoDTO resumen = obtenerResumenDetallado(sesionId);
+
+    // 3. Generar HTML simple (SIN emojis, SIN fuentes raras)
+    StringBuilder html = new StringBuilder();
+
+    html.append("<!DOCTYPE html>");
+    html.append("<html><head>");
+    html.append("<meta charset='UTF-8'>");
+    html.append("<title>Cierre de Caja</title>");
+    html.append("<style>");
+    html.append("body { font-family: Arial, sans-serif; padding: 20px; }");
+    html.append("h1 { color: #7C3AED; border-bottom: 2px solid #7C3AED; padding-bottom: 10px; }");
+    html.append("table { width: 100%; border-collapse: collapse; margin: 20px 0; }");
+    html.append("th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }");
+    html.append("th { background: #f5f5f5; font-weight: bold; }");
+    html.append(".total { font-size: 18px; font-weight: bold; color: #7C3AED; }");
+    html.append(".positivo { color: green; }");
+    html.append(".negativo { color: red; }");
+    html.append("@media print { button { display: none; } }");
+    html.append("</style>");
+    html.append("</head><body>");
+
+    // Header
+    html.append("<h1>CIERRE DE CAJA</h1>");
+    html.append("<p><strong>Terminal:</strong> ").append(sesion.getTerminal().getNombre()).append("</p>");
+    html.append("<p><strong>Cajero:</strong> ").append(sesion.getUsuario().getNombre())
+        .append(" ").append(sesion.getUsuario().getApellidos()).append("</p>");
+    html.append("<p><strong>Fecha:</strong> ")
+        .append(sesion.getFechaHoraApertura().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")))
+        .append("</p>");
+
+    // Resumen de montos
+    html.append("<table>");
+    html.append("<tr><th>Concepto</th><th style='text-align: right;'>Monto</th></tr>");
+    html.append("<tr><td>Monto Inicial</td><td style='text-align: right;'>")
+        .append(formatearMoneda(resumen.getMontoInicial())).append("</td></tr>");
+    html.append("<tr><td>Ventas en Efectivo</td><td style='text-align: right; color: green;'>")
+        .append(formatearMoneda(resumen.getVentasEfectivo())).append("</td></tr>");
+    html.append("<tr><td>Vales</td><td style='text-align: right; color: red;'>")
+        .append(formatearMoneda(resumen.getVales())).append("</td></tr>");
+    html.append("<tr class='total'><td>MONTO ESPERADO</td><td style='text-align: right;'>")
+        .append(formatearMoneda(resumen.getMontoEsperado())).append("</td></tr>");
+    html.append("<tr class='total'><td>MONTO DE CIERRE</td><td style='text-align: right;'>")
+        .append(formatearMoneda(sesion.getMontoCierre())).append("</td></tr>");
+
+    BigDecimal diferencia = sesion.getMontoCierre().subtract(resumen.getMontoEsperado());
+    html.append("<tr><td>DIFERENCIA</td><td style='text-align: right;' class='")
+        .append(diferencia.compareTo(BigDecimal.ZERO) >= 0 ? "positivo" : "negativo")
+        .append("'>").append(formatearMoneda(diferencia)).append("</td></tr>");
+    html.append("</table>");
+
+    // Resumen de documentos
+    html.append("<h2>Documentos Emitidos</h2>");
+    html.append("<table>");
+    html.append("<tr><th>Tipo</th><th style='text-align: center;'>Cantidad</th><th style='text-align: right;'>Total</th></tr>");
+    html.append("<tr><td>Facturas</td><td style='text-align: center;'>")
+        .append(resumen.getCantidadFacturas())
+        .append("</td><td style='text-align: right;'>")
+        .append(formatearMoneda(resumen.getTotalFacturas())).append("</td></tr>");
+    html.append("<tr><td>Tiquetes</td><td style='text-align: center;'>")
+        .append(resumen.getCantidadTiquetes())
+        .append("</td><td style='text-align: right;'>")
+        .append(formatearMoneda(resumen.getTotalTiquetes())).append("</td></tr>");
+    html.append("</table>");
+
+    // Botón de imprimir
+    html.append("<button onclick='window.print()' style='padding: 10px 20px; background: #7C3AED; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;'>")
+        .append("Imprimir")
+        .append("</button>");
+
+    html.append("</body></html>");
+
+    return html.toString();
+  }
+
+  // Helper para formatear moneda
+  private String formatearMoneda(BigDecimal monto) {
+    if (monto == null) return "₡0";
+    return String.format("₡%,d", monto.longValue());
   }
 
   // Agregar este método en SesionCajaServiceImpl

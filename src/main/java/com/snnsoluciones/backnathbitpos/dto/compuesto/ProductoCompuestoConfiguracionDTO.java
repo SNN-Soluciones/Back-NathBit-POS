@@ -32,7 +32,6 @@ public class ProductoCompuestoConfiguracionDTO {
 
     // Opción que activa esta configuración
     private Long opcionTriggerId;
-    private String opcionTriggerNombre;
     private Long opcionTriggerProductoId;
     private String opcionTriggerProductoNombre;
 

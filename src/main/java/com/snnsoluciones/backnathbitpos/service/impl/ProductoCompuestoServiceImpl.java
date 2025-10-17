@@ -10,6 +10,9 @@ import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoSlotDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoOpcionDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
+import com.snnsoluciones.backnathbitpos.dto.productocompuesto.ConfiguracionFlujoDTO;
+import com.snnsoluciones.backnathbitpos.dto.productocompuesto.OpcionPreguntaInicialDTO;
+import com.snnsoluciones.backnathbitpos.dto.productocompuesto.SlotPreguntaInicialDTO;
 import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
@@ -48,6 +51,7 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   private final FamiliaProductoRepository familiaProductoRepository;
   private final ProductoCompuestoConfiguracionRepository configuracionRepository;
   private final ProductoCompuestoSlotConfiguracionRepository slotConfigRepository;
+  private final ProductoCompuestoOpcionRepository productoCompuestoOpcionRepository;
 
   @Override
   @Transactional
@@ -931,7 +935,7 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
       return stock != null && stock > 0;
     } catch (Exception e) {
       log.warn("Error verificando stock para producto {}: {}", productoId, e.getMessage());
-      return false;  // En caso de error, marcar como no disponible
+      return true;  // En caso de error, marcar como no disponible
     }
   }
   /**
@@ -1016,6 +1020,164 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     return convertirConfiguracionADto(configuracion, producto.getSucursal().getId());
   }
 
+  @Override
+  public ConfiguracionFlujoDTO obtenerFlujoConfiguracion(Long productoId, Long sucursalId) {
+    log.info("Obteniendo flujo de configuración para producto {} en sucursal {}",
+        productoId, sucursalId);
+
+    // 1. Validar que el producto existe y es COMPUESTO
+    Producto producto = productoRepository.findById(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+
+    if (producto.getTipo() != TipoProducto.COMPUESTO) {
+      throw new BusinessException("El producto debe ser tipo COMPUESTO");
+    }
+
+    // 2. Obtener el ProductoCompuesto
+    ProductoCompuesto compuesto = compuestoRepository
+        .findByProductoId(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Configuración de producto compuesto no encontrada"
+        ));
+
+    // 3. Construir DTO base
+    ConfiguracionFlujoDTO flujo = ConfiguracionFlujoDTO.builder()
+        .productoId(producto.getId())
+        .productoNombre(producto.getNombre())
+        .precioBase(producto.getPrecioBase())
+        .build();
+
+    // 4. DECIDIR EL FLUJO: ¿Tiene pregunta inicial?
+    if (compuesto.getSlotPreguntaInicial() != null) {
+      // ========== CASO A: BIRRIAMEN (con pregunta inicial) ==========
+      log.info("Producto tiene pregunta inicial");
+      flujo.setTienePreguntaInicial(true);
+      flujo.setSlotPreguntaInicial(
+          construirSlotPreguntaInicial(compuesto.getSlotPreguntaInicial(), sucursalId)
+      );
+      flujo.setConfiguracionDefault(null);
+
+    } else {
+      // ========== CASO B: FUZE TEA (sin pregunta inicial - default) ==========
+      log.info("Producto NO tiene pregunta inicial, buscando configuración default");
+      flujo.setTienePreguntaInicial(false);
+      flujo.setSlotPreguntaInicial(null);
+
+      // Buscar configuración default
+      ProductoCompuestoConfiguracion configDefault = configuracionRepository
+          .findByCompuestoIdAndEsDefaultTrue(compuesto.getId())
+          .orElseThrow(() -> new BusinessException(
+              "El producto no tiene pregunta inicial ni configuración default configurada"
+          ));
+
+      // Convertir a DTO
+      flujo.setConfiguracionDefault(
+          convertirConfiguracionADto(configDefault, sucursalId)
+      );
+    }
+
+    log.info("Flujo de configuración generado: tienePreguntaInicial={}",
+        flujo.getTienePreguntaInicial());
+
+    return flujo;
+  }
+
+  @Override
+  public ProductoCompuestoConfiguracionDTO obtenerConfiguracionPorOpcion(
+      Long productoId,
+      Long opcionId,
+      Long sucursalId
+  ) {
+    log.info("Obteniendo configuración por opción {} del producto {} en sucursal {}",
+        opcionId, productoId, sucursalId);
+
+    // 1. Validar que el producto existe y es COMPUESTO
+    Producto producto = productoRepository.findById(productoId)
+        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+
+    if (producto.getTipo() != TipoProducto.COMPUESTO) {
+      throw new BusinessException("El producto debe ser tipo COMPUESTO");
+    }
+
+    // 2. Validar que la opción existe
+    ProductoCompuestoOpcion opcion = productoCompuestoOpcionRepository.findById(opcionId)
+        .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada"));
+
+    // 3. Buscar la configuración que se activa con esta opción
+    ProductoCompuestoConfiguracion configuracion = configuracionRepository
+        .findByOpcionTriggerId(opcionId)
+        .orElseThrow(() -> new BusinessException(
+            "No existe una configuración asociada a la opción '" +
+                opcion.getNombreEfectivo() + "'"
+        ));
+
+    // 4. Validar que la configuración pertenece al producto correcto
+    if (!configuracion.getCompuesto().getProducto().getId().equals(productoId)) {
+      throw new BusinessException(
+          "La configuración no pertenece al producto especificado"
+      );
+    }
+
+    // 5. Validar que la configuración está activa
+    if (!configuracion.getActiva()) {
+      throw new BusinessException(
+          "La configuración '" + configuracion.getNombre() + "' está inactiva"
+      );
+    }
+
+    log.info("Configuración encontrada: {} con {} slots",
+        configuracion.getNombre(),
+        configuracion.getSlots().size());
+
+    // 6. Convertir a DTO con todas las opciones cargadas
+    return convertirConfiguracionADto(configuracion, sucursalId);
+  }
+
+  /**
+   * Construye el DTO del slot de pregunta inicial con sus opciones
+   */
+  private SlotPreguntaInicialDTO construirSlotPreguntaInicial(
+      ProductoCompuestoSlot slot,
+      Long sucursalId
+  ) {
+    log.debug("Construyendo slot pregunta inicial: {}", slot.getNombre());
+
+    // Obtener opciones del slot ordenadas
+    List<OpcionPreguntaInicialDTO> opciones = slot.getOpciones().stream()
+        .sorted(Comparator.comparingInt(ProductoCompuestoOpcion::getOrden))
+        .map(opcion -> {
+          // Buscar la configuración que activa esta opción
+          Long configuracionId = configuracionRepository
+              .findByOpcionTriggerId(opcion.getId())
+              .map(ProductoCompuestoConfiguracion::getId)
+              .orElse(null);
+
+          if (configuracionId == null) {
+            log.warn("Opción {} no tiene configuración asociada", opcion.getId());
+          }
+
+          return OpcionPreguntaInicialDTO.builder()
+              .id(opcion.getId())
+              .nombre(opcion.getNombreEfectivo())
+              .descripcion(slot.getDescripcion())
+              .precioAdicional(opcion.getPrecioAdicional())
+              .configuracionId(configuracionId)
+              .esDefault(opcion.getEsDefault())
+              .orden(opcion.getOrden())
+              .build();
+        })
+        .collect(Collectors.toList());
+
+    return SlotPreguntaInicialDTO.builder()
+        .slotId(slot.getId())
+        .nombre(slot.getNombre())
+        .pregunta(slot.getDescripcion() != null ?
+            slot.getDescripcion() : "¿Cómo deseas tu " + slot.getNombre() + "?")
+        .descripcion(slot.getDescripcion())
+        .opciones(opciones)
+        .build();
+  }
+
   /**
    * Convierte ProductoCompuestoConfiguracion a DTO
    * Carga las opciones dinámicamente para cada slot
@@ -1033,10 +1195,9 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         .descripcion(configuracion.getDescripcion())
         .orden(configuracion.getOrden())
         .activa(configuracion.getActiva())
-        .opcionTriggerId(opcionTrigger.getId())
-        .opcionTriggerNombre(opcionTrigger.getProducto().getNombre())
-        .opcionTriggerProductoId(opcionTrigger.getProducto().getId())
-        .opcionTriggerProductoNombre(opcionTrigger.getProducto().getNombre())
+        .opcionTriggerId(opcionTrigger != null ? opcionTrigger.getId() : null)
+        .opcionTriggerProductoId(opcionTrigger != null && opcionTrigger.getProducto() != null ? opcionTrigger.getProducto().getId() : null)
+        .opcionTriggerProductoNombre(opcionTrigger != null && opcionTrigger.getProducto() != null ? opcionTrigger.getProducto().getNombre() : null)
         .createdAt(configuracion.getCreatedAt())
         .updatedAt(configuracion.getUpdatedAt())
         .build();

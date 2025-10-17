@@ -50,11 +50,28 @@ public class ProductoCompuesto {
     private Integer tiempoPreparacionExtra;
 
     /**
+     * Slot que contiene la pregunta inicial (opcional)
+     * Si es NULL → no hay pregunta inicial, se usa configuración default
+     * Si tiene valor → ese slot se muestra primero y sus opciones activan configuraciones
+     */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "slot_pregunta_inicial_id")
+    private ProductoCompuestoSlot slotPreguntaInicial;
+
+    /**
+     * Nivel máximo de recursión permitido para sub-pasos
+     * Por defecto 2 niveles
+     */
+    @Column(name = "max_nivel_subpaso")
+    @Builder.Default
+    private Integer maxNivelSubpaso = 2;
+
+    /**
      * Slots de personalización
      * Cada slot es una categoría de opciones (tipo papa, proteína, etc)
      */
-    @OneToMany(mappedBy = "compuesto", cascade = CascadeType.ALL, 
-               orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "compuesto", cascade = CascadeType.ALL,
+        orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("orden ASC")
     @Builder.Default
     private List<ProductoCompuestoSlot> slots = new ArrayList<>();
@@ -67,7 +84,7 @@ public class ProductoCompuesto {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // Métodos helper
+    // ==================== MÉTODOS HELPER ====================
 
     /**
      * Agrega un slot de personalización

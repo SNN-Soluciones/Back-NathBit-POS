@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.compuesto.ActualizarConfiguracionReq
 import com.snnsoluciones.backnathbitpos.dto.compuesto.CrearConfiguracionRequest;
 import com.snnsoluciones.backnathbitpos.dto.compuesto.ProductoCompuestoConfiguracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
+import com.snnsoluciones.backnathbitpos.dto.productocompuesto.ConfiguracionFlujoDTO;
 import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -150,4 +151,61 @@ public class ProductoCompuestoController {
           .body(ApiResponse.error("Error: " + e.getMessage()));
     }
   }
+
+  /**
+   * Obtiene el flujo de configuración inicial de un producto compuesto Decide si mostrar pregunta
+   * inicial o configuración default
+   * <p>
+   * Casos de uso: - Birriamen: Retorna pregunta inicial "¿Combo o Sencillo?" - Fuze Tea: Retorna
+   * configuración default directamente
+   *
+   * @param productoId ID del producto compuesto
+   * @param sucursalId ID de la sucursal para filtrar disponibilidad
+   * @return Flujo de configuración
+   */
+  @GetMapping("/flujo-configuracion")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  public ResponseEntity<ConfiguracionFlujoDTO> obtenerFlujoConfiguracion(
+      @PathVariable Long productoId,
+      @RequestParam Long sucursalId
+  ) {
+    log.info("GET /api/productos/{}/flujo-configuracion?sucursalId={}",
+        productoId, sucursalId);
+
+    ConfiguracionFlujoDTO flujo = compuestoService
+        .obtenerFlujoConfiguracion(productoId, sucursalId);
+
+    return ResponseEntity.ok(flujo);
+  }
+
+  /**
+   * Obtiene la configuración que se activa al seleccionar una opción específica
+   *
+   * Caso de uso:
+   * - Usuario abre modal de Birriamen
+   * - Ve pregunta: "¿Cómo deseas tu Birriamen?"
+   * - Elige "COMBO" (opcionId = 123)
+   * - Este endpoint retorna la configuración con slots: Proteína, Bebida, Acompañamiento, etc.
+   *
+   * @param productoId ID del producto compuesto
+   * @param opcionId ID de la opción seleccionada (COMBO, SENCILLO, etc.)
+   * @param sucursalId ID de la sucursal para filtrar disponibilidad
+   * @return Configuración completa con slots y opciones
+   */
+  @GetMapping("/configuraciones/por-opcion/{opcionId}")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  public ResponseEntity<ProductoCompuestoConfiguracionDTO> obtenerConfiguracionPorOpcion(
+      @PathVariable Long productoId,
+      @PathVariable Long opcionId,
+      @RequestParam Long sucursalId
+  ) {
+    log.info("GET /api/productos/{}/configuraciones/por-opcion/{}?sucursalId={}",
+        productoId, opcionId, sucursalId);
+
+    ProductoCompuestoConfiguracionDTO configuracion = compuestoService
+        .obtenerConfiguracionPorOpcion(productoId, opcionId, sucursalId);
+
+    return ResponseEntity.ok(configuracion);
+  }
+
 }

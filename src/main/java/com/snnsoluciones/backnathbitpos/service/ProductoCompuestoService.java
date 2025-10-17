@@ -8,6 +8,7 @@ import com.snnsoluciones.backnathbitpos.dto.compuesto.ProductoCompuestoConfigura
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
+import com.snnsoluciones.backnathbitpos.dto.productocompuesto.ConfiguracionFlujoDTO;
 import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import java.util.List;
 
@@ -88,4 +89,29 @@ public interface ProductoCompuestoService {
      * @return Configuración con slots y sus opciones cargadas dinámicamente
      */
     ProductoCompuestoConfiguracionDTO obtenerConfiguracionPorOpcion(Long productoId, Long opcionId);
+
+    /**
+     * Obtiene el flujo de configuración inicial de un producto compuesto
+     * Decide si mostrar pregunta inicial o configuración default
+     *
+     * @param productoId ID del producto compuesto
+     * @param sucursalId ID de la sucursal para filtrar disponibilidad
+     * @return DTO con el flujo de configuración
+     */
+    ConfiguracionFlujoDTO obtenerFlujoConfiguracion(Long productoId, Long sucursalId);
+
+    /**
+     * Obtiene la configuración que se activa al seleccionar una opción específica
+     * Usado cuando hay pregunta inicial (ej: usuario elige "COMBO")
+     *
+     * @param productoId ID del producto compuesto
+     * @param opcionId ID de la opción seleccionada (ej: opción "COMBO")
+     * @param sucursalId ID de la sucursal para filtrar disponibilidad
+     * @return Configuración completa con sus slots y opciones
+     */
+    ProductoCompuestoConfiguracionDTO obtenerConfiguracionPorOpcion(
+        Long productoId,
+        Long opcionId,
+        Long sucursalId
+    );
 }

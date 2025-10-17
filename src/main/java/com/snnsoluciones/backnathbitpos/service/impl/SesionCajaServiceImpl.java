@@ -1020,6 +1020,73 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     return html.toString();
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public Map<String, Integer> contarDocumentosPorTipo(Long sesionId) {
+    log.debug("📊 Contando documentos por tipo para sesión {}", sesionId);
+
+    Map<String, Integer> conteo = new HashMap<>();
+
+    // Inicializar todos los contadores en 0
+    conteo.put("FACTURA_ELECTRONICA", 0);
+    conteo.put("TIQUETE_ELECTRONICO", 0);
+    conteo.put("FACTURA_INTERNA", 0);
+    conteo.put("TIQUETE_INTERNO", 0);
+    conteo.put("NOTA_CREDITO", 0);
+
+    try {
+      // 1️⃣ CONTAR FACTURAS Y TIQUETES ELECTRÓNICOS
+      List<Factura> facturas = facturaRepository.findBySesionCajaId(sesionId);
+
+      for (Factura f : facturas) {
+        // Solo contar documentos válidos (no anulados ni rechazados)
+        if (f.getEstado() == EstadoFactura.ANULADA ||
+            f.getEstado() == EstadoFactura.RECHAZADA) {
+          continue;
+        }
+
+        String tipo = f.getTipoDocumento().name();
+
+        // Mapear tipos de documentos
+        if (tipo.equals("FACTURA_ELECTRONICA") || tipo.equals("FACTURA_INTERNA")) {
+          conteo.merge("FACTURA_ELECTRONICA", 1, Integer::sum);
+        } else if (tipo.equals("TIQUETE_ELECTRONICO") || tipo.equals("TIQUETE_INTERNO")) {
+          conteo.merge("TIQUETE_ELECTRONICO", 1, Integer::sum);
+        } else if (tipo.equals("NOTA_CREDITO")) {
+          conteo.merge("NOTA_CREDITO", 1, Integer::sum);
+        }
+      }
+
+      // 2️⃣ CONTAR FACTURAS INTERNAS (las que NO están en Hacienda)
+      List<FacturaInterna> facturasInternas = facturaInternaRepository.findBySesionCajaId(sesionId);
+
+      for (FacturaInterna fi : facturasInternas) {
+        // Solo contar las que no están anuladas
+        if ("ANULADA".equals(fi.getEstado())) {
+          continue;
+        }
+
+        // Determinar si es factura o tiquete interno por el prefijo del número
+        String numero = fi.getNumero();
+        if (numero != null) {
+          if (numero.startsWith("FI-") || numero.startsWith("FACT-")) {
+            conteo.merge("FACTURA_INTERNA", 1, Integer::sum);
+          } else if (numero.startsWith("TI-") || numero.startsWith("TIQ-")) {
+            conteo.merge("TIQUETE_INTERNO", 1, Integer::sum);
+          }
+        }
+      }
+
+      log.debug("✅ Conteo de documentos: {}", conteo);
+
+    } catch (Exception e) {
+      log.error("❌ Error contando documentos para sesión {}: {}", sesionId, e.getMessage());
+      // Retornar el mapa con ceros en caso de error
+    }
+
+    return conteo;
+  }
+
   // Helper para formatear moneda
   private String formatearMoneda(BigDecimal monto) {
     if (monto == null) return "₡0";

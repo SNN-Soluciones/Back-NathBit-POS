@@ -62,4 +62,10 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
      * (útil al eliminar el producto compuesto)
      */
     void deleteByCompuestoId(Long compuestoId);
+
+    /**
+     * Buscar configuración default de un producto compuesto
+     */
+    Optional<ProductoCompuestoConfiguracion> findByCompuestoIdAndEsDefaultTrue(Long compuestoId);
+
 }

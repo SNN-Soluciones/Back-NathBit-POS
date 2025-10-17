@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,13 +46,7 @@ public interface SesionCajaService {
 
     Page<SesionCajaDTO> listarPorSucursal(Long sucursalId, Pageable pageable);
 
-    /**
-     * 🆕 Busca el fondo de caja de la última sesión cerrada de una terminal
-     * Útil para sugerir el montoInicial al abrir nueva sesión
-     *
-     * @param terminalId ID de la terminal
-     * @return Optional con la última sesión cerrada
-     */
     Optional<SesionCaja> buscarUltimaSesionCerrada(Long terminalId);
     String generarHtmlCierre(Long sesionId, OpcionesImpresionCierreDTO opciones);
+    Map<String, Integer> contarDocumentosPorTipo(Long sesionId);
 }

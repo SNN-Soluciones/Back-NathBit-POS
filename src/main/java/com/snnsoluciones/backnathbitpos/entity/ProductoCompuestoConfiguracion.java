@@ -66,7 +66,7 @@ public class ProductoCompuestoConfiguracion {
      * y se muestran solo los slots asociados a ella
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "opcion_trigger_id", nullable = false)
+    @JoinColumn(name = "opcion_trigger_id")
     private ProductoCompuestoOpcion opcionTrigger;
 
     /**
@@ -84,6 +84,15 @@ public class ProductoCompuestoConfiguracion {
     @Column(nullable = false)
     @Builder.Default
     private Boolean activa = true;
+
+    /**
+     * Indica si esta es la configuración por defecto
+     * Solo puede haber UNA configuración default por producto compuesto
+     * Se usa cuando NO hay pregunta inicial
+     */
+    @Column(name = "es_default", nullable = false)
+    @Builder.Default
+    private Boolean esDefault = false;
 
     /**
      * Slots asociados a esta configuración
@@ -126,6 +135,17 @@ public class ProductoCompuestoConfiguracion {
     public boolean seActivaConOpcion(Long opcionId) {
         return this.opcionTrigger != null && 
                this.opcionTrigger.getId().equals(opcionId);
+    }
+
+    /**
+     * Valida la consistencia entre esDefault y opcionTrigger
+     */
+    public boolean esConfiguracionValida() {
+        if (Boolean.TRUE.equals(esDefault)) {
+            return opcionTrigger == null;
+        } else {
+            return opcionTrigger != null;
+        }
     }
 
     /**

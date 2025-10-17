@@ -6,11 +6,13 @@ import com.snnsoluciones.backnathbitpos.dto.sesiones.MovimientoCajaDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.RegistrarValeRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
+import com.snnsoluciones.backnathbitpos.entity.CierreDatafono;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCajaDenominacion;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
+import com.snnsoluciones.backnathbitpos.repository.CierreDatafonoRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaDenominacionRepository;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.MovimientoCajaService;
@@ -22,6 +24,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -63,6 +66,7 @@ public class SesionCajaController {
   private final JwtTokenProvider jwtTokenProvider;
   private final SesionCajaDenominacionRepository sesionCajaDenominacionRepository;
   private final PdfGeneratorService pdfGeneratorService;
+  private final CierreDatafonoRepository cierreDatafonoRepository;
 
   @Operation(summary = "Abrir sesión de caja")
   @PostMapping("/abrir")
@@ -364,39 +368,133 @@ public class SesionCajaController {
   @GetMapping("/{id}/cierre/recibo")
   @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
   public ResponseEntity<byte[]> imprimirCierre(@PathVariable Long id) throws Exception {
-    SesionCaja s = sesionCajaService.buscarPorId(id)
-        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
 
-    List<SesionCajaDenominacion> den = sesionCajaDenominacionRepository.findBySesionCajaId(id);
+    log.info("📄 Generando cierre de caja mejorado para sesión: {}", id);
 
-    Map<String,Object> params = new HashMap<>();
-    params.put("SESION_ID", s.getId());
-    params.put("FECHA_APERTURA", s.getFechaHoraApertura());
-    params.put("FECHA_CIERRE", s.getFechaHoraCierre());
-    params.put("MONTO_INICIAL", s.getMontoInicial());
-    params.put("MONTO_ESPERADO", sesionCajaService.calcularMontoEsperado(s));
-    params.put("MONTO_CIERRE", s.getMontoCierre());
-    params.put("DIFERENCIA", s.getMontoCierre().subtract((BigDecimal)params.get("MONTO_ESPERADO")));
-    params.put("TOTAL_EFECTIVO", s.getTotalEfectivo());
-    params.put("TOTAL_TARJETA", s.getTotalTarjeta());
-    params.put("TOTAL_TRANSFERENCIA", s.getTotalTransferencia());
-    params.put("OBSERVACIONES", s.getObservacionesCierre());
+    try {
+      // 1️⃣ OBTENER LA SESIÓN
+      SesionCaja sesion = sesionCajaService.buscarPorId(id)
+          .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
 
-    // datasource para el subreporte/tabla de denominaciones
-    JRDataSource dataSource = new JRBeanCollectionDataSource(den);
+      // 2️⃣ VALIDAR QUE ESTÉ CERRADA
+      if (sesion.getEstado().name().equals("ABIERTA")) {
+        throw new RuntimeException("La sesión debe estar cerrada para generar el reporte");
+      }
 
-    JasperPrint jp = JasperFillManager.fillReport(
-        this.getClass().getResourceAsStream("/reports/cierre_caja.jasper"),
-        params,
-        dataSource
-    );
-    byte[] pdf = JasperExportManager.exportReportToPdf(jp);
+      // 3️⃣ OBTENER TODAS LAS ENTIDADES RELACIONADAS
+      Empresa empresa = sesion.getTerminal().getSucursal().getEmpresa();
+      List<SesionCajaDenominacion> denominaciones = sesionCajaDenominacionRepository.findBySesionCajaId(id);
 
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
-    headers.setContentDispositionFormData("inline", "cierre_caja_" + id + ".pdf");
+      // 🆕 NUEVOS DATOS A BUSCAR
+      List<MovimientoCaja> movimientos = movimientoCajaService.obtenerMovimientosPorSesion(id);
+      List<CierreDatafono> datafonos = cierreDatafonoRepository.findBySesionCajaId(id);
 
-    return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+      Map<String, Integer> conteoDocumentos = sesionCajaService.contarDocumentosPorTipo(id);
+
+      // 4️⃣ CALCULAR TOTALES DE MOVIMIENTOS
+      BigDecimal totalEntradas = BigDecimal.ZERO;
+      BigDecimal totalSalidas = BigDecimal.ZERO;
+      BigDecimal totalVales = BigDecimal.ZERO;
+      BigDecimal totalArqueos = BigDecimal.ZERO;
+      BigDecimal totalPagosProveedor = BigDecimal.ZERO;
+
+      for (MovimientoCaja mov : movimientos) {
+        if (mov.getTipoMovimiento().name().startsWith("ENTRADA")) {
+          totalEntradas = totalEntradas.add(mov.getMonto());
+        } else if (mov.getTipoMovimiento().name().equals("SALIDA_VALE")) {
+          totalVales = totalVales.add(mov.getMonto());
+        } else if (mov.getTipoMovimiento().name().equals("SALIDA_ARQUEO")) {
+          totalArqueos = totalArqueos.add(mov.getMonto());
+        } else if (mov.getTipoMovimiento().name().equals("SALIDA_PAGO_PROVEEDOR")) {
+          totalPagosProveedor = totalPagosProveedor.add(mov.getMonto());
+        }
+
+        if (mov.getTipoMovimiento().name().startsWith("SALIDA")) {
+          totalSalidas = totalSalidas.add(mov.getMonto());
+        }
+      }
+
+      // 5️⃣ PREPARAR PARÁMETROS PARA EL REPORTE
+      Map<String, Object> params = new HashMap<>();
+
+      // DATOS EMPRESA
+      params.put("EMPRESA_NOMBRE", empresa.getNombreComercial() != null ?
+          empresa.getNombreComercial() : empresa.getNombreRazonSocial());
+      params.put("EMPRESA_CEDULA", empresa.getIdentificacion());
+
+      // DATOS SESIÓN
+      params.put("SESION_ID", sesion.getId());
+      params.put("USUARIO", sesion.getUsuario() != null ?
+          sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos() : "");
+      params.put("TERMINAL", sesion.getTerminal().getNombre());
+      params.put("SUCURSAL", sesion.getTerminal().getSucursal().getNombre());
+      params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
+      params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
+
+      // MONTOS BÁSICOS
+      BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
+      params.put("MONTO_INICIAL", sesion.getMontoInicial());
+      params.put("MONTO_ESPERADO", montoEsperado);
+      params.put("MONTO_CIERRE", sesion.getMontoCierre());
+      params.put("DIFERENCIA", sesion.getMontoCierre().subtract(montoEsperado));
+
+      // TOTALES DE VENTAS Y MEDIOS DE PAGO
+      params.put("TOTAL_VENTAS", sesion.getTotalVentas());
+      params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
+      params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
+      params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
+      params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
+      params.put("TOTAL_SINPE", sesion.getTotalOtros());
+
+      // 🆕 MOVIMIENTOS DISCRIMINADOS
+      params.put("TOTAL_ENTRADAS", totalEntradas);
+      params.put("TOTAL_SALIDAS", totalSalidas);
+      params.put("TOTAL_VALES", totalVales);
+      params.put("TOTAL_ARQUEOS", totalArqueos);
+      params.put("TOTAL_PAGOS_PROVEEDOR", totalPagosProveedor);
+
+      // 🆕 CONTEO DE DOCUMENTOS
+      params.put("CANT_FACTURAS_ELECTRONICAS", conteoDocumentos.getOrDefault("FACTURA_ELECTRONICA", 0));
+      params.put("CANT_TIQUETES_ELECTRONICOS", conteoDocumentos.getOrDefault("TIQUETE_ELECTRONICO", 0));
+      params.put("CANT_FACTURAS_INTERNAS", conteoDocumentos.getOrDefault("FACTURA_INTERNA", 0));
+      params.put("CANT_TIQUETES_INTERNOS", conteoDocumentos.getOrDefault("TIQUETE_INTERNO", 0));
+      params.put("CANT_NOTAS_CREDITO", conteoDocumentos.getOrDefault("NOTA_CREDITO", 0));
+      params.put("TOTAL_DOCUMENTOS", conteoDocumentos.values().stream().mapToInt(Integer::intValue).sum());
+
+      // 🆕 DISTRIBUCIÓN DE EFECTIVO
+      params.put("MONTO_RETIRADO", sesion.getMontoRetirado() != null ? sesion.getMontoRetirado() : BigDecimal.ZERO);
+      params.put("FONDO_CAJA", sesion.getFondoCaja() != null ? sesion.getFondoCaja() : BigDecimal.ZERO);
+
+      // OBSERVACIONES
+      params.put("OBSERVACIONES", sesion.getObservacionesCierre() != null ?
+          sesion.getObservacionesCierre() : "Sin observaciones");
+
+      // 🆕 DATASOURCES PARA SUBREPORTES
+      params.put("MOVIMIENTOS_DS", new JRBeanCollectionDataSource(movimientos));
+      params.put("DATAFONOS_DS", new JRBeanCollectionDataSource(datafonos));
+      params.put("DENOMINACIONES_DS", new JRBeanCollectionDataSource(denominaciones));
+
+      // 6️⃣ GENERAR PDF
+      byte[] pdf = pdfGeneratorService.generarPdf(
+          "cierre_caja_ticket",
+          params,
+          new ArrayList<>()  // ✅ Lista vacía porque los datos van en params
+      );
+
+      // 7️⃣ PREPARAR RESPUESTA
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_PDF);
+      headers.setContentDispositionFormData("inline",
+          "cierre_caja_ticket_" + id + ".pdf");
+
+      log.info("✅ Cierre de caja generado exitosamente para sesión {}", id);
+
+      return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+
+    } catch (Exception e) {
+      log.error("❌ Error generando cierre de caja para sesión {}: {}", id, e.getMessage(), e);
+      throw new RuntimeException("Error generando reporte: " + e.getMessage());
+    }
   }
 
   @Operation(summary = "Obtener resumen detallado de sesión")
@@ -555,11 +653,14 @@ public class SesionCajaController {
   public ResponseEntity<byte[]> imprimirCierreTicket(@PathVariable Long id,
       HttpServletRequest request) {
 
+    log.info("📄 Generando cierre de caja mejorado para sesión: {}", id);
+
     try {
+      // 1️⃣ VALIDACIONES DE SEGURIDAD
       String token = request.getHeader("Authorization").substring(7);
       Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
 
-      var sesion = sesionCajaService.buscarPorId(id)
+      SesionCaja sesion = sesionCajaService.buscarPorId(id)
           .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
 
       if (sesion.getEstado().name().equals("ABIERTA")) {
@@ -571,71 +672,122 @@ public class SesionCajaController {
         throw new RuntimeException("No tiene permisos para ver este reporte");
       }
 
-      var denoms = sesionCajaDenominacionRepository.findBySesionCajaId(id);
-      ResumenCajaDetalladoDTO resumen = sesionCajaService.obtenerResumenDetallado(id);
+      // 2️⃣ OBTENER TODAS LAS ENTIDADES RELACIONADAS
+      Empresa empresa = sesion.getTerminal().getSucursal().getEmpresa();
+      List<SesionCajaDenominacion> denominaciones = sesionCajaDenominacionRepository.findBySesionCajaId(id);
+      List<MovimientoCaja> movimientos = movimientoCajaService.obtenerMovimientosPorSesion(id);
+      List<CierreDatafono> datafonos = cierreDatafonoRepository.findBySesionCajaId(id);
 
-      StringBuilder plataformasTexto = new StringBuilder();
-      if (resumen.getVentasPlataformas() != null && !resumen.getVentasPlataformas().isEmpty()) {
-        plataformasTexto.append("\n--- PLATAFORMAS DIGITALES ---\n");
-        BigDecimal totalPlat = BigDecimal.ZERO;
-        for (ResumenCajaDetalladoDTO.VentaPlataformaDTO plat : resumen.getVentasPlataformas()) {
-          plataformasTexto.append(String.format("%-15s ₡%,10.2f\n",
-              "[" + plat.getPlataformaCodigo() + "] " + plat.getPlataformaNombre(),
-              plat.getTotalVentas()));
-          plataformasTexto.append(String.format("  (%d pedidos)\n", plat.getCantidadTransacciones()));
-          totalPlat = totalPlat.add(plat.getTotalVentas());
+      // Conteo de documentos
+      Map<String, Integer> conteoDocumentos = sesionCajaService.contarDocumentosPorTipo(id);
+
+      // 3️⃣ CALCULAR TOTALES DE MOVIMIENTOS
+      BigDecimal totalEntradas = BigDecimal.ZERO;
+      BigDecimal totalSalidas = BigDecimal.ZERO;
+      BigDecimal totalVales = BigDecimal.ZERO;
+      BigDecimal totalArqueos = BigDecimal.ZERO;
+      BigDecimal totalPagosProveedor = BigDecimal.ZERO;
+
+      for (MovimientoCaja mov : movimientos) {
+        if (mov.getTipoMovimiento().name().startsWith("ENTRADA")) {
+          totalEntradas = totalEntradas.add(mov.getMonto());
+        } else if (mov.getTipoMovimiento().name().equals("SALIDA_VALE")) {
+          totalVales = totalVales.add(mov.getMonto());
+        } else if (mov.getTipoMovimiento().name().equals("SALIDA_ARQUEO")) {
+          totalArqueos = totalArqueos.add(mov.getMonto());
+        } else if (mov.getTipoMovimiento().name().equals("SALIDA_PAGO_PROVEEDOR")) {
+          totalPagosProveedor = totalPagosProveedor.add(mov.getMonto());
         }
-        plataformasTexto.append(String.format("Total Plataformas: ₡%,10.2f\n", totalPlat));
+
+        if (mov.getTipoMovimiento().name().startsWith("SALIDA")) {
+          totalSalidas = totalSalidas.add(mov.getMonto());
+        }
       }
 
-      var params = new java.util.HashMap<String,Object>();
+      // 4️⃣ PREPARAR PARÁMETROS PARA EL REPORTE
+      Map<String, Object> params = new HashMap<>();
 
-      Empresa empresa = sesion.getTerminal().getSucursal().getEmpresa();
+      // DATOS EMPRESA
       params.put("EMPRESA_NOMBRE", empresa.getNombreComercial() != null ?
           empresa.getNombreComercial() : empresa.getNombreRazonSocial());
       params.put("EMPRESA_CEDULA", empresa.getIdentificacion());
 
+      // DATOS SESIÓN
       params.put("SESION_ID", sesion.getId());
       params.put("USUARIO", sesion.getUsuario() != null ?
           sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos() : "");
+      params.put("TERMINAL", sesion.getTerminal().getNombre());
+      params.put("SUCURSAL", sesion.getTerminal().getSucursal().getNombre());
       params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
       params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
 
+      // MONTOS BÁSICOS
+      BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
       params.put("MONTO_INICIAL", sesion.getMontoInicial());
-      var esperado = sesionCajaService.calcularMontoEsperado(sesion);
-      params.put("MONTO_ESPERADO", esperado);
+      params.put("MONTO_ESPERADO", montoEsperado);
       params.put("MONTO_CIERRE", sesion.getMontoCierre());
-      params.put("DIFERENCIA", sesion.getMontoCierre().subtract(esperado));
+      params.put("DIFERENCIA", sesion.getMontoCierre().subtract(montoEsperado));
 
+      // TOTALES DE VENTAS Y MEDIOS DE PAGO
       params.put("TOTAL_VENTAS", sesion.getTotalVentas());
       params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
-      params.put("TOTAL_VALES", movimientoCajaService.obtenerTotalVales(id));
       params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
       params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
       params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
       params.put("TOTAL_SINPE", sesion.getTotalOtros());
-      params.put("OBSERVACIONES", sesion.getObservacionesCierre());
-      params.put("PLATAFORMAS_TEXTO", plataformasTexto.toString());
 
+      // 🆕 MOVIMIENTOS DISCRIMINADOS
+      params.put("TOTAL_ENTRADAS", totalEntradas);
+      params.put("TOTAL_SALIDAS", totalSalidas);
+      params.put("TOTAL_VALES", totalVales);
+      params.put("TOTAL_ARQUEOS", totalArqueos);
+      params.put("TOTAL_PAGOS_PROVEEDOR", totalPagosProveedor);
+
+      // 🆕 CONTEO DE DOCUMENTOS
+      params.put("CANT_FACTURAS_ELECTRONICAS", conteoDocumentos.getOrDefault("FACTURA_ELECTRONICA", 0));
+      params.put("CANT_TIQUETES_ELECTRONICOS", conteoDocumentos.getOrDefault("TIQUETE_ELECTRONICO", 0));
+      params.put("CANT_FACTURAS_INTERNAS", conteoDocumentos.getOrDefault("FACTURA_INTERNA", 0));
+      params.put("CANT_TIQUETES_INTERNOS", conteoDocumentos.getOrDefault("TIQUETE_INTERNO", 0));
+      params.put("CANT_NOTAS_CREDITO", conteoDocumentos.getOrDefault("NOTA_CREDITO", 0));
+      params.put("TOTAL_DOCUMENTOS", conteoDocumentos.values().stream().mapToInt(Integer::intValue).sum());
+
+      // 🆕 DISTRIBUCIÓN DE EFECTIVO
+      params.put("MONTO_RETIRADO", sesion.getMontoRetirado() != null ? sesion.getMontoRetirado() : BigDecimal.ZERO);
+      params.put("FONDO_CAJA", sesion.getFondoCaja() != null ? sesion.getFondoCaja() : BigDecimal.ZERO);
+
+      // OBSERVACIONES
+      params.put("OBSERVACIONES", sesion.getObservacionesCierre() != null ?
+          sesion.getObservacionesCierre() : "Sin observaciones");
+
+      // 🆕 DATASOURCES PARA SUBREPORTES
+      params.put("MOVIMIENTOS_DS", new JRBeanCollectionDataSource(movimientos));
+      params.put("DATAFONOS_DS", new JRBeanCollectionDataSource(datafonos));
+      params.put("DENOMINACIONES_DS", new JRBeanCollectionDataSource(denominaciones));
+
+      // 5️⃣ GENERAR PDF
       byte[] pdf = pdfGeneratorService.generarPdf(
           "cierre_caja_ticket",
           params,
-          denoms
+          new ArrayList<>()  // ✅ Lista vacía - los datos van en params
       );
 
-      var headers = new HttpHeaders();
+      // 6️⃣ PREPARAR RESPUESTA
+      HttpHeaders headers = new HttpHeaders();
       headers.setContentType(MediaType.APPLICATION_PDF);
       headers.setContentDispositionFormData("inline",
           "cierre_caja_ticket_" + id + ".pdf");
 
+      log.info("✅ Cierre de caja generado exitosamente para sesión {}", id);
+
       return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
 
     } catch (Exception e) {
-      log.error("Error generando reporte de cierre: {}", e.getMessage());
+      log.error("❌ Error generando cierre de caja para sesión {}: {}", id, e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(("Error: " + e.getMessage()).getBytes());
     }
   }
+  
 
   @GetMapping("/sucursal/{sucursalId}")
   @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")

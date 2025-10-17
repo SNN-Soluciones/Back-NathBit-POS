@@ -68,4 +68,12 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
      */
     Optional<ProductoCompuestoConfiguracion> findByCompuestoIdAndEsDefaultTrue(Long compuestoId);
 
+    @Query("SELECT pcc FROM ProductoCompuestoConfiguracion pcc " +
+        "LEFT JOIN FETCH pcc.slots s " +
+        "LEFT JOIN FETCH s.slot " +
+        "WHERE pcc.compuesto.id = :compuestoId AND pcc.esDefault = true")
+    Optional<ProductoCompuestoConfiguracion> findByCompuestoIdAndEsDefaultTrueWithSlots(
+        @Param("compuestoId") Long compuestoId
+    );
+
 }

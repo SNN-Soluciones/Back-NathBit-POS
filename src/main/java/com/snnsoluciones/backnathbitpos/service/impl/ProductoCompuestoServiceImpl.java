@@ -29,6 +29,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -876,31 +877,26 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   ) {
     List<OpcionSlotDTO> opciones = new ArrayList<>();
 
-    // Obtener opciones manuales ordenadas
-    List<ProductoCompuestoOpcion> opcionesManuales = slot.getOpciones()
-        .stream()
-        .sorted(Comparator.comparingInt(ProductoCompuestoOpcion::getOrden))
-        .toList();
+    // ✅ Trae opciones + producto inicializados (sin lazy)
+    List<ProductoCompuestoOpcion> opcionesManuales =
+        opcionRepository.findBySlotIdOrderByOrdenWithProducto(slot.getId());
 
     log.info("Slot tiene {} opciones manuales", opcionesManuales.size());
 
     for (ProductoCompuestoOpcion opcionManual : opcionesManuales) {
-      Producto producto = opcionManual.getProducto();
+      Producto producto = opcionManual.getProducto(); // ya inicializado
 
       // Verificar stock en sucursal
       boolean tieneStock = verificarStockProducto(producto.getId(), sucursal.getId());
       Integer stockDisponible = obtenerStockDisponible(producto.getId(), sucursal.getId());
 
-      // La disponibilidad final es: disponible en config Y tiene stock
-      boolean disponibleFinal = opcionManual.getDisponible() && tieneStock;
-
+      boolean disponibleFinal = Boolean.TRUE.equals(opcionManual.getDisponible()) && tieneStock;
       BigDecimal precioAdicional = opcionManual.getPrecioAdicional() != null
           ? opcionManual.getPrecioAdicional()
           : BigDecimal.ZERO;
 
       boolean esGratuita = precioAdicional.compareTo(BigDecimal.ZERO) == 0;
 
-      // Crear DTO
       OpcionSlotDTO opcion = OpcionSlotDTO.builder()
           .opcionId(opcionManual.getId())
           .productoId(producto.getId())
@@ -911,7 +907,7 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
           .precioAdicional(precioAdicional)
           .esGratuita(esGratuita)
           .disponible(disponibleFinal)
-          .esDefault(opcionManual.getEsDefault())
+          .esDefault(Boolean.TRUE.equals(opcionManual.getEsDefault()))
           .stockDisponible(stockDisponible)
           .orden(opcionManual.getOrden())
           .origen("MANUAL")
@@ -1047,9 +1043,8 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         .precioBase(producto.getPrecioBase())
         .build();
 
-    // 4. DECIDIR EL FLUJO: ¿Tiene pregunta inicial?
+    // 4. DECIDIR EL FLUJO
     if (compuesto.getSlotPreguntaInicial() != null) {
-      // ========== CASO A: BIRRIAMEN (con pregunta inicial) ==========
       log.info("Producto tiene pregunta inicial");
       flujo.setTienePreguntaInicial(true);
       flujo.setSlotPreguntaInicial(
@@ -1058,28 +1053,53 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
       flujo.setConfiguracionDefault(null);
 
     } else {
-      // ========== CASO B: FUZE TEA (sin pregunta inicial - default) ==========
       log.info("Producto NO tiene pregunta inicial, buscando configuración default");
       flujo.setTienePreguntaInicial(false);
       flujo.setSlotPreguntaInicial(null);
 
-      // Buscar configuración default
       ProductoCompuestoConfiguracion configDefault = configuracionRepository
-          .findByCompuestoIdAndEsDefaultTrue(compuesto.getId())
+          .findByCompuestoIdAndEsDefaultTrueWithSlots(compuesto.getId())  // ⭐ Usar este
           .orElseThrow(() -> new BusinessException(
               "El producto no tiene pregunta inicial ni configuración default configurada"
           ));
 
-      // Convertir a DTO
-      flujo.setConfiguracionDefault(
-          convertirConfiguracionADto(configDefault, sucursalId)
-      );
+      // ⭐ CONVERTIR CON MANEJO DE ERRORES
+      ProductoCompuestoConfiguracionDTO configDto =
+          convertirConfiguracionADtoSafe(configDefault, sucursalId);
+      flujo.setConfiguracionDefault(configDto);
     }
 
     log.info("Flujo de configuración generado: tienePreguntaInicial={}",
         flujo.getTienePreguntaInicial());
 
     return flujo;
+  }
+
+  /**
+   * Versión SAFE de convertir configuración que maneja errores internamente
+   */
+  private ProductoCompuestoConfiguracionDTO convertirConfiguracionADtoSafe(
+      ProductoCompuestoConfiguracion configuracion,
+      Long sucursalId) {
+
+    try {
+      return convertirConfiguracionADto(configuracion, sucursalId);
+    } catch (Exception e) {
+      log.error("Error convirtiendo configuración a DTO: {}", e.getMessage(), e);
+
+      // Crear DTO básico sin slots si falla
+
+      return ProductoCompuestoConfiguracionDTO.builder()
+          .id(configuracion.getId())
+          .compuestoId(configuracion.getCompuesto().getId())
+          .nombre(configuracion.getNombre())
+          .descripcion(configuracion.getDescripcion())
+          .orden(configuracion.getOrden())
+          .activa(configuracion.getActiva())
+          .opcionTriggerId(null)
+          .slots(new ArrayList<>())
+          .build();
+    }
   }
 
   @Override
@@ -1278,40 +1298,47 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         .familiaNombre(slot.getFamilia() != null ? slot.getFamilia().getNombre() : null)
         .build();
 
-    // ========== CARGAR OPCIONES DINÁMICAMENTE ==========
-
+    // ⭐ CARGAR OPCIONES CON MANEJO DE ERRORES
     try {
-      // Obtener sucursal
       Sucursal sucursal = sucursalRepository.findById(sucursalId)
           .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
 
       List<OpcionSlotDTO> opciones;
 
       if (Boolean.TRUE.equals(slot.getUsaFamilia()) && slot.getFamilia() != null) {
-        // ✅ CARGAR DESDE FAMILIA CON PRECIO EFECTIVO
-        log.debug("Cargando opciones de familia {} para slot {}",
-            slot.getFamilia().getNombre(), slot.getNombre());
-
         opciones = cargarOpcionesDesdeFamiliaConPrecio(
             slot.getFamilia(),
             sucursal,
             precioAdicionalEfectivo != null ? precioAdicionalEfectivo : BigDecimal.ZERO
         );
       } else {
-        // ✅ CARGAR OPCIONES MANUALES
-        log.debug("Cargando opciones manuales para slot {}", slot.getNombre());
-        opciones = cargarOpcionesManuales(slot, sucursal);
+        opciones = cargarOpcionesManualesSafe(slot, sucursal); // ⭐ Usar versión SAFE
       }
 
       dto.setOpciones(opciones);
-      log.debug("Slot '{}' tiene {} opciones cargadas", slot.getNombre(), opciones.size());
+      log.debug("Slot '{}' cargado con {} opciones", slot.getNombre(), opciones.size());
 
     } catch (Exception e) {
       log.error("Error cargando opciones para slot {}: {}", slot.getNombre(), e.getMessage());
-      dto.setOpciones(List.of());
+      dto.setOpciones(new ArrayList<>()); // Lista vacía si falla
     }
 
     return dto;
+  }
+
+  /**
+   * Versión SAFE que no lanza excepciones
+   */
+  private List<OpcionSlotDTO> cargarOpcionesManualesSafe(
+      ProductoCompuestoSlot slot,
+      Sucursal sucursal) {
+
+    try {
+      return cargarOpcionesManuales(slot, sucursal);
+    } catch (Exception e) {
+      log.error("Error en cargarOpcionesManuales: {}", e.getMessage(), e);
+      return new ArrayList<>();
+    }
   }
 
   /**

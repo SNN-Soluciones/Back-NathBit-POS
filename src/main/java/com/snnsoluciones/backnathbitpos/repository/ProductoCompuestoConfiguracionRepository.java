@@ -76,4 +76,17 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
         @Param("compuestoId") Long compuestoId
     );
 
+    // EN: ProductoCompuestoConfiguracionRepository.java
+
+    @Query("""
+    SELECT DISTINCT c 
+    FROM ProductoCompuestoConfiguracion c
+    LEFT JOIN FETCH c.slots sc
+    LEFT JOIN FETCH sc.slot s
+    WHERE c.opcionTrigger.id = :opcionId
+    AND c.activa = true
+    """)
+    Optional<ProductoCompuestoConfiguracion> findByOpcionTriggerIdWithSlots(
+        @Param("opcionId") Long opcionId
+    );
 }

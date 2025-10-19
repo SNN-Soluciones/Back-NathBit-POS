@@ -1125,10 +1125,9 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
 
     // 3. Buscar la configuración que se activa con esta opción
     ProductoCompuestoConfiguracion configuracion = configuracionRepository
-        .findByOpcionTriggerId(opcionId)
-        .orElseThrow(() -> new BusinessException(
-            "No existe una configuración asociada a la opción '" +
-                opcion.getNombreEfectivo() + "'"
+        .findByOpcionTriggerIdWithSlots(opcionId)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "No existe configuración para la opción seleccionada"
         ));
 
     // 4. Validar que la configuración pertenece al producto correcto

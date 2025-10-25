@@ -26,6 +26,7 @@ public class FacturaInternaResponse {
     // Totales
     private BigDecimal subtotal;
     private BigDecimal descuento;
+    private BigDecimal descuentoPorcentaje;
     private BigDecimal total;
     private String numeroViper;
 

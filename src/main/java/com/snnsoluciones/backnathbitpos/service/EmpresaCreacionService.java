@@ -10,4 +10,11 @@ public interface EmpresaCreacionService {
         MultipartFile logo,
         MultipartFile certificado
     );
+
+    CrearEmpresaCompletaResponse actualizarEmpresaCompleta(
+        Long empresaId,
+        CrearEmpresaCompletaRequest request,
+        MultipartFile logo,
+        MultipartFile certificado,
+        String usuarioEmail);
 }

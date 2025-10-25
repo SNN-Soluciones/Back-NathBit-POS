@@ -17,12 +17,8 @@ import org.springframework.http.ResponseEntity;
 public interface FacturaBitacoraService {
 
     Page<FacturaBitacoraListResponse> buscarSimple(
-        String busqueda,
-        String fechaDesde,
-        String fechaHasta,
-        String tipoDocumento,
-        int page,
-        int size
+        String busqueda, String fechaDesde, String fechaHasta, String tipoDocumento,
+        int page, int size, Long empresaId, Long sucursalId // 👈 NUEVOS
     );
 
     /**

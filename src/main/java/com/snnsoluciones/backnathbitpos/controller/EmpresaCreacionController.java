@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.empresa.CrearEmpresaCompletaRequest;
 import com.snnsoluciones.backnathbitpos.dto.empresa.CrearEmpresaCompletaResponse;
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.service.EmpresaCreacionService;
+import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class EmpresaCreacionController {
 
     private final EmpresaCreacionService empresaCreacionService;
+    private final EmpresaService empresaService;
     private final ObjectMapper objectMapper;
     private final UsuarioEmpresaService usuarioEmpresaService;
 
@@ -117,6 +120,61 @@ public class EmpresaCreacionController {
             log.error("Error inesperado creando empresa: ", e);
             return ResponseEntity.internalServerError()
                 .body(ApiResponse.error("Error interno al crear la empresa"));
+        }
+    }
+
+    @Operation(summary = "Actualizar empresa completa",
+        description = "Actualiza una empresa con todos sus datos, logo, certificado y configuración de Hacienda")
+    @PutMapping(value = "/actualizar-completo/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<CrearEmpresaCompletaResponse>> actualizarEmpresaCompleta(
+        @PathVariable Long id,
+        @RequestPart("datos") String datosJson,
+        @RequestPart(value = "logo", required = false) MultipartFile logo,
+        @RequestPart(value = "certificado", required = false) MultipartFile certificado,
+        Authentication auth) {
+
+        try {
+            // 1. Parsear el JSON de los datos
+            CrearEmpresaCompletaRequest request = objectMapper.readValue(
+                datosJson,
+                CrearEmpresaCompletaRequest.class
+            );
+
+            log.info("Actualizando empresa completa: {} (ID: {})", request.getNombreComercial(), id);
+
+            // 2. Validar que la empresa existe
+            Empresa empresaExistente = empresaService.buscarPorId(id);
+            if (empresaExistente == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("Empresa no encontrada"));
+            }
+
+            // 3. Actualizar empresa
+            CrearEmpresaCompletaResponse response = empresaCreacionService.actualizarEmpresaCompleta(
+                id,
+                request,
+                logo,
+                certificado,
+                auth.getName()
+            );
+
+            log.info("✅ Empresa actualizada exitosamente con ID: {}", response.getEmpresaId());
+
+            return ResponseEntity.ok(ApiResponse.ok(
+                "Empresa actualizada exitosamente",
+                response
+            ));
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Error de validación: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getMessage()));
+
+        } catch (Exception e) {
+            log.error("Error actualizando empresa: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Error interno del servidor"));
         }
     }
 

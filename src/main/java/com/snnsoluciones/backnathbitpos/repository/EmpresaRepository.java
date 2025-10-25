@@ -1,6 +1,10 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
+import com.google.common.io.Files;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,4 +32,8 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
   boolean existsByEmail(String email);
 
   List<Empresa> findAllByActivaTrue();
+
+  Optional<Empresa> findByIdentificacion(String identificacion);
+
+  Optional<Empresa> findByEmail(String email);
 }

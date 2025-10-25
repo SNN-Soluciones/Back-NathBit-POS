@@ -162,6 +162,11 @@ public class SucursalController extends BaseController {
     response.setIpOrquestador(sucursal.getIpOrquestador());
     response.setMetodoImpresion(sucursal.getMetodoImpresion());
 
+    response.setImpresionAutomatica(sucursal.getImpresionAutomatica());
+    response.setAutoImprimirFactura(sucursal.getAutoImprimirFactura());
+    response.setAutoImprimirComanda(sucursal.getAutoImprimirComanda());
+    response.setTiempoAutoClose(sucursal.getTiempoAutoClose());
+
     // Campos de empresa
     response.setEmpresaId(sucursal.getEmpresa().getId());
     response.setEmpresaNombre(sucursal.getEmpresa().getNombreComercial());
@@ -209,6 +214,11 @@ public class SucursalController extends BaseController {
     sucursal.setNumeroSucursal(request.getNumeroSucursal());
     sucursal.setOtrasSenas(request.getOtrasSenas());
     sucursal.setTerminales(mapTerminalesToEntity(request));
+
+    sucursal.setImpresionAutomatica(request.getImpresionAutomatica());
+    sucursal.setAutoImprimirFactura(request.getAutoImprimirFactura());
+    sucursal.setAutoImprimirComanda(request.getAutoImprimirComanda());
+    sucursal.setTiempoAutoClose(request.getTiempoAutoClose());
 
     // Establecer empresa
     Empresa empresa = empresaService.buscarPorId(request.getEmpresaId());

@@ -151,6 +151,7 @@ public class FacturaInternaService {
         // Totales
         factura.setSubtotal(subtotal);
         factura.setDescuento(request.getDescuento() != null ? request.getDescuento() : BigDecimal.ZERO);
+        factura.setDescuentoPorcentaje(request.getDescuentoPorcentaje() != null ? request.getDescuentoPorcentaje() : BigDecimal.ZERO);
         factura.calcularTotal();
 
         // Medios de pago
@@ -325,6 +326,7 @@ public class FacturaInternaService {
             .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
             .clienteNombre(factura.getNombreCliente())
             .subtotal(factura.getSubtotal())
+            .descuentoPorcentaje(factura.getDescuentoPorcentaje())
             .descuento(factura.getDescuento())
             .total(factura.getTotal())
             .pagoRecibido(factura.getPagoRecibido())

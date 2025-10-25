@@ -22,8 +22,14 @@ public class EmpresaActividad {
     private Empresa empresa;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "actividad_id", nullable = false)
+    @JoinColumn(name = "actividad_id")
     private ActividadEconomica actividad;
+
+    @Column(name = "codigo_actividad", length = 10)
+    private String codigoActividad;
+
+    @Column(name = "descripcion_actividad", length = 500)
+    private String descripcionActividad;
     
     @Column(name = "es_principal", nullable = false)
     private Boolean esPrincipal = false;

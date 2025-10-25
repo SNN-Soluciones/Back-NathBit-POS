@@ -11,5 +11,6 @@ import java.util.Optional;
 
 @Repository
 public interface EmpresaActividadRepository extends JpaRepository<EmpresaActividad, Long> {
-    
+
+  void deleteByEmpresaId(Long id);
 }

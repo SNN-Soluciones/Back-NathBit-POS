@@ -25,6 +25,7 @@
 	<parameter name="numero_viper" class="java.lang.String"/>
 	<parameter name="subtotal" class="java.lang.String"/>
 	<parameter name="descuentos" class="java.lang.String"/>
+	<parameter name="descuento_porcentaje" class="java.lang.String"/>
 	<parameter name="iva" class="java.lang.String"/>
 	<parameter name="total" class="java.lang.String"/>
 	<parameter name="subreport_detalles" class="net.sf.jasperreports.engine.JasperReport"/>
@@ -145,19 +146,14 @@
 				</textElement>
 				<textFieldExpression><![CDATA[$P{subtotal}]]></textFieldExpression>
 			</textField>
-			<staticText>
-				<reportElement positionType="Float" x="0" y="58" width="90" height="10" uuid="d6e7f8a9-b0c1-2d3e-fabc-567890123456"/>
+			<textField>
+				<reportElement positionType="Float" x="0" y="57" width="90" height="12" uuid="d6e7f8a9-b0c1-2d3e-fabc-567890123456">
+					<printWhenExpression><![CDATA[$P{descuentos} != null && !$P{descuentos}.equals("₡ 0.00")]]></printWhenExpression>
+				</reportElement>
 				<textElement textAlignment="Left">
 					<font fontName="DejaVu Sans" size="8"/>
 				</textElement>
-				<text><![CDATA[Descuentos:]]></text>
-			</staticText>
-			<textField>
-				<reportElement positionType="Float" x="90" y="56" width="114" height="12" uuid="e7f8a9b0-c1d2-3e4f-abcd-678901234567"/>
-				<textElement textAlignment="Right">
-					<font fontName="DejaVu Sans" size="9"/>
-				</textElement>
-				<textFieldExpression><![CDATA[$P{descuentos}]]></textFieldExpression>
+				<textFieldExpression><![CDATA["Descuentos" + (($P{descuento_porcentaje} != null && !$P{descuento_porcentaje}.equals("0") && !$P{descuento_porcentaje}.equals("0.00")) ? " (" + $P{descuento_porcentaje} + "%)" : "") + ":"]]></textFieldExpression>
 			</textField>
 			<line>
 				<reportElement positionType="Float" x="0" y="70" width="206" height="1" uuid="b0c1d2e3-f4a5-6b7c-defa-901234567890"/>
@@ -233,11 +229,18 @@
 				<text><![CDATA[www.nathbit.com]]></text>
 			</staticText>
 			<textField>
-				<reportElement x="0" y="103" width="204" height="12" uuid="17185de1-8872-442f-acd1-234d88a48dd2"/>
+				<reportElement x="0" y="104" width="204" height="12" uuid="17185de1-8872-442f-acd1-234d88a48dd2"/>
 				<textElement textAlignment="Left" verticalAlignment="Middle">
 					<font size="7"/>
 				</textElement>
-				<textFieldExpression><![CDATA["Viper: " +$P{numero_viper}]]></textFieldExpression>
+				<textFieldExpression><![CDATA["Beeper: " +$P{numero_viper}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="91" y="57" width="113" height="12" uuid="ea0e8013-3293-4a98-b702-9feb04d36c71"/>
+				<textElement textAlignment="Right">
+					<font fontName="DejaVu Sans" size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{descuentos}]]></textFieldExpression>
 			</textField>
 		</band>
 	</detail>

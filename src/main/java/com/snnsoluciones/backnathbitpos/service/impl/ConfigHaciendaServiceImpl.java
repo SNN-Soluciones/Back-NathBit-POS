@@ -74,4 +74,9 @@ public class ConfigHaciendaServiceImpl implements ConfigHaciendaService {
     public boolean esConfiguracionCompleta(Long empresaId) {
         return configRepository.existsConfiguracionCompleta(empresaId);
     }
+
+    @Override
+    public EmpresaConfigHacienda guardar(EmpresaConfigHacienda empresaConfigHacienda) {
+        return configRepository.save(empresaConfigHacienda);
+    }
 }

@@ -59,6 +59,10 @@ public class FacturaInterna {
     @Column(name = "subtotal", nullable = false, precision = 15, scale = 2)
     private BigDecimal subtotal; // Suma de líneas
 
+    @Column(name = "descuento_porcentaje", precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal descuentoPorcentaje = BigDecimal.ZERO; // Porcentaje de descuento global (0-100
+
     @Column(name = "descuento", precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal descuento = BigDecimal.ZERO;

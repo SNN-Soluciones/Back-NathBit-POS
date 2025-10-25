@@ -35,6 +35,8 @@ public class CrearFacturaInternaRequest {
     @DecimalMin(value = "0.0", message = "El descuento no puede ser negativo")
     private BigDecimal descuento;
 
+    private BigDecimal descuentoPorcentaje;
+
     private String numeroViper;
 
 

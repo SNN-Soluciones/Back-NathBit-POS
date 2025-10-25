@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.service.FacturaBitacoraService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -31,30 +32,53 @@ public class FacturaBitacoraController {
 
     @Operation(summary = "Buscar bitácoras (MVP - simple)")
     @GetMapping("/buscar-simple")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE', 'JEFE_CAJAS')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','ROOT','SOPORTE','JEFE_CAJAS')")
     public ResponseEntity<ApiResponse<Page<FacturaBitacoraListResponse>>> buscarSimple(
-        @RequestParam(required = false) String busqueda,        // ✅ Clave, consecutivo o cliente
-        @RequestParam(required = false) String fechaDesde,      // ✅ Formato: 2025-01-01
-        @RequestParam(required = false) String fechaHasta,      // ✅ Formato: 2025-01-31
-        @RequestParam(required = false) String tipoDocumento,   // ✅ FE, TE, NC, ND
+        @RequestParam(required = false) String busqueda,
+        @RequestParam(required = false) String fechaDesde,
+        @RequestParam(required = false) String fechaHasta,
+        @RequestParam(required = false) String tipoDocumento,
+        @RequestParam(required = false) Long empresaId,   // 👈 NUEVO
+        @RequestParam(required = false) Long sucursalId,  // 👈 NUEVO
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
-        try {
-            log.info("Búsqueda simple - busqueda: {}, fechaDesde: {}, fechaHasta: {}, tipoDocumento: {}",
-                busqueda, fechaDesde, fechaHasta, tipoDocumento);
-
-            Page<FacturaBitacoraListResponse> resultado = bitacoraService.buscarSimple(
-                busqueda, fechaDesde, fechaHasta, tipoDocumento, page, size
-            );
-
-            return ResponseEntity.ok(ApiResponse.ok("Bitácoras encontradas", resultado));
-        } catch (Exception e) {
-            log.error("Error en búsqueda simple", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("Error al buscar: " + e.getMessage()));
-        }
+        Page<FacturaBitacoraListResponse> resultado = bitacoraService.buscarSimple(
+            busqueda, fechaDesde, fechaHasta, tipoDocumento, page, size, empresaId, sucursalId // 👈 pasa al service
+        );
+        return ResponseEntity.ok(ApiResponse.ok("Bitácoras encontradas", resultado));
     }
+
+    // 👇 NUEVO endpoint “corto” para alinear con el front
+    @PostMapping("/{id}/reintentar")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+    public ResponseEntity<ApiResponse<FacturaBitacoraActionResponse>> reintentarProcesamientoCorto(
+        @PathVariable Long id
+    ) {
+        ReintentarProcesamientoRequest req = new ReintentarProcesamientoRequest();
+        req.setBitacoraId(id);
+        req.setReiniciarContador(false);
+        FacturaBitacoraActionResponse resp = bitacoraService.reintentarProcesamiento(req);
+        return resp.isExitoso()
+            ? ResponseEntity.ok(ApiResponse.ok("Reintento programado exitosamente", resp))
+            : ResponseEntity.badRequest().body(ApiResponse.error(resp.getMensaje()));
+    }
+
+    // 👇 Ajustar cancelar para aceptar body { motivo } O param
+    @PostMapping("/{id}/cancelar")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+    public ResponseEntity<ApiResponse<FacturaBitacoraActionResponse>> cancelarProcesamiento(
+        @PathVariable Long id,
+        @RequestParam(required = false) String motivo,
+        @RequestBody(required = false) Map<String, String> body // 👈 acepta body opcional
+    ) {
+        if (motivo == null && body != null) motivo = body.get("motivo");
+        FacturaBitacoraActionResponse resp = bitacoraService.cancelarProcesamiento(id, motivo);
+        return resp.isExitoso()
+            ? ResponseEntity.ok(ApiResponse.ok("Procesamiento cancelado", resp))
+            : ResponseEntity.badRequest().body(ApiResponse.error(resp.getMensaje()));
+    }
+
 
     @Operation(summary = "Obtener detalle de bitácora",
         description = "Obtiene información completa de una bitácora incluyendo archivos y mensajes")
@@ -200,33 +224,6 @@ public class FacturaBitacoraController {
             log.error("Error al descargar archivo", e);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("Archivo no encontrado: " + e.getMessage()));
-        }
-    }
-
-    @Operation(summary = "Cancelar procesamiento",
-        description = "Cancela el procesamiento de una factura (solo si está pendiente)")
-    @PostMapping("/{id}/cancelar")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
-    public ResponseEntity<ApiResponse<FacturaBitacoraActionResponse>> cancelarProcesamiento(
-            @PathVariable Long id,
-            @RequestParam(required = false) String motivo) {
-        
-        try {
-            log.info("Cancelando procesamiento de bitácora ID: {}", id);
-            FacturaBitacoraActionResponse respuesta = bitacoraService.cancelarProcesamiento(id, motivo);
-            
-            if (respuesta.isExitoso()) {
-                return ResponseEntity.ok(
-                    ApiResponse.ok("Procesamiento cancelado", respuesta)
-                );
-            } else {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error(respuesta.getMensaje()));
-            }
-        } catch (Exception e) {
-            log.error("Error al cancelar procesamiento", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("Error al cancelar: " + e.getMessage()));
         }
     }
 }

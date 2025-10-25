@@ -67,76 +67,90 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
 
     @Override
     public Page<FacturaBitacoraListResponse> buscarSimple(
-        String busqueda,
-        String fechaDesde,
-        String fechaHasta,
-        String tipoDocumento,
-        int page,
-        int size
+        String busqueda, String fechaDesde, String fechaHasta, String tipoDocumento,
+        int page, int size, Long empresaId, Long sucursalId // 👈 NUEVOS
     ) {
-        log.info("Búsqueda simple bitácora");
+        log.info("Búsqueda simple bitácora - busqueda: {}, fechaDesde: {}, fechaHasta: {}, empresaId: {}, sucursalId: {}",
+            busqueda, fechaDesde, fechaHasta, empresaId, sucursalId);
+
+        boolean esBusquedaGeneral = (busqueda == null || busqueda.trim().isEmpty());
+        boolean noHayFechas = (fechaDesde == null || fechaDesde.isEmpty()) &&
+            (fechaHasta == null || fechaHasta.isEmpty());
+
+        if (esBusquedaGeneral && noHayFechas) {
+            LocalDateTime hace15Dias = LocalDateTime.now().minusDays(15);
+            fechaDesde = hace15Dias.format(DateTimeFormatter.ISO_LOCAL_DATE);
+            log.info("✅ Límite por defecto: últimos 15 días desde {}", fechaDesde);
+        }
 
         Specification<FacturaBitacora> spec = crearEspecificacionSimple(
-            busqueda, fechaDesde, fechaHasta, tipoDocumento
+            busqueda, fechaDesde, fechaHasta, tipoDocumento, empresaId, sucursalId // 👈 pasa ids
         );
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-
-        Page<FacturaBitacora> bitacoras = bitacoraRepository.findAll(spec, pageable);
-
-        return bitacoras.map(this::convertirAListResponse);
+        return bitacoraRepository.findAll(spec, pageable).map(this::convertirAListResponse);
     }
 
-    /**
-     * ✅ Especificación SIMPLE - MVP Style
-     */
     private Specification<FacturaBitacora> crearEspecificacionSimple(
-        String busqueda,
-        String fechaDesde,
-        String fechaHasta,
-        String tipoDocumento
+        String busqueda, String fechaDesde, String fechaHasta, String tipoDocumento,
+        Long empresaId, Long sucursalId
     ) {
         return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
+            query.distinct(true);
+            List<Predicate> ps = new ArrayList<>();
 
-            // ✅ 1. BÚSQUEDA GENERAL (clave, consecutivo, cliente)
-            if (busqueda != null && !busqueda.trim().isEmpty()) {
-                String searchTerm = "%" + busqueda.toLowerCase().trim() + "%";
-
-                Join<FacturaBitacora, Factura> facturaJoin = root.join("factura", JoinType.LEFT);
-                Join<Factura, Cliente> clienteJoin = facturaJoin.join("cliente", JoinType.LEFT);
-
-                predicates.add(cb.or(
-                    cb.like(cb.lower(root.get("clave")), searchTerm),
-                    cb.like(cb.lower(facturaJoin.get("consecutivo")), searchTerm),
-                    cb.like(cb.lower(clienteJoin.get("nombreRazonSocial")), searchTerm),
-                    cb.like(cb.lower(clienteJoin.get("email")), searchTerm)
-                ));
-            }
-
-            // ✅ 2. FECHA DESDE
+            // Fechas (sobre bitácora)
             if (fechaDesde != null && !fechaDesde.isEmpty()) {
-                LocalDateTime fechaDesdeTime = LocalDate.parse(fechaDesde).atStartOfDay();
-                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fechaDesdeTime));
+                try {
+                    ps.add(cb.greaterThanOrEqualTo(root.get("createdAt"),
+                        LocalDate.parse(fechaDesde).atStartOfDay()));
+                } catch (Exception ignored) {}
             }
-
-            // ✅ 3. FECHA HASTA
             if (fechaHasta != null && !fechaHasta.isEmpty()) {
-                LocalDateTime fechaHastaTime = LocalDate.parse(fechaHasta).atTime(23, 59, 59);
-                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), fechaHastaTime));
+                try {
+                    ps.add(cb.lessThanOrEqualTo(root.get("createdAt"),
+                        LocalDate.parse(fechaHasta).atTime(23,59,59)));
+                } catch (Exception ignored) {}
             }
 
-            // ✅ 4. TIPO DE DOCUMENTO (extraído de la clave)
+            // Root secundario: Factura
+            var facturaRoot = query.from(Factura.class);
+            ps.add(cb.equal(facturaRoot.get("id"), root.get("facturaId"))); // b.facturaId = f.id
+
+            // Filtros por tipo/empresa/sucursal (sobre factura)
             if (tipoDocumento != null && !tipoDocumento.isEmpty()) {
-                // La clave tiene formato: 50612345678901001000000100000000000000001
-                // Posición 29-30 indica el tipo: 01=FE, 02=ND, 03=NC, 04=TE, etc.
-                String codigoTipo = mapearTipoDocumentoACodigo(tipoDocumento);
-                if (codigoTipo != null) {
-                    predicates.add(cb.like(root.get("clave"), "%" + codigoTipo + "%"));
+                ps.add(cb.equal(facturaRoot.get("tipoDocumento"), tipoDocumento));
+            }
+            if (empresaId != null || sucursalId != null) {
+                var sucursalJoin = facturaRoot.join("sucursal", JoinType.LEFT);
+                if (empresaId != null) {
+                    ps.add(cb.equal(sucursalJoin.get("empresa").get("id"), empresaId));
+                }
+                if (sucursalId != null) {
+                    ps.add(cb.equal(sucursalJoin.get("id"), sucursalId));
                 }
             }
 
-            return cb.and(predicates.toArray(new Predicate[0]));
+            // Búsqueda libre
+            if (busqueda != null && !busqueda.trim().isEmpty()) {
+                String like = "%" + busqueda.toLowerCase() + "%";
+                List<Predicate> ors = new ArrayList<>();
+                // clave en bitácora
+                ors.add(cb.like(cb.lower(root.get("clave")), like));
+                // consecutivo y receptor “sueltos” en factura
+                ors.add(cb.like(cb.lower(facturaRoot.get("consecutivo")), like));
+                ors.add(cb.like(cb.lower(facturaRoot.get("nombreReceptor")), like));
+                ors.add(cb.like(cb.lower(facturaRoot.get("emailReceptor")), like));
+
+                // Cliente (root adicional)
+                var clienteJoin = facturaRoot.join("cliente", JoinType.LEFT);
+                ors.add(cb.like(cb.lower(clienteJoin.get("razonSocial")), like));
+                ors.add(cb.like(cb.lower(clienteJoin.get("numeroIdentificacion")), like));
+
+                ps.add(cb.or(ors.toArray(new Predicate[0])));
+            }
+
+            return cb.and(ps.toArray(new Predicate[0]));
         };
     }
 

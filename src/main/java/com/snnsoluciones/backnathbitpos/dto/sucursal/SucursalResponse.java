@@ -21,6 +21,10 @@ public class SucursalResponse {
     private String empresaNombre;
     private ModoImpresion modoImpresion;
     private String ipOrquestador;
+    private Boolean impresionAutomatica;
+    private Boolean autoImprimirFactura;
+    private Boolean autoImprimirComanda;
+    private Integer tiempoAutoClose;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

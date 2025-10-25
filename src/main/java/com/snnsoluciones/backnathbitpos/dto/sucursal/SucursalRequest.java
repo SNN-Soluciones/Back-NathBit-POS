@@ -46,5 +46,10 @@ public class SucursalRequest {
     @Size(max = 100, message = "La IP del orquestador no puede exceder 100 caracteres")
     private String ipOrquestador;
 
+    private Boolean impresionAutomatica = false;
+    private Boolean autoImprimirFactura = true;
+    private Boolean autoImprimirComanda = false;
+    private Integer tiempoAutoClose = 2;
+
     private List<TerminalRequest> terminales;
 }

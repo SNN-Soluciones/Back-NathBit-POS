@@ -14,4 +14,6 @@ public interface ConfigHaciendaService {
     void eliminar(Long id);
     
     boolean esConfiguracionCompleta(Long empresaId);
+
+    EmpresaConfigHacienda guardar(EmpresaConfigHacienda empresaConfigHacienda);
 }

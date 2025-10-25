@@ -17,8 +17,7 @@ import org.hibernate.dialect.PostgreSQLEnumJdbcType;
 @Entity
 @Table(name = "sucursales",
     uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"nombre", "empresa_id"}),
-        @UniqueConstraint(columnNames = {"codigo_sucursal", "empresa_id"})
+        @UniqueConstraint(columnNames = {"nombre", "empresa_id"})
     },
     indexes = {
         @Index(name = "idx_sucursal_empresa", columnList = "empresa_id"),
@@ -139,6 +138,37 @@ public class Sucursal {
      */
     @Column(name = "ip_orquestador", length = 100)
     private String ipOrquestador;
+
+    /**
+     * Define si la impresión debe ser automática al finalizar venta
+     * Solo aplica en dispositivos desktop (Windows/Mac)
+     */
+    @Column(name = "impresion_automatica", nullable = false)
+    @Builder.Default
+    private Boolean impresionAutomatica = false;
+
+    /**
+     * Define si debe auto-imprimir la factura/tiquete
+     */
+    @Column(name = "auto_imprimir_factura", nullable = false)
+    @Builder.Default
+    private Boolean autoImprimirFactura = true;
+
+    /**
+     * Define si debe auto-imprimir la comanda de cocina
+     * Solo aplica para facturas internas
+     */
+    @Column(name = "auto_imprimir_comanda", nullable = false)
+    @Builder.Default
+    private Boolean autoImprimirComanda = false;
+
+    /**
+     * Tiempo en segundos antes de auto-cerrar el modal y resetear
+     * Si es 0, no cierra automáticamente
+     */
+    @Column(name = "tiempo_auto_close", nullable = false)
+    @Builder.Default
+    private Integer tiempoAutoClose = 2;
 
     // Campos existentes de auditoría
     @CreationTimestamp

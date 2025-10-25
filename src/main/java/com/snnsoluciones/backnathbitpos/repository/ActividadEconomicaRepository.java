@@ -19,5 +19,4 @@ public interface ActividadEconomicaRepository extends JpaRepository<ActividadEco
     // Buscar activas
     List<ActividadEconomica> findByActivaTrue();
     Optional<ActividadEconomica> findByCodigo(String codigo);
-
 }

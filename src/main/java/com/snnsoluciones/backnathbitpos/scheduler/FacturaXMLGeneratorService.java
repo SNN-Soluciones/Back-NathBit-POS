@@ -89,7 +89,7 @@ public class FacturaXMLGeneratorService {
           .getActividades().stream()
           .filter(EmpresaActividad::getEsPrincipal)
           .findFirst()
-          .map(ea -> ea.getActividad().getCodigo())
+          .map(EmpresaActividad::getCodigoActividad)
           .orElseThrow(
               () -> new RuntimeException("No hay actividad económica principal configurada"));
 

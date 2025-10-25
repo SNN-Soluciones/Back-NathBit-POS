@@ -105,6 +105,10 @@ public class TiqueteInternoPdfMapperService {
     parametros.put("subtotal", DECIMAL_FORMAT.format(facturaInterna.getSubtotal()));
     parametros.put("descuentos", DECIMAL_FORMAT.format(
         facturaInterna.getDescuento() != null ? facturaInterna.getDescuento() : BigDecimal.ZERO));
+    parametros.put("descuento_porcentaje",
+        facturaInterna.getDescuentoPorcentaje() != null
+            ? facturaInterna.getDescuentoPorcentaje().toString()
+            : "0");
     parametros.put("iva", "0.00"); // FacturaInterna no maneja IVA separado
     parametros.put("total", DECIMAL_FORMAT.format(facturaInterna.getTotal()));
 

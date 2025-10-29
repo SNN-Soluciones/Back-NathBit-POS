@@ -29,7 +29,8 @@ public class FacturaRecepcionResponse {
     // Receptor (nosotros)
     private String receptorNombre;
     private String receptorIdentificacion;
-    
+    private boolean duplicada;
+
     // Condiciones
     private String condicionVenta;
     private Integer plazoCredito;

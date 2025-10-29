@@ -69,6 +69,7 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/auth/login",
                     "/api/facturas-recepcion/procesar-email",
+                    "/api/empresas/*/identificacion",
                     "/nathbit/api/auth/login",
                     "/api/auth/refresh",
                     "/api/test/**",

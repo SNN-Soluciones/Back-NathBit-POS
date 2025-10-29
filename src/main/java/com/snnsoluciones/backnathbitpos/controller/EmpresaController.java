@@ -273,4 +273,38 @@ public class EmpresaController extends BaseController{
             );
         }
     }
+
+    @Operation(summary = "Obtener identificación de empresa (para MailReceptor)")
+    @GetMapping("/{empresaId}/identificacion")
+    public ResponseEntity<Map<String, String>> obtenerIdentificacionEmpresa(
+        @PathVariable Long empresaId,
+        @RequestHeader(value = "X-API-Key", required = false) String apiKey) {
+
+        // Validar API Key (si viene del MailReceptor externo)
+        if (apiKey != null && !apiKey.isEmpty()) {
+            // TODO: Agregar validación de API Key desde application.yml
+            // Por ahora, validar contra valor hardcodeado
+            String expectedApiKey = "nathbit-mailreceptor-2024-secure-key-change-this";
+            if (!apiKey.equals(expectedApiKey)) {
+                log.warn("❌ Intento de acceso con API Key inválida");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+        }
+
+        // Buscar empresa
+        Empresa empresa = empresaService.buscarPorId(empresaId);
+
+        if (empresa == null) {
+            log.warn("⚠️ Empresa {} no encontrada", empresaId);
+            return ResponseEntity.notFound().build();
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("identificacion", empresa.getIdentificacion());
+        response.put("empresaId", empresaId.toString());
+
+        log.debug("✅ Identificación empresa {} obtenida: {}", empresaId, empresa.getIdentificacion());
+
+        return ResponseEntity.ok(response);
+    }
 }

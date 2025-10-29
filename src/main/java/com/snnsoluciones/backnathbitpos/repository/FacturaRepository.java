@@ -95,4 +95,13 @@ public interface FacturaRepository extends JpaRepository<Factura, Long>,
   """)
   List<FacturaDetalle> cargarImpuestosDeDetalles(@Param("facturaIds") List<Long> facturaIds);
 
+  @org.springframework.data.jpa.repository.Query("""
+    select f
+    from Factura f
+      join fetch f.sucursal s
+      join fetch s.empresa e
+    where f.id = :id
+""")
+  java.util.Optional<Factura> findByIdFetchEmpresa(@org.springframework.data.repository.query.Param("id") Long id);
+
 }

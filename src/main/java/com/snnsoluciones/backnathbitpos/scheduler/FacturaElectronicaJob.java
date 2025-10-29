@@ -4,40 +4,46 @@
 //import com.snnsoluciones.backnathbitpos.entity.Empresa;
 //import com.snnsoluciones.backnathbitpos.entity.Factura;
 //import com.snnsoluciones.backnathbitpos.entity.FacturaBitacora;
+//import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 //import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 //import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
 //import com.snnsoluciones.backnathbitpos.enums.mh.AmbienteHacienda;
 //import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
 //import com.snnsoluciones.backnathbitpos.integrations.hacienda.HaciendaClient;
 //import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.ConsultaEstadoResponse;
-//import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.HaciendaAuthParams;
 //import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.HaciendaTokenResponse;
 //import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.IdentificacionDTO;
 //import com.snnsoluciones.backnathbitpos.integrations.hacienda.dto.RecepcionRequest;
+//import com.snnsoluciones.backnathbitpos.repository.EmailAuditLogRepository;
 //import com.snnsoluciones.backnathbitpos.repository.FacturaBitacoraRepository;
 //import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 //import com.snnsoluciones.backnathbitpos.service.EmailService;
+//import com.snnsoluciones.backnathbitpos.service.ImapService;
 //import com.snnsoluciones.backnathbitpos.service.StorageService;
 //import com.snnsoluciones.backnathbitpos.service.pdf.FacturaPdfService;
 //import com.snnsoluciones.backnathbitpos.sign.SignerService;
 //import com.snnsoluciones.backnathbitpos.util.ByteArrayMultipartFile;
 //import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
-//import jakarta.transaction.Transactional;
-//import java.nio.charset.StandardCharsets;
-//import java.time.LocalDateTime;
-//import java.time.ZonedDateTime;
-//import java.time.format.DateTimeFormatter;
-//import java.util.Base64;
-//import java.util.List;
-//import java.util.Optional;
+//import jakarta.persistence.EntityManager;
 //import lombok.RequiredArgsConstructor;
 //import lombok.extern.slf4j.Slf4j;
 //import org.springframework.data.domain.PageRequest;
 //import org.springframework.http.HttpStatus;
 //import org.springframework.scheduling.annotation.Scheduled;
 //import org.springframework.stereotype.Component;
+//import org.springframework.transaction.annotation.Propagation;
+//import org.springframework.transaction.annotation.Transactional;
+//import org.springframework.transaction.support.TransactionSynchronization;
+//import org.springframework.transaction.support.TransactionSynchronizationManager;
 //import org.springframework.web.client.HttpClientErrorException;
 //import org.springframework.web.multipart.MultipartFile;
+//
+//import java.nio.charset.StandardCharsets;
+//import java.time.LocalDateTime;
+//import java.time.ZonedDateTime;
+//import java.time.format.DateTimeFormatter;
+//import java.util.Base64;
+//import java.util.List;
 //
 //@Slf4j
 //@Component
@@ -53,13 +59,20 @@
 //  private final EmailService emailService;
 //  private final StorageService storageService;
 //  private final S3PathBuilder s3PathBuilder;
+//  private final EmailAuditLogRepository emailAuditLogRepository;
+//  private final ImapService imapService;
+//  private final EntityManager entityManager;
+//
+//  @org.springframework.beans.factory.annotation.Autowired
+//  @org.springframework.context.annotation.Lazy
+//  private FacturaElectronicaJob self;
 //
 //  // Configuración
-//  private static final int MAX_FACTURAS_POR_CICLO = 10;
+//  private static final int MAX_FACTURAS_POR_CICLO = 6;
 //  private static final int MAX_INTENTOS = 3;
 //
 //  @Scheduled(fixedDelay = 60000, initialDelay = 10000)
-//  @Transactional
+//  // IMPORTANTE: NO transaccional aquí
 //  public void procesarFacturasPendientes() {
 //    log.info("⏳ Iniciando job de procesamiento de facturas electrónicas...");
 //
@@ -73,37 +86,54 @@
 //      return;
 //    }
 //
+//    int exitosas = 0;
+//    int fallidas = 0;
+//
 //    log.info("Se encontraron {} facturas pendientes", pendientes.size());
 //
 //    for (FacturaBitacora bitacora : pendientes) {
 //      try {
-//        procesarFacturaFlow(bitacora);
+//        self.procesarFacturaFlow(bitacora);// cada factura en su propia transacción
+//        exitosas++;
+//        bitacoraRepository.flush();
 //      } catch (Exception e) {
+//        fallidas++;
 //        log.error("❌ Error procesando factura {}: {}", bitacora.getClave(), e.getMessage(), e);
-//        manejarError(bitacora, e);
+//        try {
+//          manejarErrorTransactional(bitacora, e); // asegurar persistencia del estado de error
+//        } catch (Exception ee) {
+//          log.error("❌ Error al persistir el manejo de error para {}: {}", bitacora.getClave(), ee.getMessage(), ee);
+//        }
+//        entityManager.clear();
+//        log.debug("⚠️ Error manejado y contexto limpiado");
 //      }
 //    }
 //
-//    log.info("🏁 Job de procesamiento finalizado");
+//    log.info("🏁 Job finalizado - Exitosas: {}, Fallidas: {}", exitosas, fallidas);
 //  }
 //
 //  /**
-//   * Flow completo de una factura: XML -> Firmar -> Enviar -> (si POST falla: reconsulta) -> Consultar -> Guardar respuesta -> PDF -> Email
+//   * Flow completo de una factura: Validar -> XML -> Firmar -> Enviar -> Poll -> Guardar respuesta -> PDF -> Email
+//   * Corre en transacción independiente.
 //   */
-//  private void procesarFacturaFlow(FacturaBitacora bitacora) throws Exception {
-//    log.info("➡️ Procesando factura {} (intento #{})", bitacora.getClave(),
-//        bitacora.getIntentos() + 1);
+//  @Transactional(propagation = Propagation.REQUIRES_NEW)
+//  protected void procesarFacturaFlow(FacturaBitacora bitacora) throws Exception {
+//    log.info("➡️ Procesando factura {} (intento #{})", bitacora.getClave(), bitacora.getIntentos() + 1);
 //
 //    // 1) Marcar intento
 //    bitacora.setIntentos(bitacora.getIntentos() + 1);
 //    bitacora.setEstado(EstadoBitacora.PROCESANDO);
 //    bitacoraRepository.save(bitacora);
 //
-//    Factura factura = facturaRepository.findById(bitacora.getFacturaId())
+//    Factura factura = facturaRepository.findByIdFetchEmpresa(bitacora.getFacturaId())
 //        .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + bitacora.getFacturaId()));
 //    final Empresa empresa = factura.getSucursal().getEmpresa();
 //    final String empresaNombre = empresa.getNombreComercial();
 //    final boolean produccion = empresa.getConfigHacienda().getAmbiente() == AmbienteHacienda.PRODUCCION;
+//
+//    // 0) Validaciones previas 4.4 (corta de raíz si falta info)
+//    log.info("[0/6] Validando requisitos mínimos 4.4...");
+//    validarFacturaPreXML(factura);
 //
 //    // 2) Generar XML
 //    log.info("[1/6] Generando XML...");
@@ -155,24 +185,22 @@
 //        .comprobanteXml(Base64.getEncoder().encodeToString(xmlFirmado))
 //        .build();
 //
-//    boolean postOk = false;
 //    try {
 //      haciendaService.postRecepcion(token.getAccessToken(), produccion, req);
-//      postOk = true;
 //      factura.setEstado(EstadoFactura.ENVIADA);
-//      facturaRepository.save(factura);
 //      bitacora.setHaciendaMensaje("Enviada a MH");
+//      facturaRepository.save(factura);
 //      bitacoraRepository.save(bitacora);
 //    } catch (HttpClientErrorException ex) {
-//      // Si POST falla, intentamos reconsultar estado por clave (puede que ya estuviera enviada)
 //      log.warn("[MH] POST /recepcion falló {} {}. Intentando reconsulta por clave {}...",
 //          ex.getStatusCode(), ex.getStatusText(), factura.getClave());
-//      ConsultaEstadoResponse estadoTrasPostFallido = consultarEstadoConRefreshSi400(empresa, produccion, factura.getClave(), token.getAccessToken());
+//
+//      ConsultaEstadoResponse estadoTrasPostFallido =
+//          consultarEstadoConRefreshSi400(empresa, produccion, factura.getClave(), token.getAccessToken());
 //
 //      if (estadoTrasPostFallido != null) {
 //        String ind = safeUpper(estadoTrasPostFallido.getIndEstado());
 //        if ("ACEPTADO".equals(ind) || "RECHAZADO".equals(ind)) {
-//          // Guardar respuesta y cerrar ciclo
 //          guardarRespuestaDeHacienda(bitacora, factura, estadoTrasPostFallido, empresaNombre);
 //          if ("ACEPTADO".equals(ind)) {
 //            factura.setEstado(EstadoFactura.ACEPTADA);
@@ -181,21 +209,14 @@
 //            facturaRepository.save(factura);
 //            bitacoraRepository.save(bitacora);
 //
-//            // Solo Factura (01) genera PDF/Email
+//            // Sólo Factura (01) genera PDF/Email
 //            if ("01".equals(factura.getTipoDocumento().getCodigo())) {
-//              try {
-//                log.info("[5/6] Generando PDF...");
-//                byte[] pdf = pdfService.generarFacturaCarta(factura.getClave());
-//                log.info("[6/6] Enviando correo...");
-//                enviarEmail(bitacora, factura, pdf);
-//              } catch (Exception mailEx) {
-//                log.error("❌ Error PDF/Email tras POST fallido: {}", mailEx.getMessage(), mailEx);
-//              }
+//              programarEnvioEmailPostCommit(bitacora, factura);
 //            } else {
 //              log.info("Tipo {} aceptado (tras POST fallido): no PDF/Email.", factura.getTipoDocumento().getCodigo());
 //            }
 //            log.info("✅ Factura {} completada con estado {}", factura.getClave(), factura.getEstado());
-//            return; // ya cerramos
+//            return;
 //          } else {
 //            // RECHAZADO
 //            factura.setEstado(EstadoFactura.RECHAZADA);
@@ -211,12 +232,11 @@
 //        }
 //      }
 //
-//      // Si no hay terminal, marcamos para retry
-//      manejarError(bitacora, ex);
-//      return;
+//      // No terminal → marcar para retry
+//      throw ex; // que lo capture el caller y dispare manejo de error transaccional
 //    }
 //
-//    // 5) Si POST fue OK → hacer poll
+//    // 5) Poll
 //    log.info("[4/6] Consultando estado en MH...");
 //    ConsultaEstadoResponse estado = pollEstadoHacienda(token.getAccessToken(), produccion, factura.getClave(), 6, 10);
 //
@@ -247,23 +267,61 @@
 //      bitacoraRepository.save(bitacora);
 //    }
 //
-//    // 6) Generar PDF + Email si ACEPTADA y es Factura (01)
+//    // 6) PDF + Email sólo si ACEPTADA y tipo 01
 //    if (factura.getEstado() == EstadoFactura.ACEPTADA && "01".equals(factura.getTipoDocumento().getCodigo())) {
-//      log.info("[5/6] Generando PDF...");
-//      byte[] pdf = pdfService.generarFacturaCarta(factura.getClave());
-//
-//      log.info("[6/6] Enviando correo...");
-//      enviarEmail(bitacora, factura, pdf);
-//
-//      bitacora.setEstado(EstadoBitacora.ACEPTADA); // redundante, por si acaso
+//      if (yaSeEnvioEmail(factura.getClave(), factura.getEmailReceptor())) {
+//        log.info("⏭️ Email ya enviado...");
+//        bitacora.setEstado(EstadoBitacora.ACEPTADA);
+//        bitacoraRepository.save(bitacora);
+//        log.info("✅ Factura {} completada (email ya enviado)", factura.getClave());
+//        return;
+//      }
+//      programarEnvioEmailPostCommit(bitacora, factura);
+//      bitacora.setEstado(EstadoBitacora.ACEPTADA);
+//      bitacoraRepository.save(bitacora);
+//    } else if (factura.getEstado() == EstadoFactura.ACEPTADA) {
+//      log.info("Tipo {} aceptado: no PDF/Email.", factura.getTipoDocumento().getCodigo());
+//      bitacora.setEstado(EstadoBitacora.ACEPTADA);
 //      bitacoraRepository.save(bitacora);
 //    }
+//
 //    log.info("✅ Factura {} completada con estado {}", factura.getClave(), factura.getEstado());
 //  }
 //
+//  @Transactional(propagation = Propagation.REQUIRES_NEW)
+//  protected void manejarErrorTransactional(FacturaBitacora bitacora, Exception e) {
+//    manejarError(bitacora, e);
+//  }
+//
 //  /**
-//   * Intenta GET /recepcion/{clave}. Si recibe 400, renueva token y reintenta 1 vez.
-//   * Devuelve null si no se pudo obtener respuesta o no hay indEstado.
+//   * Encola el envío del correo para ejecutarse sólo DESPUÉS del commit de la transacción actual.
+//   */
+//  private void programarEnvioEmailPostCommit(FacturaBitacora bitacora, Factura factura) {
+//    // Preparar datos dentro de la transacción
+//    final byte[] pdfBytes;
+//    try {
+//      log.info("[5/6] Generando PDF...");
+//      pdfBytes = pdfService.generarFacturaCarta(factura.getClave());
+//    } catch (Exception ex) {
+//      log.error("❌ Error generando PDF: {}", ex.getMessage(), ex);
+//      return;
+//    }
+//
+//    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+//      @Override
+//      public void afterCommit() {
+//        try {
+//          log.info("[6/6] Enviando correo (post-commit)...");
+//          enviarEmail(bitacora, factura, pdfBytes);
+//        } catch (Exception mailEx) {
+//          log.error("❌ Error enviando email post-commit para factura {}: {}", factura.getClave(), mailEx.getMessage(), mailEx);
+//        }
+//      }
+//    });
+//  }
+//
+//  /**
+//   * Intenta GET /recepcion/{clave}. Si 400, renueva token y reintenta 1 vez.
 //   */
 //  private ConsultaEstadoResponse consultarEstadoConRefreshSi400(Empresa empresa, boolean produccion, String clave, String tokenActual) {
 //    try {
@@ -327,7 +385,7 @@
 //  }
 //
 //  /**
-//   * Guarda la respuesta XML (si vino en base64 o bytes) en tu storage y actualiza bitácora
+//   * Guarda la respuesta XML (si vino en base64 o bytes) en storage y actualiza bitácora
 //   */
 //  private void guardarRespuestaDeHacienda(FacturaBitacora bitacora, Factura factura, ConsultaEstadoResponse estado, String empresaNombre) {
 //    try {
@@ -420,5 +478,45 @@
 //  private String formatearFechaHacienda(String fechaEmision) {
 //    ZonedDateTime zdt = ZonedDateTime.parse(fechaEmision);
 //    return zdt.format(HACIENDA_FMT);
+//  }
+//
+//  /**
+//   * Valida requisitos mínimos de 4.4 antes de generar XML.
+//   */
+//  private void validarFacturaPreXML(Factura factura) {
+//    Empresa emp = factura.getSucursal().getEmpresa();
+//    if (emp == null || emp.getProvincia() == null) {
+//      throw new IllegalStateException("Emisor/Ubicación incompleta: faltan datos obligatorios en 4.4");
+//    }
+//    if (emp.getCanton() == null || emp.getDistrito() == null || emp.getOtrasSenas() == null || emp.getOtrasSenas()
+//        .isBlank()) {
+//      throw new IllegalStateException("Emisor/Ubicación incompleta: Provincia, Cantón, Distrito y OtrasSenas son obligatorios en 4.4");
+//    }
+//  }
+//
+//  /**
+//   * Doble validación: BD primero, IMAP como respaldo.
+//   */
+//  private boolean yaSeEnvioEmail(String clave, String emailDestino) {
+//    if (clave == null || emailDestino == null || emailDestino.isBlank()) return false;
+//
+//    boolean existeEnBD = emailAuditLogRepository.existsByClaveAndEmailDestinoAndEstado(
+//        clave, emailDestino, EstadoEmail.ENVIADO);
+//    if (existeEnBD) {
+//      log.info("✅ Email ya enviado (verificado en BD): {} -> {}", clave, emailDestino);
+//      return true;
+//    }
+//
+//    log.info("🔍 Email no encontrado en BD, verificando en carpeta Sent vía IMAP...");
+//    try {
+//      boolean existeEnIMAP = imapService.emailExisteEnEnviados(clave, emailDestino);
+//      if (existeEnIMAP) {
+//        log.warn("⚠️ Email encontrado en IMAP pero NO en BD - posible inconsistencia para: {} -> {}", clave, emailDestino);
+//      }
+//      return existeEnIMAP;
+//    } catch (Exception e) {
+//      log.error("❌ Error consultando IMAP, asumiendo NO enviado: {}", e.getMessage());
+//      return false;
+//    }
 //  }
 //}

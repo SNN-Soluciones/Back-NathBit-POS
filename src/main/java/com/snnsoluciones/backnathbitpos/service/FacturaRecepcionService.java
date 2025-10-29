@@ -903,8 +903,22 @@ public class FacturaRecepcionService {
       FacturaRecepcion factura = xmlParserService.parsearXML(xmlContent, empresa, sucursal);
 
       // 3. Validar duplicado
-      if (facturaRecepcionRepository.existsByClave(factura.getClave())) {
-        throw new RuntimeException("Ya existe una factura con esta clave: " + factura.getClave());
+      Optional<FacturaRecepcion> facturaExistente =
+          facturaRecepcionRepository.findByClave(factura.getClave());
+
+      if (facturaExistente.isPresent()) {
+        log.warn("⚠️ Factura DUPLICADA detectada: {}", factura.getClave());
+
+        FacturaRecepcionResponse response = mapearAResponse(facturaExistente.get());
+        response.setDuplicada(true);  // ← MARCAR COMO DUPLICADA
+
+        log.info("📋 Estado actual: {}, Proveedor: {}",
+            facturaExistente.get().getEstadoInterno(),
+            facturaExistente.get().getProveedor() != null
+                ? facturaExistente.get().getProveedor().getNombreComercial()
+                : "Sin asignar");
+
+        return response;
       }
 
       // 4. Subir archivos a S3

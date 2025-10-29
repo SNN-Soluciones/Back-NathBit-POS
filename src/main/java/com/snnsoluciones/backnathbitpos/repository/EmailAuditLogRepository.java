@@ -33,4 +33,13 @@ public interface EmailAuditLogRepository extends JpaRepository<EmailAuditLog, Lo
     """)
     Set<Long> findFacturaIdsEnviados(Collection<Long> facturaIds);
 
+    /**
+     * Verifica si existe un email enviado para una clave y email destino específicos
+     */
+    boolean existsByClaveAndEmailDestinoAndEstado(
+        String clave,
+        String emailDestino,
+        EstadoEmail estado
+    );
+
 }

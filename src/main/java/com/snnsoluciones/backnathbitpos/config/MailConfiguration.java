@@ -32,13 +32,13 @@ public class MailConfiguration {
     @Value("${spring.mail.properties.mail.smtp.ssl.enable:false}")
     private String sslEnable;
 
-    @Value("${spring.mail.properties.mail.smtp.connectiontimeout:5000}")
+    @Value("${spring.mail.properties.mail.smtp.connectiontimeout:30000}")
     private String connectionTimeout;
 
-    @Value("${spring.mail.properties.mail.smtp.timeout:5000}")
+    @Value("${spring.mail.properties.mail.smtp.timeout:60000}")
     private String timeout;
 
-    @Value("${spring.mail.properties.mail.smtp.writetimeout:5000}")
+    @Value("${spring.mail.properties.mail.smtp.writetimeout:60000}")
     private String writeTimeout;
 
     @Bean
@@ -61,7 +61,7 @@ public class MailConfiguration {
         props.put("mail.smtp.writetimeout", writeTimeout);
         
         // Propiedades adicionales para debug
-        props.put("mail.debug", "true"); // Cambiado a true según tu config
+        props.put("mail.debug", "false"); // Cambiado a true según tu config
         
         // Para Gmail con SSL (puerto 465)
         if (host.contains("gmail") && port == 465) {

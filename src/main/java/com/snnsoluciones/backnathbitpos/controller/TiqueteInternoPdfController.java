@@ -1,4 +1,9 @@
 package com.snnsoluciones.backnathbitpos.controller;
+import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
+import com.snnsoluciones.backnathbitpos.dto.facturainterna.FacturaInternaResponse;
+import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
+import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
+import com.snnsoluciones.backnathbitpos.service.FacturaInternaService;
 import com.snnsoluciones.backnathbitpos.service.pdf.TiqueteInternoPdfService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -23,6 +28,8 @@ import java.time.format.DateTimeFormatter;
 public class TiqueteInternoPdfController {
 
     private final TiqueteInternoPdfService tiqueteInternoPdfService;
+    private final FacturaInternaRepository facturaInternaRepository;
+    private final FacturaInternaService facturaInternaService;
 
     @Operation(summary = "Generar PDF de tiquete interno",
         description = "Genera un PDF de tiquete interno en formato 80mm para impresión térmica")
@@ -118,6 +125,36 @@ public class TiqueteInternoPdfController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header("X-Error-Message", e.getMessage())
                 .build();
+        }
+    }
+
+    /**
+     * Obtener datos completos de la factura interna en formato JSON
+     */
+    @Operation(summary = "Obtener datos de factura interna",
+        description = "Devuelve todos los datos de la factura interna: detalles, descuentos, medios de pago, totales")
+    @GetMapping("/datos/{numeroInterno}")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+    public ResponseEntity<ApiResponse<FacturaInternaResponse>> obtenerDatosFactura(
+        @Parameter(description = "Número interno del tiquete (ej: INT-2024-00001)", required = true)
+        @PathVariable String numeroInterno) {
+
+        log.info("Obteniendo datos para tiquete interno: {}", numeroInterno);
+
+        try {
+            // Buscar factura por número
+            FacturaInterna factura = facturaInternaRepository.findByNumero(numeroInterno)
+                .orElseThrow(() -> new RuntimeException("Tiquete interno no encontrado: " + numeroInterno));
+
+            // Mapear a response usando el service existente
+            FacturaInternaResponse response = facturaInternaService.buscarPorId(factura.getId());
+
+            return ResponseEntity.ok(ApiResponse.success("Datos obtenidos exitosamente", response));
+
+        } catch (Exception e) {
+            log.error("Error al obtener datos del tiquete {}: {}", numeroInterno, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Error al obtener datos: " + e.getMessage()));
         }
     }
 }

@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.facturainterna.*;
+import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import com.snnsoluciones.backnathbitpos.service.FacturaInternaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -61,22 +64,46 @@ public class FacturaInternaController {
 
     /**
      * Anular factura
+     * Acepta tanto /anular como /anular/{usuarioId}
+     * Si viene "undefined", lo ignora y usa el del token
      */
-    @PostMapping("/{id}/anular/{usuarioId}")
+    @PostMapping("/{id}/anular/{usuarioId:.*}")  // ⬅️ El ".*" hace que acepte cualquier cosa
     @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<Void>> anular(
-            @PathVariable Long id,
-            @PathVariable Long usuarioId,
-            @Valid @RequestBody AnularFacturaRequest request) {
-        log.info("POST /api/facturas-internas/{}/anular", id);
-        
+        @PathVariable Long id,
+        @PathVariable(required = false) String usuarioId,  // ⬅️ String para aceptar "undefined"
+        @Valid @RequestBody AnularFacturaRequest request,
+        Authentication authentication) {
+
+        log.info("POST /api/facturas-internas/{}/anular - usuarioId recibido: '{}'", id, usuarioId);
+
         try {
-            facturaInternaService.anular(id, usuarioId, request);
+            Long usuarioIdFinal = null;
+
+            // Intentar parsear el usuarioId si viene y no es "undefined"
+            if (usuarioId != null && !usuarioId.isEmpty() && !"undefined".equals(usuarioId)) {
+                try {
+                    usuarioIdFinal = Long.parseLong(usuarioId);
+                    log.info("✅ Usuario obtenido del path: {}", usuarioIdFinal);
+                } catch (NumberFormatException e) {
+                    log.warn("⚠️ usuarioId inválido en path: '{}', usando token", usuarioId);
+                }
+            }
+
+            // Si no viene o es inválido, obtener del token
+            if (usuarioIdFinal == null) {
+                ContextoUsuario contexto = (ContextoUsuario) authentication.getPrincipal();
+                usuarioIdFinal = contexto.getUserId();
+                log.info("✅ Usuario obtenido del token: {}", usuarioIdFinal);
+            }
+
+            facturaInternaService.anular(id, usuarioIdFinal, request);
             return ResponseEntity.ok(ApiResponse.success("Factura anulada exitosamente", null));
+
         } catch (Exception e) {
-            log.error("Error al anular factura: ", e);
+            log.error("❌ Error al anular factura: ", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error("Error al anular factura: " + e.getMessage()));
+                .body(ApiResponse.error("Error al anular factura: " + e.getMessage()));
         }
     }
 
@@ -114,6 +141,50 @@ public class FacturaInternaController {
             log.error("Error al listar facturas: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Error al obtener facturas"));
+        }
+    }
+
+    /**
+     * Cambiar métodos de pago de una factura
+     */
+    @PutMapping("/{id}/metodos-pago")
+    @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+    public ResponseEntity<ApiResponse<Void>> cambiarMetodosPago(
+        @PathVariable Long id,
+        @PathVariable(required = false) String usuarioId,  // Para mantener compatibilidad
+        @Valid @RequestBody CambiarMetodosPagoRequest request,
+        Authentication authentication) {
+
+        log.info("PUT /api/facturas-internas/{}/metodos-pago", id);
+
+        try {
+            // Obtener usuarioId del token (misma lógica que anular)
+            Long usuarioIdFinal = null;
+
+            if (usuarioId != null && !usuarioId.isEmpty() && !"undefined".equals(usuarioId)) {
+                try {
+                    usuarioIdFinal = Long.parseLong(usuarioId);
+                } catch (NumberFormatException e) {
+                    log.warn("⚠️ usuarioId inválido, usando token");
+                }
+            }
+
+            if (usuarioIdFinal == null) {
+                ContextoUsuario contexto = (ContextoUsuario) authentication.getPrincipal();
+                usuarioIdFinal = contexto.getUserId();
+            }
+
+            facturaInternaService.cambiarMetodosPago(id, usuarioIdFinal, request);
+            return ResponseEntity.ok(ApiResponse.success("Métodos de pago actualizados exitosamente", null));
+
+        } catch (BadRequestException e) {
+            log.error("Error de validación: ", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error al cambiar métodos de pago: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Error al actualizar métodos de pago: " + e.getMessage()));
         }
     }
 }

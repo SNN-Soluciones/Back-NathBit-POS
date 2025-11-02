@@ -190,6 +190,71 @@ public class FacturaInternaService {
     }
 
     /**
+     * Cambiar métodos de pago de una factura
+     */
+    @Transactional
+    public void cambiarMetodosPago(Long facturaId, Long usuarioId, CambiarMetodosPagoRequest request) {
+        log.info("🔄 Cambiando métodos de pago para factura ID: {}", facturaId);
+
+        // Buscar factura
+        FacturaInterna factura = facturaInternaRepository.findById(facturaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada"));
+
+        // Validaciones
+        if ("ANULADA".equals(factura.getEstado())) {
+            throw new BadRequestException("No se puede modificar una factura anulada");
+        }
+
+        // Calcular total de nuevos medios de pago
+        BigDecimal totalNuevosPagos = request.getMediosPago().stream()
+            .map(MedioPagoInternoRequest::getMonto)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Validar que el total coincida con el total de la factura
+        if (totalNuevosPagos.compareTo(factura.getTotal()) != 0) {
+            throw new BadRequestException(
+                String.format("El total de los medios de pago (₡%.2f) no coincide con el total de la factura (₡%.2f)",
+                    totalNuevosPagos, factura.getTotal())
+            );
+        }
+
+        // Eliminar medios de pago anteriores
+        factura.getMediosPago().clear();
+
+        // Agregar nuevos medios de pago
+        for (MedioPagoInternoRequest medioPagoReq : request.getMediosPago()) {
+            FacturaInternaMedioPago medioPago = FacturaInternaMedioPago.builder()
+                .tipo(medioPagoReq.getTipoPago())
+                .monto(medioPagoReq.getMonto())
+                .referencia(medioPagoReq.getReferencia())
+                .banco(medioPagoReq.getBanco())
+                .notas(medioPagoReq.getNumeroAutorizacion())
+                .build();
+
+            // Si tiene plataforma digital
+            if (medioPagoReq.getPlataformaDigitalId() != null) {
+                PlataformaDigitalConfig plataforma = plataformaDigitalConfigRepository
+                    .findById(medioPagoReq.getPlataformaDigitalId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                        "Plataforma digital no encontrada: " + medioPagoReq.getPlataformaDigitalId()));
+                medioPago.setPlataformaDigital(plataforma);
+            }
+
+            factura.agregarMedioPago(medioPago);
+        }
+
+        // Actualizar pago recibido
+        factura.setPagoRecibido(totalNuevosPagos);
+        factura.calcularVuelto();
+
+        // Guardar
+        facturaInternaRepository.save(factura);
+
+        log.info("✅ Métodos de pago actualizados para factura {} por usuario {}. Motivo: {}",
+            factura.getNumero(), usuarioId, request.getMotivo());
+    }
+
+    /**
      * Anular factura
      */
     @Transactional

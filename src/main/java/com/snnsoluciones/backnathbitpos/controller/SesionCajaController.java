@@ -648,6 +648,56 @@ public class SesionCajaController {
     }
   }
 
+  @Operation(summary = "Obtener reporte de cierre en HTML")
+  @GetMapping("/{id}/reporte-cierre")
+  @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+  public ResponseEntity<String> obtenerReporteCierre(
+      @PathVariable Long id,
+      @RequestParam(defaultValue = "false") boolean incluirFacturas,
+      @RequestParam(defaultValue = "false") boolean incluirDenominaciones,
+      @RequestParam(defaultValue = "false") boolean incluirDatafonos,
+      @RequestParam(defaultValue = "false") boolean incluirMovimientos,
+      @RequestParam(defaultValue = "false") boolean incluirPlataformas,
+      HttpServletRequest request) {
+
+    try {
+      // Validar permisos
+      String token = request.getHeader("Authorization").substring(7);
+      Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
+
+      SesionCaja sesion = sesionCajaService.buscarPorId(id)
+          .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+      // Validar permisos (cajero solo su propia sesión, supervisores cualquiera)
+      if (!securityContextService.isSupervisor() &&
+          !sesion.getUsuario().getId().equals(usuarioId)) {
+        return ResponseEntity.status(403)
+            .body("<html><body><h1>No tiene permisos para ver este reporte</h1></body></html>");
+      }
+
+      // Construir opciones
+      OpcionesImpresionCierreDTO opciones = OpcionesImpresionCierreDTO.builder()
+          .incluirFacturas(incluirFacturas)
+          .incluirDenominaciones(incluirDenominaciones)
+          .incluirDatafonos(incluirDatafonos)
+          .incluirMovimientos(incluirMovimientos)
+          .incluirPlataformas(incluirPlataformas)
+          .build();
+
+      // Generar HTML
+      String html = sesionCajaService.generarHtmlCierre(id, opciones);
+
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+          .body(html);
+
+    } catch (Exception e) {
+      log.error("Error generando reporte de cierre: {}", e.getMessage());
+      return ResponseEntity.status(500)
+          .body("<html><body><h1>Error: " + e.getMessage() + "</h1></body></html>");
+    }
+  }
+
   @GetMapping("/{id}/cierre/recibo-ticket")
   @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
   public ResponseEntity<byte[]> imprimirCierreTicket(@PathVariable Long id,

@@ -42,10 +42,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -586,19 +590,16 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       // Sumar por tipo de pago
       if (fi.getMediosPago() != null && !fi.getMediosPago().isEmpty()) {
         for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
-          switch (mp.getTipo()) {
-            case "EFECTIVO":
-              totalEfectivo = totalEfectivo.add(mp.getMonto());
-              break;
-            case "TARJETA":
-              totalTarjeta = totalTarjeta.add(mp.getMonto());
-              break;
-            case "TRANSFERENCIA":
-              totalTransferencia = totalTransferencia.add(mp.getMonto());
-              break;
-            case "SINPE_MOVIL":
-              totalSinpe = totalSinpe.add(mp.getMonto());
-              break;
+          String tipo = mp.getTipo();
+
+          if ("EFECTIVO".equals(tipo)) {
+            totalEfectivo = totalEfectivo.add(mp.getMonto());
+          } else if ("TARJETA".equals(tipo)) {
+            totalTarjeta = totalTarjeta.add(mp.getMonto());
+          } else if ("TRANSFERENCIA".equals(tipo)) {
+            totalTransferencia = totalTransferencia.add(mp.getMonto());
+          } else if ("SINPE".equals(tipo) || "SINPE_MOVIL".equals(tipo)) {
+            totalSinpe = totalSinpe.add(mp.getMonto());
           }
 
           if (mp.getPlataformaDigital() != null) {
@@ -702,13 +703,53 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
   private String obtenerMetodosPago(Factura factura) {
     if (factura.getMediosPago() == null || factura.getMediosPago().isEmpty()) {
-      return "No especificado";
+      return "";
     }
 
-    return factura.getMediosPago().stream()
-        .map(mp -> mp.getMedioPago().toString())
-        .distinct()
-        .collect(Collectors.joining(", "));
+    Set<String> medios = new HashSet<>();
+
+    for (FacturaMedioPago mp : factura.getMediosPago()) {
+      switch (mp.getMedioPago()) {
+        case EFECTIVO:
+          medios.add("E");
+          break;
+        case TARJETA:
+          medios.add("TC");
+          break;
+        case SINPE_MOVIL:
+          medios.add("S");
+          break;
+        case TRANSFERENCIA:
+          medios.add("TB");
+          break;
+      }
+    }
+
+    return String.join(",", medios);
+  }
+
+  private String obtenerMetodosPagoInterna(FacturaInterna factura) {
+    if (factura.getMediosPago() == null || factura.getMediosPago().isEmpty()) {
+      return "";
+    }
+
+    Set<String> medios = new HashSet<>();
+
+    for (FacturaInternaMedioPago mp : factura.getMediosPago()) {
+      String tipo = mp.getTipo().toUpperCase();
+
+      if (tipo.equals("EFECTIVO")) {
+        medios.add("E");
+      } else if (tipo.equals("TARJETA")) {
+        medios.add("TC");
+      } else if (tipo.equals("SINPE") || tipo.equals("SINPE_MOVIL")) {  // ← Acepta ambos
+        medios.add("S");
+      } else if (tipo.equals("TRANSFERENCIA")) {
+        medios.add("TB");
+      }
+    }
+
+    return String.join(",", medios);
   }
 
   @Override
@@ -944,80 +985,219 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     SesionCaja sesion = sesionCajaRepository.findById(sesionId)
         .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
 
-    // 2. Obtener resumen
+    // 2. Obtener resumen detallado
     ResumenCajaDetalladoDTO resumen = obtenerResumenDetallado(sesionId);
 
-    // 3. Generar HTML simple (SIN emojis, SIN fuentes raras)
+    // 3. Calcular monto esperado
+    BigDecimal montoEsperado = calcularMontoEsperado(sesion);
+
+    // 4. Formatear números
+    NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(new Locale("es", "CR"));
+    DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    // 5. Construir HTML
     StringBuilder html = new StringBuilder();
 
     html.append("<!DOCTYPE html>");
-    html.append("<html><head>");
+    html.append("<html>");
+    html.append("<head>");
     html.append("<meta charset='UTF-8'>");
-    html.append("<title>Cierre de Caja</title>");
+    html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+    html.append("<title>Cierre de Caja #").append(sesionId).append("</title>");
     html.append("<style>");
-    html.append("body { font-family: Arial, sans-serif; padding: 20px; }");
-    html.append("h1 { color: #7C3AED; border-bottom: 2px solid #7C3AED; padding-bottom: 10px; }");
-    html.append("table { width: 100%; border-collapse: collapse; margin: 20px 0; }");
-    html.append("th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }");
-    html.append("th { background: #f5f5f5; font-weight: bold; }");
-    html.append(".total { font-size: 18px; font-weight: bold; color: #7C3AED; }");
-    html.append(".positivo { color: green; }");
-    html.append(".negativo { color: red; }");
-    html.append("@media print { button { display: none; } }");
+    html.append("* { margin: 0; padding: 0; box-sizing: border-box; }");
+    html.append("body { font-family: 'Courier New', monospace; font-size: 12px; padding: 10px; }");
+    html.append(".header { text-align: center; margin-bottom: 15px; }");
+    html.append(".title { font-size: 16px; font-weight: bold; margin: 5px 0; }");
+    html.append(".divider { border-top: 1px dashed #000; margin: 8px 0; }");
+    html.append(".double-divider { border-top: 2px solid #000; margin: 10px 0; }");
+    html.append(".section { margin: 10px 0; }");
+    html.append(".section-title { font-weight: bold; margin: 8px 0 5px 0; }");
+    html.append(".row { display: flex; justify-content: space-between; margin: 3px 0; }");
+    html.append(".row-left { text-align: left; }");
+    html.append(".row-right { text-align: right; }");
+    html.append(".total-row { font-weight: bold; }");
+    html.append(".detail-line { font-size: 11px; margin: 2px 0; }");
     html.append("</style>");
-    html.append("</head><body>");
+    html.append("</head>");
+    html.append("<body>");
 
-    // Header
-    html.append("<h1>CIERRE DE CAJA</h1>");
-    html.append("<p><strong>Terminal:</strong> ").append(sesion.getTerminal().getNombre()).append("</p>");
-    html.append("<p><strong>Cajero:</strong> ").append(sesion.getUsuario().getNombre())
-        .append(" ").append(sesion.getUsuario().getApellidos()).append("</p>");
-    html.append("<p><strong>Fecha:</strong> ")
-        .append(sesion.getFechaHoraApertura().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")))
-        .append("</p>");
+    // HEADER
+    html.append("<div class='header'>");
+    html.append("<div class='title'>═══════════════════════════</div>");
+    html.append("<div class='title'>CIERRE DE CAJA</div>");
+    html.append("<div class='title'>═══════════════════════════</div>");
+    html.append("</div>");
 
-    // Resumen de montos
-    html.append("<table>");
-    html.append("<tr><th>Concepto</th><th style='text-align: right;'>Monto</th></tr>");
-    html.append("<tr><td>Monto Inicial</td><td style='text-align: right;'>")
-        .append(formatearMoneda(resumen.getMontoInicial())).append("</td></tr>");
-    html.append("<tr><td>Ventas en Efectivo</td><td style='text-align: right; color: green;'>")
-        .append(formatearMoneda(resumen.getVentasEfectivo())).append("</td></tr>");
-    html.append("<tr><td>Vales</td><td style='text-align: right; color: red;'>")
-        .append(formatearMoneda(resumen.getVales())).append("</td></tr>");
-    html.append("<tr class='total'><td>MONTO ESPERADO</td><td style='text-align: right;'>")
-        .append(formatearMoneda(resumen.getMontoEsperado())).append("</td></tr>");
-    html.append("<tr class='total'><td>MONTO DE CIERRE</td><td style='text-align: right;'>")
-        .append(formatearMoneda(sesion.getMontoCierre())).append("</td></tr>");
+    // CÁLCULO EFECTIVO EN CAJA
+    html.append("<div class='section'>");
+    html.append("<div class='section-title'>📊 EFECTIVO EN CAJA</div>");
+    html.append("<div class='divider'></div>");
 
-    BigDecimal diferencia = sesion.getMontoCierre().subtract(resumen.getMontoEsperado());
-    html.append("<tr><td>DIFERENCIA</td><td style='text-align: right;' class='")
-        .append(diferencia.compareTo(BigDecimal.ZERO) >= 0 ? "positivo" : "negativo")
-        .append("'>").append(formatearMoneda(diferencia)).append("</td></tr>");
-    html.append("</table>");
+    html.append("<div class='row'>");
+    html.append("<span>Monto Apertura:</span>");
+    html.append("<span>").append(currencyFormat.format(resumen.getMontoInicial())).append("</span>");
+    html.append("</div>");
 
-    // Resumen de documentos
-    html.append("<h2>Documentos Emitidos</h2>");
-    html.append("<table>");
-    html.append("<tr><th>Tipo</th><th style='text-align: center;'>Cantidad</th><th style='text-align: right;'>Total</th></tr>");
-    html.append("<tr><td>Facturas</td><td style='text-align: center;'>")
-        .append(resumen.getCantidadFacturas())
-        .append("</td><td style='text-align: right;'>")
-        .append(formatearMoneda(resumen.getTotalFacturas())).append("</td></tr>");
-    html.append("<tr><td>Tiquetes</td><td style='text-align: center;'>")
-        .append(resumen.getCantidadTiquetes())
-        .append("</td><td style='text-align: right;'>")
-        .append(formatearMoneda(resumen.getTotalTiquetes())).append("</td></tr>");
-    html.append("</table>");
+    html.append("<div class='row'>");
+    html.append("<span>+ Ventas Efectivo:</span>");
+    html.append("<span>").append(currencyFormat.format(resumen.getVentasEfectivo() != null ? resumen.getVentasEfectivo() : BigDecimal.ZERO)).append("</span>");
+    html.append("</div>");
 
-    // Botón de imprimir
-    html.append("<button onclick='window.print()' style='padding: 10px 20px; background: #7C3AED; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;'>")
-        .append("Imprimir")
-        .append("</button>");
+// Calcular totales de movimientos
+    List<MovimientoCaja> movimientos = movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraAsc(sesion.getId());
+    BigDecimal totalEntradas = BigDecimal.ZERO;
+    BigDecimal totalSalidas = BigDecimal.ZERO;
 
-    html.append("</body></html>");
+    for (MovimientoCaja mov : movimientos) {
+      if (mov.getTipoMovimiento().esEntrada()) {
+        totalEntradas = totalEntradas.add(mov.getMonto());
+      } else if (mov.getTipoMovimiento().esSalida()) {
+        totalSalidas = totalSalidas.add(mov.getMonto());
+      }
+    }
+
+    html.append("<div class='row'>");
+    html.append("<span>+ Movimientos Entrada:</span>");
+    html.append("<span>").append(currencyFormat.format(totalEntradas)).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='row'>");
+    html.append("<span>- Movimientos Salida:</span>");
+    html.append("<span>").append(currencyFormat.format(totalSalidas)).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='double-divider'></div>");
+    html.append("<div class='row total-row'>");
+    html.append("<span>= Total Esperado:</span>");
+    html.append("<span>").append(currencyFormat.format(montoEsperado)).append("</span>");
+    html.append("</div>");
+    html.append("</div>");
+
+    // RESUMEN VENTAS
+    html.append("<div class='section'>");
+    html.append("<div class='section-title'>📈 TOTAL DE VENTAS</div>");
+    html.append("<div class='divider'></div>");
+
+    html.append("<div class='row'>");
+    html.append("<span>Efectivo:</span>");
+    html.append("<span>").append(currencyFormat.format(resumen.getVentasEfectivo() != null ? resumen.getVentasEfectivo() : BigDecimal.ZERO)).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='row'>");
+    html.append("<span>Tarjeta:</span>");
+    html.append("<span>").append(currencyFormat.format(resumen.getVentasTarjeta() != null ? resumen.getVentasTarjeta() : BigDecimal.ZERO)).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='row'>");
+    html.append("<span>SINPE:</span>");
+    html.append("<span>").append(currencyFormat.format(resumen.getVentasOtros() != null ? resumen.getVentasOtros() : BigDecimal.ZERO)).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='row'>");
+    html.append("<span>Transferencia:</span>");
+    html.append("<span>").append(currencyFormat.format(resumen.getVentasTransferencia() != null ? resumen.getVentasTransferencia() : BigDecimal.ZERO)).append("</span>");
+    html.append("</div>");
+
+    BigDecimal totalPlataformas = BigDecimal.ZERO;
+    if (resumen.getVentasPlataformas() != null) {
+      for (ResumenCajaDetalladoDTO.VentaPlataformaDTO plat : resumen.getVentasPlataformas()) {
+        totalPlataformas = totalPlataformas.add(plat.getTotalVentas());
+      }
+    }
+
+    html.append("<div class='row'>");
+    html.append("<span>Plataformas:</span>");
+    html.append("<span>").append(currencyFormat.format(totalPlataformas)).append("</span>");
+    html.append("</div>");
+
+    BigDecimal totalVentas = BigDecimal.ZERO;
+    totalVentas = totalVentas.add(resumen.getVentasEfectivo() != null ? resumen.getVentasEfectivo() : BigDecimal.ZERO);
+    totalVentas = totalVentas.add(resumen.getVentasTarjeta() != null ? resumen.getVentasTarjeta() : BigDecimal.ZERO);
+    totalVentas = totalVentas.add(resumen.getVentasOtros() != null ? resumen.getVentasOtros() : BigDecimal.ZERO);
+    totalVentas = totalVentas.add(resumen.getVentasTransferencia() != null ? resumen.getVentasTransferencia() : BigDecimal.ZERO);
+    totalVentas = totalVentas.add(totalPlataformas);
+
+    html.append("<div class='double-divider'></div>");
+    html.append("<div class='row total-row'>");
+    html.append("<span>TOTAL VENTAS:</span>");
+    html.append("<span>").append(currencyFormat.format(totalVentas)).append("</span>");
+    html.append("</div>");
+    html.append("</div>");
+
+    // RESUMEN DOCUMENTOS (SIEMPRE)
+    html.append("<div class='section'>");
+    html.append("<div class='section-title'>📄 DOCUMENTOS EMITIDOS</div>");
+    html.append("<div class='divider'></div>");
+
+    int totalDocs = 0;
+
+    if (resumen.getCantidadFacturas() != null && resumen.getCantidadFacturas() > 0) {
+      html.append("<div class='row'>");
+      html.append("<span>Fact. Electrónicas: ").append(resumen.getCantidadFacturas()).append("</span>");
+      html.append("<span>").append(formatearMontoCorto(resumen.getTotalFacturas())).append("</span>");
+      html.append("</div>");
+      totalDocs += resumen.getCantidadFacturas();
+    }
+
+    if (resumen.getCantidadTiquetes() != null && resumen.getCantidadTiquetes() > 0) {
+      html.append("<div class='row'>");
+      html.append("<span>Tiquetes Electr.: ").append(resumen.getCantidadTiquetes()).append("</span>");
+      html.append("<span>").append(formatearMontoCorto(resumen.getTotalTiquetes())).append("</span>");
+      html.append("</div>");
+      totalDocs += resumen.getCantidadTiquetes();
+    }
+
+    if (resumen.getCantidadVentasInternas() != null && resumen.getCantidadVentasInternas() > 0) {
+      html.append("<div class='row'>");
+      html.append("<span>Facturas Internas: ").append(resumen.getCantidadVentasInternas()).append("</span>");
+      html.append("<span>").append(formatearMontoCorto(resumen.getTotalVentasInternas())).append("</span>");
+      html.append("</div>");
+      totalDocs += resumen.getCantidadVentasInternas();
+    }
+
+    html.append("<div class='divider'></div>");
+    html.append("<div class='row total-row'>");
+    html.append("<span>TOTAL: ").append(totalDocs).append(" documentos</span>");
+    html.append("</div>");
+    html.append("</div>");
+
+    // DETALLE DE FACTURAS (OPCIONAL)
+    if (Boolean.TRUE.equals(opciones.getIncluirFacturas()) && resumen.getDocumentos() != null && !resumen.getDocumentos().isEmpty()) {
+      agregarDetalleFacturas(html, resumen, currencyFormat);
+    }
+
+    // DENOMINACIONES (OPCIONAL)
+    if (Boolean.TRUE.equals(opciones.getIncluirDenominaciones())) {
+      agregarDenominaciones(html, sesionId, currencyFormat);
+    }
+
+    // DATAFONOS (OPCIONAL)
+    if (Boolean.TRUE.equals(opciones.getIncluirDatafonos())) {
+      agregarDatafonos(html, sesionId, currencyFormat);
+    }
+
+    // MOVIMIENTOS (OPCIONAL)
+    if (Boolean.TRUE.equals(opciones.getIncluirMovimientos())) {
+      agregarMovimientos(html, sesionId, currencyFormat);
+    }
+
+    // PLATAFORMAS (OPCIONAL)
+    if (Boolean.TRUE.equals(opciones.getIncluirPlataformas()) && resumen.getVentasPlataformas() != null && !resumen.getVentasPlataformas().isEmpty()) {
+      agregarPlataformas(html, resumen, currencyFormat);
+    }
+
+    html.append("</body>");
+    html.append("</html>");
 
     return html.toString();
+  }
+
+  private String formatearMontoCorto(BigDecimal monto) {
+    if (monto == null) return "₡ 0.00";
+
+    NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(new Locale("es", "CR"));
+    return currencyFormat.format(monto);
   }
 
   @Override
@@ -1184,14 +1364,262 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         totalVentas, totalDevoluciones, totalEfectivo);
   }
 
-  private String obtenerMetodosPagoInterna(FacturaInterna factura) {
-    if (factura.getMediosPago() == null || factura.getMediosPago().isEmpty()) {
-      return "No especificado";
+  private void agregarDetalleFacturas(StringBuilder html, ResumenCajaDetalladoDTO resumen, NumberFormat currencyFormat) {
+    // Agrupar documentos por tipo
+    Map<String, List<ResumenCajaDetalladoDTO.DocumentoResumenDTO>> documentosPorTipo = new HashMap<>();
+    BigDecimal totalFacturasElec = BigDecimal.ZERO;
+    BigDecimal totalTiquetesElec = BigDecimal.ZERO;
+    BigDecimal totalNotasCredito = BigDecimal.ZERO;
+    BigDecimal totalFacturasInternas = BigDecimal.ZERO;
+
+    for (ResumenCajaDetalladoDTO.DocumentoResumenDTO doc : resumen.getDocumentos()) {
+      String tipo = doc.getTipoDocumento();
+      documentosPorTipo.computeIfAbsent(tipo, k -> new ArrayList<>()).add(doc);
+
+      if (tipo.contains("Factura") && tipo.contains("Electrónica")) {
+        totalFacturasElec = totalFacturasElec.add(doc.getTotal());
+      } else if (tipo.contains("Tiquete") && tipo.contains("Electrónico")) {
+        totalTiquetesElec = totalTiquetesElec.add(doc.getTotal());
+      } else if (tipo.contains("Nota") && tipo.contains("Crédito")) {
+        totalNotasCredito = totalNotasCredito.add(doc.getTotal());
+      } else if (tipo.contains("Interno")) {
+        totalFacturasInternas = totalFacturasInternas.add(doc.getTotal());
+      }
     }
 
-    return factura.getMediosPago().stream()
-        .map(FacturaInternaMedioPago::getTipo)
-        .distinct()
-        .collect(Collectors.joining(", "));
+    // FACTURAS ELECTRÓNICAS
+    if (documentosPorTipo.containsKey("Factura Electrónica")) {
+      List<ResumenCajaDetalladoDTO.DocumentoResumenDTO> facturas = documentosPorTipo.get("Factura Electrónica");
+      html.append("<div class='section'>");
+      html.append("<div class='section-title'>📄 FACTURAS ELECTRÓNICAS (").append(facturas.size()).append(")</div>");
+      html.append("<div class='divider'></div>");
+
+      for (ResumenCajaDetalladoDTO.DocumentoResumenDTO doc : facturas) {
+        html.append("<div class='detail-line'>");
+        html.append(doc.getConsecutivo()).append(" ");
+        html.append(currencyFormat.format(doc.getTotal())).append(" ");
+        html.append(doc.getMetodoPago());
+        html.append("</div>");
+      }
+
+      html.append("<div class='divider'></div>");
+      html.append("<div class='row total-row'>");
+      html.append("<span>SUBTOTAL:</span>");
+      html.append("<span>").append(currencyFormat.format(totalFacturasElec)).append("</span>");
+      html.append("</div>");
+      html.append("</div>");
+    }
+
+    // TIQUETES ELECTRÓNICOS
+    if (documentosPorTipo.containsKey("Tiquete Electrónico")) {
+      List<ResumenCajaDetalladoDTO.DocumentoResumenDTO> tiquetes = documentosPorTipo.get("Tiquete Electrónico");
+      html.append("<div class='section'>");
+      html.append("<div class='section-title'>📄 TIQUETES ELECTRÓNICOS (").append(tiquetes.size()).append(")</div>");
+      html.append("<div class='divider'></div>");
+
+      for (ResumenCajaDetalladoDTO.DocumentoResumenDTO doc : tiquetes) {
+        html.append("<div class='detail-line'>");
+        html.append(doc.getConsecutivo()).append(" ");
+        html.append(currencyFormat.format(doc.getTotal())).append(" ");
+        html.append(doc.getMetodoPago());
+        html.append("</div>");
+      }
+
+      html.append("<div class='divider'></div>");
+      html.append("<div class='row total-row'>");
+      html.append("<span>SUBTOTAL:</span>");
+      html.append("<span>").append(currencyFormat.format(totalTiquetesElec)).append("</span>");
+      html.append("</div>");
+      html.append("</div>");
+    }
+
+    // NOTAS DE CRÉDITO
+    if (documentosPorTipo.containsKey("Nota de Crédito Electrónica")) {
+      List<ResumenCajaDetalladoDTO.DocumentoResumenDTO> notas = documentosPorTipo.get("Nota de Crédito Electrónica");
+      html.append("<div class='section'>");
+      html.append("<div class='section-title'>📄 NOTAS DE CRÉDITO (").append(notas.size()).append(")</div>");
+      html.append("<div class='divider'></div>");
+
+      for (ResumenCajaDetalladoDTO.DocumentoResumenDTO doc : notas) {
+        html.append("<div class='detail-line'>");
+        html.append(doc.getConsecutivo()).append(" ");
+        html.append(currencyFormat.format(doc.getTotal())).append(" ");
+        html.append(doc.getMetodoPago());
+        html.append("</div>");
+      }
+
+      html.append("<div class='divider'></div>");
+      html.append("<div class='row total-row'>");
+      html.append("<span>SUBTOTAL:</span>");
+      html.append("<span>").append(currencyFormat.format(totalNotasCredito)).append("</span>");
+      html.append("</div>");
+      html.append("</div>");
+    }
+
+    // FACTURAS INTERNAS
+    if (documentosPorTipo.containsKey("Tiquete Interno")) {
+      List<ResumenCajaDetalladoDTO.DocumentoResumenDTO> internas = documentosPorTipo.get("Tiquete Interno");
+      html.append("<div class='section'>");
+      html.append("<div class='section-title'>📄 FACTURAS INTERNAS (").append(internas.size()).append(")</div>");
+      html.append("<div class='divider'></div>");
+
+      for (ResumenCajaDetalladoDTO.DocumentoResumenDTO doc : internas) {
+        html.append("<div class='detail-line'>");
+        html.append(doc.getConsecutivo()).append(" ");
+        html.append(currencyFormat.format(doc.getTotal())).append(" ");
+        html.append(doc.getMetodoPago());
+        html.append("</div>");
+      }
+
+      html.append("<div class='divider'></div>");
+      html.append("<div class='row total-row'>");
+      html.append("<span>SUBTOTAL:</span>");
+      html.append("<span>").append(currencyFormat.format(totalFacturasInternas)).append("</span>");
+      html.append("</div>");
+      html.append("</div>");
+    }
+  }
+
+  private void agregarDenominaciones(StringBuilder html, Long sesionId, NumberFormat currencyFormat) {
+    List<SesionCajaDenominacion> denominaciones = sesionCajaDenominacionRepository.findBySesionCajaId(sesionId);
+
+    if (denominaciones.isEmpty()) {
+      return;
+    }
+
+    html.append("<div class='section'>");
+    html.append("<div class='section-title'>💵 CONTEO DE DENOMINACIONES</div>");
+    html.append("<div class='divider'></div>");
+
+    BigDecimal totalContado = BigDecimal.ZERO;
+
+    for (SesionCajaDenominacion denom : denominaciones) {
+      html.append("<div class='row'>");
+      html.append("<span>").append(currencyFormat.format(denom.getValor())).append(" x ").append(denom.getCantidad()).append("</span>");
+      html.append("<span>").append(currencyFormat.format(denom.getTotal())).append("</span>");
+      html.append("</div>");
+      totalContado = totalContado.add(denom.getTotal());
+    }
+
+    html.append("<div class='divider'></div>");
+    html.append("<div class='row total-row'>");
+    html.append("<span>TOTAL CONTADO:</span>");
+    html.append("<span>").append(currencyFormat.format(totalContado)).append("</span>");
+    html.append("</div>");
+    html.append("</div>");
+  }
+
+  private void agregarDatafonos(StringBuilder html, Long sesionId, NumberFormat currencyFormat) {
+    List<CierreDatafono> datafonos = cierreDatafonoRepository.findBySesionCajaId(sesionId);
+
+    if (datafonos.isEmpty()) {
+      return;
+    }
+
+    html.append("<div class='section'>");
+    html.append("<div class='section-title'>💳 CIERRES DATAFONOS</div>");
+    html.append("<div class='divider'></div>");
+
+    BigDecimal totalDatafonos = BigDecimal.ZERO;
+
+    for (CierreDatafono datafono : datafonos) {
+      html.append("<div class='row'>");
+      html.append("<span>").append(datafono.getDatafono()).append("</span>");
+      html.append("<span>").append(currencyFormat.format(datafono.getMonto())).append("</span>");
+      html.append("</div>");
+      totalDatafonos = totalDatafonos.add(datafono.getMonto());
+    }
+
+    html.append("<div class='divider'></div>");
+    html.append("<div class='row total-row'>");
+    html.append("<span>TOTAL TARJETAS:</span>");
+    html.append("<span>").append(currencyFormat.format(totalDatafonos)).append("</span>");
+    html.append("</div>");
+    html.append("</div>");
+  }
+
+  private void agregarMovimientos(StringBuilder html, Long sesionId, NumberFormat currencyFormat) {
+    List<MovimientoCaja> movimientos = movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraAsc(sesionId);
+
+    if (movimientos.isEmpty()) {
+      return;
+    }
+
+    html.append("<div class='section'>");
+    html.append("<div class='section-title'>💰 MOVIMIENTOS DE CAJA</div>");
+    html.append("<div class='divider'></div>");
+
+    BigDecimal totalEntradas = BigDecimal.ZERO;
+    BigDecimal totalSalidas = BigDecimal.ZERO;
+
+    // Separar entradas y salidas
+    List<MovimientoCaja> entradas = new ArrayList<>();
+    List<MovimientoCaja> salidas = new ArrayList<>();
+
+    for (MovimientoCaja mov : movimientos) {
+      if (mov.getTipoMovimiento().name().startsWith("ENTRADA")) {
+        entradas.add(mov);
+        totalEntradas = totalEntradas.add(mov.getMonto());
+      } else if (mov.getTipoMovimiento().name().startsWith("SALIDA")) {
+        salidas.add(mov);
+        totalSalidas = totalSalidas.add(mov.getMonto());
+      }
+    }
+
+    // ENTRADAS
+    if (!entradas.isEmpty()) {
+      html.append("<div class='section-title' style='font-size: 11px;'>[ENTRADAS]</div>");
+      for (MovimientoCaja mov : entradas) {
+        html.append("<div class='detail-line'>");
+        html.append(mov.getConcepto()).append(" ");
+        html.append(currencyFormat.format(mov.getMonto()));
+        html.append("</div>");
+      }
+    }
+
+    // SALIDAS
+    if (!salidas.isEmpty()) {
+      html.append("<div class='section-title' style='font-size: 11px; margin-top: 8px;'>[SALIDAS]</div>");
+      for (MovimientoCaja mov : salidas) {
+        html.append("<div class='detail-line'>");
+        html.append(mov.getConcepto()).append(" ");
+        html.append(currencyFormat.format(mov.getMonto()));
+        html.append("</div>");
+      }
+    }
+
+    html.append("<div class='divider'></div>");
+    html.append("<div class='row'>");
+    html.append("<span>Total Entradas:</span>");
+    html.append("<span>").append(currencyFormat.format(totalEntradas)).append("</span>");
+    html.append("</div>");
+    html.append("<div class='row'>");
+    html.append("<span>Total Salidas:</span>");
+    html.append("<span>").append(currencyFormat.format(totalSalidas)).append("</span>");
+    html.append("</div>");
+    html.append("</div>");
+  }
+
+  private void agregarPlataformas(StringBuilder html, ResumenCajaDetalladoDTO resumen, NumberFormat currencyFormat) {
+    html.append("<div class='section'>");
+    html.append("<div class='section-title'>🚚 VENTAS POR PLATAFORMA</div>");
+    html.append("<div class='divider'></div>");
+
+    BigDecimal totalPlataformas = BigDecimal.ZERO;
+
+    for (ResumenCajaDetalladoDTO.VentaPlataformaDTO plat : resumen.getVentasPlataformas()) {
+      html.append("<div class='row'>");
+      html.append("<span>").append(plat.getPlataformaNombre()).append(": ").append(plat.getCantidadTransacciones()).append(" pedidos</span>");
+      html.append("<span>").append(currencyFormat.format(plat.getTotalVentas())).append("</span>");
+      html.append("</div>");
+      totalPlataformas = totalPlataformas.add(plat.getTotalVentas());
+    }
+
+    html.append("<div class='divider'></div>");
+    html.append("<div class='row total-row'>");
+    html.append("<span>TOTAL PLATAFORMAS:</span>");
+    html.append("<span>").append(currencyFormat.format(totalPlataformas)).append("</span>");
+    html.append("</div>");
+    html.append("</div>");
   }
 }

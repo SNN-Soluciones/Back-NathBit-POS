@@ -27,4 +27,6 @@ public interface MovimientoCajaRepository extends JpaRepository<MovimientoCaja, 
 
   List<MovimientoCaja> findBySesionCajaIdAndTipoMovimiento(Long sesionCajaId, TipoMovimientoCaja tipo);
 
+  List<MovimientoCaja> findBySesionCajaIdOrderByFechaHoraAsc(Long sesionId);
+
 }

@@ -29,6 +29,11 @@ public class ResumenCajaDetalladoDTO {
     private BigDecimal montoCierre;
     private BigDecimal montoEsperado;
 
+    // 🆕 NUEVOS CAMPOS PARA ANDROID
+    private BigDecimal montoRetirado;
+    private BigDecimal fondoCaja;
+    private BigDecimal totalDevoluciones;
+
     // Ventas por tipo de pago
     private BigDecimal ventasEfectivo;
     private BigDecimal ventasTarjeta;
@@ -55,6 +60,9 @@ public class ResumenCajaDetalladoDTO {
     private BigDecimal totalNotasCredito;
     private BigDecimal totalVentasInternas;
 
+    // 🆕 NUEVO: Lista de datafonos para Android
+    @Builder.Default
+    private List<DatafonoResumenDTO> datafonos = new ArrayList<>();
 
     // NUEVO: Lista detallada de documentos
     @Builder.Default
@@ -107,5 +115,15 @@ public class ResumenCajaDetalladoDTO {
         private String plataformaCodigo;
         private BigDecimal totalVentas;
         private Integer cantidadTransacciones;
+    }
+
+    // 🆕 NUEVO: DTO interno para datafonos
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DatafonoResumenDTO {
+        private String datafono;
+        private BigDecimal monto;
     }
 }

@@ -13,6 +13,7 @@ public class ProductoCompuestoDto {
     private String productoCodigoInterno;
     private String instruccionesPersonalizacion;
     private Integer tiempoPreparacionExtra;
+    private Long slotPreguntaInicialId;
     private List<ProductoCompuestoSlotDto> slots = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

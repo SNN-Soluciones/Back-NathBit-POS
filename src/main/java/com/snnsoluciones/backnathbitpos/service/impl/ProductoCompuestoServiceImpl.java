@@ -250,6 +250,10 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     dto.setProductoNombre(compuesto.getProducto().getNombre());
     dto.setProductoCodigoInterno(compuesto.getProducto().getCodigoInterno());
 
+    if (compuesto.getSlotPreguntaInicial() != null) {
+      dto.setSlotPreguntaInicialId(compuesto.getSlotPreguntaInicial().getId());
+    }
+
     // Cargar slots usando el nuevo método que soporta familias
     List<ProductoCompuestoSlot> slots = slotRepository.findByCompuestoIdOrderByOrden(
         compuesto.getId());
@@ -1394,7 +1398,6 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     return opciones;
   }
 
-  // Agregar a ProductoCompuestoServiceImpl.java
 
   @Override
   @Transactional
@@ -1418,36 +1421,62 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
             "El producto no tiene configuración de compuesto. Debe crear la configuración base primero."
         ));
 
-    // 3. Validar que opcionTrigger existe y pertenece a este compuesto
-    ProductoCompuestoOpcion opcionTrigger = opcionRepository.findById(request.getOpcionTriggerId())
-        .orElseThrow(() -> new ResourceNotFoundException("La opción trigger no existe"));
+    // ⭐ 3. DECIDIR SI ES CONFIGURACIÓN DEFAULT O CONDICIONAL
+    ProductoCompuestoOpcion opcionTrigger = null;
+    boolean esDefault = false;
 
-    // Validar que la opción pertenece a un slot de este compuesto
-    boolean opcionPerteneceAlCompuesto = compuesto.getSlots().stream()
-        .anyMatch(slot -> slot.getOpciones().stream()
-            .anyMatch(opcion -> opcion.getId().equals(request.getOpcionTriggerId()))
+    if (request.getOpcionTriggerId() != null) {
+      // ===== CONFIGURACIÓN CONDICIONAL (con trigger) =====
+
+      opcionTrigger = opcionRepository.findById(request.getOpcionTriggerId())
+          .orElseThrow(() -> new ResourceNotFoundException("La opción trigger no existe"));
+
+      // Validar que la opción pertenece a un slot de este compuesto
+      boolean opcionPerteneceAlCompuesto = compuesto.getSlots().stream()
+          .anyMatch(slot -> slot.getOpciones().stream()
+              .anyMatch(opcion -> opcion.getId().equals(request.getOpcionTriggerId()))
+          );
+
+      if (!opcionPerteneceAlCompuesto) {
+        throw new BusinessException(
+            "La opción trigger no pertenece a ningún slot de este producto compuesto"
         );
+      }
 
-    if (!opcionPerteneceAlCompuesto) {
-      throw new BusinessException(
-          "La opción trigger no pertenece a ningún slot de este producto compuesto"
-      );
+      // Validar que opcionTrigger NO esté usada por otra configuración
+      if (configuracionRepository.existsByOpcionTriggerId(request.getOpcionTriggerId())) {
+        throw new BusinessException(
+            "Ya existe una configuración para esta opción. " +
+                "Una opción solo puede activar una configuración."
+        );
+      }
+
+      log.info("Creando configuración CONDICIONAL con trigger: opcionId={}", request.getOpcionTriggerId());
+
+    } else {
+      // ===== CONFIGURACIÓN DEFAULT (sin trigger) =====
+
+      // Validar que NO exista ya una configuración default
+      Optional<ProductoCompuestoConfiguracion> configDefaultExistente =
+          configuracionRepository.findByCompuestoIdAndEsDefaultTrue(compuesto.getId());
+
+      if (configDefaultExistente.isPresent()) {
+        throw new BusinessException(
+            "Ya existe una configuración default para este producto. " +
+                "Solo puede haber una configuración default por producto."
+        );
+      }
+
+      esDefault = true;
+      log.info("Creando configuración DEFAULT (sin trigger)");
     }
 
-    // 4. Validar que opcionTrigger NO esté usada por otra configuración
-    if (configuracionRepository.existsByOpcionTriggerId(request.getOpcionTriggerId())) {
-      throw new BusinessException(
-          "Ya existe una configuración para esta opción. " +
-              "Una opción solo puede activar una configuración."
-      );
-    }
-
-    // 5. Validar que tenga al menos 1 slot
+    // 4. Validar que tenga al menos 1 slot
     if (request.getSlots() == null || request.getSlots().isEmpty()) {
       throw new BusinessException("Debe incluir al menos un slot en la configuración");
     }
 
-    // 6. Validar que todos los slots pertenecen al compuesto
+    // 5. Validar que todos los slots pertenecen al compuesto
     for (CrearConfiguracionRequest.SlotConfigRequest slotReq : request.getSlots()) {
       ProductoCompuestoSlot slot = slotRepository.findById(slotReq.getSlotId())
           .orElseThrow(() -> new ResourceNotFoundException(
@@ -1464,21 +1493,22 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
       validarOverrides(slotReq, slot);
     }
 
-    // 7. Crear la configuración
+    // 6. Crear la configuración
     ProductoCompuestoConfiguracion configuracion = ProductoCompuestoConfiguracion.builder()
         .compuesto(compuesto)
         .nombre(request.getNombre())
         .descripcion(request.getDescripcion())
-        .opcionTrigger(opcionTrigger)
+        .opcionTrigger(opcionTrigger)  // ⭐ NULL si es default
         .orden(request.getOrden() != null ? request.getOrden() : 0)
         .activa(request.getActiva() != null ? request.getActiva() : true)
+        .esDefault(esDefault)  // ⭐ TRUE si es default, FALSE si es condicional
         .build();
 
     configuracion = configuracionRepository.save(configuracion);
 
-    log.info("Configuración creada con ID: {}", configuracion.getId());
+    log.info("Configuración creada con ID: {} (esDefault: {})", configuracion.getId(), esDefault);
 
-    // 8. Crear los slots de la configuración
+    // 7. Crear los slots de la configuración
     int orden = 0;
     for (CrearConfiguracionRequest.SlotConfigRequest slotReq : request.getSlots()) {
       ProductoCompuestoSlot slot = slotRepository.findById(slotReq.getSlotId()).get();
@@ -1493,24 +1523,18 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
           .precioAdicionalOverride(slotReq.getPrecioAdicionalOverride())
           .build();
 
-      configuracion.agregarSlot(slotConfig);
       slotConfigRepository.save(slotConfig);
 
-      log.debug("Slot '{}' agregado a configuración - Overrides: {}",
-          slot.getNombre(),
-          slotReq.getCantidadMinimaOverride() != null ||
-              slotReq.getCantidadMaximaOverride() != null ||
-              slotReq.getEsRequeridoOverride() != null ||
-              slotReq.getPrecioAdicionalOverride() != null
-      );
+      log.debug("Slot '{}' agregado a configuración (orden: {})", slot.getNombre(), slotConfig.getOrden());
     }
 
     log.info("Configuración '{}' creada exitosamente con {} slots",
         configuracion.getNombre(),
-        configuracion.getSlots().size());
+        request.getSlots().size());
 
-    // 9. Convertir a DTO y retornar
-    return convertirConfiguracionADto(configuracion, producto.getSucursal().getId());
+    // 8. Convertir a DTO y retornar
+    Long sucursalId = producto.getSucursal() != null ? producto.getSucursal().getId() : 0L;
+    return convertirConfiguracionADto(configuracion, sucursalId);
   }
 
   /**
@@ -1754,9 +1778,9 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
 
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, propagation = Propagation.NOT_SUPPORTED)
   public List<ProductoCompuestoConfiguracionDTO> obtenerConfiguraciones(Long productoId) {
-    log.info("Obteniendo todas las configuraciones del producto {}", productoId);
+    log.info("Listando configuraciones para producto {}", productoId);
 
     // 1. Validar que el producto existe y es COMPUESTO
     Producto producto = productoRepository.findById(productoId)
@@ -1778,14 +1802,24 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
 
     log.info("Se encontraron {} configuraciones", configuraciones.size());
 
-    // 4. Convertir a DTOs
-    Long sucursalId = producto.getSucursal() != null ? producto.getSucursal().getId() : null;
+    // 4. Convertir a DTOs CON MANEJO DE ERRORES (NO usar stream)
+    Long sucursalId = producto.getSucursal() != null ? producto.getSucursal().getId() : 0L;
 
-    List<ProductoCompuestoConfiguracionDTO> dtos = configuraciones.stream()
-        .map(config -> convertirConfiguracionADto(config, sucursalId))
-        .collect(Collectors.toList());
+    List<ProductoCompuestoConfiguracionDTO> dtos = new ArrayList<>();
 
-    log.debug("Configuraciones convertidas a DTOs exitosamente");
+    for (ProductoCompuestoConfiguracion config : configuraciones) {
+      try {
+        ProductoCompuestoConfiguracionDTO dto = convertirConfiguracionADto(config, sucursalId);
+        dtos.add(dto);
+        log.debug("Configuración {} convertida exitosamente", config.getId());
+      } catch (Exception e) {
+        log.error("Error convirtiendo configuración {} a DTO: {}",
+            config.getId(), e.getMessage(), e);
+        // NO lanzar excepción, solo logear y continuar
+      }
+    }
+
+    log.info("Configuraciones convertidas: {}/{}", dtos.size(), configuraciones.size());
 
     return dtos;
   }

@@ -9,12 +9,14 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.service.ProductoCompuestoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,30 +41,22 @@ public class ProductoCompuestoConfiguracionController {
     @GetMapping("/{productoId}/configuraciones")
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
     @Operation(summary = "Listar configuraciones",
-            description = "Obtiene todas las configuraciones condicionales de un producto compuesto")
+        description = "Obtiene todas las configuraciones condicionales de un producto compuesto")
     public ResponseEntity<ApiResponse<List<ProductoCompuestoConfiguracionDTO>>> obtenerConfiguraciones(
-            @PathVariable Long productoId) {
+        @PathVariable Long productoId) {
 
         log.info("Obteniendo configuraciones del producto: {}", productoId);
 
-        try {
-            List<ProductoCompuestoConfiguracionDTO> configuraciones =
-                    compuestoService.obtenerConfiguraciones(productoId);
+        // ⭐ SIMPLE: Sin try-catch, sin @Transactional
+        List<ProductoCompuestoConfiguracionDTO> configuraciones =
+            compuestoService.obtenerConfiguraciones(productoId);
 
-            return ResponseEntity.ok(
-                    ApiResponse.ok(
-                            "Configuraciones obtenidas: " + configuraciones.size(),
-                            configuraciones
-                    )
-            );
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Error obteniendo configuraciones: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Error al obtener configuraciones: " + e.getMessage()));
-        }
+        return ResponseEntity.ok(
+            ApiResponse.ok(
+                "Configuraciones obtenidas: " + configuraciones.size(),
+                configuraciones
+            )
+        );
     }
 
     /**

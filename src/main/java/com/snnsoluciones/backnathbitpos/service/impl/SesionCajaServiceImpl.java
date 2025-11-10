@@ -437,7 +437,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
   @Override
   public ResumenCajaDetalladoDTO obtenerResumenDetallado(Long sesionId) {
-    log.info("Obteniendo resumen detallado de sesión: {}", sesionId);
+    log.info("🎯 INICIANDO - Obteniendo resumen detallado de sesión: {}", sesionId);
 
     SesionCaja sesion = sesionCajaRepository.findById(sesionId)
         .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
@@ -459,6 +459,10 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     resumen.setFechaApertura(sesion.getFechaHoraApertura());
     resumen.setFechaCierre(sesion.getFechaHoraCierre());
 
+    // 🆕 NUEVO: Cargar campos para Android
+    resumen.setMontoRetirado(sesion.getMontoRetirado() != null ? sesion.getMontoRetirado() : BigDecimal.ZERO);
+    resumen.setFondoCaja(sesion.getFondoCaja() != null ? sesion.getFondoCaja() : BigDecimal.ZERO);
+
     // Montos básicos
     resumen.setMontoInicial(sesion.getMontoInicial());
 
@@ -479,6 +483,9 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     BigDecimal totalFacturas = BigDecimal.ZERO;
     BigDecimal totalTiquetes = BigDecimal.ZERO;
     BigDecimal totalNC = BigDecimal.ZERO;
+
+    // 🆕 NUEVO: Inicializar totalDevoluciones (notas de crédito)
+    BigDecimal totalDevoluciones = BigDecimal.ZERO;
 
     // Totales por tipo de pago
     BigDecimal totalEfectivo = BigDecimal.ZERO;
@@ -508,7 +515,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
               (f.getCliente() != null ? f.getCliente().getRazonSocial() : "Cliente General"))
           .total(f.getTotalComprobante())
           .estado(f.getEstado().toString())
-          .fechaEmision(f.getFechaEmision()) // Usar fecha real de la factura
+          .fechaEmision(f.getFechaEmision())
           .metodoPago(obtenerMetodosPago(f))
           .build();
 
@@ -527,41 +534,55 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         case NOTA_CREDITO:
           cantNC++;
           totalNC = totalNC.add(f.getTotalComprobante());
+          // 🆕 NUEVO: Sumar a totalDevoluciones
+          totalDevoluciones = totalDevoluciones.add(f.getTotalComprobante());
           break;
       }
 
       if (f.getMediosPago() != null) {
-        for (FacturaMedioPago medioPago : f.getMediosPago()) {
-          switch (medioPago.getMedioPago()) {
-            case EFECTIVO:
-              totalEfectivo = totalEfectivo.add(medioPago.getMonto());
+
+        for (FacturaMedioPago mp : f.getMediosPago()) {
+          // Usar método estandarizado para determinar el tipo de pago
+          String metodoPago = obtenerMetodoPagoEstandar(mp.getMedioPago().name());
+          String metodoOriginal = mp.getMedioPago().name();
+
+          switch (metodoPago) {
+            case "E":
+              totalEfectivo = totalEfectivo.add(mp.getMonto());
               break;
-            case TARJETA:
-              totalTarjeta = totalTarjeta.add(medioPago.getMonto());
+            case "TC":
+              totalTarjeta = totalTarjeta.add(mp.getMonto());
               break;
-            case SINPE_MOVIL:
-              totalSinpe = totalSinpe.add(medioPago.getMonto());
+            case "S":
+              totalSinpe = totalSinpe.add(mp.getMonto());
               break;
-            case TRANSFERENCIA:
-              totalTransferencia = totalTransferencia.add(medioPago.getMonto());
+            case "TB":
+              totalTransferencia = totalTransferencia.add(mp.getMonto());
+              break;
+            case "PLATAFORMA":
+              break;
+            default:
               break;
           }
 
-          if (medioPago.getPlataformaDigital() != null) {
-            Long plataformaId = medioPago.getPlataformaDigital().getId();
+          if (mp.getPlataformaDigital() != null) {
+            Long plataformaId = mp.getPlataformaDigital().getId();
             BigDecimal[] datos = ventasPorPlataforma.getOrDefault(
                 plataformaId,
                 new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO}
             );
-            datos[0] = datos[0].add(medioPago.getMonto());
+            datos[0] = datos[0].add(mp.getMonto());
             datos[1] = datos[1].add(BigDecimal.ONE);
             ventasPorPlataforma.put(plataformaId, datos);
+
           }
         }
+      } else {
+        log.info("    ❌ Sin medios de pago");
       }
     }
 
-    // NUEVO: PROCESAR FACTURAS INTERNAS
+    // PROCESAR FACTURAS INTERNAS
     List<FacturaInterna> facturasInternas = facturaInternaRepository.findBySesionCajaId(sesionId);
 
     for (FacturaInterna fi : facturasInternas) {
@@ -570,7 +591,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         continue;
       }
 
-      // Obtener métodos de pago para mostrar
+      // Obtener métodos de pago para mostrar (ya estandarizados)
       String metodosPago = obtenerMetodosPagoInterna(fi);
 
       // Agregar al listado de documentos
@@ -587,19 +608,27 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
       documentos.add(doc);
 
-      // Sumar por tipo de pago
+      // Sumar por tipo de pago usando método estandarizado
       if (fi.getMediosPago() != null && !fi.getMediosPago().isEmpty()) {
-        for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
-          String tipo = mp.getTipo();
 
-          if ("EFECTIVO".equals(tipo)) {
-            totalEfectivo = totalEfectivo.add(mp.getMonto());
-          } else if ("TARJETA".equals(tipo)) {
-            totalTarjeta = totalTarjeta.add(mp.getMonto());
-          } else if ("TRANSFERENCIA".equals(tipo)) {
-            totalTransferencia = totalTransferencia.add(mp.getMonto());
-          } else if ("SINPE".equals(tipo) || "SINPE_MOVIL".equals(tipo)) {
-            totalSinpe = totalSinpe.add(mp.getMonto());
+        for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
+          String metodoPago = obtenerMetodoPagoEstandar(mp.getTipo());
+
+          switch (metodoPago) {
+            case "E":
+              totalEfectivo = totalEfectivo.add(mp.getMonto());
+              break;
+            case "TC":
+              totalTarjeta = totalTarjeta.add(mp.getMonto());
+              break;
+            case "S":
+              totalSinpe = totalSinpe.add(mp.getMonto());
+              break;
+            case "TB":
+              totalTransferencia = totalTransferencia.add(mp.getMonto());
+              break;
+            default:
+              break;
           }
 
           if (mp.getPlataformaDigital() != null) {
@@ -613,12 +642,32 @@ public class SesionCajaServiceImpl implements SesionCajaService {
             ventasPorPlataforma.put(plataformaId, datos);
           }
         }
+      } else {
+        log.info("    ❌ Sin medios de pago internos");
       }
+
       cantVentasInternas++;
       totalVentasInternas = totalVentasInternas.add(fi.getTotal());
     }
 
+    log.info("✅ FACTURAS INTERNAS PROCESADAS - Efectivo: {}, Tarjeta: {}, Sinpe: {}, Transferencia: {}, Total Internas: {}",
+        totalEfectivo, totalTarjeta, totalSinpe, totalTransferencia, totalVentasInternas);
+
+    // 🆕 NUEVO: Cargar datafonos para Android
+    List<CierreDatafono> datafonosEntities = cierreDatafonoRepository.findBySesionCajaId(sesionId);
+    List<ResumenCajaDetalladoDTO.DatafonoResumenDTO> datafonos = datafonosEntities.stream()
+        .map(df -> ResumenCajaDetalladoDTO.DatafonoResumenDTO.builder()
+            .datafono(df.getDatafono())
+            .monto(df.getMonto())
+            .build())
+        .collect(Collectors.toList());
+
+    resumen.setDatafonos(datafonos);
+    log.info("💳 DATAFONOS CARGADOS: {} datafonos encontrados", datafonos.size());
+
+    // PROCESAR PLATAFORMAS
     List<ResumenCajaDetalladoDTO.VentaPlataformaDTO> ventasPlataformas = new ArrayList<>();
+
     for (Map.Entry<Long, BigDecimal[]> entry : ventasPorPlataforma.entrySet()) {
       Long plataformaId = entry.getKey();
       BigDecimal[] datos = entry.getValue();
@@ -633,18 +682,25 @@ public class SesionCajaServiceImpl implements SesionCajaService {
                 .cantidadTransacciones(datos[1].intValue())
                 .build();
         ventasPlataformas.add(ventaPlataforma);
+
       });
+    }
+
+    BigDecimal totalPlataformas = BigDecimal.ZERO;
+    for (ResumenCajaDetalladoDTO.VentaPlataformaDTO plataforma : ventasPlataformas) {
+      totalPlataformas = totalPlataformas.add(plataforma.getTotalVentas());
     }
 
     // Asignar totales por tipo de pago
     resumen.setVentasEfectivo(totalEfectivo);
     resumen.setVentasTarjeta(totalTarjeta);
     resumen.setVentasTransferencia(totalTransferencia);
-    resumen.setVentasOtros(totalSinpe);
+    resumen.setVentasOtros(totalSinpe); // SINPE va en VentasOtros
     ventasPlataformas.sort((a, b) -> b.getTotalVentas().compareTo(a.getTotalVentas()));
-
-// Luego donde asignas los valores al resumen:
     resumen.setVentasPlataformas(ventasPlataformas);
+
+    // 🆕 NUEVO: Asignar totalDevoluciones al resumen
+    resumen.setTotalDevoluciones(totalDevoluciones);
 
     // Establecer contadores
     resumen.setCantidadFacturas(cantFacturas);
@@ -692,6 +748,28 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
     resumen.setMontoCierre(sesion.getMontoCierre());
 
+    // 🎯 VALIDACIÓN FINAL DE TOTALES
+    BigDecimal totalFacturasCalculado = totalEfectivo
+        .add(totalTarjeta)
+        .add(totalSinpe)
+        .add(totalTransferencia)
+        .add(totalPlataformas);
+
+    BigDecimal totalDocumentosCalculado = totalFacturas
+        .add(totalTiquetes)
+        .add(totalNC)
+        .add(totalVentasInternas);
+
+    if (totalFacturasCalculado.compareTo(totalDocumentosCalculado) != 0) {
+      log.error("🚨 DISCREPANCIA CRÍTICA: Métodos pago ({}) vs Documentos ({}) - Diferencia: {}",
+          totalFacturasCalculado, totalDocumentosCalculado,
+          totalDocumentosCalculado.subtract(totalFacturasCalculado));
+    } else {
+      log.info("✅ TOTALES COINCIDEN PERFECTAMENTE");
+    }
+
+    log.info("🎯 FINALIZANDO - Resumen detallado generado para sesión: {}", sesionId);
+
     return resumen;
   }
 
@@ -722,6 +800,9 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         case TRANSFERENCIA:
           medios.add("TB");
           break;
+        default:
+          medios.add(mp.getMedioPago().name());
+          break;
       }
     }
 
@@ -738,14 +819,31 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     for (FacturaInternaMedioPago mp : factura.getMediosPago()) {
       String tipo = mp.getTipo().toUpperCase();
 
-      if (tipo.equals("EFECTIVO")) {
-        medios.add("E");
-      } else if (tipo.equals("TARJETA")) {
-        medios.add("TC");
-      } else if (tipo.equals("SINPE") || tipo.equals("SINPE_MOVIL")) {  // ← Acepta ambos
-        medios.add("S");
-      } else if (tipo.equals("TRANSFERENCIA")) {
-        medios.add("TB");
+      switch (tipo) {
+        case "EFECTIVO":
+        case "E":
+          medios.add("E");
+          break;
+        case "TARJETA":
+        case "TC":
+        case "TARJETA_CREDITO":
+        case "TARJETA_DEBITO":
+          medios.add("TC");
+          break;
+        case "SINPE":
+        case "SINPE_MOVIL":
+        case "S":
+          medios.add("S");
+          break;
+        case "TRANSFERENCIA":
+        case "TB":
+        case "TRANSFERENCIA_BANCARIA":
+          medios.add("TB");
+          break;
+        default:
+          // Si viene un código desconocido, mantenerlo tal cual
+          medios.add(tipo);
+          break;
       }
     }
 
@@ -1042,6 +1140,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     html.append("<div class='row'>");
     html.append("<span>+ Ventas Efectivo:</span>");
     html.append("<span>").append(currencyFormat.format(resumen.getVentasEfectivo() != null ? resumen.getVentasEfectivo() : BigDecimal.ZERO)).append("</span>");
+
     html.append("</div>");
 
 // Calcular totales de movimientos
@@ -1273,7 +1372,49 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     return String.format("₡%,d", monto.longValue());
   }
 
-  // Agregar este método en SesionCajaServiceImpl
+  private String obtenerMetodoPagoEstandar(String metodoOriginal) {
+    if (metodoOriginal == null) return "";
+
+    String metodo = metodoOriginal.toUpperCase().trim();
+
+    // Estandarización para EFECTIVO
+    if (metodo.equals("E") || metodo.contains("EFECTIVO")) return "E";
+
+    // Estandarización para TARJETA
+    if (metodo.equals("TC") || metodo.contains("TARJETA") ||
+        metodo.contains("CREDITO") || metodo.contains("DEBITO")) return "TC";
+
+    // Estandarización para SINPE
+    if (metodo.equals("S") || metodo.contains("SINPE")) return "S";
+
+    // Estandarización para TRANSFERENCIA
+    if (metodo.equals("TB") || metodo.contains("TRANSFERENCIA") ||
+        metodo.contains("BANCARIA")) return "TB";
+
+    // 🆕 Estandarización para PLATAFORMA_DIGITAL
+    if (metodo.contains("PLATAFORMA") || metodo.contains("DIGITAL") ||
+        metodo.contains("UBER") || metodo.contains("RAPPI")) {
+      return "PLATAFORMA";
+    }
+
+    return metodo; // Mantener original si no coincide
+  }
+
+  // En el método cerrarSesion, agregar validación de métodos de pago
+  private void validarMetodosPagoConsistentes(SesionCaja sesion) {
+    BigDecimal totalCalculado = sesion.getTotalEfectivo()
+        .add(sesion.getTotalTarjeta())
+        .add(sesion.getTotalTransferencia())
+        .add(sesion.getTotalOtros()); // SINPE va en TotalOtros
+
+    BigDecimal totalVentas = sesion.getTotalVentas();
+
+    if (totalCalculado.compareTo(totalVentas) != 0) {
+      log.warn("Discrepancia en totales de métodos de pago para sesión {}. " +
+              "Calculado: {}, Ventas: {}",
+          sesion.getId(), totalCalculado, totalVentas);
+    }
+  }
 
   private void actualizarTotalesDesdeFacturas(SesionCaja sesion) {
     log.info("Actualizando totales desde facturas para sesión: {}", sesion.getId());

@@ -48,7 +48,11 @@ public class OrdenService {
       mesa = mesaRepository.findById(request.mesaId())
           .orElseThrow(() -> new ResourceNotFoundException("Mesa no encontrada"));
 
-      // Validar estado solo si hay mesa
+      if (mesa.tieneOrdenActiva()) {
+        throw new BusinessException("La mesa " + mesa.getCodigo() + " ya tiene una orden activa. Use el endpoint de agregar items.");
+      }
+
+      // Validar estado solo si NO tiene orden activa
       if (mesa.getEstado() != EstadoMesa.DISPONIBLE) {
         throw new BusinessException("La mesa " + mesa.getCodigo() + " no está disponible");
       }
@@ -56,19 +60,6 @@ public class OrdenService {
 
     Sucursal sucursal = sucursalRepository.findById(request.sucursalId())
         .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
-
-    // Verificar si la mesa ya tiene orden activa
-    if(mesa != null && mesa.tieneOrdenActiva()) {
-      if (mesa.tieneOrdenActiva()) {
-        throw new BusinessException("La mesa ya tiene una orden activa");
-      }
-      // Verificar estado de la mesa
-      if (mesa.getEstado() != EstadoMesa.DISPONIBLE) {
-        throw new BusinessException("La mesa no está disponible");
-      }
-    }
-
-
 
     String numeroOrden = request.ordenNumero() != null ? request.ordenNumero() : generarNumeroOrden(request.sucursalId());
 
@@ -79,6 +70,7 @@ public class OrdenService {
     // Obtener usuario actual
     Usuario mesero = usuarioRepository.findById(usuarioId)
         .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
 
     // Crear orden
     Orden orden = Orden.builder()
@@ -145,6 +137,7 @@ public class OrdenService {
     Orden orden = ordenRepository.findById(ordenId)
         .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada"));
 
+    // ⚠️ CAMBIO: Mejorar validación de estado
     if (!orden.puedeModificarse()) {
       throw new BusinessException("La orden no puede modificarse en estado: " + orden.getEstado());
     }
@@ -193,6 +186,8 @@ public class OrdenService {
                 opcion.setEsGratuita(true);
               }
             });
+
+        item.getOpciones().add(opcion); // ⚠️ AÑADIDO: Agregar la opción al item
       }
     }
 
@@ -201,6 +196,9 @@ public class OrdenService {
 
     // Agregar a la orden
     orden.agregarItem(item);
+
+    // ⚠️ AÑADIDO: Recalcular totales de la orden
+    orden.recalcularTotales();
 
     orden = ordenRepository.save(orden);
 

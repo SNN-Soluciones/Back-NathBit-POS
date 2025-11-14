@@ -27,8 +27,8 @@ public class Orden {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
-    private String numero; // ORD-2024-00001
+    @Column(nullable = false, unique = false)
+    private String numero;
 
     @ManyToOne
     @JoinColumn(name = "mesa_id")

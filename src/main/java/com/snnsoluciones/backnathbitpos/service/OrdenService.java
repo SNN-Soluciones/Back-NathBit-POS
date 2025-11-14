@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import java.util.Collections;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -389,16 +390,49 @@ public class OrdenService {
         .collect(Collectors.toList());
   }
 
-  // Método auxiliar para generar número de orden
+  /**
+   * Genera número de orden único por sucursal y día
+   * Formato: ORD-DDMMAA-NNN
+   * Ejemplo: ORD-131125-001 (día 13/11/25, orden #1)
+   */
   private String generarNumeroOrden(Long sucursalId) {
-    String prefijo = "ORD-" + LocalDate.now().getYear() + "-";
+    LocalDate hoy = LocalDate.now();
 
-    Integer ultimoNumero = ordenRepository
-        .findMaxNumeroOrden(sucursalId, prefijo)
-        .orElse(0);
+    // Formato: DDMMAA (día-mes-año con 2 dígitos)
+    String fechaFormato = String.format("%02d%02d%02d",
+        hoy.getDayOfMonth(),
+        hoy.getMonthValue(),
+        hoy.getYear() % 100 // Últimos 2 dígitos del año (2025 -> 25)
+    );
 
-    int nuevoNumero = ultimoNumero + 1;
-    return String.format("%s%05d", prefijo, nuevoNumero);
+    // Buscar el último número del día en esta sucursal
+    String patron = "ORD-" + fechaFormato + "-%";
+
+    Optional<Orden> ultimaOrden = ordenRepository.findUltimaOrdenDelDia(sucursalId, patron);
+
+    int siguiente = 1; // Por defecto, primera orden del día
+
+    if (ultimaOrden.isPresent()) {
+      // Extraer el número secuencial del último número
+      String ultimoNumero = ultimaOrden.get().getNumero();
+      // Ejemplo: "ORD-131125-001" -> extraer "001"
+      String secuenciaStr = ultimoNumero.substring(ultimoNumero.lastIndexOf("-") + 1);
+
+      try {
+        int ultimaSecuencia = Integer.parseInt(secuenciaStr);
+        siguiente = ultimaSecuencia + 1;
+      } catch (NumberFormatException e) {
+        log.warn("Error parseando secuencia de orden: {}", ultimoNumero, e);
+        siguiente = 1;
+      }
+    }
+
+    // Generar número con formato ORD-DDMMAA-NNN
+    String numeroOrden = String.format("ORD-%s-%03d", fechaFormato, siguiente);
+
+    log.info("Número de orden generado: {} para sucursal: {}", numeroOrden, sucursalId);
+
+    return numeroOrden;
   }
 
   // Métodos de mapeo

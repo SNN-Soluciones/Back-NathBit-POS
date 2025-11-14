@@ -15,6 +15,18 @@ import java.util.Optional;
 @Repository
 public interface OrdenRepository extends JpaRepository<Orden, Long> {
 
+    @Query("""
+    SELECT o FROM Orden o 
+    WHERE o.sucursal.id = :sucursalId 
+    AND o.numero LIKE :patron 
+    ORDER BY o.id DESC 
+    LIMIT 1
+    """)
+    Optional<Orden> findUltimaOrdenDelDia(
+        @Param("sucursalId") Long sucursalId,
+        @Param("patron") String patron
+    );
+
     // Orden activa principal de una mesa (no split)
     @Query("SELECT o FROM Orden o WHERE o.mesa.id = :mesaId AND o.estado NOT IN ('PAGADA', 'ANULADA') AND o.esSplit = false")
     Optional<Orden> findOrdenActivaPrincipalByMesaId(@Param("mesaId") Long mesaId);

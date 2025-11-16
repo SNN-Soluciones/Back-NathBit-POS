@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.ModoFacturacion;
 import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
+import com.snnsoluciones.backnathbitpos.enums.ZonaPreparacion;
 import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.RegimenTributario;
@@ -273,6 +274,17 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         impuestoExento.setCodigoTarifaIVA(CodigoTarifaIVA.TARIFA_EXENTA);
         impuestoExento.setPorcentaje(BigDecimal.ZERO);
         impuestoExento.setActivo(true);
+
+        if (dto.getZonaPreparacion() != null) {
+          try {
+            producto.setZonaPreparacion(ZonaPreparacion.valueOf(dto.getZonaPreparacion()));
+          } catch (IllegalArgumentException e) {
+            throw new BusinessException("Zona de preparación inválida: " + dto.getZonaPreparacion());
+          }
+        } else {
+          producto.setZonaPreparacion(ZonaPreparacion.NINGUNA);
+        }
+
         producto.setImpuestos(Set.of(impuestoExento));
 
         producto.setUnidadMedida(UnidadMedida.SERVICIOS_PROFESIONALES);

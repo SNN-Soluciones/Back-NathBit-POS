@@ -88,4 +88,6 @@ public class ProductoCreateDto {
     private List<ProductoImpuestoCreateDto> impuestos;
     private BigDecimal factorConversionReceta;
 
+    private String zonaPreparacion;
+
 }

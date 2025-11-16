@@ -74,4 +74,6 @@ public class ProductoUpdateDto {
     private TipoInventario tipoInventario;
 
     private BigDecimal factorConversionReceta;
+
+    private String zonaPreparacion;
 }

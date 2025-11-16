@@ -15,6 +15,7 @@ import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.CategoriaProductoService;
+import com.snnsoluciones.backnathbitpos.service.ImageProcessingService;
 import com.snnsoluciones.backnathbitpos.service.ProductoImagenService;
 import com.snnsoluciones.backnathbitpos.service.ProductoInventarioService;
 import com.snnsoluciones.backnathbitpos.service.ProductoServiceV2;
@@ -58,6 +59,7 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
   private final FacturaDetalleRepository facturaDetalleRepository;
   private final CategoriaProductoService categoriaService;
   private final FamiliaProductoRepository familiaProductoRepository;
+  private final ImageProcessingService imageProcessingService;
 
   // ========== CRUD CON IMÁGENES ==========
 
@@ -68,6 +70,11 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         dto.getTipo(), empresaId, dto.getSucursalId());
 
     Sucursal sucursal = null;
+    String imagenUrl = null;
+    String imagenKey = null;
+    String thumbnailUrl = null;
+    String thumbnailKey = null;
+
     try {
       // 1. VALIDACIONES DE ENTRADA
       if (empresaId == null) {
@@ -84,7 +91,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
             .orElseThrow(() -> new ResourceNotFoundException(
                 "Sucursal no encontrada: " + dto.getSucursalId()));
 
-        // Validar que la sucursal pertenezca a la empresa
         if (!sucursal.getEmpresa().getId().equals(empresaId)) {
           throw new BusinessException("La sucursal no pertenece a la empresa especificada");
         }
@@ -98,7 +104,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
           empresa.getRegimenTributario() == RegimenTributario.REGIMEN_SIMPLIFICADO;
       boolean esFacturacionElectronica = empresa.getRequiereHacienda();
 
-      // Para sucursal específica, usar su configuración
       if (sucursal != null && sucursal.getModoFacturacion() == ModoFacturacion.SOLO_INTERNO) {
         esFacturacionElectronica = false;
       }
@@ -107,10 +112,63 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       validarCodigosUnicos(empresaId, dto.getSucursalId(), dto.getCodigoInterno(),
           dto.getCodigoBarras());
 
+      // ============================================================
+      // ✅ SUBIR IMAGEN ANTES DE CREAR EL PRODUCTO
+      // ============================================================
+      if (imagen != null && !imagen.isEmpty()) {
+        try {
+          log.info("📸 Subiendo imagen ANTES de crear el producto...");
+
+          productoImagenService.validarImagen(imagen);
+
+          String codigoInterno = dto.getCodigoInterno() != null ?
+              dto.getCodigoInterno() : generarCodigoInterno(empresaId, dto.getSucursalId());
+
+          String nombreComercial = sucursal != null ?
+              sucursal.getNombre() :
+              (empresa.getNombreComercial() != null ?
+                  empresa.getNombreComercial() :
+                  empresa.getNombreRazonSocial());
+
+          String nombreComercialLimpio = limpiarNombreParaRuta(nombreComercial);
+          String nombreOriginal = imagen.getOriginalFilename();
+          String extension = obtenerExtension(nombreOriginal);
+
+          String carpeta = String.format("NathBit-POS/%s/productos", nombreComercialLimpio);
+          String nombreArchivoOriginal = codigoInterno;
+          String nombreArchivoThumbnail = codigoInterno + "_thumb";
+
+          // Subir imagen original
+          imagenUrl = storageService.subirArchivo(imagen, carpeta, nombreArchivoOriginal, false);
+          imagenKey = carpeta + "/" + nombreArchivoOriginal + extension;
+
+          log.info("✅ Imagen original subida: {}", imagenUrl);
+
+          // Generar y subir thumbnail
+          try {
+            byte[] thumbnailBytes = imageProcessingService.generarThumbnail(imagen);
+            thumbnailKey = carpeta + "/" + nombreArchivoThumbnail + ".jpg";
+            thumbnailUrl = storageService.subirArchivo(
+                thumbnailBytes,
+                thumbnailKey,
+                "image/jpeg",
+                false
+            );
+            log.info("✅ Thumbnail subido: {}", thumbnailUrl);
+          } catch (Exception e) {
+            log.warn("⚠️ No se pudo generar thumbnail: {}", e.getMessage());
+          }
+
+        } catch (Exception e) {
+          log.error("❌ Error subiendo imagen: {}", e.getMessage(), e);
+          throw new BusinessException("Error al subir la imagen: " + e.getMessage());
+        }
+      }
+
       // 6. CREAR PRODUCTO
       Producto producto = new Producto();
       producto.setEmpresa(empresa);
-      producto.setSucursal(sucursal); // Puede ser null para productos globales
+      producto.setSucursal(sucursal);
       producto.setCodigoInterno(dto.getCodigoInterno() != null ?
           dto.getCodigoInterno() : generarCodigoInterno(empresaId, dto.getSucursalId()));
       producto.setCodigoBarras(dto.getCodigoBarras());
@@ -121,24 +179,30 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       producto.setCreatedAt(LocalDateTime.now());
       producto.setUpdatedAt(LocalDateTime.now());
 
+      // ✅ ASIGNAR URLs DE IMAGEN SI SE SUBIERON
+      if (imagenUrl != null) {
+        producto.setImagenUrl(imagenUrl);
+        producto.setImagenKey(imagenKey);
+        producto.setThumbnailUrl(thumbnailUrl);
+        producto.setThumbnailKey(thumbnailKey);
+        log.info("📸 URLs de imagen asignadas");
+      }
+
+      // 7. ASIGNAR CATEGORÍAS
       Set<CategoriaProducto> categorias = new HashSet<>();
       if (dto.getCategoriaIds() != null && !dto.getCategoriaIds().isEmpty()) {
         for (Long categoriaId : dto.getCategoriaIds()) {
           CategoriaProducto categoria = categoriaService.buscarPorId(categoriaId)
-              .orElseThrow(
-                  () -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
+              .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
 
-          // Validar que pertenezca a la misma empresa
           if (!categoria.getEmpresa().getId().equals(empresa.getId())) {
-            throw new BusinessException(
-                "La categoría " + categoriaId + " no pertenece a la misma empresa");
+            throw new BusinessException("La categoría " + categoriaId + " no pertenece a la misma empresa");
           }
 
           if (!categoria.getActivo()) {
             throw new BusinessException("La categoría " + categoria.getNombre() + " está inactiva");
           }
 
-          // Validar alcance si aplica
           if (sucursal != null && categoria.getSucursal() != null &&
               !categoria.getSucursal().getId().equals(sucursal.getId())) {
             throw new BusinessException("La categoría " + categoria.getNombre() +
@@ -155,46 +219,49 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         producto.setFamilia(familia);
       }
 
-      // Asignar categorías antes de guardar
       producto.setCategorias(categorias);
 
-      // 7. CONFIGURAR SEGÚN RÉGIMEN TRIBUTARIO
-      if (esRegimenSimplificado || !esFacturacionElectronica) {
-        log.info("Aplicando configuración para régimen simplificado o sin factura electrónica");
+      // 8. CONFIGURAR TRIBUTACIÓN SEGÚN RÉGIMEN
+      boolean esSimplificadoSinFactura = esRegimenSimplificado && !esFacturacionElectronica;
 
-        // Buscar o crear CABYS genérico
-        Sucursal finalSucursal = sucursal;
+      if (esSimplificadoSinFactura) {
+        log.info("Aplicando configuración simplificada sin factura electrónica");
+
+        // ✅ CORREGIDO: Buscar CABYS genérico según alcance
         EmpresaCAByS cabysSinMesa;
-        if (sucursal == null) {
-          cabysSinMesa = empresaCAbySRepository
-              .findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(empresaId, "6332000000000")
-              .orElse(null);
-        } else {
+
+        if (sucursal != null) {
+          // Buscar por sucursal
           cabysSinMesa = empresaCAbySRepository
               .findBySucursalIdAndCodigoCabysCodigoAndActivoTrue(sucursal.getId(), "6332000000000")
               .orElse(null);
+        } else {
+          // Buscar por empresa
+          cabysSinMesa = empresaCAbySRepository
+              .findByEmpresaIdAndCodigoCabysCodigoAndActivoTrue(empresaId, "6332000000000")
+              .orElse(null);
         }
 
-// 2. Si no existe, crearlo
+        // Si no existe, crearlo
         if (cabysSinMesa == null) {
           CodigoCAByS codigoGenerico = codigoCAbySRepository.findByCodigo("6332000000000")
-              .orElseThrow(
-                  () -> new BusinessException("CABYS genérico no configurado en el sistema"));
+              .orElseThrow(() -> new BusinessException("CABYS genérico no configurado en el sistema"));
 
           cabysSinMesa = EmpresaCAByS.builder()
               .empresa(empresa)
-              .sucursal(finalSucursal)
+              .sucursal(sucursal)  // Puede ser null para productos globales
               .codigoCabys(codigoGenerico)
               .activo(true)
               .createdAt(LocalDateTime.now())
               .build();
 
           cabysSinMesa = empresaCAbySRepository.save(cabysSinMesa);
+          log.info("CABYS genérico creado para {}", sucursal != null ? "sucursal" : "empresa");
         }
 
         producto.setEmpresaCabys(cabysSinMesa);
 
-        // Crear IVA 0% exonerado
+        // Crear IVA exento
         ProductoImpuesto impuestoExento = new ProductoImpuesto();
         impuestoExento.setProducto(producto);
         impuestoExento.setTipoImpuesto(TipoImpuesto.IVA);
@@ -203,13 +270,11 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         impuestoExento.setActivo(true);
         producto.setImpuestos(Set.of(impuestoExento));
 
-        // Unidad por defecto
         producto.setUnidadMedida(UnidadMedida.SERVICIOS_PROFESIONALES);
 
-      } else {
+      }  else {
         log.info("Aplicando configuración para régimen tradicional con factura electrónica");
 
-        // VALIDAR CAMPOS REQUERIDOS
         if (dto.getEmpresaCabysId() == null) {
           throw new BusinessException("Régimen tradicional requiere código CABYS");
         }
@@ -218,12 +283,10 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
           throw new BusinessException("Régimen tradicional requiere configuración de impuestos");
         }
 
-        // Asignar CABYS
         EmpresaCAByS empresaCabys = empresaCAbySRepository.findById(dto.getEmpresaCabysId())
             .orElseThrow(() -> new BusinessException("CABYS no autorizado para esta empresa"));
         producto.setEmpresaCabys(empresaCabys);
 
-        // Configurar impuestos
         Set<ProductoImpuesto> impuestos = new HashSet<>();
         for (ProductoImpuestoCreateDto impDto : dto.getImpuestos()) {
           ProductoImpuesto impuesto = new ProductoImpuesto();
@@ -236,105 +299,54 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         }
         producto.setImpuestos(impuestos);
 
-        // Unidad de medida del DTO
         producto.setUnidadMedida(dto.getUnidadMedida());
       }
 
-      // 8. CONFIGURAR PRECIOS
+      // ✅ 9. CONFIGURAR PRECIOS (¡ESTO FALTABA!)
       producto.setPrecioVenta(dto.getPrecioVenta());
-      producto.setPrecioCompra(
-          dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
+      producto.setPrecioCompra(dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
       producto.setMoneda(dto.getMoneda() != null ? dto.getMoneda() : Moneda.CRC);
+      producto.setPrecioBase(dto.getPrecioVenta()); // También el precio base
 
-      // 9. CONFIGURAR INVENTARIO SEGÚN EMPRESA/SUCURSAL
+      // 10. CONFIGURAR INVENTARIO
       boolean manejaInventario = false;
       if (sucursal != null && sucursal.getManejaInventario() != null) {
         manejaInventario = sucursal.getManejaInventario();
       }
-
       producto.setRequiereInventario(manejaInventario);
 
-      if (sucursal != null && sucursal.getManejaInventario() != null) {
-        manejaInventario = sucursal.getManejaInventario();
-      }
-
-      producto.setRequiereInventario(manejaInventario);
-
-      // 10. CONFIGURAR SEGÚN TIPO DE PRODUCTO
+      // 11. CONFIGURAR SEGÚN TIPO DE PRODUCTO
       configurarSegunTipo(producto, dto);
 
-      // Validaciones específicas por tipo
       if (producto.getTipo() == TipoProducto.MATERIA_PRIMA) {
-        producto.setPrecioVenta(BigDecimal.ZERO); // Forzar precio 0
-        producto.setRequiereInventario(true); // Siempre requiere inventario
+        producto.setPrecioVenta(BigDecimal.ZERO);
+        producto.setRequiereInventario(true);
       }
 
-      // 11. GUARDAR PRODUCTO
+      // 12. GUARDAR PRODUCTO
       producto = productoRepository.save(producto);
-      log.info("Producto creado con ID: {} - Alcance: {}",
-          producto.getId(),
-          sucursal != null ? "Sucursal " + sucursal.getNombre() : "Global empresa");
 
-      // 12. MANEJAR IMAGEN SI EXISTE
-      if (imagen != null && !imagen.isEmpty()) {
+      log.info("✅ Producto creado con ID: {}", producto.getId());
+
+      return convertirADto(producto);
+
+    } catch (Exception e) {
+      log.error("❌ Error creando producto: {}", e.getMessage(), e);
+
+      // ROLLBACK: Eliminar imagen de S3 si se subió
+      if (imagenKey != null) {
         try {
-          validarImagen(imagen);
-
-          String urlImagen = productoImagenService.subirImagen(
-              empresaId,
-              empresa.getNombreComercial() != null ? empresa.getNombreComercial()
-                  : empresa.getNombreRazonSocial(),
-              producto.getCodigoInterno(),
-              imagen
-          );
-
-          // Construir key para S3
-          String carpeta = sucursal != null ?
-              limpiarNombreParaRuta(sucursal.getNombre()) :
-              limpiarNombreParaRuta(empresa.getNombreComercial());
-          String extension = obtenerExtension(imagen.getOriginalFilename());
-          String imagenKey = String.format("NathBit-POS/%s/productos/%s%s",
-              carpeta, producto.getCodigoInterno(), extension);
-
-          producto.setImagenUrl(urlImagen);
-          producto.setImagenKey(imagenKey);
-          producto = productoRepository.save(producto);
-
-        } catch (Exception e) {
-          log.error("Error al subir imagen, continuando sin imagen: {}", e.getMessage());
-          // No fallar la creación por la imagen
+          log.warn("⚠️ Rollback: eliminando imagen de S3");
+          storageService.eliminarArchivo(imagenKey);
+          if (thumbnailKey != null) {
+            storageService.eliminarArchivo(thumbnailKey);
+          }
+        } catch (Exception cleanupError) {
+          log.error("❌ Error en rollback de imagen: {}", cleanupError.getMessage());
         }
       }
 
-      // 13. CREAR INVENTARIO INICIAL SI ES MATERIA PRIMA Y ES LOCAL
-      if (producto.getTipo() == TipoProducto.MATERIA_PRIMA &&
-          producto.getRequiereInventario() &&
-          sucursal != null) {
-
-        ProductoInventario inventario = ProductoInventario.builder()
-            .producto(producto)
-            .sucursal(sucursal)
-            .cantidadActual(BigDecimal.ZERO)
-            .cantidadMinima(BigDecimal.ZERO)
-            // cantidadMaxima NO existe en ProductoInventario
-            .estado(true)
-            .ultimaActualizacion(LocalDateTime.now())
-            .build();
-
-        inventarioRepository.save(inventario);
-        log.info("Inventario inicial creado para materia prima en sucursal: {}",
-            sucursal.getNombre());
-      }
-
-      // 14. CONVERTIR Y RETORNAR
-      return convertirADto(producto);
-
-    } catch (BusinessException | ResourceNotFoundException e) {
-      log.error("Error de negocio creando producto: {}", e.getMessage());
       throw e;
-    } catch (Exception e) {
-      log.error("Error inesperado creando producto", e);
-      throw new BusinessException("Error al crear producto: " + e.getMessage());
     }
   }
 

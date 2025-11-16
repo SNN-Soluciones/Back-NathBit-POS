@@ -600,7 +600,7 @@ public class OrdenService {
           .filter(imp -> "01".equals(imp.getTipoImpuesto().name())) // IVA
           .map(imp -> imp.getPorcentaje() != null ? imp.getPorcentaje() : BigDecimal.ONE)
           .findFirst()
-          .orElse(BigDecimal.ONE);
+          .orElse(BigDecimal.ZERO);
     }
 
     // Si no tiene impuestos, devolver ZERO

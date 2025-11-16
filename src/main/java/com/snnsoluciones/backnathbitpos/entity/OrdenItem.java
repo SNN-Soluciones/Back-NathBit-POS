@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
+import java.math.RoundingMode;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -111,25 +112,39 @@ public class OrdenItem {
 
         // Calcular descuento
         if (porcentajeDescuento != null && porcentajeDescuento.compareTo(BigDecimal.ZERO) > 0) {
-            this.totalDescuento = subtotal.multiply(porcentajeDescuento).divide(new BigDecimal("100"));
+            this.totalDescuento = subtotal
+                .multiply(porcentajeDescuento)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         } else if (montoDescuento != null && montoDescuento.compareTo(BigDecimal.ZERO) > 0) {
             this.totalDescuento = montoDescuento.multiply(cantidad);
         } else {
             this.totalDescuento = BigDecimal.ZERO;
         }
 
-        // Subtotal después de descuento
-        BigDecimal subtotalConDescuento = subtotal.subtract(totalDescuento);
+        // Base imponible = subtotal - descuentos
+        BigDecimal baseImponible = subtotal.subtract(totalDescuento);
 
-        // Calcular impuesto sobre el monto con descuento
+        // Calcular IVA sobre la base imponible
+        BigDecimal montoIVA = BigDecimal.ZERO;
         if (tarifaImpuesto != null && tarifaImpuesto.compareTo(BigDecimal.ZERO) > 0) {
-            this.totalImpuesto = subtotalConDescuento.multiply(tarifaImpuesto).divide(new BigDecimal("100"));
-        } else {
-            this.totalImpuesto = BigDecimal.ZERO;
+            montoIVA = baseImponible
+                .multiply(tarifaImpuesto)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         }
 
-        // Total final
-        this.total = subtotalConDescuento.add(totalImpuesto);
+        // 🎯 Calcular impuesto de SERVICIO (10%) SOLO si el producto es servicio
+        BigDecimal montoServicio = BigDecimal.ZERO;
+        if (producto != null && Boolean.TRUE.equals(producto.getEsServicio())) {
+            montoServicio = baseImponible
+                .multiply(new BigDecimal("10"))
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        }
+
+        // Total de impuestos = IVA + Servicio (si aplica)
+        this.totalImpuesto = montoIVA.add(montoServicio);
+
+        // Total final = Base imponible + Impuestos
+        this.total = baseImponible.add(this.totalImpuesto);
     }
 
     public void agregarOpcion(OrdenItemOpcion opcion) {

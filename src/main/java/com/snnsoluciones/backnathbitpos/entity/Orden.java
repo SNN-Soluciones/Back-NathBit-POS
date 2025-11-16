@@ -192,6 +192,7 @@ public class Orden {
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal totalDescuento = BigDecimal.ZERO;
         BigDecimal totalImpuesto = BigDecimal.ZERO;
+        BigDecimal totalServicio = BigDecimal.ZERO;
 
         // Calcular desde los items
         for (OrdenItem item : this.items) {
@@ -201,29 +202,28 @@ public class Orden {
             subtotal = subtotal.add(item.getSubtotal());
             totalDescuento = totalDescuento.add(item.getTotalDescuento());
             totalImpuesto = totalImpuesto.add(item.getTotalImpuesto());
+
+            // 🎯 Calcular el servicio SOLO de items que son servicios (para el campo total_servicio)
+            if (item.getProducto() != null && Boolean.TRUE.equals(item.getProducto().getEsServicio())) {
+                BigDecimal baseImponibleItem = item.getSubtotal().subtract(item.getTotalDescuento());
+                BigDecimal servicioItem = baseImponibleItem
+                    .multiply(new BigDecimal("10"))
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                totalServicio = totalServicio.add(servicioItem);
+            }
         }
 
-        // Calcular servicio si aplica
-        BigDecimal totalServicio = BigDecimal.ZERO;
-        if (this.porcentajeServicio != null && this.porcentajeServicio.compareTo(BigDecimal.ZERO) > 0) {
-            // Servicio se calcula sobre el subtotal menos descuentos
-            BigDecimal baseServicio = subtotal.subtract(totalDescuento);
-            totalServicio = baseServicio
-                .multiply(this.porcentajeServicio)
-                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-        }
-
-        // Calcular total final
+        // Total final = subtotal - descuentos + impuestos
+        // (el servicio ya está incluido en totalImpuesto de cada item)
         BigDecimal total = subtotal
             .subtract(totalDescuento)
-            .add(totalImpuesto)
-            .add(totalServicio);
+            .add(totalImpuesto);
 
         // Asignar valores calculados
         this.subtotal = subtotal;
         this.totalDescuento = totalDescuento;
         this.totalImpuesto = totalImpuesto;
-        this.totalServicio = totalServicio;
+        this.totalServicio = totalServicio; // Solo para reporting, no afecta el total
         this.total = total;
     }
 }

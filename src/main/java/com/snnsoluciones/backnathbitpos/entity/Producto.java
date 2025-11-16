@@ -167,6 +167,10 @@ public class Producto {
   @Builder.Default
   private Set<ProductoImpuesto> impuestos = new HashSet<>();
 
+  @Column(name = "aplica_servicio", nullable = false)
+  @Builder.Default
+  private Boolean aplicaServicio = false;
+
   // Campos de auditoría
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)

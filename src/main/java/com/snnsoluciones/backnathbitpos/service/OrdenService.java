@@ -325,15 +325,22 @@ public class OrdenService {
         if (!estadoAnterior.puedePagarse()) {
           throw new BusinessException("No se puede pagar una orden en estado: " + estadoAnterior);
         }
-        orden.setFechaCierre(LocalDateTime.now());
 
-        // Liberar mesa
+        // ⭐ PRIMERO: Cambiar estado de la orden y guardar
+        orden.setEstado(EstadoOrden.PAGADA);
+        orden.setFechaCierre(LocalDateTime.now());
+        orden = ordenRepository.save(orden);
+
+        // ⭐ DESPUÉS: Liberar la mesa
         Mesa mesa = orden.getMesa();
-        if (!mesa.tieneOrdenActiva()) {
-          mesa.setEstado(EstadoMesa.DISPONIBLE);
+        if (mesa != null) {
+          mesa.actualizarEstadoSegunOrden(); // Verifica órdenes activas y actualiza estado
           mesaRepository.save(mesa);
+          log.info("✅ Mesa {} liberada después de pagar orden {}", mesa.getCodigo(), orden.getNumero());
         }
-        break;
+
+        log.info("✅ Orden {} marcada como PAGADA", orden.getNumero());
+        return mapToResponse(orden); // ⭐ Return aquí para evitar doble guardado
 
       case ANULADA:
         if (estadoAnterior.esFinal()) {

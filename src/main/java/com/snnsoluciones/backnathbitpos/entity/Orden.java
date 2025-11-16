@@ -146,23 +146,30 @@ public class Orden {
             .map(OrdenItem::getTotalDescuento)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Calcular impuestos
+        // Calcular impuestos (ya incluye servicio de cada item)
         this.totalImpuesto = items.stream()
             .map(OrdenItem::getTotalImpuesto)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Calcular servicio
-        if (porcentajeServicio != null && porcentajeServicio.compareTo(BigDecimal.ZERO) > 0) {
-            this.totalServicio = subtotal.multiply(porcentajeServicio).divide(new BigDecimal("100"));
-        } else {
-            this.totalServicio = BigDecimal.ZERO;
+        // 🎯 Calcular servicio SOLO para el campo informativo
+        // (NO se suma al total porque ya está en totalImpuesto)
+        BigDecimal totalServicio = BigDecimal.ZERO;
+        for (OrdenItem item : items) {
+            if (item.getProducto() != null && Boolean.TRUE.equals(item.getProducto().getEsServicio())) {
+                BigDecimal baseImponibleItem = item.getSubtotal().subtract(item.getTotalDescuento());
+                BigDecimal servicioItem = baseImponibleItem
+                    .multiply(new BigDecimal("10"))
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                totalServicio = totalServicio.add(servicioItem);
+            }
         }
+        this.totalServicio = totalServicio;
 
-        // Total final
+        // Total final = subtotal - descuentos + impuestos
+        // (el servicio YA está incluido en totalImpuesto)
         this.total = subtotal
             .subtract(totalDescuento)
-            .add(totalImpuesto)
-            .add(totalServicio);
+            .add(totalImpuesto);
     }
 
     public boolean esOrdenVentanilla() {

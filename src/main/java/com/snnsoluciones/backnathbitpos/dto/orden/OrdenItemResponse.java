@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.orden;
 
+import com.snnsoluciones.backnathbitpos.enums.ZonaPreparacion;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,6 +18,7 @@ public record OrdenItemResponse(
     BigDecimal totalDescuento,
     BigDecimal totalImpuesto,
     BigDecimal total,
+    ZonaPreparacion productoZonaPreparacion,
     String notas,
     Boolean enviadoCocina,
     LocalDateTime fechaEnvioCocina,

@@ -497,6 +497,7 @@ public class OrdenService {
         item.getTotalDescuento(),
         item.getTotalImpuesto(),
         item.getTotal(),
+        item.getProducto().getZonaPreparacion(),
         item.getNotas(),
         item.getEnviadoCocina(),
         item.getFechaEnvioCocina(),

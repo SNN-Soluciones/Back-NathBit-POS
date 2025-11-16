@@ -210,7 +210,7 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     producto.setUnidadMedida(dto.getUnidadMedida());
     producto.setMoneda(dto.getMoneda());
     producto.setPrecioVenta(dto.getPrecioVenta());
-    producto.setEsServicio(dto.getAplicaServicio());
+    producto.setEsServicio(dto.getEsServicio());
     producto.setActivo(dto.getActivo());
 
     // Actualizar CABYS si cambió
@@ -394,8 +394,8 @@ public class ProductoCrudServiceImpl implements ProductoCrudService {
     producto.setPrecioVenta(dto.getPrecioVenta());
 
     // Actualizar aplica servicio si viene en el DTO
-    if (dto.getAplicaServicio() != null) {
-      producto.setEsServicio(dto.getAplicaServicio());
+    if (dto.getEsServicio() != null) {
+      producto.setEsServicio(dto.getEsServicio());
     }
 
     // Actualizar impuesto IVA si viene en el DTO

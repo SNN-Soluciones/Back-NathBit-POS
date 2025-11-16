@@ -22,7 +22,7 @@ public class ActualizarPrecioDto {
     private BigDecimal precioVenta;
     
     // Opcional: por si queremos actualizar también si aplica servicio
-    private Boolean aplicaServicio;
+    private Boolean esServicio;
     
     // Opcional: por si queremos actualizar el tipo de impuesto
     private String codigoTarifaIVA;

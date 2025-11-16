@@ -224,6 +224,11 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       // 8. CONFIGURAR TRIBUTACIÓN SEGÚN RÉGIMEN
       boolean esSimplificadoSinFactura = esRegimenSimplificado && !esFacturacionElectronica;
 
+      if (sucursal != null && sucursal.getModoFacturacion() == ModoFacturacion.SOLO_INTERNO) {
+        esSimplificadoSinFactura = true;
+        log.info("Sucursal con modo SOLO_INTERNO detectado, aplicando configuración simplificada");
+      }
+
       if (esSimplificadoSinFactura) {
         log.info("Aplicando configuración simplificada sin factura electrónica");
 
@@ -307,6 +312,7 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       producto.setPrecioCompra(dto.getPrecioCompra() != null ? dto.getPrecioCompra() : BigDecimal.ZERO);
       producto.setMoneda(dto.getMoneda() != null ? dto.getMoneda() : Moneda.CRC);
       producto.setPrecioBase(dto.getPrecioVenta()); // También el precio base
+      producto.setEsServicio(dto.getEsServicio() != null ? dto.getEsServicio() : false);
 
       // 10. CONFIGURAR INVENTARIO
       boolean manejaInventario = false;
@@ -520,6 +526,10 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
       }
       if (dto.getPrecioCompra() != null) {
         producto.setPrecioCompra(dto.getPrecioCompra());
+      }
+
+      if (dto.getEsServicio() != null) {
+        producto.setEsServicio(dto.getEsServicio());
       }
 
       // 6. Actualizar configuración tributaria solo si cambió

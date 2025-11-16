@@ -53,9 +53,9 @@ public class ProductoUpdateDto {
     @DecimalMin(value = "0.00", message = "Precio debe ser mayor o igual a 0")
     @Digits(integer = 13, fraction = 5, message = "Precio formato inválido")
     private BigDecimal precioVenta;
-    
+
     @Builder.Default
-    private Boolean aplicaServicio = false;
+    private Boolean esServicio = false;
     
     @Builder.Default
     private Boolean activo = true;

@@ -591,6 +591,28 @@ public class OrdenService {
     );
   }
 
+  @Transactional
+  public OrdenResponse actualizarNumeroPersonas(Long ordenId, ActualizarNumeroPersonasRequest request) {
+    log.info("Actualizando número de personas de orden {}: {}", ordenId, request.numeroPersonas());
+
+    Orden orden = ordenRepository.findById(ordenId)
+        .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada"));
+
+    // Validar que la orden esté en estado modificable
+    if (!orden.puedeModificarse()) {
+      throw new BusinessException("No se puede modificar el número de personas en estado: " + orden.getEstado());
+    }
+
+    // Actualizar número de personas
+    orden.setNumeroPersonas(request.numeroPersonas());
+    orden.setFechaActualizacion(LocalDateTime.now());
+
+    orden = ordenRepository.save(orden);
+
+    log.info("Número de personas actualizado exitosamente");
+    return mapToResponse(orden);
+  }
+
   // En OrdenService.java, agregar este método helper:
   private BigDecimal obtenerTarifaImpuesto(Producto producto) {
     // Si el producto tiene impuestos configurados
@@ -605,5 +627,17 @@ public class OrdenService {
 
     // Si no tiene impuestos, devolver ZERO
     return BigDecimal.ZERO;
+  }
+
+  // En OrdenService.java
+
+  @Transactional(readOnly = true)
+  public OrdenResponse obtenerOrdenPorId(Long ordenId) {
+    log.info("Obteniendo orden por ID: {}", ordenId);
+
+    Orden orden = ordenRepository.findById(ordenId)
+        .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada con ID: " + ordenId));
+
+    return mapToResponse(orden);
   }
 }

@@ -23,6 +23,8 @@ public class CrearFacturaInternaRequest {
 
     private Long sesionCajaId;
 
+    private Long ordenId;
+
     // Cliente opcional
     private Long clienteId;
     private String nombreCliente;

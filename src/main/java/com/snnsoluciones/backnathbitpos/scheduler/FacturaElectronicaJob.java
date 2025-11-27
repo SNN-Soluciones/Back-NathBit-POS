@@ -68,7 +68,7 @@ public class FacturaElectronicaJob {
   private FacturaElectronicaJob self;
 
   // Configuración
-  private static final int MAX_FACTURAS_POR_CICLO = 6;
+  private static final int MAX_FACTURAS_POR_CICLO = 15;
   private static final int MAX_INTENTOS = 3;
 
   @Scheduled(fixedDelay = 60000, initialDelay = 10000)

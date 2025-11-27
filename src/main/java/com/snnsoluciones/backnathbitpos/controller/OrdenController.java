@@ -226,6 +226,22 @@ public class OrdenController {
         }
     }
 
+    @Operation(summary = "Actualizar número de personas en la orden")
+    @PatchMapping("/{id}/numero-personas")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN', 'ROOT', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<OrdenResponse>> actualizarNumeroPersonas(
+        @PathVariable Long id,
+        @Valid @RequestBody ActualizarNumeroPersonasRequest request) {
+        try {
+            OrdenResponse orden = ordenService.actualizarNumeroPersonas(id, request);
+            return ResponseEntity.ok(ApiResponse.success("Número de personas actualizado", orden));
+        } catch (Exception e) {
+            log.error("Error al actualizar número de personas: ", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @Operation(summary = "Crear orden de ventanilla (sin mesa)")
     @PostMapping("/ventanilla")
     @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN','ROOT', 'SUPER_ADMIN', 'COCINERO')")

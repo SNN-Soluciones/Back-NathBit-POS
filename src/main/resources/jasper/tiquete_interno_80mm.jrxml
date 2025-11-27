@@ -26,7 +26,7 @@
 	<parameter name="subtotal" class="java.lang.String"/>
 	<parameter name="descuentos" class="java.lang.String"/>
 	<parameter name="descuento_porcentaje" class="java.lang.String"/>
-	<parameter name="iva" class="java.lang.String"/>
+	<parameter name="impuesto_servicio" class="java.lang.String"/>
 	<parameter name="total" class="java.lang.String"/>
 	<parameter name="subreport_detalles" class="net.sf.jasperreports.engine.JasperReport"/>
 	<parameter name="datasource_detalles" class="net.sf.jasperreports.engine.data.JRBeanCollectionDataSource"/>
@@ -120,7 +120,7 @@
 		</band>
 	</pageHeader>
 	<detail>
-		<band height="171" splitType="Stretch">
+		<band height="180" splitType="Stretch">
 			<subreport isUsingCache="false">
 				<reportElement x="0" y="5" width="204" height="30" uuid="f2a3b4c5-d6e7-89af-bcde-123456789012"/>
 				<dataSourceExpression><![CDATA[$P{datasource_detalles}]]></dataSourceExpression>
@@ -155,81 +155,99 @@
 				</textElement>
 				<textFieldExpression><![CDATA["Descuentos" + (($P{descuento_porcentaje} != null && !$P{descuento_porcentaje}.equals("0") && !$P{descuento_porcentaje}.equals("0.00")) ? " (" + $P{descuento_porcentaje} + "%)" : "") + ":"]]></textFieldExpression>
 			</textField>
+			<staticText>
+				<reportElement positionType="Float" x="0" y="69" width="90" height="12" uuid="d6e7f8a9-b0c1-2d3e-fabc-056789012379">
+					<printWhenExpression><![CDATA[$P{impuesto_servicio} != null && !$P{impuesto_servicio}.equals("0.00")]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Left">
+					<font fontName="DejaVu Sans" size="8"/>
+				</textElement>
+				<text><![CDATA[IMP. SERVICIO (10%):]]></text>
+			</staticText>
+			<textField>
+				<reportElement positionType="Float" x="91" y="70" width="113" height="12" uuid="d6e7f8a9-b0c1-2d3e-fabc-056789012378">
+					<printWhenExpression><![CDATA[$P{impuesto_servicio} != null && !$P{impuesto_servicio}.equals("0.00")]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right">
+					<font fontName="DejaVu Sans" size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{impuesto_servicio}]]></textFieldExpression>
+			</textField>
 			<line>
-				<reportElement positionType="Float" x="0" y="70" width="206" height="1" uuid="b0c1d2e3-f4a5-6b7c-defa-901234567890"/>
+				<reportElement positionType="Float" x="-1" y="82" width="206" height="1" uuid="b0c1d2e3-f4a5-6b7c-defa-901234567890"/>
 				<graphicElement>
 					<pen lineWidth="2.0" lineStyle="Solid"/>
 				</graphicElement>
 			</line>
 			<staticText>
-				<reportElement positionType="Float" x="0" y="73" width="120" height="15" uuid="c1d2e3f4-a5b6-7c8d-efab-012345678901"/>
+				<reportElement positionType="Float" x="0" y="85" width="120" height="15" uuid="c1d2e3f4-a5b6-7c8d-efab-012345678901"/>
 				<textElement textAlignment="Left">
 					<font fontName="DejaVu Sans" size="11" isBold="true"/>
 				</textElement>
 				<text><![CDATA[TOTAL:]]></text>
 			</staticText>
 			<textField>
-				<reportElement positionType="Float" x="90" y="73" width="116" height="15" uuid="d2e3f4a5-b6c7-8d9e-fabc-123456789012"/>
+				<reportElement positionType="Float" x="90" y="85" width="116" height="15" uuid="d2e3f4a5-b6c7-8d9e-fabc-123456789012"/>
 				<textElement textAlignment="Right">
 					<font fontName="DejaVu Sans" size="11" isBold="true"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$P{total}]]></textFieldExpression>
 			</textField>
 			<line>
-				<reportElement positionType="Float" x="0" y="90" width="206" height="1" uuid="e3f4a5b6-c7d8-9e0f-abcd-234567890123"/>
+				<reportElement positionType="Float" x="0" y="102" width="206" height="1" uuid="e3f4a5b6-c7d8-9e0f-abcd-234567890123"/>
 				<graphicElement>
 					<pen lineWidth="2.0" lineStyle="Solid"/>
 				</graphicElement>
 			</line>
 			<textField>
-				<reportElement positionType="Float" x="0" y="93" width="206" height="10" uuid="f4a5b6c7-d8e9-0f1a-bcde-345678901234"/>
+				<reportElement positionType="Float" x="0" y="105" width="206" height="10" uuid="f4a5b6c7-d8e9-0f1a-bcde-345678901234"/>
 				<textElement textAlignment="Left">
 					<font fontName="DejaVu Sans" size="8"/>
 				</textElement>
 				<textFieldExpression><![CDATA["Cajero: " + $P{cajero_nombre}]]></textFieldExpression>
 			</textField>
 			<textField>
-				<reportElement positionType="Float" x="0" y="116" width="206" height="10" uuid="a5b6c7d8-e9f0-1a2b-cdef-456789012345"/>
+				<reportElement positionType="Float" x="0" y="128" width="206" height="10" uuid="a5b6c7d8-e9f0-1a2b-cdef-456789012345"/>
 				<textElement textAlignment="Left">
 					<font fontName="DejaVu Sans" size="8"/>
 				</textElement>
 				<textFieldExpression><![CDATA["Cliente: " + $P{cliente_referencia}]]></textFieldExpression>
 			</textField>
 			<line>
-				<reportElement positionType="Float" x="0" y="128" width="205" height="1" uuid="b6c7d8e9-f0a1-2b3c-defa-567890123456"/>
+				<reportElement positionType="Float" x="0" y="140" width="205" height="1" uuid="b6c7d8e9-f0a1-2b3c-defa-567890123456"/>
 				<graphicElement>
 					<pen lineWidth="2.0" lineStyle="Solid"/>
 				</graphicElement>
 			</line>
 			<staticText>
-				<reportElement positionType="Float" x="0" y="132" width="206" height="12" uuid="c7d8e9f0-1234-56ab-cdef-789012345678"/>
+				<reportElement positionType="Float" x="0" y="144" width="206" height="12" uuid="c7d8e9f0-1234-56ab-cdef-789012345678"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="9" isBold="true"/>
 				</textElement>
 				<text><![CDATA[¡GRACIAS POR SU VISITA!]]></text>
 			</staticText>
 			<line>
-				<reportElement positionType="Float" x="0" y="145" width="205" height="1" uuid="d8e9f012-3456-78bc-def0-890123456789"/>
+				<reportElement positionType="Float" x="0" y="157" width="205" height="1" uuid="d8e9f012-3456-78bc-def0-890123456789"/>
 				<graphicElement>
 					<pen lineWidth="2.0" lineStyle="Solid"/>
 				</graphicElement>
 			</line>
 			<staticText>
-				<reportElement positionType="Float" x="0" y="147" width="206" height="8" uuid="e9f01234-5678-9abc-ef01-901234567890"/>
+				<reportElement positionType="Float" x="0" y="159" width="206" height="8" uuid="e9f01234-5678-9abc-ef01-901234567890"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="6"/>
 				</textElement>
 				<text><![CDATA[NathBit POS]]></text>
 			</staticText>
 			<staticText>
-				<reportElement positionType="Float" x="0" y="156" width="206" height="8" uuid="f0123456-789a-bcde-f012-012345678901"/>
+				<reportElement positionType="Float" x="0" y="168" width="206" height="8" uuid="f0123456-789a-bcde-f012-012345678901"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="DejaVu Sans" size="6"/>
 				</textElement>
 				<text><![CDATA[www.nathbit.com]]></text>
 			</staticText>
 			<textField>
-				<reportElement x="0" y="104" width="204" height="12" uuid="17185de1-8872-442f-acd1-234d88a48dd2"/>
+				<reportElement x="0" y="116" width="204" height="12" uuid="17185de1-8872-442f-acd1-234d88a48dd2"/>
 				<textElement textAlignment="Left" verticalAlignment="Middle">
 					<font size="7"/>
 				</textElement>

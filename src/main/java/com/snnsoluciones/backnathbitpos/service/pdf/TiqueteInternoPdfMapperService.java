@@ -7,6 +7,7 @@ import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import com.snnsoluciones.backnathbitpos.service.SucursalService;
+import java.math.RoundingMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jasperreports.engine.JasperReport;
@@ -109,7 +110,9 @@ public class TiqueteInternoPdfMapperService {
         facturaInterna.getDescuentoPorcentaje() != null
             ? facturaInterna.getDescuentoPorcentaje().toString()
             : "0");
-    parametros.put("iva", "0.00"); // FacturaInterna no maneja IVA separado
+    BigDecimal impuestoServicio = calcularImpuestoServicio(facturaInterna);
+    parametros.put("impuesto_servicio", DECIMAL_FORMAT.format(impuestoServicio));
+
     parametros.put("total", DECIMAL_FORMAT.format(facturaInterna.getTotal()));
 
     // Detalles para el subreporte
@@ -142,6 +145,39 @@ public class TiqueteInternoPdfMapperService {
     }
 
     return parametros;
+  }
+
+  /**
+   * Calcula el impuesto de servicio (10%) sobre los items que son servicios
+   *
+   * @param facturaInterna La factura interna
+   * @return Monto total del impuesto de servicio
+   */
+  private BigDecimal calcularImpuestoServicio(FacturaInterna facturaInterna) {
+    BigDecimal impuestoServicio = BigDecimal.ZERO;
+
+    if (facturaInterna.getDetalles() == null || facturaInterna.getDetalles().isEmpty()) {
+      return impuestoServicio;
+    }
+
+    for (FacturaInternaDetalle detalle : facturaInterna.getDetalles()) {
+      // Verificar si el producto es un servicio
+      if (detalle.getProducto() != null
+          && Boolean.TRUE.equals(detalle.getProducto().getEsServicio())) {
+
+        // Base imponible = subtotal del detalle (ya incluye descuentos a nivel de línea)
+        BigDecimal baseImponible = detalle.getSubtotal();
+
+        // Calcular 10% de servicio
+        BigDecimal servicioDetalle = baseImponible
+            .multiply(new BigDecimal("10"))
+            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+
+        impuestoServicio = impuestoServicio.add(servicioDetalle);
+      }
+    }
+
+    return impuestoServicio;
   }
 
   /**

@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaEscposResponse;
 import com.snnsoluciones.backnathbitpos.dto.factura.FacturaListaResponse;
 import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse;
 import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.*;
@@ -7,6 +8,8 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
 import java.math.RoundingMode;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;

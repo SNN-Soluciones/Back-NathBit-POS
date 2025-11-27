@@ -62,39 +62,45 @@ public class FacturaInternaService {
         // ===== 2) Generar el número de factura ANTES (para usarlo en la Orden) =====
         final String numeroFactura = generarNumeroFactura(empresa.getId(), sucursal.getId());
 
-        // ===== 3) Construir y crear ORDEN (ABRE ANTES DE LA FACTURA) =====
-        // (Si es ventanilla, mesaId = null; si viene mesa desde el request, úsala)
-        // Ajusta los getters al DTO real de tu request de factura interna:
-        Long mesaId = null; // si tu DTO no lo trae, déjalo null
+        OrdenResponse orden;
         Long clienteId = request.getClienteId();
         String nombreCliente = request.getNombreCliente();
 
-        // Regla sencilla para servicio: 10% si mesa, 0% si ventanilla (ajústalo a tu negocio)
-        BigDecimal pctServicio = BigDecimal.ZERO;
+        // 🔥 PARCHE: Si viene ordenId, usar orden existente (división de cuentas)
+        if (request.getOrdenId() != null) {
+            log.info("🔗 Usando orden existente ID: {} para factura {}", request.getOrdenId(), numeroFactura);
+            orden = ordenService.obtenerOrdenPorId(request.getOrdenId());
 
-        // Mapear los detalles a items de orden
-        List<CrearOrdenRequest.ItemRequest> itemsOrden = request.getDetalles().stream()
-            .map(d -> new CrearOrdenRequest.ItemRequest(
-                d.getProductoId(),
-                d.getCantidad(),          // BigDecimal según tu DTO
-                d.getNotas()              // observaciones/notas por línea
-            ))
-            .toList();
+        } else {
+            // 🔥 Crear nueva orden SOLO si no viene ordenId
+            log.info("📝 Creando nueva orden para factura {}", numeroFactura);
 
-        CrearOrdenRequest crearOrdenRequest = new CrearOrdenRequest(
-            mesaId,                       // Long mesaId
-            sucursal.getId(),             // Long sucursalId
-            clienteId,                    // Long clienteId
-            nombreCliente,                // String nombreCliente
-            1,                            // Integer numeroPersonas (MVP)
-            pctServicio,                  // BigDecimal porcentajeServicio
-            "Orden generada desde TIQ " + numeroFactura, // observaciones
-            numeroFactura,                // String ordenNumero (¡aquí va el número de factura!)
-            itemsOrden                    // List<ItemRequest> @NotEmpty
-        );
+            Long mesaId = null;
+            BigDecimal pctServicio = BigDecimal.ZERO;
 
-        OrdenResponse orden = ordenService.crearOrden(crearOrdenRequest);
-        log.info("Orden {} creada antes de factura interna {}", orden.numero(), numeroFactura);
+            List<CrearOrdenRequest.ItemRequest> itemsOrden = request.getDetalles().stream()
+                .map(d -> new CrearOrdenRequest.ItemRequest(
+                    d.getProductoId(),
+                    d.getCantidad(),
+                    d.getNotas()
+                ))
+                .toList();
+
+            CrearOrdenRequest crearOrdenRequest = new CrearOrdenRequest(
+                mesaId,
+                sucursal.getId(),
+                clienteId,
+                nombreCliente,
+                1,
+                pctServicio,
+                "Orden generada desde TIQ " + numeroFactura,
+                numeroFactura,
+                itemsOrden
+            );
+
+            orden = ordenService.crearOrden(crearOrdenRequest);
+            log.info("✅ Orden {} creada para factura {}", orden.numero(), numeroFactura);
+        }
 
         // ===== 4) Construir y guardar la FACTURA usando el MISMO número =====
         FacturaInterna factura = FacturaInterna.builder()
@@ -149,10 +155,29 @@ public class FacturaInternaService {
         }
 
         // Totales
+// Totales
         factura.setSubtotal(subtotal);
         factura.setDescuento(request.getDescuento() != null ? request.getDescuento() : BigDecimal.ZERO);
         factura.setDescuentoPorcentaje(request.getDescuentoPorcentaje() != null ? request.getDescuentoPorcentaje() : BigDecimal.ZERO);
-        factura.calcularTotal();
+
+        BigDecimal impuestoServicio = BigDecimal.ZERO;
+        for (FacturaInternaDetalle detalle : factura.getDetalles()) {
+            if (detalle.getProducto() != null && Boolean.TRUE.equals(detalle.getProducto().getEsServicio())) {
+                // Base imponible para el servicio = total del detalle (ya con descuentos de línea)
+                BigDecimal baseImponible = detalle.getTotal();
+                BigDecimal servicioDetalle = baseImponible
+                    .multiply(new BigDecimal("10"))
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                impuestoServicio = impuestoServicio.add(servicioDetalle);
+            }
+        }
+
+// Total = subtotal - descuento global + impuesto de servicio
+        BigDecimal totalSinDescuento = factura.getSubtotal().subtract(factura.getDescuento());
+        factura.setTotal(totalSinDescuento.add(impuestoServicio));
+
+        log.info("💰 Totales factura: Subtotal={}, Descuento={}, Impuesto Servicio={}, Total={}",
+            factura.getSubtotal(), factura.getDescuento(), impuestoServicio, factura.getTotal());
 
         // Medios de pago
         BigDecimal totalPagos = BigDecimal.ZERO;
@@ -381,6 +406,23 @@ public class FacturaInternaService {
      * Mapear a response completo
      */
     private FacturaInternaResponse mapToResponse(FacturaInterna factura) {
+        String clienteCedula = null;
+        String clienteEmail = null;
+
+        if (factura.getCliente() != null) {
+            Cliente cliente = factura.getCliente();
+            clienteCedula = cliente.getNumeroIdentificacion();
+
+            // Buscar email principal o el primero disponible
+            if (cliente.getClienteEmails() != null && !cliente.getClienteEmails().isEmpty()) {
+                clienteEmail = cliente.getClienteEmails().stream()
+                    .filter(e -> Boolean.TRUE.equals(e.getEsPrincipal()))
+                    .findFirst()
+                    .map(ClienteEmail::getEmail)
+                    .orElseGet(() -> cliente.getClienteEmails().iterator().next().getEmail());
+            }
+        }
+
         return FacturaInternaResponse.builder()
             .id(factura.getId())
             .numero(factura.getNumero())
@@ -390,6 +432,8 @@ public class FacturaInternaService {
             .cajeroNombre(factura.getCajero().getNombre())
             .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
             .clienteNombre(factura.getNombreCliente())
+            .clienteCedula(clienteCedula)
+            .clienteEmail(clienteEmail)
             .subtotal(factura.getSubtotal())
             .descuentoPorcentaje(factura.getDescuentoPorcentaje())
             .descuento(factura.getDescuento())

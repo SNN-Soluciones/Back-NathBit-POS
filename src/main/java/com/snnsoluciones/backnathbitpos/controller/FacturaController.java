@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
+import com.snnsoluciones.backnathbitpos.service.impl.FacturaReimpresionService;
 import com.snnsoluciones.backnathbitpos.service.impl.FacturaResponseBuilder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +37,45 @@ public class FacturaController {
 
     private final FacturaService facturaService;
     private final FacturaResponseBuilder responseBuilder;
+    private final FacturaReimpresionService reimpresionService;
+
+
+    /**
+     * Obtiene todos los datos necesarios para reimprimir una factura electrónica
+     * Incluye: emisor, cliente, detalles, otros cargos, exoneraciones, referencias, medios de pago
+     *
+     * GET /api/v1/facturas/reimpresion/{clave}
+     *
+     * @param clave Clave de 50 dígitos del documento
+     * @return DTO completo para generar ESC/POS
+     */
+    @Operation(summary = "Obtener datos para reimpresión de factura electrónica",
+        description = "Retorna todos los datos necesarios para generar el ticket ESC/POS de una factura")
+    @GetMapping("/reimpresion/{clave}")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<FacturaReimpresionDto>> obtenerDatosReimpresion(
+        @PathVariable String clave) {
+
+        log.info("📄 Solicitando datos de reimpresión para clave: {}", clave);
+
+        try {
+            FacturaReimpresionDto datos = reimpresionService.obtenerDatosReimpresion(clave);
+
+            return ResponseEntity.ok(ApiResponse.ok(
+                "Datos de reimpresión obtenidos exitosamente",
+                datos
+            ));
+
+        } catch (RuntimeException e) {
+            log.error("❌ Error obteniendo datos de reimpresión para {}: {}", clave, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("❌ Error inesperado obteniendo datos de reimpresión", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Error al obtener datos de reimpresión: " + e.getMessage()));
+        }
+    }
 
     /**
      * Genera un reporte Excel de ventas para Hacienda en un rango de fechas

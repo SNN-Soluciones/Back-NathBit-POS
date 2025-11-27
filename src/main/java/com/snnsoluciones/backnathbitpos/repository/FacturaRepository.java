@@ -104,4 +104,28 @@ public interface FacturaRepository extends JpaRepository<Factura, Long>,
 """)
   java.util.Optional<Factura> findByIdFetchEmpresa(@org.springframework.data.repository.query.Param("id") Long id);
 
+  /**
+   * Busca una factura por clave con todas las relaciones necesarias para reimpresión
+   * Carga: detalles, impuestos de detalles, medios de pago, otros cargos, cliente, empresa
+   */
+  @Query("""
+    SELECT DISTINCT f FROM Factura f
+    LEFT JOIN FETCH f.detalles d
+    LEFT JOIN FETCH d.impuestos
+    LEFT JOIN FETCH d.producto
+    LEFT JOIN FETCH f.mediosPago
+    LEFT JOIN FETCH f.otrosCargos
+    LEFT JOIN FETCH f.cliente c
+    LEFT JOIN FETCH c.ubicacion.provincia.provincia
+    LEFT JOIN FETCH c.ubicacion.canton.canton
+    LEFT JOIN FETCH c.ubicacion.distrito.distrito
+    LEFT JOIN FETCH f.sucursal s
+    LEFT JOIN FETCH s.empresa e
+    LEFT JOIN FETCH e.provincia
+    LEFT JOIN FETCH e.canton
+    LEFT JOIN FETCH e.distrito
+    WHERE f.clave = :clave
+    """)
+  Optional<Factura> findByClaveWithAllRelations(@Param("clave") String clave);
+
 }

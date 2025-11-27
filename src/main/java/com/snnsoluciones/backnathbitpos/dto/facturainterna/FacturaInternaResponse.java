@@ -22,6 +22,8 @@ public class FacturaInternaResponse {
     // Cliente
     private Long clienteId;
     private String clienteNombre;
+    private String clienteCedula;
+    private String clienteEmail;
 
     // Totales
     private BigDecimal subtotal;

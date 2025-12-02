@@ -1,27 +1,26 @@
 # Build stage
-FROM gradle:7.6-jdk17-alpine AS build
+FROM gradle:8.5-jdk17-alpine AS build
 WORKDIR /app
-
-# Copiar todo
 COPY . .
-
-# Construir
-RUN gradle clean build -x test --no-daemon
+RUN gradle build -x test --no-daemon
 
 # Runtime stage
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-# Copiar el JAR con el nombre EXACTO que veo en tu imagen
-COPY --from=build /app/build/libs/Back-NathBit-POS-0.0.1-SNAPSHOT.jar app.jar
+# Crear usuario no-root
+RUN addgroup -S nathbit && adduser -S nathbit -G nathbit
+USER nathbit
 
-# Variables de entorno
-ENV JAVA_OPTS="-Xmx512m -Xms256m" \
-    SPRING_PROFILES_ACTIVE=prod \
-    SERVER_PORT=8080
+# Copiar JAR
+COPY --from=build /app/build/libs/*.jar app.jar
 
-# Exponer puerto
+# Configuración
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
 EXPOSE 8080
 
-# Ejecutar
-CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

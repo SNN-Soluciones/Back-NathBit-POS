@@ -1,4 +1,4 @@
-# Configuración de producción para DigitalOcean
+# Configuración de producción
 server:
   port: ${PORT:8080}
   error:
@@ -10,23 +10,21 @@ server:
     min-response-size: 1024
 
 spring:
-  # Nombre de la aplicación
   application:
     name: nathbit-pos-backend
 
-  # Configuración de base de datos
+  # Base de datos - SIN sslmode
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nathbitpos}?sslmode=require&prepareThreshold=0
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nathbitpos}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:password}
     hikari:
-      maximum-pool-size: 5
+      maximum-pool-size: 10
       minimum-idle: 2
       idle-timeout: 300000
       connection-timeout: 20000
-      leak-detection-threshold: 60000
 
-  # JPA Configuration
+  # JPA
   jpa:
     hibernate:
       ddl-auto: none
@@ -34,37 +32,31 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
-        jdbc:
-          lob:
-            non_contextual_creation: true
-        temp:
-          use_jdbc_metadata_defaults: false
     show-sql: false
     open-in-view: false
 
-  # Security
-  security:
-    jwt:
-      secret: ${JWT_SECRET:your-secret-key-here-minimum-32-characters-long}
-      expiration: ${JWT_EXPIRATION:86400000} # 24 horas
+  # Deshabilitar Reactor Debug Agent
+  reactor:
+    debug-agent:
+      enabled: false
 
-  # Jackson Configuration
+  # Jackson
   jackson:
     serialization:
       write-dates-as-timestamps: false
     time-zone: America/Costa_Rica
 
-  # Actuator
-  management:
-    endpoints:
-      web:
-        exposure:
-          include: health,info,metrics
-    endpoint:
-      health:
-        show-details: always
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
 
-# CORS Configuration
+# CORS
 cors:
   allowed-origins: ${CORS_ORIGINS:http://localhost:4200,https://nathbit.com}
   allowed-methods: GET,POST,PUT,DELETE,OPTIONS
@@ -76,21 +68,31 @@ cors:
 # Logging
 logging:
   level:
-    root: ${LOG_LEVEL:INFO}
-    com.snnsoluciones: ${APP_LOG_LEVEL:INFO}
+    root: INFO
+    com.snnsoluciones: INFO
     org.springframework.web: INFO
-    org.springframework.security: INFO
-    org.hibernate.SQL: ${SQL_LOG_LEVEL:ERROR}
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    org.hibernate.SQL: ERROR
 
-# Application specific
+# App
 app:
   name: NathBit POS
   version: 1.0.0
-  description: Sistema POS Multi-empresa
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 86400000
 
-# File upload limits
-spring.servlet.multipart:
-  max-file-size: 10MB
-  max-request-size: 10MB
+# Resend
+resend:
+  api-key: ${RESEND_API_KEY}
+  from-email: noreply@nathbit.com
+  from-name: NathBit POS
+
+# Storage (Vultr Objects - se mantiene igual)
+storage:
+  spaces:
+    access-key: ${STORAGE_ACCESS_KEY:QTF7BXEVCUCZFPR930G0}
+    secret-key: ${STORAGE_SECRET_KEY:JP3tLInSAGED1AnAnbwrGRlyTXH8jQeWAiqKHqfh}
+    endpoint: https://ewr1.vultrobjects.com
+    region: ewr1
+    bucket: snn-soluciones
+    base-folder: NathBit-POS

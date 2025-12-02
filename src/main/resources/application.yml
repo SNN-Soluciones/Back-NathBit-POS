@@ -65,6 +65,11 @@ firma:
 gometa:
   api-key: iyPaqeKXKCCgwKX
 
+resend:
+  api-key: ${RESEND_API_KEY:re_euLurR2e_5vNToNWMydg49f672dSdSfie}
+  from-email: noreply@nathbit.com
+  from-name: NathBit POS
+
 
 logging:
   level:

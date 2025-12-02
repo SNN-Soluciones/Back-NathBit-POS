@@ -512,7 +512,11 @@ public class OrdenService {
         item.getFechaPreparado(),
         item.getEntregado(),
         item.getFechaEntregado(),
-        opciones
+        opciones,
+        // ===== NUEVOS CAMPOS =====
+        item.getEstadoPago() != null ? item.getEstadoPago().name() : "PENDIENTE",
+        item.getFacturaInterna() != null ? item.getFacturaInterna().getId() : null,
+        item.getFechaPago()
     );
   }
 

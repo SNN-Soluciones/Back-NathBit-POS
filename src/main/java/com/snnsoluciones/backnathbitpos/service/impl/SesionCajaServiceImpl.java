@@ -30,11 +30,8 @@ import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
-import com.snnsoluciones.backnathbitpos.service.EmailService;
+import com.snnsoluciones.backnathbitpos.service.ResendEmailService;
 import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
-import jakarta.mail.util.ByteArrayDataSource;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -53,12 +50,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,11 +82,8 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   private final SucursalRepository sucursalRepository;
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
   private final CierreDatafonoRepository cierreDatafonoRepository;
-  private final EmailService emailService;
-  private final JavaMailSender javaMailSender;
+  private final ResendEmailService resendEmailService;
 
-  @Value("${spring.mail.username}")
-  private String emailFrom;
 
   @Override
   public SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial) {
@@ -891,137 +882,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     return sesion;
   }
 
-  /**
-   * 📨 Envía email individual con el cierre
-   */
-  private void enviarEmailCierreIndividual(
-      String destinatario,
-      SesionCaja sesion,
-      String htmlContent,
-      byte[] pdfBytes) {
-
-    try {
-      MimeMessage message = javaMailSender.createMimeMessage();
-      MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-      // Configurar
-      helper.setFrom(emailFrom);
-      helper.setTo(destinatario);
-      helper.setSubject(String.format(
-          "Cierre de Caja - %s - %s",
-          sesion.getTerminal().getNombre(),
-          LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-      ));
-
-      // HTML
-      helper.setText(htmlContent, true);
-
-      // Adjuntar PDF
-      helper.addAttachment(
-          String.format("cierre_caja_%s.pdf", sesion.getId()),
-          new ByteArrayDataSource(pdfBytes, "application/pdf")
-      );
-
-      // Enviar
-      javaMailSender.send(message);
-
-    } catch (MessagingException e) {
-      log.error("Error enviando email a {}: {}", destinatario, e.getMessage());
-      throw new RuntimeException("Error al enviar email", e);
-    }
-  }
-
-  /**
-   * 🎨 Genera HTML del email de cierre
-   */
-  private String generarHtmlEmailCierre(
-      SesionCaja sesion,
-      ResumenCajaDetalladoDTO resumen,
-      OpcionesImpresionCierreDTO opciones) {
-
-    StringBuilder html = new StringBuilder();
-
-    html.append("<!DOCTYPE html>");
-    html.append("<html>");
-    html.append("<head>");
-    html.append("<meta charset='UTF-8'>");
-    html.append("<style>");
-    html.append("body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }");
-    html.append(".container { max-width: 600px; margin: 20px auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }");
-    html.append(".header { background: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%); padding: 30px; text-align: center; color: white; }");
-    html.append(".header h1 { margin: 0; font-size: 24px; }");
-    html.append(".content { padding: 30px; }");
-    html.append(".info-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7C3AED; }");
-    html.append(".info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #dee2e6; }");
-    html.append(".info-label { font-weight: 600; color: #6c757d; }");
-    html.append(".info-value { color: #212529; font-weight: 600; }");
-    html.append(".footer { background-color: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #6c757d; }");
-    html.append("</style>");
-    html.append("</head>");
-    html.append("<body>");
-    html.append("<div class='container'>");
-
-    // Header
-    html.append("<div class='header'>");
-    html.append("<h1>🔒 Cierre de Caja</h1>");
-    html.append("<p style='margin: 10px 0 0; opacity: 0.9;'>").append(sesion.getTerminal().getNombre()).append("</p>");
-    html.append("</div>");
-
-    // Content
-    html.append("<div class='content'>");
-    html.append("<p>Se adjunta el cierre de caja con el detalle completo de la sesión.</p>");
-
-    // Info Box
-    html.append("<div class='info-box'>");
-
-    html.append("<div class='info-row'>");
-    html.append("<span class='info-label'>Terminal:</span>");
-    html.append("<span class='info-value'>").append(sesion.getTerminal().getNombre()).append("</span>");
-    html.append("</div>");
-
-    html.append("<div class='info-row'>");
-    html.append("<span class='info-label'>Cajero:</span>");
-    html.append("<span class='info-value'>").append(sesion.getUsuario().getNombre().concat(sesion.getUsuario().getApellidos())).append("</span>");
-    html.append("</div>");
-
-    html.append("<div class='info-row'>");
-    html.append("<span class='info-label'>Fecha:</span>");
-    html.append("<span class='info-value'>").append(
-        sesion.getFechaHoraApertura().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-    ).append("</span>");
-    html.append("</div>");
-
-    html.append("<div class='info-row' style='border-bottom: none; margin-top: 10px;'>");
-    html.append("<span class='info-label'>Monto Esperado:</span>");
-    html.append("<span class='info-value' style='color: #7C3AED; font-size: 18px;'>₡")
-        .append(String.format("%,.0f", resumen.getMontoEsperado()))
-        .append("</span>");
-    html.append("</div>");
-
-    html.append("<div class='info-row' style='border-bottom: none;'>");
-    html.append("<span class='info-label'>Monto de Cierre:</span>");
-    html.append("<span class='info-value' style='color: #7C3AED; font-size: 18px;'>₡")
-        .append(String.format("%,.0f", sesion.getMontoCierre()))
-        .append("</span>");
-    html.append("</div>");
-
-    html.append("</div>");
-
-    html.append("<p>Adjunto encontrará el PDF con el detalle completo del cierre.</p>");
-    html.append("</div>");
-
-    // Footer
-    html.append("<div class='footer'>");
-    html.append("<p><strong>").append(sesion.getTerminal().getSucursal().getEmpresa().getNombreComercial()).append("</strong></p>");
-    html.append("<p>Este es un correo automático del sistema NathBit POS</p>");
-    html.append("</div>");
-
-    html.append("</div>");
-    html.append("</body>");
-    html.append("</html>");
-
-    return html.toString();
-  }
 
   private static File cpToTempFile(String classpath, String prefix) throws IOException {
     ClassPathResource res = new ClassPathResource(classpath);
@@ -1292,6 +1152,107 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     return html.toString();
   }
 
+  /**
+   * 📨 Envía email de cierre de caja a todos los destinatarios relevantes
+   * @param sesionId ID de la sesión
+   * @param opciones Opciones de impresión para el PDF
+   * @param emailAdicional Email adicional opcional (puede ser null)
+   */
+  @Override
+  public void enviarEmailCierre(Long sesionId, OpcionesImpresionCierreDTO opciones, String emailAdicional) {
+    log.info("📧 Iniciando envío de email de cierre para sesión: {}", sesionId);
+
+    // 1. Obtener sesión
+    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
+
+    // 2. Obtener resumen
+    ResumenCajaDetalladoDTO resumen = obtenerResumenDetallado(sesionId);
+
+    // 3. Generar HTML del email
+    String htmlContent = generarHtmlEmailCierre(sesion, resumen, opciones);
+
+    // 4. Generar PDF
+    String htmlPdf = generarHtmlCierre(sesionId, opciones);
+    byte[] pdfBytes = convertirHtmlAPdf(htmlPdf);
+
+    // 5. Recolectar destinatarios (sin duplicados)
+    Set<String> destinatarios = new HashSet<>();
+
+    // Email del usuario que cierra
+    if (sesion.getUsuario() != null && sesion.getUsuario().getEmail() != null) {
+      destinatarios.add(sesion.getUsuario().getEmail().toLowerCase().trim());
+    }
+
+    // Email de la sucursal
+    Sucursal sucursal = sesion.getTerminal().getSucursal();
+    if (sucursal != null && sucursal.getEmail() != null && !sucursal.getEmail().isBlank()) {
+      destinatarios.add(sucursal.getEmail().toLowerCase().trim());
+    }
+
+    // Email de la empresa
+    if (sucursal != null && sucursal.getEmpresa() != null && sucursal.getEmpresa().getEmail() != null) {
+      destinatarios.add(sucursal.getEmpresa().getEmail().toLowerCase().trim());
+    }
+
+    // Email adicional (parámetro opcional)
+    if (emailAdicional != null && !emailAdicional.isBlank()) {
+      destinatarios.add(emailAdicional.toLowerCase().trim());
+    }
+
+    // 6. Enviar a cada destinatario
+    log.info("📤 Enviando cierre de caja a {} destinatarios: {}", destinatarios.size(), destinatarios);
+
+    int enviados = 0;
+    int fallidos = 0;
+
+    for (String destinatario : destinatarios) {
+      try {
+        enviarEmailCierreIndividual(destinatario, sesion, htmlContent, pdfBytes);
+        enviados++;
+      } catch (Exception e) {
+        log.error("❌ Falló envío a {}: {}", destinatario, e.getMessage());
+        fallidos++;
+      }
+    }
+
+    log.info("✅ Cierre de caja enviado - Exitosos: {}, Fallidos: {}", enviados, fallidos);
+  }
+
+  /**
+   * 📨 Envía email individual con el cierre
+   */
+  private void enviarEmailCierreIndividual(
+      String destinatario,
+      SesionCaja sesion,
+      String htmlContent,
+      byte[] pdfBytes) {
+
+    String asunto = String.format(
+        "Cierre de Caja - %s - %s",
+        sesion.getTerminal().getNombre(),
+        LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+    );
+
+    List<ResendEmailService.EmailAttachment> adjuntos = List.of(
+        new ResendEmailService.EmailAttachment(
+            String.format("cierre_caja_%s.pdf", sesion.getId()),
+            pdfBytes,
+            "application/pdf"
+        )
+    );
+
+    boolean enviado = resendEmailService.enviarConAdjuntos(
+        destinatario, asunto, htmlContent, adjuntos
+    );
+
+    if (enviado) {
+      log.info("✅ Email de cierre enviado a: {}", destinatario);
+    } else {
+      throw new RuntimeException("No se pudo enviar email a: " + destinatario);
+    }
+  }
+
   private String formatearMontoCorto(BigDecimal monto) {
     if (monto == null) return "₡ 0.00";
 
@@ -1366,12 +1327,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     return conteo;
   }
 
-  // Helper para formatear moneda
-  private String formatearMoneda(BigDecimal monto) {
-    if (monto == null) return "₡0";
-    return String.format("₡%,d", monto.longValue());
-  }
-
   private String obtenerMetodoPagoEstandar(String metodoOriginal) {
     if (metodoOriginal == null) return "";
 
@@ -1398,22 +1353,6 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     }
 
     return metodo; // Mantener original si no coincide
-  }
-
-  // En el método cerrarSesion, agregar validación de métodos de pago
-  private void validarMetodosPagoConsistentes(SesionCaja sesion) {
-    BigDecimal totalCalculado = sesion.getTotalEfectivo()
-        .add(sesion.getTotalTarjeta())
-        .add(sesion.getTotalTransferencia())
-        .add(sesion.getTotalOtros()); // SINPE va en TotalOtros
-
-    BigDecimal totalVentas = sesion.getTotalVentas();
-
-    if (totalCalculado.compareTo(totalVentas) != 0) {
-      log.warn("Discrepancia en totales de métodos de pago para sesión {}. " +
-              "Calculado: {}, Ventas: {}",
-          sesion.getId(), totalCalculado, totalVentas);
-    }
   }
 
   private void actualizarTotalesDesdeFacturas(SesionCaja sesion) {
@@ -1762,5 +1701,97 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     html.append("<span>").append(currencyFormat.format(totalPlataformas)).append("</span>");
     html.append("</div>");
     html.append("</div>");
+  }
+
+  /**
+   * 🎨 Genera HTML del email de cierre
+   */
+  private String generarHtmlEmailCierre(
+      SesionCaja sesion,
+      ResumenCajaDetalladoDTO resumen,
+      OpcionesImpresionCierreDTO opciones) {
+
+    StringBuilder html = new StringBuilder();
+
+    html.append("<!DOCTYPE html>");
+    html.append("<html>");
+    html.append("<head>");
+    html.append("<meta charset='UTF-8'>");
+    html.append("<style>");
+    html.append("body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }");
+    html.append(".container { max-width: 600px; margin: 20px auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }");
+    html.append(".header { background: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%); padding: 30px; text-align: center; color: white; }");
+    html.append(".header h1 { margin: 0; font-size: 24px; }");
+    html.append(".content { padding: 30px; }");
+    html.append(".info-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7C3AED; }");
+    html.append(".info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #dee2e6; }");
+    html.append(".info-label { font-weight: 600; color: #6c757d; }");
+    html.append(".info-value { color: #212529; font-weight: 600; }");
+    html.append(".footer { background-color: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #6c757d; }");
+    html.append("</style>");
+    html.append("</head>");
+    html.append("<body>");
+    html.append("<div class='container'>");
+
+    // Header
+    html.append("<div class='header'>");
+    html.append("<h1>🔒 Cierre de Caja</h1>");
+    html.append("<p style='margin: 10px 0 0; opacity: 0.9;'>").append(sesion.getTerminal().getNombre()).append("</p>");
+    html.append("</div>");
+
+    // Content
+    html.append("<div class='content'>");
+    html.append("<p>Se adjunta el cierre de caja con el detalle completo de la sesión.</p>");
+
+    // Info Box
+    html.append("<div class='info-box'>");
+
+    html.append("<div class='info-row'>");
+    html.append("<span class='info-label'>Terminal:</span>");
+    html.append("<span class='info-value'>").append(sesion.getTerminal().getNombre()).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row'>");
+    html.append("<span class='info-label'>Cajero:</span>");
+    html.append("<span class='info-value'>").append(sesion.getUsuario().getNombre().concat(sesion.getUsuario().getApellidos())).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row'>");
+    html.append("<span class='info-label'>Fecha:</span>");
+    html.append("<span class='info-value'>").append(
+        sesion.getFechaHoraApertura().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+    ).append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row' style='border-bottom: none; margin-top: 10px;'>");
+    html.append("<span class='info-label'>Monto Esperado:</span>");
+    html.append("<span class='info-value' style='color: #7C3AED; font-size: 18px;'>₡")
+        .append(String.format("%,.0f", resumen.getMontoEsperado()))
+        .append("</span>");
+    html.append("</div>");
+
+    html.append("<div class='info-row' style='border-bottom: none;'>");
+    html.append("<span class='info-label'>Monto de Cierre:</span>");
+    html.append("<span class='info-value' style='color: #7C3AED; font-size: 18px;'>₡")
+        .append(String.format("%,.0f", sesion.getMontoCierre()))
+        .append("</span>");
+    html.append("</div>");
+
+    html.append("</div>");
+
+    html.append("<p>Adjunto encontrará el PDF con el detalle completo del cierre.</p>");
+    html.append("</div>");
+
+    // Footer
+    html.append("<div class='footer'>");
+    html.append("<p><strong>").append(sesion.getTerminal().getSucursal().getEmpresa().getNombreComercial()).append("</strong></p>");
+    html.append("<p>Este es un correo automático del sistema NathBit POS</p>");
+    html.append("</div>");
+
+    html.append("</div>");
+    html.append("</body>");
+    html.append("</html>");
+
+    return html.toString();
   }
 }

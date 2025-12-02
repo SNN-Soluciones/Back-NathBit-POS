@@ -35,6 +35,15 @@ public class FacturaInterna {
     @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
 
+    // ===== MESERO Y MESA (Opcional) =====
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mesero_id")
+    private Usuario mesero; // Usuario que atendió (puede ser igual al cajero)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mesa_id")
+    private Mesa mesa;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sucursal_id", nullable = false)
     private Sucursal sucursal;
@@ -66,6 +75,15 @@ public class FacturaInterna {
     @Column(name = "descuento", precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal descuento = BigDecimal.ZERO;
+
+    // ===== IMPUESTO DE SERVICIO =====
+    @Column(name = "porcentaje_servicio", precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal porcentajeServicio = BigDecimal.ZERO;
+
+    @Column(name = "impuesto_servicio", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal impuestoServicio = BigDecimal.ZERO;
 
     @Column(name = "total", nullable = false, precision = 15, scale = 2)
     private BigDecimal total; // subtotal - descuento
@@ -128,13 +146,6 @@ public class FacturaInterna {
     // ===== MÉTODOS HELPER =====
 
     /**
-     * Calcula el total basado en subtotal y descuento
-     */
-    public void calcularTotal() {
-        this.total = this.subtotal.subtract(this.descuento != null ? this.descuento : BigDecimal.ZERO);
-    }
-
-    /**
      * Calcula el vuelto basado en pago recibido
      */
     public void calcularVuelto() {
@@ -170,5 +181,14 @@ public class FacturaInterna {
         this.anuladaPorId = usuarioId;
         this.fechaAnulacion = LocalDateTime.now();
         this.motivoAnulacion = motivo;
+    }
+
+    /**
+     * Calcula el total basado en subtotal, descuento e impuesto de servicio
+     */
+    public void calcularTotal() {
+        BigDecimal desc = this.descuento != null ? this.descuento : BigDecimal.ZERO;
+        BigDecimal servicio = this.impuestoServicio != null ? this.impuestoServicio : BigDecimal.ZERO;
+        this.total = this.subtotal.subtract(desc).add(servicio);
     }
 }

@@ -213,6 +213,15 @@
 				</textElement>
 				<textFieldExpression><![CDATA["Cliente: " + $P{cliente_referencia}]]></textFieldExpression>
 			</textField>
+			<textField>
+				<reportElement positionType="Float" x="0" y="116" width="204" height="12" uuid="17185de1-8872-442f-acd1-234d88a48dd2">
+					<printWhenExpression><![CDATA[$P{numero_viper} != null && !$P{numero_viper}.trim().isEmpty()]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<font size="7"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Beeper: " + $P{numero_viper}]]></textFieldExpression>
+			</textField>
 			<line>
 				<reportElement positionType="Float" x="0" y="140" width="205" height="1" uuid="b6c7d8e9-f0a1-2b3c-defa-567890123456"/>
 				<graphicElement>
@@ -246,13 +255,6 @@
 				</textElement>
 				<text><![CDATA[www.nathbit.com]]></text>
 			</staticText>
-			<textField>
-				<reportElement x="0" y="116" width="204" height="12" uuid="17185de1-8872-442f-acd1-234d88a48dd2"/>
-				<textElement textAlignment="Left" verticalAlignment="Middle">
-					<font size="7"/>
-				</textElement>
-				<textFieldExpression><![CDATA["Beeper: " +$P{numero_viper}]]></textFieldExpression>
-			</textField>
 			<textField>
 				<reportElement x="91" y="57" width="113" height="12" uuid="ea0e8013-3293-4a98-b702-9feb04d36c71"/>
 				<textElement textAlignment="Right">

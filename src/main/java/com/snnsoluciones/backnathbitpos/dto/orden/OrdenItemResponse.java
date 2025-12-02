@@ -26,5 +26,8 @@ public record OrdenItemResponse(
     LocalDateTime fechaPreparado,
     Boolean entregado,
     LocalDateTime fechaEntregado,
-    List<OrdenItemOpcionResponse> opciones
+    List<OrdenItemOpcionResponse> opciones,
+    String estadoPago,
+    Long facturaInternaId,
+    LocalDateTime fechaPago
 ) {}

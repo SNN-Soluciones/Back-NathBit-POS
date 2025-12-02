@@ -45,4 +45,15 @@ public class FacturaInternaResponse {
 
     // Medios de pago (cuando es MIXTO)
     private List<MedioPagoResponse> mediosPago;
+
+    private Long meseroId;
+    private String meseroNombre;
+
+    // Mesa
+    private Long mesaId;
+    private String mesaCodigo;
+
+    // Impuesto de servicio
+    private BigDecimal porcentajeServicio;
+    private BigDecimal impuestoServicio;
 }

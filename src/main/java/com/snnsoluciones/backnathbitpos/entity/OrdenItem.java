@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.EstadoPagoItem;
 import jakarta.persistence.*;
 import java.math.RoundingMode;
 import lombok.*;
@@ -105,6 +106,22 @@ public class OrdenItem {
     @Column(name = "split_personas")
     private String splitPersonas; // "1,3" significa personas 1 y 3 comparten este item
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_pago", length = 20)
+    @Builder.Default
+    private EstadoPagoItem estadoPago = EstadoPagoItem.PENDIENTE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "factura_id")
+    private Factura factura;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "factura_interna_id")
+    private FacturaInterna facturaInterna;
+
+    @Column(name = "fecha_pago")
+    private LocalDateTime fechaPago;
+
     // Métodos de cálculo
     public void calcularTotales() {
         // Subtotal base
@@ -165,5 +182,59 @@ public class OrdenItem {
     public void marcarEntregado() {
         this.entregado = true;
         this.fechaEntregado = LocalDateTime.now();
+    }
+
+    /**
+     * Verifica si el item está pendiente de pago
+     */
+    public boolean estaPendiente() {
+        return estadoPago == null || estadoPago == EstadoPagoItem.PENDIENTE;
+    }
+
+    /**
+     * Verifica si el item ya fue pagado
+     */
+    public boolean estaPagado() {
+        return estadoPago == EstadoPagoItem.PAGADO;
+    }
+
+    /**
+     * Marca el item como pagado con factura ELECTRÓNICA
+     */
+    public void marcarPagadoConFactura(Factura factura) {
+        this.estadoPago = EstadoPagoItem.PAGADO;
+        this.factura = factura;
+        this.facturaInterna = null; // Exclusividad
+        this.fechaPago = LocalDateTime.now();
+    }
+
+    /**
+     * Marca el item como pagado con factura INTERNA
+     */
+    public void marcarPagadoConFacturaInterna(FacturaInterna facturaInterna) {
+        this.estadoPago = EstadoPagoItem.PAGADO;
+        this.facturaInterna = facturaInterna;
+        this.factura = null; // Exclusividad
+        this.fechaPago = LocalDateTime.now();
+    }
+
+    /**
+     * Obtiene el ID de la factura asociada (electrónica o interna)
+     */
+    @Transient
+    public Long getFacturaAsociadaId() {
+        if (factura != null) return factura.getId();
+        if (facturaInterna != null) return facturaInterna.getId();
+        return null;
+    }
+
+    /**
+     * Obtiene el tipo de documento con el que se pagó
+     */
+    @Transient
+    public String getTipoDocumentoPago() {
+        if (factura != null) return factura.getTipoDocumento().name();
+        if (facturaInterna != null) return "FACTURA_INTERNA";
+        return null;
     }
 }

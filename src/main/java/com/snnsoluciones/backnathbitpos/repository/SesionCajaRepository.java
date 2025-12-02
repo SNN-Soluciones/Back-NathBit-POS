@@ -16,6 +16,10 @@ import java.util.Optional;
 @Repository
 public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
 
+  // En SesionCajaRepository.java
+  @Query("SELECT s FROM SesionCaja s WHERE s.usuario.id = :usuarioId AND s.estado = 'ABIERTA'")
+  Optional<SesionCaja> findSesionActivaByUsuarioId(@Param("usuarioId") Long usuarioId);
+
   // Buscar sesión abierta por usuario
   @Query("""
       SELECT sc\s

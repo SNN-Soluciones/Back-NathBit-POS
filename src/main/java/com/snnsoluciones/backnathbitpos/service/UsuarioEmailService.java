@@ -3,45 +3,36 @@ package com.snnsoluciones.backnathbitpos.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import jakarta.mail.internet.MimeMessage;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UsuarioEmailService {
 
-    private final JavaMailSender mailSender;
-    
-    @Value("${app.email.from:noreply@nathbitpos.com}")
-    private String emailFrom;
-    
+    private final ResendEmailService resendEmailService;
+
     @Value("${app.nombre-sistema:NathBit POS}")
     private String nombreSistema;
 
     public void enviarCredencialesTemporal(String email, String nombreUsuario, String passwordTemporal) {
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
-            helper.setTo(email);
-            helper.setFrom(emailFrom);
-            helper.setSubject(nombreSistema + " - Credenciales de Acceso");
-            
+            String asunto = nombreSistema + " - Credenciales de Acceso";
             String contenido = buildEmailContent(nombreUsuario, email, passwordTemporal);
-            helper.setText(contenido, true);
-            
-            mailSender.send(message);
-            log.info("Email enviado exitosamente a: {}", email);
-            
+
+            boolean enviado = resendEmailService.enviar(email, asunto, contenido);
+
+            if (enviado) {
+                log.info("✅ Email de credenciales enviado a: {}", email);
+            } else {
+                log.warn("⚠️ No se pudo enviar email a: {}", email);
+            }
+
         } catch (Exception e) {
-            log.error("Error enviando email a {}: {}", email, e.getMessage());
-            // NO lanzar excepción para no interrumpir la creación del usuario
+            log.error("❌ Error enviando email a {}: {}", email, e.getMessage());
         }
     }
-    
+
     private String buildEmailContent(String nombre, String email, String password) {
         return """
             <!DOCTYPE html>
@@ -57,7 +48,7 @@ public class UsuarioEmailService {
                         <p><strong>Contraseña temporal:</strong> %s</p>
                     </div>
                     
-                    <p style="color: #e74c3c;"><strong>Importante:</strong> Por seguridad, se te pedirá cambiar esta contraseña en tu primer inicio de sesión.</p>
+                    <p style="color: #e74c3c;"><strong>Importante:</strong> Por seguridad, deberá cambiar esta contraseña en su primer inicio de sesión.</p>
                     
                     <p>Saludos,<br>Equipo de %s</p>
                 </div>

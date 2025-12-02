@@ -51,4 +51,12 @@ public class CrearFacturaInternaRequest {
 
     // Notas
     private String notas;
+
+    private Long meseroId;
+    private Long mesaId;
+
+    // Impuesto de servicio (solo si viene, si no viene = 0)
+    @DecimalMin(value = "0.0", message = "El porcentaje no puede ser negativo")
+    @DecimalMax(value = "100.0", message = "El porcentaje no puede ser mayor a 100")
+    private BigDecimal porcentajeServicio;
 }

@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.entity;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
 import jakarta.persistence.*;
 import java.math.RoundingMode;
+import java.util.stream.Collectors;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -122,6 +123,24 @@ public class Orden {
     @Column(name = "fecha_cierre")
     private LocalDateTime fechaCierre;
 
+    @ManyToMany
+    @JoinTable(
+        name = "orden_facturas",
+        joinColumns = @JoinColumn(name = "orden_id"),
+        inverseJoinColumns = @JoinColumn(name = "factura_id")
+    )
+    @Builder.Default
+    private List<Factura> facturasParciales = new ArrayList<>();
+
+    @ManyToMany
+    @JoinTable(
+        name = "orden_facturas_internas",
+        joinColumns = @JoinColumn(name = "orden_id"),
+        inverseJoinColumns = @JoinColumn(name = "factura_interna_id")
+    )
+    @Builder.Default
+    private List<FacturaInterna> facturasInternasParciales = new ArrayList<>();
+
     // Métodos de utilidad
     public void agregarItem(OrdenItem item) {
         items.add(item);
@@ -232,5 +251,90 @@ public class Orden {
         this.totalImpuesto = totalImpuesto;
         this.totalServicio = totalServicio; // Solo para reporting, no afecta el total
         this.total = total;
+    }
+
+    /**
+     * Calcula el total de items PENDIENTES de pago
+     */
+    public BigDecimal getTotalPendiente() {
+        return items.stream()
+            .filter(OrdenItem::estaPendiente)
+            .map(OrdenItem::getTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Calcula el total de items YA PAGADOS
+     */
+    public BigDecimal getTotalPagado() {
+        return items.stream()
+            .filter(OrdenItem::estaPagado)
+            .map(OrdenItem::getTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Verifica si hay items pendientes de pago
+     */
+    public boolean tieneItemsPendientes() {
+        return items.stream().anyMatch(OrdenItem::estaPendiente);
+    }
+
+    /**
+     * Verifica si todos los items están pagados
+     */
+    public boolean todosItemsPagados() {
+        return items.stream().allMatch(OrdenItem::estaPagado);
+    }
+
+    /**
+     * Obtiene solo los items pendientes de pago
+     */
+    public List<OrdenItem> getItemsPendientes() {
+        return items.stream()
+            .filter(OrdenItem::estaPendiente)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Obtiene solo los items ya pagados
+     */
+    public List<OrdenItem> getItemsPagados() {
+        return items.stream()
+            .filter(OrdenItem::estaPagado)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Cuenta cuántas facturas parciales se han emitido
+     */
+    public int getCantidadFacturasEmitidas() {
+        return facturasParciales.size() + facturasInternasParciales.size();
+    }
+
+    /**
+     * Agrega una factura electrónica a la lista de pagos parciales
+     */
+    public void agregarFacturaParcial(Factura factura) {
+        if (!facturasParciales.contains(factura)) {
+            facturasParciales.add(factura);
+        }
+    }
+
+    /**
+     * Agrega una factura interna a la lista de pagos parciales
+     */
+    public void agregarFacturaInternaParcial(FacturaInterna facturaInterna) {
+        if (!facturasInternasParciales.contains(facturaInterna)) {
+            facturasInternasParciales.add(facturaInterna);
+        }
+    }
+
+    /**
+     * Verifica si la orden puede recibir pagos parciales
+     * (debe estar en estado que permita pago y tener items pendientes)
+     */
+    public boolean puedePagarParcial() {
+        return estado.puedePagarse() && tieneItemsPendientes();
     }
 }

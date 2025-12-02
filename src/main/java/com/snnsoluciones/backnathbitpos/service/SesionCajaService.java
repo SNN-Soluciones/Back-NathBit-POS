@@ -17,7 +17,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface SesionCajaService {
-    
+
+    void enviarEmailCierre(Long sesionId, OpcionesImpresionCierreDTO opciones, String emailAdicional);
+
     // Gestión de sesiones
     SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial);
     Optional<SesionCaja> buscarSesionActiva(Long usuarioId);

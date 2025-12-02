@@ -6,14 +6,8 @@ import com.snnsoluciones.backnathbitpos.entity.EmailAuditLog;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
-import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
-import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.repository.EmailAuditLogRepository;
-import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
-import com.snnsoluciones.backnathbitpos.service.pdf.FacturaPdfService;
-import com.snnsoluciones.backnathbitpos.util.S3PathBuilder;
 import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.util.ByteArrayDataSource;
 import java.util.HashMap;
 import java.util.List;
@@ -21,7 +15,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,15 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class EmailService {
 
-  private final JavaMailSender mailSender;
+  private final ResendEmailService resendEmailService;
   private final EmailAuditLogRepository auditLogRepository;
-  private final FacturaRepository facturaRepository;
-  private final StorageService storageService;
-  private final S3PathBuilder s3PathBuilder;
-  private final FacturaPdfService facturaPdfService;
-
-  @Value("${spring.mail.username}")
-  private String emailFrom;
 
   @Value("${app.email.max-attachment-size:10485760}") // 10MB default
   private Long maxAttachmentSize;
@@ -71,17 +57,21 @@ public class EmailService {
       validarTamanoAdjuntos(dto, auditLog);
 
       // Construir y enviar email
-      MimeMessage message = construirMensaje(dto, auditLog);
-      mailSender.send(message);
+      List<ResendEmailService.EmailAttachment> adjuntos = construirAdjuntos(dto);
+      String htmlContent = generarHtmlFactura(dto);
+      boolean enviado = resendEmailService.enviarConAdjuntos(
+          dto.getEmailDestino(),
+          dto.getAsunto(),
+          htmlContent,
+          adjuntos
+      );
+      if (!enviado) {
+        throw new RuntimeException("Error al enviar email via Resend");
+      }
 
       // Marcar como enviado
       auditLog.marcarEnviado();
       log.info("Email enviado exitosamente para factura {}", dto.getClave());
-
-    } catch (MessagingException e) {
-      // Error de mensajería - generalmente transitorio
-      log.error("Error de mensajería enviando factura {}: {}", dto.getClave(), e.getMessage());
-      auditLog.registrarError(e.getMessage(), "TRANSITORIO");
 
     } catch (IllegalArgumentException e) {
       // Error de validación - permanente
@@ -96,30 +86,6 @@ public class EmailService {
     }
 
     auditLogRepository.save(auditLog);
-  }
-
-  /**
-   * Construye el mensaje MIME con HTML y adjuntos
-   */
-  private MimeMessage construirMensaje(EmailFacturaDto dto, EmailAuditLog auditLog)
-      throws MessagingException {
-    MimeMessage message = mailSender.createMimeMessage();
-    MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-    // Configurar destinatarios
-    helper.setFrom(emailFrom);
-    helper.setTo(dto.getEmailDestino());
-    helper.setSubject(dto.getAsunto());
-    auditLog.setAsunto(dto.getAsunto());
-
-    // Crear contenido HTML
-    String htmlContent = generarHtmlFactura(dto);
-    helper.setText(htmlContent, true);
-
-    // Adjuntar archivos
-    adjuntarArchivos(helper, dto, auditLog);
-
-    return message;
   }
 
   /**
@@ -207,39 +173,37 @@ public class EmailService {
   /**
    * Adjunta los archivos al mensaje
    */
-  private void adjuntarArchivos(MimeMessageHelper helper, EmailFacturaDto dto,
-      EmailAuditLog auditLog) throws MessagingException {
-    try {
-      // 1. PDF
-      if (dto.getPdfBytes() != null) {
-        helper.addAttachment(
-            String.format("Factura_%s.pdf", dto.getClave()),
-            new ByteArrayDataSource(dto.getPdfBytes(), "application/pdf")
-        );
-        auditLog.setAdjuntoPdfSize((long) dto.getPdfBytes().length);
-      }
+  private List<ResendEmailService.EmailAttachment> construirAdjuntos(EmailFacturaDto dto) {
+    List<ResendEmailService.EmailAttachment> adjuntos = new java.util.ArrayList<>();
 
-      // 2. XML Firmado
-      if (dto.getXmlFirmadoBytes() != null) {
-        helper.addAttachment(
-            String.format("FE_%s_firmado.xml", dto.getClave()),
-            new ByteArrayDataSource(dto.getXmlFirmadoBytes(), "text/xml")
-        );
-        auditLog.setAdjuntoXmlSize((long) dto.getXmlFirmadoBytes().length);
-      }
-
-      // 3. Respuesta Hacienda
-      if (dto.getRespuestaHaciendaBytes() != null) {
-        helper.addAttachment(
-            String.format("Respuesta_Hacienda_%s.xml", dto.getClave()),
-            new ByteArrayDataSource(dto.getRespuestaHaciendaBytes(), "text/xml")
-        );
-        auditLog.setAdjuntoRespuestaSize((long) dto.getRespuestaHaciendaBytes().length);
-      }
-
-    } catch (Exception e) {
-      throw new MessagingException("Error adjuntando archivos: " + e.getMessage(), e);
+    // PDF
+    if (dto.getPdfBytes() != null) {
+      adjuntos.add(new ResendEmailService.EmailAttachment(
+          dto.getConsecutivo() + ".pdf",
+          dto.getPdfBytes(),
+          "application/pdf"
+      ));
     }
+
+    // XML Firmado
+    if (dto.getXmlFirmadoBytes() != null) {
+      adjuntos.add(new ResendEmailService.EmailAttachment(
+          dto.getClave() + ".xml",
+          dto.getXmlFirmadoBytes(),
+          "application/xml"
+      ));
+    }
+
+    // Respuesta Hacienda
+    if (dto.getRespuestaHaciendaBytes() != null) {
+      adjuntos.add(new ResendEmailService.EmailAttachment(
+          dto.getClave() + "_respuesta.xml",
+          dto.getRespuestaHaciendaBytes(),
+          "application/xml"
+      ));
+    }
+
+    return adjuntos;
   }
 
   /**
@@ -278,23 +242,16 @@ public class EmailService {
         empresa.getNombreComercial(), emailDestino);
 
     try {
-      MimeMessage message = mailSender.createMimeMessage();
-      MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-      // Configurar mensaje
-      helper.setFrom(emailFrom);
-      helper.setTo(emailDestino);
-      helper.setSubject("🎉 ¡Bienvenido a NathBit POS! - Empresa creada exitosamente");
-
-      // Generar HTML
+      String asunto = "🎉 ¡Bienvenido a NathBit POS! - Empresa creada exitosamente";
       String htmlContent = generarHtmlBienvenida(empresa);
-      helper.setText(htmlContent, true);
 
-      // Enviar
-      mailSender.send(message);
+      boolean enviado = resendEmailService.enviar(emailDestino, asunto, htmlContent);
 
-      log.info("Email de bienvenida enviado exitosamente a {}", emailDestino);
-      return true;
+      if (enviado) {
+        log.info("Email de bienvenida enviado exitosamente a {}", emailDestino);
+      }
+
+      return enviado;
 
     } catch (Exception e) {
       log.error("Error enviando email de bienvenida: {}", e.getMessage(), e);
@@ -320,239 +277,6 @@ public class EmailService {
 
     // Por defecto considerar transitorio
     return "TRANSITORIO";
-  }
-
-  /**
-   * Reintenta enviar emails fallidos
-   */
-  @Transactional
-  public void reintentarEmailsFallidos() {
-    List<EstadoEmail> estadosReintentables = List.of(EstadoEmail.ERROR, EstadoEmail.REINTENTANDO);
-    List<EmailAuditLog> pendientes = auditLogRepository.findByEstadoInAndIntentosLessThan(
-        estadosReintentables, 3);
-
-    log.info("Encontrados {} emails para reintentar", pendientes.size());
-
-    for (EmailAuditLog auditLog : pendientes) {
-      try {
-        // Obtener factura y reconstruir DTO
-        Factura factura = facturaRepository.findById(auditLog.getFacturaId())
-            .orElseThrow(() -> new IllegalStateException(
-                "Factura no encontrada: " + auditLog.getFacturaId()));
-
-        EmailFacturaDto dto = reconstruirEmailDto(factura, auditLog);
-
-        // Reintentar
-        enviarFacturaElectronica(dto);
-
-      } catch (Exception e) {
-        log.error("Error reintentando email para factura {}: {}", auditLog.getClave(),
-            e.getMessage());
-      }
-    }
-  }
-
-  /**
-   * Envía notificación de error de factura electrónica
-   *
-   * @param factura      La factura que falló
-   * @param mensajeError El mensaje de error de Hacienda
-   * @param xmlRespuesta El XML de respuesta de Hacienda
-   * @return true si se envió correctamente
-   */
-  public boolean enviarErrorFacturaElectronica(Factura factura, String mensajeError,
-      byte[] xmlRespuesta) {
-    log.info("Enviando notificación de error para factura: {} - Error: {}",
-        factura.getClave(), mensajeError);
-
-    try {
-      // Obtener empresa y email de notificaciones
-      Empresa empresa = factura.getSucursal().getEmpresa();
-      String emailDestino = empresa.getEmailNotificacion();
-
-      // Si no hay email de notificaciones, usar el principal
-      if (emailDestino == null || emailDestino.isBlank()) {
-        emailDestino = empresa.getEmail();
-      }
-
-      MimeMessage message = mailSender.createMimeMessage();
-      MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-      // Configurar mensaje
-      helper.setFrom(emailFrom);
-      helper.setTo(emailDestino);
-      helper.setSubject("⚠️ Error en Factura Electrónica - " + factura.getConsecutivo());
-
-      // Generar HTML
-      String htmlContent = generarHtmlErrorFactura(factura, mensajeError);
-      helper.setText(htmlContent, true);
-
-      // Adjuntar PDF si existe
-      try {
-        byte[] pdfBytes = facturaPdfService.generarFacturaCarta(factura.getClave());
-        if (pdfBytes != null) {
-          helper.addAttachment(
-              String.format("Factura_%s.pdf", factura.getClave()),
-              new ByteArrayDataSource(pdfBytes, "application/pdf")
-          );
-        }
-      } catch (Exception e) {
-        log.warn("No se pudo adjuntar PDF al email de error: {}", e.getMessage());
-      }
-
-      // Adjuntar XML de respuesta si existe
-      if (xmlRespuesta != null) {
-        helper.addAttachment(
-            String.format("Respuesta_Error_%s.xml", factura.getClave()),
-            new ByteArrayDataSource(xmlRespuesta, "text/xml")
-        );
-      }
-
-      // Enviar
-      mailSender.send(message);
-
-      log.info("Email de error enviado exitosamente a {}", emailDestino);
-      return true;
-
-    } catch (Exception e) {
-      log.error("Error enviando email de error de factura: {}", e.getMessage(), e);
-      return false;
-    }
-  }
-
-  /**
-   * Envía notificación de error de factura con auditoría completa
-   *
-   * @param dto DTO con datos del error
-   * @return true si se envió correctamente
-   */
-  @Transactional
-  public boolean enviarErrorFacturaConAuditoria(EmailErrorFacturaDto dto) {
-    log.info("Enviando notificación de error para factura: {} - Error: {}",
-        dto.getClave(), dto.getMensajeError());
-
-    // Crear registro de auditoría
-    EmailAuditLog auditLog = EmailAuditLog.builder()
-        .facturaId(dto.getFacturaId())
-        .clave(dto.getClave())
-        .emailDestino(dto.getEmailDestino())
-        .asunto("⚠️ Error en Factura Electrónica - " + dto.getConsecutivo())
-        .estado(EstadoEmail.PENDIENTE)
-        .intentos(0)
-        .build();
-
-    try {
-      MimeMessage message = mailSender.createMimeMessage();
-      MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-      // Configurar mensaje
-      helper.setFrom(emailFrom);
-      helper.setTo(dto.getEmailDestino());
-      helper.setSubject(auditLog.getAsunto());
-
-      // Generar HTML mejorado
-      String htmlContent = generarHtmlErrorFacturaMejorado(dto);
-      helper.setText(htmlContent, true);
-
-      // Adjuntar archivos
-      adjuntarArchivosError(helper, dto, auditLog);
-
-      // Enviar
-      mailSender.send(message);
-
-      // Marcar como enviado
-      auditLog.marcarEnviado();
-      auditLogRepository.save(auditLog);
-
-      log.info("Email de error enviado exitosamente a {}", dto.getEmailDestino());
-      return true;
-
-    } catch (Exception e) {
-      log.error("Error enviando email de error: {}", e.getMessage(), e);
-
-      // Registrar error en auditoría
-      String tipoError = determinarTipoError(e);
-      auditLog.registrarError(e.getMessage(), tipoError);
-      auditLogRepository.save(auditLog);
-
-      return false;
-    }
-  }
-
-
-  /**
-   * Reconstruye el DTO desde una factura para reintentos
-   */
-  private EmailFacturaDto reconstruirEmailDto(Factura factura, EmailAuditLog auditLog) {
-    try {
-      // Obtener empresa
-      Empresa empresa = factura.getSucursal().getEmpresa();
-
-      String nombreEmpresa = empresa.getNombreComercial() != null && !empresa.getNombreComercial().trim().isEmpty()
-          ? empresa.getNombreComercial()
-          : empresa.getNombreRazonSocial();
-
-      // Generar PDF on-demand
-      byte[] pdfBytes = null;
-      try {
-        pdfBytes = facturaPdfService.generarFacturaCarta(factura.getClave());
-      } catch (Exception e) {
-        log.warn("No se pudo generar PDF para reintento: {}", e.getMessage());
-      }
-
-      // Obtener XML firmado de S3
-      byte[] xmlFirmadoBytes = null;
-      try {
-        String xmlFirmadoPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_SIGNED, nombreEmpresa);
-        xmlFirmadoBytes = storageService.downloadFileAsBytes(xmlFirmadoPath);
-      } catch (Exception e) {
-        log.warn("No se pudo obtener XML firmado para reintento: {}", e.getMessage());
-      }
-
-      // Obtener respuesta Hacienda de S3
-      byte[] respuestaBytes = null;
-      try {
-        String respuestaPath = s3PathBuilder.buildXmlPath(factura, TipoArchivoFactura.XML_RESPUESTA, nombreEmpresa);
-        respuestaBytes = storageService.downloadFileAsBytes(respuestaPath);
-      } catch (Exception e) {
-        log.warn("No se pudo obtener respuesta Hacienda para reintento: {}", e.getMessage());
-      }
-
-      // URL del logo
-      String logoUrl = null;
-      try {
-        if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().isEmpty()) {
-          // CAMBIO 4: Extraer key si es necesario antes de generar URL firmada
-          String logoKey = extraerKeyDeUrl(empresa.getLogoUrl());
-          if (logoKey != null) {
-            logoUrl = storageService.generateSignedUrl(logoKey, 60);
-          }
-        }
-      } catch (Exception e) {
-        log.warn("No se pudo obtener URL del logo: {}", e.getMessage());
-      }
-
-      // Reconstruir DTO
-      return EmailFacturaDto.builder()
-          .facturaId(factura.getId())
-          .clave(factura.getClave())
-          .consecutivo(factura.getConsecutivo())
-          .emailDestino(auditLog.getEmailDestino())
-          .tipoDocumento(factura.getTipoDocumento().getDescripcion())
-          .nombreComercial(empresa.getNombreComercial())
-          .razonSocial(empresa.getNombreRazonSocial())
-          .cedulaJuridica(empresa.getIdentificacion())
-          .fechaEmision(factura.getFechaEmision())
-          .logoUrl(logoUrl)
-          .pdfBytes(pdfBytes)
-          .xmlFirmadoBytes(xmlFirmadoBytes)
-          .respuestaHaciendaBytes(respuestaBytes)
-          .build();
-
-    } catch (Exception e) {
-      log.error("Error reconstruyendo EmailFacturaDto: {}", e.getMessage(), e);
-      throw new RuntimeException("No se pudo reconstruir el DTO para reintento", e);
-    }
   }
 
   /**
@@ -864,196 +588,15 @@ public class EmailService {
   }
 
   /**
-   * Adjunta archivos al email de error
-   */
-  private void adjuntarArchivosError(MimeMessageHelper helper, EmailErrorFacturaDto dto,
-      EmailAuditLog auditLog)
-      throws MessagingException {
-
-    // PDF si existe
-    if (dto.getPdfBytes() != null && dto.getPdfBytes().length > 0) {
-      helper.addAttachment(
-          String.format("Factura_Error_%s.pdf", dto.getClave()),
-          new ByteArrayDataSource(dto.getPdfBytes(), "application/pdf")
-      );
-      auditLog.setAdjuntoPdfSize((long) dto.getPdfBytes().length);
-    }
-
-    // XML de respuesta
-    if (dto.getXmlRespuestaBytes() != null && dto.getXmlRespuestaBytes().length > 0) {
-      helper.addAttachment(
-          String.format("Respuesta_Hacienda_Error_%s.xml", dto.getClave()),
-          new ByteArrayDataSource(dto.getXmlRespuestaBytes(), "text/xml")
-      );
-      auditLog.setAdjuntoRespuestaSize((long) dto.getXmlRespuestaBytes().length);
-    }
-  }
-
-  /**
-   * HTML mejorado para errores
-   */
-  private String generarHtmlErrorFacturaMejorado(EmailErrorFacturaDto dto) {
-    // Mapeo de códigos de error a mensajes amigables
-    Map<String, String> mensajesAmigables = new HashMap<>();
-    mensajesAmigables.put("01", "El emisor no está registrado como contribuyente");
-    mensajesAmigables.put("02", "El receptor no está registrado");
-    mensajesAmigables.put("03", "Error en el formato del documento");
-    mensajesAmigables.put("04", "Error en la firma digital");
-    mensajesAmigables.put("05", "Documento duplicado");
-    // Agregar más códigos según documentación de Hacienda
-
-    String mensajeAmigable = mensajesAmigables.getOrDefault(
-        dto.getCodigoError(),
-        dto.getMensajeError()
-    );
-
-    StringBuilder html = new StringBuilder();
-
-    html.append("<!DOCTYPE html>");
-    html.append("<html>");
-    html.append("<head>");
-    html.append("<meta charset='UTF-8'>");
-    html.append("<style>");
-    // Estilos modernos y responsivos
-    html.append(
-        "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; ");
-    html.append(
-        "  margin: 0; padding: 0; background-color: #f5f5f5; color: #333; line-height: 1.6; }");
-    html.append(".container { max-width: 600px; margin: 20px auto; background-color: white; ");
-    html.append("  border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }");
-    html.append(".header { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); ");
-    html.append("  padding: 40px 30px; text-align: center; color: white; }");
-    html.append(".header h1 { margin: 0; font-size: 26px; font-weight: 600; }");
-    html.append(".header p { margin: 10px 0 0; opacity: 0.9; font-size: 14px; }");
-    html.append(".icon { font-size: 60px; margin-bottom: 20px; }");
-    html.append(".content { padding: 40px 30px; }");
-    html.append(".alert { background: #fff5f5; border-left: 4px solid #dc3545; ");
-    html.append("  padding: 15px 20px; margin: 20px 0; border-radius: 4px; }");
-    html.append(".info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; ");
-    html.append("  margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 6px; }");
-    html.append(".info-item { font-size: 14px; }");
-    html.append(".info-label { font-weight: 600; color: #6c757d; margin-bottom: 5px; }");
-    html.append(".info-value { color: #212529; }");
-    html.append(".clave { font-family: 'Courier New', monospace; font-size: 11px; ");
-    html.append(
-        "  word-break: break-all; background: #e9ecef; padding: 5px; border-radius: 3px; }");
-    html.append(
-        ".steps { background: #e8f5e9; padding: 20px; border-radius: 6px; margin: 20px 0; }");
-    html.append(".steps h3 { color: #2e7d32; margin-top: 0; }");
-    html.append(".steps ol { margin: 10px 0; padding-left: 20px; }");
-    html.append(".steps li { margin: 8px 0; }");
-    html.append(".footer { background-color: #f8f9fa; padding: 30px; text-align: center; ");
-    html.append("  font-size: 12px; color: #6c757d; border-top: 1px solid #dee2e6; }");
-    html.append(".button { display: inline-block; padding: 10px 20px; background: #007bff; ");
-    html.append("  color: white; text-decoration: none; border-radius: 5px; margin: 10px 0; }");
-    html.append("@media (max-width: 600px) { ");
-    html.append("  .info-grid { grid-template-columns: 1fr; }");
-    html.append("  .container { margin: 0; border-radius: 0; }");
-    html.append("}");
-    html.append("</style>");
-    html.append("</head>");
-    html.append("<body>");
-    html.append("<div class='container'>");
-
-    // Header mejorado
-    html.append("<div class='header'>");
-    html.append("<div class='icon'>⚠️</div>");
-    html.append("<h1>Factura Rechazada por Hacienda</h1>");
-    html.append("<p>Requiere corrección inmediata</p>");
-    html.append("</div>");
-
-    // Content
-    html.append("<div class='content'>");
-
-    // Alert
-    html.append("<div class='alert'>");
-    html.append("<strong>Mensaje de Hacienda:</strong><br>");
-    html.append(mensajeAmigable);
-    html.append("</div>");
-
-    // Grid de información
-    html.append("<div class='info-grid'>");
-
-    html.append("<div class='info-item'>");
-    html.append("<div class='info-label'>Número de Factura</div>");
-    html.append("<div class='info-value'>").append(dto.getConsecutivo()).append("</div>");
-    html.append("</div>");
-
-    html.append("<div class='info-item'>");
-    html.append("<div class='info-label'>Fecha y Hora</div>");
-    html.append("<div class='info-value'>").append(dto.getFechaEmision()).append("</div>");
-    html.append("</div>");
-
-    html.append("<div class='info-item'>");
-    html.append("<div class='info-label'>Cliente</div>");
-    html.append("<div class='info-value'>").append(dto.getNombreCliente()).append("</div>");
-    html.append("</div>");
-
-    html.append("<div class='info-item'>");
-    html.append("<div class='info-label'>Monto Total</div>");
-    html.append("<div class='info-value' style='font-weight: bold; color: #dc3545;'>")
-        .append(dto.getMontoTotal()).append("</div>");
-    html.append("</div>");
-
-    html.append("</div>");
-
-    // Clave
-    html.append("<div class='info-item' style='margin: 20px 0;'>");
-    html.append("<div class='info-label'>Clave Numérica</div>");
-    html.append("<div class='clave'>").append(dto.getClave()).append("</div>");
-    html.append("</div>");
-
-    // Pasos a seguir
-    html.append("<div class='steps'>");
-    html.append("<h3>Pasos a Seguir</h3>");
-    html.append("<ol>");
-    html.append("<li>Revise el archivo XML adjunto para ver el detalle del error</li>");
-    html.append("<li>Corrija los datos según el error indicado</li>");
-    html.append("<li>Genere nuevamente la factura con los datos corregidos</li>");
-    html.append("<li>Si necesita ayuda, contacte al soporte técnico</li>");
-    html.append("</ol>");
-    html.append("</div>");
-
-    html.append("</div>");
-
-    // Footer
-    html.append("<div class='footer'>");
-    html.append("<strong>").append(dto.getNombreEmpresa()).append("</strong><br>");
-    html.append("Cédula: ").append(dto.getCedulaEmpresa()).append("<br><br>");
-    html.append("Sistema de Facturación Electrónica - NathBit POS<br>");
-    html.append("<small>Este es un mensaje automático, no responder a este correo</small>");
-    html.append("</div>");
-
-    html.append("</div>");
-    html.append("</body>");
-    html.append("</html>");
-
-    return html.toString();
-  }
-
-  /**
    * Enviar email simple sin adjuntos (para notificaciones)
    */
   public void enviarEmailSimple(String destinatario, String asunto, String mensaje) {
-    try {
-      MimeMessage mimeMessage = mailSender.createMimeMessage();
-      MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
-
-      helper.setFrom(emailFrom);
-      helper.setTo(destinatario);
-      helper.setSubject(asunto);
-
-      // HTML simple
-      String htmlContent = construirHtmlSimple(mensaje);
-      helper.setText(htmlContent, true);
-
-      mailSender.send(mimeMessage);
-      log.info("Email simple enviado a: {}", destinatario);
-
-    } catch (MessagingException e) {
-      log.error("Error enviando email simple a {}: {}", destinatario, e.getMessage());
-      throw new RuntimeException("Error al enviar email: " + e.getMessage(), e);
+    String htmlContent = construirHtmlSimple(mensaje);
+    boolean enviado = resendEmailService.enviar(destinatario, asunto, htmlContent);
+    if (!enviado) {
+      throw new RuntimeException("Error al enviar email simple");
     }
+    log.info("Email simple enviado a: {}", destinatario);
   }
 
   /**

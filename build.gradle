@@ -77,6 +77,7 @@ dependencies {
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
     implementation "org.modelmapper:modelmapper:${modelMapperVersion}"
     implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
+    implementation 'com.resend:resend-java:3.1.0'
 
     // ================== Digital Signatures (XAdES4j) ==================
     implementation 'com.google.cloud:google-cloud-security-private-ca:2.45.0'

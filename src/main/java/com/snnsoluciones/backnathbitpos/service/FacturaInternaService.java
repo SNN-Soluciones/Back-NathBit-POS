@@ -8,6 +8,7 @@ import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import java.math.RoundingMode;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,6 +39,15 @@ public class FacturaInternaService {
     private final OrdenService ordenService;
     private final MetricaProductoVendidoService metricaProductoService;
     private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
+    private final MesaRepository mesaRepository;
+
+    /**
+     * Busca una factura interna por su número
+     */
+    @Transactional(readOnly = true)
+    public Optional<FacturaInterna> buscarPorNumero(String numero) {
+        return facturaInternaRepository.findByNumero(numero);
+    }
 
     /**
      * Crear una nueva factura interna
@@ -55,6 +65,18 @@ public class FacturaInternaService {
 
         Usuario cajero = usuarioRepository.findById(request.getUsuarioId())
             .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        Usuario mesero = null;
+        if (request.getMeseroId() != null) {
+            mesero = usuarioRepository.findById(request.getMeseroId())
+                .orElseThrow(() -> new ResourceNotFoundException("Mesero no encontrado"));
+        }
+
+        Mesa mesa = null;
+        if (request.getMesaId() != null) {
+            mesa = mesaRepository.findById(request.getMesaId())
+                .orElseThrow(() -> new ResourceNotFoundException("Mesa no encontrada"));
+        }
 
         SesionCaja sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
             .orElseThrow(() -> new ResourceNotFoundException("No hay sesion de caja abierta"));
@@ -109,6 +131,8 @@ public class FacturaInternaService {
             .sucursal(sucursal)
             .sesionCaja(sesionCaja)
             .cajero(cajero)
+            .mesero(mesero)
+            .mesa(mesa)
             .fecha(LocalDateTime.now())
             .estado("PAGADA")
             .notas(request.getNotas())
@@ -171,6 +195,10 @@ public class FacturaInternaService {
                 impuestoServicio = impuestoServicio.add(servicioDetalle);
             }
         }
+
+
+        factura.setPorcentajeServicio(BigDecimal.TEN);
+        factura.setImpuestoServicio(impuestoServicio);
 
 // Total = subtotal - descuento global + impuesto de servicio
         BigDecimal totalSinDescuento = factura.getSubtotal().subtract(factura.getDescuento());
@@ -413,7 +441,6 @@ public class FacturaInternaService {
             Cliente cliente = factura.getCliente();
             clienteCedula = cliente.getNumeroIdentificacion();
 
-            // Buscar email principal o el primero disponible
             if (cliente.getClienteEmails() != null && !cliente.getClienteEmails().isEmpty()) {
                 clienteEmail = cliente.getClienteEmails().stream()
                     .filter(e -> Boolean.TRUE.equals(e.getEsPrincipal()))
@@ -430,18 +457,33 @@ public class FacturaInternaService {
             .empresaNombre(factura.getEmpresa().getNombreRazonSocial())
             .sucursalNombre(factura.getSucursal().getNombre())
             .cajeroNombre(factura.getCajero().getNombre())
+            // Mesero
+            .meseroId(factura.getMesero() != null ? factura.getMesero().getId() : null)
+            .meseroNombre(factura.getMesero() != null
+                ? factura.getMesero().getNombre() + " " + factura.getMesero().getApellidos()
+                : null)
+            // Mesa
+            .mesaId(factura.getMesa() != null ? factura.getMesa().getId() : null)
+            .mesaCodigo(factura.getMesa() != null ? factura.getMesa().getCodigo() : null)
+            // Cliente
             .clienteId(factura.getCliente() != null ? factura.getCliente().getId() : null)
             .clienteNombre(factura.getNombreCliente())
             .clienteCedula(clienteCedula)
             .clienteEmail(clienteEmail)
+            // Totales
             .subtotal(factura.getSubtotal())
             .descuentoPorcentaje(factura.getDescuentoPorcentaje())
             .descuento(factura.getDescuento())
+            // Impuesto servicio
+            .porcentajeServicio(factura.getPorcentajeServicio())
+            .impuestoServicio(factura.getImpuestoServicio())
+            // Total y pago
             .total(factura.getTotal())
             .pagoRecibido(factura.getPagoRecibido())
             .vuelto(factura.getVuelto())
             .estado(factura.getEstado())
             .notas(factura.getNotas())
+            .numeroViper(factura.getNumeroViper())
             .detalles(factura.getDetalles().stream()
                 .map(this::mapDetalleToResponse)
                 .collect(Collectors.toList()))

@@ -4,14 +4,11 @@ WORKDIR /app
 COPY . .
 RUN gradle bootJar -x test --no-daemon
 
-# Debug - ver qué se generó
-RUN ls -la /app/build/libs/
-
-# Runtime stage
-FROM eclipse-temurin:17-jre-alpine
+# Runtime stage (cambié de alpine a normal)
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-# Copiar JAR (nombre específico)
+# Copiar JAR
 COPY --from=build /app/build/libs/Back-NathBit-POS-0.0.1-SNAPSHOT.jar app.jar
 
 # Configuración

@@ -32,116 +32,81 @@ public class PlanPagoService {
     private final SucursalRepository sucursalRepository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
-    
+
     /**
      * Verificar estado de pago de una sucursal
+     * Lógica:
+     * - > 3 días antes: Sin alerta
+     * - 1-3 días antes: Próximo a vencer
+     * - Día 0: Día de pago
+     * - Días negativos: En período de gracia (dinámico según plan.diasGracia)
+     * - Gracia agotada: Suspendido
      */
     public EstadoPagoDTO verificarEstadoPago(Long sucursalId) {
         PlanPago plan = planPagoRepository.findBySucursalId(sucursalId).orElse(null);
-        
+
         // Si no tiene plan, está activo (sucursales sin cobro)
         if (plan == null) {
             return EstadoPagoDTO.builder()
                 .activo(true)
                 .suspendido(false)
+                .mostrarAlerta(false)
                 .tipoAlerta(EstadoPagoDTO.TipoAlerta.SIN_ALERTA)
                 .build();
         }
-        
+
         LocalDate hoy = LocalDate.now();
         LocalDate fechaVencimiento = plan.getFechaProximoVencimiento();
-        
-        long diasRestantes = ChronoUnit.DAYS.between(hoy, fechaVencimiento);
-        
-        EstadoPagoDTO estado = EstadoPagoDTO.builder()
-            .fechaVencimiento(fechaVencimiento)
-            .montoAdeudado(plan.getCuotaMensual())
-            .diasRestantes((int) diasRestantes)
-            .build();
-        
-        // Si está suspendido
+        int diasParaVencimiento = (int) ChronoUnit.DAYS.between(hoy, fechaVencimiento);
+
+        // Si ya está marcado como suspendido en BD
         if (plan.getEstado() == EstadoPlan.SUSPENDIDO) {
-            estado.setActivo(false);
-            estado.setSuspendido(true);
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.SUSPENDIDO);
-            estado.setMensaje("⚠️ SERVICIO SUSPENDIDO ⚠️\n\n" +
-                "El servicio de esta sucursal ha sido suspendido por falta de pago.\n" +
-                "Por favor contacte con administración para reactivar el servicio.\n\n");
-            return estado;
+            return buildEstadoSuspendido(fechaVencimiento, diasParaVencimiento);
         }
-        
-        // Determinar tipo de alerta
-        estado.setActivo(true);
-        estado.setSuspendido(false);
-        
-        if (diasRestantes > 3) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.SIN_ALERTA);
-            
-        } else if (diasRestantes == 3) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.AVISO_3_DIAS);
-            estado.setMensaje("📅 Recordatorio de Pago\n\n" +
-                "Faltan 3 días para el vencimiento de la cuota de esta sucursal.\n" +
-                "Fecha de vencimiento: " + formatearFecha(fechaVencimiento) + "\n" +
-                "Monto: $" + plan.getCuotaMensual());
-            
-        } else if (diasRestantes == 2) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.AVISO_2_DIAS);
-            estado.setMensaje("⏰ Recordatorio de Pago\n\n" +
-                "Faltan 2 días para el vencimiento de la cuota de esta sucursal.\n" +
-                "Fecha de vencimiento: " + formatearFecha(fechaVencimiento) + "\n" +
-                "Monto: $" + plan.getCuotaMensual());
-            
-        } else if (diasRestantes == 1) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.AVISO_1_DIA);
-            estado.setMensaje("⚠️ Recordatorio Urgente de Pago\n\n" +
-                "Mañana vence la cuota de esta sucursal.\n" +
-                "Fecha de vencimiento: " + formatearFecha(fechaVencimiento) + "\n" +
-                "Monto: $" + plan.getCuotaMensual());
-            
-        } else if (diasRestantes == 0) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.VENCIDO_HOY);
-            estado.setMensaje("🔴 Pago Vencido HOY\n\n" +
-                "La cuota de esta sucursal vence hoy.\n" +
-                "Por favor realice el pago para evitar la suspensión del servicio.\n" +
-                "Monto: $" + plan.getCuotaMensual());
-            
-        } else if (diasRestantes == -1) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.VENCIDO_1_DIA);
-            estado.setMensaje("🔴 Pago Vencido - 1 día de mora\n\n" +
-                "La cuota de esta sucursal se venció ayer.\n" +
-                "Tiene " + plan.getDiasGracia() + " días de gracia antes de la suspensión.\n" +
-                "Monto: $" + plan.getCuotaMensual());
-            
-        } else if (diasRestantes == -2) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.VENCIDO_2_DIAS);
-            estado.setMensaje("🔴 Pago Vencido - 2 días de mora\n\n" +
-                "La cuota de esta sucursal está vencida.\n" +
-                "Le queda 1 día antes de la suspensión del servicio.\n" +
-                "Monto: $" + plan.getCuotaMensual());
-            
-        } else if (diasRestantes == -3) {
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.VENCIDO_3_DIAS);
-            estado.setMensaje("🔴🔴 ÚLTIMO AVISO - 3 días de mora\n\n" +
-                "El servicio de esta sucursal será SUSPENDIDO MAÑANA si no realiza el pago.\n" +
-                "Por favor realice el pago de inmediato.\n" +
-                "Monto: $" + plan.getCuotaMensual());
-            
-        } else { // diasRestantes < -3
-            // Suspender automáticamente
-            plan.setEstado(EstadoPlan.SUSPENDIDO);
-            planPagoRepository.save(plan);
-            
-            estado.setActivo(false);
-            estado.setSuspendido(true);
-            estado.setTipoAlerta(EstadoPagoDTO.TipoAlerta.SUSPENDIDO);
-            estado.setMensaje("⚠️ SERVICIO SUSPENDIDO ⚠️\n\n" +
-                "El servicio de esta sucursal ha sido suspendido por falta de pago.\n" +
-                "Días de mora: " + Math.abs(diasRestantes) + "\n" +
-                "Monto adeudado: $" + plan.getCuotaMensual() + "\n\n" +
-                "Por favor contacte con administración para reactivar el servicio.");
+
+        // Más de 3 días antes - Sin alerta
+        if (diasParaVencimiento > 3) {
+            return EstadoPagoDTO.builder()
+                .activo(true)
+                .suspendido(false)
+                .mostrarAlerta(false)
+                .fechaVencimiento(fechaVencimiento)
+                .diasParaVencimiento(diasParaVencimiento)
+                .tipoAlerta(EstadoPagoDTO.TipoAlerta.SIN_ALERTA)
+                .build();
         }
-        
-        return estado;
+
+        // 1-3 días antes - Próximo a vencer
+        if (diasParaVencimiento >= 1 && diasParaVencimiento <= 3) {
+            return buildProximoVencer(fechaVencimiento, diasParaVencimiento);
+        }
+
+        // Día exacto de pago
+        if (diasParaVencimiento == 0) {
+            return buildDiaPago(fechaVencimiento);
+        }
+
+        // Vencido - Calcular días de gracia restantes
+        int diasMora = Math.abs(diasParaVencimiento);
+        int diasGracia = plan.getDiasGracia();
+        int diasGraciaRestantes = diasGracia - diasMora;
+
+        // Todavía tiene días de gracia
+        if (diasGraciaRestantes > 0) {
+            return buildEnGracia(fechaVencimiento, diasParaVencimiento, diasGraciaRestantes);
+        }
+
+        // Último día de gracia
+        if (diasGraciaRestantes == 0) {
+            return buildUltimoDiaGracia(fechaVencimiento, diasParaVencimiento);
+        }
+
+        // Gracia agotada - Suspender
+        plan.setEstado(EstadoPlan.SUSPENDIDO);
+        planPagoRepository.save(plan);
+        log.warn("Sucursal {} suspendida automáticamente - {} días de mora", sucursalId, diasMora);
+
+        return buildEstadoSuspendido(fechaVencimiento, diasParaVencimiento);
     }
     
     /**
@@ -374,5 +339,75 @@ public class PlanPagoService {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd 'de' MMMM 'de' yyyy", 
             new Locale("es", "CR"));
         return fecha.format(formatter);
+    }
+
+    private EstadoPagoDTO buildProximoVencer(LocalDate fechaVencimiento, int diasRestantes) {
+        String mensaje = diasRestantes == 1
+            ? "📅 Falta 1 día para el vencimiento de la cuota.\nFecha: " + formatearFecha(fechaVencimiento)
+            : "📅 Faltan " + diasRestantes + " días para el vencimiento de la cuota.\nFecha: " + formatearFecha(fechaVencimiento);
+
+        return EstadoPagoDTO.builder()
+            .activo(true)
+            .suspendido(false)
+            .mostrarAlerta(true)
+            .fechaVencimiento(fechaVencimiento)
+            .diasParaVencimiento(diasRestantes)
+            .tipoAlerta(EstadoPagoDTO.TipoAlerta.PROXIMO_VENCER)
+            .mensaje(mensaje)
+            .build();
+    }
+
+    private EstadoPagoDTO buildDiaPago(LocalDate fechaVencimiento) {
+        return EstadoPagoDTO.builder()
+            .activo(true)
+            .suspendido(false)
+            .mostrarAlerta(true)
+            .fechaVencimiento(fechaVencimiento)
+            .diasParaVencimiento(0)
+            .tipoAlerta(EstadoPagoDTO.TipoAlerta.DIA_PAGO)
+            .mensaje("🔔 Hoy es día de pago.\nPor favor realice el pago para evitar inconvenientes.")
+            .build();
+    }
+
+    private EstadoPagoDTO buildEnGracia(LocalDate fechaVencimiento, int diasParaVencimiento, int diasGraciaRestantes) {
+        String mensaje = diasGraciaRestantes == 1
+            ? "⚠️ Pago vencido.\nLe queda 1 día de gracia."
+            : "⚠️ Pago vencido.\nLe quedan " + diasGraciaRestantes + " días de gracia.";
+
+        return EstadoPagoDTO.builder()
+            .activo(true)
+            .suspendido(false)
+            .mostrarAlerta(true)
+            .fechaVencimiento(fechaVencimiento)
+            .diasParaVencimiento(diasParaVencimiento)
+            .diasGraciaRestantes(diasGraciaRestantes)
+            .tipoAlerta(EstadoPagoDTO.TipoAlerta.EN_GRACIA)
+            .mensaje(mensaje)
+            .build();
+    }
+
+    private EstadoPagoDTO buildUltimoDiaGracia(LocalDate fechaVencimiento, int diasParaVencimiento) {
+        return EstadoPagoDTO.builder()
+            .activo(true)
+            .suspendido(false)
+            .mostrarAlerta(true)
+            .fechaVencimiento(fechaVencimiento)
+            .diasParaVencimiento(diasParaVencimiento)
+            .diasGraciaRestantes(0)
+            .tipoAlerta(EstadoPagoDTO.TipoAlerta.ULTIMO_DIA_GRACIA)
+            .mensaje("🔴 ÚLTIMO DÍA DE GRACIA\nEl servicio será suspendido mañana si no realiza el pago.")
+            .build();
+    }
+
+    private EstadoPagoDTO buildEstadoSuspendido(LocalDate fechaVencimiento, int diasParaVencimiento) {
+        return EstadoPagoDTO.builder()
+            .activo(false)
+            .suspendido(true)
+            .mostrarAlerta(true)
+            .fechaVencimiento(fechaVencimiento)
+            .diasParaVencimiento(diasParaVencimiento)
+            .tipoAlerta(EstadoPagoDTO.TipoAlerta.SUSPENDIDO)
+            .mensaje("⛔ SERVICIO SUSPENDIDO\n\nEl servicio ha sido suspendido por falta de pago.\nContacte con administración para reactivar.")
+            .build();
     }
 }

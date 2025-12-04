@@ -30,4 +30,14 @@ public class TenantMigrationController {
             return ResponseEntity.badRequest().body(ApiResponse.error(result.getMensaje()));
         }
     }
+
+    @PostMapping("/migrar/{empresaId}/asignar-pins")
+    public ResponseEntity<ApiResponse<String>> asignarPins(@PathVariable Long empresaId) {
+        try {
+            String resultado = migrationService.asignarPinsATenant(empresaId);
+            return ResponseEntity.ok(ApiResponse.success(resultado, null));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
 }

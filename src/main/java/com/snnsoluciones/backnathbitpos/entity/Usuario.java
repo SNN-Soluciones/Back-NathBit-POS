@@ -65,6 +65,16 @@ public class Usuario {
     @Column(unique = true, length = 50)
     private String username;
 
+    // ============ CAMPOS PARA PIN (MULTI-TENANT) ============
+    @Column(name = "pin")
+    private String pin;
+
+    @Column(name = "pin_longitud")
+    private Integer pinLongitud;
+
+    @Column(name = "requiere_cambio_pin")
+    private Boolean requiereCambioPin;
+
     @Column(name = "requiere_cambio_password")
     private Boolean requiereCambioPassword = false;
 
@@ -73,6 +83,12 @@ public class Usuario {
 
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UsuarioSucursal> usuarioSucursales = new ArrayList<>();
+
+    @Column(name = "migrado_a_global")
+    private Boolean migradoAGlobal;
+
+    @Column(name = "usuario_global_id")
+    private Long usuarioGlobalId;
 
     @PrePersist
     protected void onCreate() {

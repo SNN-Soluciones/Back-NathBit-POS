@@ -67,11 +67,23 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 // Endpoints públicos
                 .requestMatchers(
+                    // Auth legacy
                     "/api/auth/login",
+                    "/api/auth/refresh",
+                    "/nathbit/api/auth/login",
+
+                    // Auth multi-tenant (NUEVOS)
+                    "/api/auth/global/login",
+                    "/api/auth/empresa",
+                    "/api/auth/dispositivo/solicitar",
+                    "/api/auth/dispositivo/verificar",
+                    "/api/auth/dispositivo/reenviar",
+                    "/api/auth/dispositivo/usuarios",  // <-- AGREGAR
+                    "/api/auth/pin",
+
+                    // Otros públicos
                     "/api/facturas-recepcion/procesar-email",
                     "/api/empresas/*/identificacion",
-                    "/nathbit/api/auth/login",
-                    "/api/auth/refresh",
                     "/api/test/**",
                     "/swagger-ui/**",
                     "/v3/api-docs/**",

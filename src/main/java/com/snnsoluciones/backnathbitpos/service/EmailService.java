@@ -171,6 +171,113 @@ public class EmailService {
   }
 
   /**
+   * Envía email con código de registro de dispositivo (OTP)
+   */
+  public void enviarCodigoRegistroDispositivo(String destinatario,
+      String nombreDestinatario,
+      String nombreEmpresa,
+      String nombreDispositivo,
+      String codigo,
+      String ipSolicitante,
+      String plataforma,
+      int minutosExpiracion) {
+    log.info("Enviando código OTP a {} para dispositivo {}", destinatario, nombreDispositivo);
+
+    String asunto = "🔐 Código de registro de dispositivo - " + nombreEmpresa;
+    String htmlContent = generarHtmlCodigoRegistro(
+        nombreDestinatario, nombreEmpresa, nombreDispositivo,
+        codigo, ipSolicitante, plataforma, minutosExpiracion
+    );
+
+    boolean enviado = resendEmailService.enviar(destinatario, asunto, htmlContent);
+    if (!enviado) {
+      throw new RuntimeException("Error al enviar código OTP");
+    }
+    log.info("Código OTP enviado exitosamente a {}", destinatario);
+  }
+
+  /**
+   * Genera HTML para email de código OTP
+   */
+  private String generarHtmlCodigoRegistro(String nombreDestinatario,
+      String nombreEmpresa,
+      String nombreDispositivo,
+      String codigo,
+      String ipSolicitante,
+      String plataforma,
+      int minutosExpiracion) {
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); padding: 30px; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">🔐 Código de Verificación</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">%s</p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 30px; border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 10px 10px;">
+                <p style="margin-top: 0;">Hola <strong>%s</strong>,</p>
+                
+                <p>Un nuevo dispositivo está solicitando acceso al sistema:</p>
+                
+                <div style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                    <table style="width: 100%%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; color: #6c757d;">📱 Dispositivo:</td>
+                            <td style="padding: 8px 0; font-weight: bold;">%s</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #6c757d;">💻 Plataforma:</td>
+                            <td style="padding: 8px 0;">%s</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #6c757d;">🌐 IP:</td>
+                            <td style="padding: 8px 0;">%s</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <p style="margin-bottom: 10px; color: #6c757d;">Tu código de verificación es:</p>
+                    <div style="background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px 40px; border-radius: 10px; display: inline-block;">
+                        %s
+                    </div>
+                    <p style="margin-top: 15px; color: #dc3545; font-size: 14px;">
+                        ⏱️ Este código expira en <strong>%d minutos</strong>
+                    </p>
+                </div>
+                
+                <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin-top: 20px;">
+                    <p style="margin: 0; color: #856404; font-size: 14px;">
+                        <strong>⚠️ Importante:</strong> Si no reconoces esta solicitud, ignora este mensaje.
+                    </p>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #dee2e6; margin: 30px 0;">
+                
+                <p style="color: #6c757d; font-size: 12px; text-align: center; margin-bottom: 0;">
+                    Este es un mensaje automático de NathBit POS.<br>
+                    Por favor no responda a este correo.
+                </p>
+            </div>
+        </body>
+        </html>
+        """.formatted(
+        nombreEmpresa,
+        nombreDestinatario,
+        nombreDispositivo,
+        plataforma != null ? plataforma : "No especificada",
+        ipSolicitante != null ? ipSolicitante : "No disponible",
+        codigo,
+        minutosExpiracion
+    );
+  }
+
+  /**
    * Adjunta los archivos al mensaje
    */
   private List<ResendEmailService.EmailAttachment> construirAdjuntos(EmailFacturaDto dto) {

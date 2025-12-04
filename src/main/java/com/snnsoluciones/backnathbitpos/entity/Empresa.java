@@ -78,6 +78,12 @@ public class Empresa {
     @Column(name = "otras_senas", length = 500)
     private String otrasSenas;
 
+    @Column(name = "migrado_a_tenant")
+    private Boolean migradoATenant;
+
+    @Column(name = "tenant_id")
+    private Long tenantId;
+
     // Configuración fiscal
     @Column(name = "requiere_hacienda")
     private Boolean requiereHacienda = false;

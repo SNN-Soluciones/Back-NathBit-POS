@@ -114,7 +114,7 @@ public class TenantInterceptor implements HandlerInterceptor {
 
         log.debug("Device token encontrado: {}...", deviceToken.substring(0, Math.min(10, deviceToken.length())));
 
-        Optional<Dispositivo> dispositivoOpt = dispositivoRepository.findByTokenAndActivoTrue(deviceToken);
+        Optional<Dispositivo> dispositivoOpt = dispositivoRepository.findByTokenWithTenant(deviceToken);
         
         if (dispositivoOpt.isEmpty()) {
             log.warn("Device token no válido o dispositivo inactivo");

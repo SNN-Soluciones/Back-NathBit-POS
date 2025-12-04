@@ -5,7 +5,7 @@ spring:
       maximum-pool-size: 10
       initialization-fail-timeout: -1
       connection-timeout: 10000
-    url: jdbc:postgresql://45.32.164.243:5432/nathbitpos
+    url: jdbc:postgresql://localhost:5433/nathbitpos
     username: snnsoluciones
     password: "@39NSNm90@1"
 

@@ -52,7 +52,7 @@
 	<parameter name="mensaje_hacienda" class="java.lang.String"/>
 	<parameter name="vendedor" class="java.lang.String"/>
 	<parameter name="resolucion" class="java.lang.String" isForPrompting="false">
-		<defaultValueExpression><![CDATA["Autorizado mediante resolución DGT-R-033-2019"]]></defaultValueExpression>
+		<defaultValueExpression><![CDATA["Autorizado mediante Resolución MH-DGT-RES-0027-2024"]]></defaultValueExpression>
 	</parameter>
 	<parameter name="subreport_detalles" class="net.sf.jasperreports.engine.JasperReport"/>
 	<parameter name="subreport_otros_cargos" class="net.sf.jasperreports.engine.JasperReport"/>

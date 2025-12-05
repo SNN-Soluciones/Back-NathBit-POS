@@ -160,7 +160,7 @@ public class EmailService {
     html.append("<p>Este es un correo automático, por favor no responder.<br>");
     html.append(dto.getRazonSocial()).append(" - Cédula Jurídica: ").append(dto.getCedulaJuridica())
         .append("<br>");
-    html.append("Comprobante electrónico autorizado mediante la resolución DGT-R-48-2016</p>");
+    html.append("Autorizado mediante Resolución MH-DGT-RES-0027-2024</p>");
     html.append("</div>");
 
     html.append("</div>");

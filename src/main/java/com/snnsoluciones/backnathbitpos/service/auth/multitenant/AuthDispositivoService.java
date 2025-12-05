@@ -7,8 +7,10 @@ import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.NotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.global.*;
 import com.snnsoluciones.backnathbitpos.service.EmailService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,7 @@ public class AuthDispositivoService {
     private final CodigoRegistroRepository codigoRegistroRepository;
     private final UsuarioGlobalRepository usuarioGlobalRepository;
     private final EmailService emailService;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * Máximo de códigos activos por tenant
@@ -118,11 +121,11 @@ public class AuthDispositivoService {
      * Solicita un código OTP para registrar un nuevo dispositivo.
      * Envía el código por email a los SUPER_ADMIN del tenant.
      */
-    public SolicitarCodigoResponse solicitarCodigo(SolicitarCodigoRequest request, 
-                                                    String ipCliente, 
-                                                    String userAgent) {
-        log.info("Solicitando código OTP para tenant={}, dispositivo={}", 
-                 request.getTenantCodigo(), request.getNombreDispositivo());
+    public SolicitarCodigoResponse solicitarCodigo(SolicitarCodigoRequest request,
+        String ipCliente,
+        String userAgent) {
+        log.info("Solicitando código OTP para tenant={}, dispositivo={}, sucursal={}",
+            request.getTenantCodigo(), request.getNombreDispositivo(), request.getSucursalId());
 
         // Buscar tenant
         Tenant tenant = tenantRepository.findByCodigoIgnoreCase(request.getTenantCodigo())
@@ -132,36 +135,43 @@ public class AuthDispositivoService {
             throw new BadRequestException("La empresa no está activa");
         }
 
+        // Validar que la sucursal existe
+        String sucursalNombre = obtenerNombreSucursal(tenant.getSchemaName(), request.getSucursalId());
+        if (sucursalNombre == null) {
+            throw new BadRequestException("Sucursal no encontrada");
+        }
+
         // Verificar límite de códigos activos
         LocalDateTime ahora = LocalDateTime.now();
         long codigosActivos = codigoRegistroRepository.countCodigosActivosPorTenant(tenant.getId(), ahora);
-        
+
         if (codigosActivos >= MAX_CODIGOS_ACTIVOS_POR_TENANT) {
             throw new BadRequestException("Demasiadas solicitudes pendientes. Intente más tarde.");
         }
 
         // Invalidar códigos anteriores del mismo dispositivo
         codigoRegistroRepository.invalidarCodigosAnteriores(
-            tenant.getId(), 
-            request.getNombreDispositivo(), 
+            tenant.getId(),
+            request.getNombreDispositivo(),
             ahora
         );
 
-        // Crear nuevo código
+        // Crear nuevo código CON SUCURSAL
         CodigoRegistro codigo = CodigoRegistro.crear(
             tenant,
             request.getNombreDispositivo(),
             ipCliente,
             userAgent
         );
+        codigo.setSucursalId(request.getSucursalId());
+        codigo.setSucursalNombre(sucursalNombre);
         codigo = codigoRegistroRepository.save(codigo);
 
         // Obtener emails de SUPER_ADMINs del tenant
         List<UsuarioGlobal> admins = usuarioGlobalRepository.findByTenantId(tenant.getId());
-        
+
         if (admins.isEmpty()) {
             log.warn("No hay SUPER_ADMINs para el tenant {}", tenant.getCodigo());
-            // Buscar propietarios específicamente
             admins = usuarioGlobalRepository.findPropietariosByTenantId(tenant.getId());
         }
 
@@ -169,14 +179,14 @@ public class AuthDispositivoService {
             throw new BadRequestException("No hay administradores configurados para esta empresa");
         }
 
-        // Enviar email a cada admin
+        // Enviar email a cada admin (incluir info de sucursal)
         for (UsuarioGlobal admin : admins) {
             try {
                 emailService.enviarCodigoRegistroDispositivo(
                     admin.getEmail(),
                     admin.getNombre(),
                     tenant.getNombre(),
-                    request.getNombreDispositivo(),
+                    request.getNombreDispositivo() + " - " + sucursalNombre,  // Incluir sucursal
                     codigo.getCodigo(),
                     ipCliente,
                     request.getPlataforma(),
@@ -191,18 +201,87 @@ public class AuthDispositivoService {
         return SolicitarCodigoResponse.builder()
             .mensaje("Código enviado a los administradores de la empresa")
             .expiraEnSegundos(CodigoRegistro.MINUTOS_EXPIRACION * 60)
-            .intentosRestantes(3) // TODO: Implementar límite de intentos
+            .intentosRestantes(3)
             .build();
+    }
+
+    /**
+     * Obtiene las sucursales de un tenant para selección.
+     */
+    @Transactional(readOnly = true)
+    public ListaSucursalesResponse obtenerSucursalesTenant(String codigoTenant) {
+        log.info("Obteniendo sucursales para tenant: {}", codigoTenant);
+
+        Tenant tenant = tenantRepository.findByCodigoIgnoreCase(codigoTenant)
+            .orElseThrow(() -> new NotFoundException("Empresa no encontrada"));
+
+        if (!tenant.estaActivo()) {
+            throw new BadRequestException("La empresa no está activa");
+        }
+
+        // Consultar sucursales del schema del tenant
+        String schemaName = tenant.getSchemaName();
+        List<SucursalResumen> sucursales = obtenerSucursalesDelSchema(schemaName);
+
+        return ListaSucursalesResponse.builder()
+            .tenant(TenantResumen.builder()
+                .id(tenant.getId())
+                .codigo(tenant.getCodigo())
+                .nombre(tenant.getNombre())
+                .build())
+            .sucursales(sucursales)
+            .build();
+    }
+
+    /**
+     * Obtiene sucursales directamente del schema del tenant
+     */
+    private List<SucursalResumen> obtenerSucursalesDelSchema(String schemaName) {
+        String sql = String.format(
+            "SELECT id, nombre, numero_sucursal FROM %s.sucursales WHERE activa = true ORDER BY nombre",
+            schemaName
+        );
+
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+            return rows.stream()
+                .map(row -> SucursalResumen.builder()
+                    .id(((Number) row.get("id")).longValue())
+                    .nombre((String) row.get("nombre"))
+                    .numeroSucursal(row.get("numero_sucursal") != null ? row.get("numero_sucursal").toString() : "001")
+                    .build())
+                .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error obteniendo sucursales del schema {}: {}", schemaName, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Obtiene el nombre de una sucursal
+     */
+    private String obtenerNombreSucursal(String schemaName, Long sucursalId) {
+        String sql = String.format(
+            "SELECT nombre FROM %s.sucursales WHERE id = ?",
+            schemaName
+        );
+
+        try {
+            return jdbcTemplate.queryForObject(sql, String.class, sucursalId);
+        } catch (Exception e) {
+            log.warn("No se encontró sucursal {} en schema {}", sucursalId, schemaName);
+            return null;
+        }
     }
 
     /**
      * Verifica el código OTP y registra el dispositivo.
      */
     public VerificarCodigoResponse verificarCodigo(VerificarCodigoRequest request,
-                                                    String ipCliente,
-                                                    String userAgent) {
-        log.info("Verificando código OTP para tenant={}, dispositivo={}", 
-                 request.getTenantCodigo(), request.getNombreDispositivo());
+        String ipCliente,
+        String userAgent) {
+        log.info("Verificando código OTP para tenant={}, dispositivo={}, sucursal={}",
+            request.getTenantCodigo(), request.getNombreDispositivo(), request.getSucursalId());
 
         // Buscar tenant
         Tenant tenant = tenantRepository.findByCodigoIgnoreCase(request.getTenantCodigo())
@@ -221,6 +300,11 @@ public class AuthDispositivoService {
             throw new BadRequestException("El código no corresponde a este dispositivo");
         }
 
+        // Verificar que coincide la sucursal
+        if (!codigo.getSucursalId().equals(request.getSucursalId())) {
+            throw new BadRequestException("El código no corresponde a esta sucursal");
+        }
+
         // Marcar código como usado
         codigo.marcarComoUsado();
         codigoRegistroRepository.save(codigo);
@@ -228,7 +312,7 @@ public class AuthDispositivoService {
         // Determinar plataforma
         Plataforma plataforma = parsePlataforma(request.getPlataforma());
 
-        // Crear dispositivo
+        // Crear dispositivo CON SUCURSAL
         Dispositivo dispositivo = Dispositivo.crear(
             tenant,
             request.getNombreDispositivo(),
@@ -236,13 +320,12 @@ public class AuthDispositivoService {
             userAgent,
             ipCliente
         );
+        dispositivo.setSucursalId(request.getSucursalId());
+        dispositivo.setSucursalNombre(codigo.getSucursalNombre());
         dispositivo = dispositivoRepository.save(dispositivo);
 
-        log.info("Dispositivo {} registrado exitosamente para tenant {}", 
-                 dispositivo.getNombre(), tenant.getCodigo());
-
-        // TODO: Obtener usuarios del tenant
-        List<UsuarioLocalInfo> usuarios = List.of();
+        log.info("Dispositivo {} registrado para tenant {} en sucursal {}",
+            dispositivo.getNombre(), tenant.getCodigo(), codigo.getSucursalNombre());
 
         return VerificarCodigoResponse.builder()
             .deviceToken(dispositivo.getToken())
@@ -251,19 +334,26 @@ public class AuthDispositivoService {
                 .codigo(tenant.getCodigo())
                 .nombre(tenant.getNombre())
                 .build())
+            .sucursal(SucursalResumen.builder()
+                .id(codigo.getSucursalId())
+                .nombre(codigo.getSucursalNombre())
+                .build())
             .dispositivo(DispositivoInfo.builder()
                 .id(dispositivo.getId())
                 .nombre(dispositivo.getNombre())
                 .plataforma(plataforma != null ? plataforma.name() : null)
+                .sucursal(SucursalResumen.builder()
+                    .id(codigo.getSucursalId())
+                    .nombre(codigo.getSucursalNombre())
+                    .build())
                 .build())
-            .usuarios(usuarios)
             .build();
     }
 
     /**
      * Reenvía el código OTP.
      */
-    public SolicitarCodigoResponse reenviarCodigo(String tenantCodigo, 
+    public SolicitarCodigoResponse reenviarCodigo(String tenantCodigo,
                                                    String nombreDispositivo,
                                                    String ipCliente,
                                                    String userAgent) {
@@ -271,7 +361,7 @@ public class AuthDispositivoService {
             .tenantCodigo(tenantCodigo)
             .nombreDispositivo(nombreDispositivo)
             .build();
-        
+
         return solicitarCodigo(request, ipCliente, userAgent);
     }
 

@@ -226,10 +226,10 @@ public class AuthPinService {
      */
     private List<SucursalResumen> obtenerSucursalesDelTenant(String schemaName, Long usuarioId) {
         String sql = String.format(
-            "SELECT s.id, s.nombre, s.numero_sucursal " +
+            "SELECT DISTINCT s.id, s.nombre, s.numero_sucursal " +
                 "FROM %s.sucursales s " +
-                "INNER JOIN %s.usuarios_sucursales us ON s.id = us.sucursal_id " +
-                "WHERE us.usuario_id = ? AND us.activo = true",
+                "INNER JOIN %s.usuarios_empresas ue ON s.id = ue.sucursal_id " +
+                "WHERE ue.usuario_id = ? AND ue.activo = true AND ue.sucursal_id IS NOT NULL",
             schemaName, schemaName
         );
 
@@ -239,7 +239,7 @@ public class AuthPinService {
                 .map(row -> SucursalResumen.builder()
                     .id(((Number) row.get("id")).longValue())
                     .nombre((String) row.get("nombre"))
-                    .numeroSucursal(row.get("numero_sucursal").toString())
+                    .numeroSucursal(row.get("numero_sucursal") != null ? row.get("numero_sucursal").toString() : "001")
                     .build())
                 .collect(Collectors.toList());
         } catch (Exception e) {

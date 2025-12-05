@@ -228,6 +228,24 @@ public class AuthMultitenantController {
         }
     }
 
+    @Operation(summary = "Obtener sucursales del tenant",
+        description = "Lista las sucursales disponibles para registrar dispositivo")
+    @GetMapping("/empresa/{codigo}/sucursales")
+    public ResponseEntity<ApiResponse<ListaSucursalesResponse>> obtenerSucursales(
+        @PathVariable String codigo) {
+
+        log.info("GET /api/auth/empresa/{}/sucursales", codigo);
+
+        try {
+            ListaSucursalesResponse response = authDispositivoService.obtenerSucursalesTenant(codigo);
+            return ResponseEntity.ok(ApiResponse.success("Sucursales obtenidas", response));
+        } catch (Exception e) {
+            log.error("Error obteniendo sucursales: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @Operation(summary = "Login con PIN", 
                description = "Autenticación de usuario local con PIN de 4-6 dígitos")
     @PostMapping("/pin")

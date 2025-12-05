@@ -123,6 +123,7 @@ public class AuthMultitenantDTOs {
         private String nombre;
         private String plataforma;
         private LocalDateTime ultimoUso;
+        private SucursalResumen sucursal;  // NUEVO
     }
 
     /**
@@ -158,6 +159,9 @@ public class AuthMultitenantDTOs {
         @Size(max = 100, message = "El nombre no puede exceder 100 caracteres")
         private String nombreDispositivo;
 
+        @NotNull(message = "La sucursal es requerida")
+        private Long sucursalId;
+
         private String plataforma; // WEB, ANDROID, IOS, WINDOWS
     }
 
@@ -192,6 +196,9 @@ public class AuthMultitenantDTOs {
         @Size(min = 6, max = 6, message = "El código debe tener 6 dígitos")
         private String codigo;
 
+        @NotNull(message = "La sucursal es requerida")
+        private Long sucursalId;
+
         private String plataforma;
     }
 
@@ -206,7 +213,7 @@ public class AuthMultitenantDTOs {
         private String deviceToken;
         private TenantResumen tenant;
         private DispositivoInfo dispositivo;
-        private List<UsuarioLocalInfo> usuarios;
+        private SucursalResumen sucursal;  // NUEVO
     }
 
     // ==================== AUTH PIN ====================
@@ -279,8 +286,21 @@ public class AuthMultitenantDTOs {
     @AllArgsConstructor
     public static class ObtenerUsuariosResponse {
         private TenantResumen tenant;
+        private SucursalResumen sucursal;  // NUEVO
         private DispositivoInfo dispositivo;
         private List<UsuarioLocalInfo> usuarios;
+    }
+
+    /**
+     * Response con lista de sucursales del tenant
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ListaSucursalesResponse {
+        private TenantResumen tenant;
+        private List<SucursalResumen> sucursales;
     }
 
     // ==================== CERRAR SESIÓN ====================

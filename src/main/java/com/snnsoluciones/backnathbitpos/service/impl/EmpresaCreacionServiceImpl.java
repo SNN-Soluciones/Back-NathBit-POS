@@ -328,7 +328,7 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
         // Persistir (el servicio interno decide create/update)
         configHaciendaService.crearOActualizar(configReq);
 
-        // 6.1) Actividades económicas (si el request trae lista, reemplazamos ordenadamente)
+// 6.1) Actividades económicas (si el request trae lista, reemplazamos ordenadamente)
         if (cfg != null && cfg.getActividades() != null) {
           log.info("6.1 Reemplazando actividades económicas...");
           if (cfg.getActividades().isEmpty()) {
@@ -344,18 +344,19 @@ public class EmpresaCreacionServiceImpl implements EmpresaCreacionService {
             }
           }
 
-          // Borrar actuales y crear nuevas (ajusta a tu repo: deleteByEmpresaId / deleteByEmpresa / etc.)
-          try {
-            empresaActividadRepository.deleteByEmpresaId(empresa.getId());
-          } catch (Exception ignore) {
-            // Si tu repo no tiene este método, usa el que corresponda en tu proyecto:
-            // empresaActividadRepository.deleteByEmpresa(empresa);
-            // o bien carga y deleteAll(...)
+          // Esto evita ObjectDeletedException al hacer merge
+          if (empresa.getActividades() != null) {
+            empresa.getActividades().clear();
           }
+
+          // Eliminar de BD y sincronizar
+          empresaActividadRepository.deleteByEmpresaId(empresa.getId());
+          empresaActividadRepository.flush(); // Forzar DELETE antes de INSERT
 
           crearActividadesEconomicas(empresa, cfg.getActividades());
           log.info("   ✅ Actividades económicas actualizadas");
         }
+
       } else {
         // Si NO requiere Hacienda ahora, puedes decidir deshabilitar/limpiar config (opcional):
         log.info("6. Configuración Hacienda: empresa no requiere Hacienda. Se mantiene configuración existente sin uso (no se borra).");

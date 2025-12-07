@@ -76,6 +76,7 @@ public class SecurityConfig {
                     "/api/auth/global/login",
                     "/api/auth/empresa",
                     "/api/auth/dispositivo/solicitar",
+                    "/api/auth/empresa/*/sucursales",
                     "/api/auth/dispositivo/verificar",
                     "/api/auth/dispositivo/reenviar",
                     "/api/auth/dispositivo/usuarios",  // <-- AGREGAR

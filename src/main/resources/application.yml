@@ -40,7 +40,7 @@ app:
     default-logo-path: "defaults/logo-default.png"
 
   jwt:
-    secret: ${JWT_SECRET:NathBit2025SecureKeyForJWTTokenGenerationMustBe64CharsLongXYZ123456789ABCDEF}
+    secret: ${JWT_SECRET:NathBit20251SecureKeyForJWTTokenGenerationMustBe64CharsLongXYZ123456789ABCDE}
     expiration: 86400000 # 24 horas
     refresh-expiration: 604800000 # 7 días - AGREGAR ESTA LÍNEA
 

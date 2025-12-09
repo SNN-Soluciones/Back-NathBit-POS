@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -84,4 +85,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
         "AND u.rol != 'ROOT'")
     Page<Usuario> findConAsignacion(Pageable pageable);
 
+    List<Usuario> findByUsuarioEmpresas_Empresa_IdAndUpdatedAtAfter(Long empresaId, LocalDateTime updatedAt);
+
+    List<Usuario> findByUsuarioEmpresas_Empresa_Id(Long empresaId);
 }

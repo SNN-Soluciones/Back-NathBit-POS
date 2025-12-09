@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.CategoriaProducto;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -80,4 +81,8 @@ public interface CategoriaProductoRepository extends JpaRepository<CategoriaProd
         """)
     Integer obtenerSiguienteOrdenLocal(@Param("empresaId") Long empresaId,
         @Param("sucursalId") Long sucursalId);
+
+    List<CategoriaProducto> findBySucursalIdAndUpdatedAtAfter(Long sucursalId, LocalDateTime updatedAt);
+
+    List<CategoriaProducto> findBySucursalId(Long sucursalId);
 }

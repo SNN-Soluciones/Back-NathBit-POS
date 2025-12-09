@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.FamiliaProducto;
+import java.time.LocalDateTime;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -100,4 +101,8 @@ public interface FamiliaProductoRepository extends JpaRepository<FamiliaProducto
         @Param("empresaId") Long empresaId,
         @Param("sucursalId") Long sucursalId
     );
+
+    List<FamiliaProducto> findBySucursalIdAndUpdatedAtAfter(Long sucursalId, LocalDateTime updatedAt);
+
+    List<FamiliaProducto> findBySucursalId(Long sucursalId);
 }

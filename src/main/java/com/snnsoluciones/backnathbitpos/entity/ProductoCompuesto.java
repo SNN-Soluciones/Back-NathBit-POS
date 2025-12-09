@@ -76,6 +76,12 @@ public class ProductoCompuesto {
     @Builder.Default
     private List<ProductoCompuestoSlot> slots = new ArrayList<>();
 
+    @OneToMany(mappedBy = "compuesto", cascade = CascadeType.ALL,
+        orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("orden ASC")
+    @Builder.Default
+    private List<ProductoCompuestoConfiguracion> configuraciones = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

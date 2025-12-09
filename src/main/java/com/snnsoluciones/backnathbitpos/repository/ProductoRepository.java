@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Producto;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -160,4 +161,8 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
   long countBySucursalIdAndActivoTrue(Long sucursalId);
 
   boolean existsByCodigoInternoAndEmpresaIdAndSucursalId(String codigoInterno, Long empresaId, Long sucursalId);
+
+  List<Producto> findBySucursalIdAndUpdatedAtAfter(Long sucursalId, LocalDateTime updatedAt);
+
+  List<Producto> findBySucursalId(Long sucursalId);
 }

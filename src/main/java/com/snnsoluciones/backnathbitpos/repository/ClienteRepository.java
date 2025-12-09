@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -97,5 +98,9 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
      * Buscar clientes por permiso de crédito
      */
     Page<Cliente> findByPermiteCredito(Boolean permiteCredito, Pageable pageable);
+
+    List<Cliente> findByEmpresaIdAndUpdatedAtAfter(Long empresaId, LocalDateTime updatedAt);
+
+    List<Cliente> findByEmpresaId(Long empresaId);
 
 }

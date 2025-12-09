@@ -115,6 +115,9 @@ public class Producto {
   @JdbcType(PostgreSQLEnumJdbcType.class)
   private ZonaPreparacion zonaPreparacion = ZonaPreparacion.NINGUNA;
 
+  @OneToOne(mappedBy = "producto", fetch = FetchType.LAZY)
+  private ProductoCompuesto productoCompuesto;
+
   @Column(name = "factor_conversion_receta", precision = 10, scale = 4)
   @Builder.Default
   private BigDecimal factorConversionReceta = BigDecimal.ONE;

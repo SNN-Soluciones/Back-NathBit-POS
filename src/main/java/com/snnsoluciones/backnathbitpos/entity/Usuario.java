@@ -65,6 +65,21 @@ public class Usuario {
     @Column(unique = true, length = 50)
     private String username;
 
+    @Column(length = 255)
+    private String pin;
+
+    @Column(name = "pin_longitud")
+    private Integer pinLongitud = 4;
+
+    @Column(name = "requiere_cambio_pin")
+    private Boolean requiereCambioPin = false;
+
+    @Column(name = "migrado_a_global")
+    private Boolean migradoAGlobal = false;
+
+    @Column(name = "usuario_global_id")
+    private Long usuarioGlobalId;
+
     @Column(name = "requiere_cambio_password")
     private Boolean requiereCambioPassword = false;
 

@@ -28,6 +28,8 @@ import com.snnsoluciones.backnathbitpos.repository.CodigoCABySRepository;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
 import com.snnsoluciones.backnathbitpos.service.UbicacionService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -42,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,6 +70,10 @@ public class ClienteServiceImpl implements ClienteService {
   private final ClienteActividadRepository clienteActividadRepository;
   private final ActividadEconomicaRepository actividadEconomicaRepository;
   private final RestTemplate restTemplate;
+  private final JdbcTemplate jdbcTemplate;
+
+  @PersistenceContext
+  private EntityManager entityManager;
 
   private static final Pattern EMAIL_PATTERN = Pattern.compile(
       "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$"
@@ -92,7 +99,8 @@ public class ClienteServiceImpl implements ClienteService {
 
     Long sucursalId = dto.getSucursalId() != null ? dto.getSucursalId() : null;
 
-    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, sucursalId, "cliente");
+    Sucursal sucursal = modularHelper.determinarSucursalParaEntidad(empresaId, sucursalId,
+        "cliente");
 
     // =========================
     // 1) Empresa
@@ -264,7 +272,7 @@ public class ClienteServiceImpl implements ClienteService {
       clienteExistente.setTelefonoNumero(clienteActualizado.getTelefonoNumero());
     }
 
-    // Validaciones
+    // Validaciones de emails
     if (clienteActualizado.getClienteEmails() != null) {
       // Limpiar emails existentes
       clienteExistente.getClienteEmails().clear();
@@ -293,6 +301,56 @@ public class ClienteServiceImpl implements ClienteService {
     clienteExistente.setRazonSocial(clienteActualizado.getRazonSocial());
     clienteExistente.setTelefonoNumero(clienteActualizado.getTelefonoNumero());
     clienteExistente.setPermiteCredito(clienteActualizado.getPermiteCredito());
+
+    // =========================
+// PROCESAR EXONERACIÓN (JDBC DIRECTO)
+// =========================
+    ExoneracionClienteDto exDto = clienteActualizado.getExoneracion();
+
+// DESCONECTAR HIBERNATE de las exoneraciones viejas
+    clienteExistente.getExoneraciones().clear();
+    entityManager.flush();
+    entityManager.clear();
+
+// Recargar el cliente limpio
+    clienteExistente = clienteRepository.findById(id).orElseThrow();
+
+    if (exDto != null && StringUtils.isNotBlank(exDto.getCodigoAutorizacion())) {
+      log.info("Procesando exoneración para cliente ID: {}", id);
+
+      // BORRAR
+      jdbcTemplate.update("DELETE FROM cliente_exoneracion_cabys WHERE exoneracion_id IN (SELECT id FROM clientes_exoneraciones WHERE cliente_id = ?)", id);
+      jdbcTemplate.update("DELETE FROM clientes_exoneraciones WHERE cliente_id = ?", id);
+
+      // INSERTAR
+      jdbcTemplate.update(
+          "INSERT INTO clientes_exoneraciones (cliente_id, tipo_documento, numero_documento, nombre_institucion, " +
+              "fecha_emision, fecha_vencimiento, porcentaje_exoneracion, categoria_compra, monto_maximo, activo, " +
+              "codigo_autorizacion, numero_autorizacion, posee_cabys, created_at, updated_at) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?, ?, ?, NOW(), NOW())",
+          id,
+          mapTipoDocumento(exDto.getTipoDocumento()).name(),
+          StringUtils.trimToEmpty(exDto.getNumeroDocumento()),
+          StringUtils.trimToEmpty(exDto.getNombreInstitucion()),
+          exDto.getFechaEmision(),
+          exDto.getFechaVencimiento(),
+          exDto.getPorcentajeExoneracion() != null ? exDto.getPorcentajeExoneracion() : BigDecimal.ZERO,
+          exDto.getCategoriaCompra(),
+          exDto.getMontoMaximo(),
+          StringUtils.trimToEmpty(exDto.getCodigoAutorizacion()),
+          exDto.getNumeroAutorizacion(),
+          Boolean.TRUE.equals(exDto.getPoseeCabys())
+      );
+
+      clienteExistente.setTieneExoneracion(true);
+      log.info("Exoneración procesada OK");
+
+    } else {
+      // Borrar si no viene exoneración
+      jdbcTemplate.update("DELETE FROM cliente_exoneracion_cabys WHERE exoneracion_id IN (SELECT id FROM clientes_exoneraciones WHERE cliente_id = ?)", id);
+      jdbcTemplate.update("DELETE FROM clientes_exoneraciones WHERE cliente_id = ?", id);
+      clienteExistente.setTieneExoneracion(false);
+    }
 
     return clienteRepository.save(clienteExistente);
   }
@@ -352,7 +410,9 @@ public class ClienteServiceImpl implements ClienteService {
             .sorted((e1, e2) -> {
               // Ordenar por frecuencia de uso (más usado primero)
               int compareVeces = e2.getVecesUsado().compareTo(e1.getVecesUsado());
-              if (compareVeces != 0) return compareVeces;
+              if (compareVeces != 0) {
+                return compareVeces;
+              }
 
               // Si tienen el mismo uso, ordenar por último uso
               if (e1.getUltimoUso() != null && e2.getUltimoUso() != null) {
@@ -472,7 +532,9 @@ public class ClienteServiceImpl implements ClienteService {
             .sorted((e1, e2) -> {
               // Ordenar por frecuencia de uso
               int compareVeces = e2.getVecesUsado().compareTo(e1.getVecesUsado());
-              if (compareVeces != 0) return compareVeces;
+              if (compareVeces != 0) {
+                return compareVeces;
+              }
 
               // Si tienen el mismo uso, ordenar por último uso
               if (e1.getUltimoUso() != null && e2.getUltimoUso() != null) {

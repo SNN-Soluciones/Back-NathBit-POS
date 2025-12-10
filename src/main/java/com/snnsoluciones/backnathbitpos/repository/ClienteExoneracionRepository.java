@@ -14,6 +14,14 @@ import java.util.Optional;
 
 @Repository
 public interface ClienteExoneracionRepository extends JpaRepository<ClienteExoneracion, Long> {
+
+    @Modifying
+    @Query("DELETE FROM ClienteExoneracion e WHERE e.cliente.id = :clienteId")
+    void deleteAllByClienteId(@Param("clienteId") Long clienteId);
+
+    @Modifying
+    @Query(value = "UPDATE clientes_exoneraciones SET cliente_id = :clienteId WHERE id = :exoneracionId", nativeQuery = true)
+    void updateClienteId(@Param("exoneracionId") Long exoneracionId, @Param("clienteId") Long clienteId);
     
     // Buscar exoneraciones activas por cliente
     List<ClienteExoneracion> findByClienteIdAndActivoTrue(Long clienteId);

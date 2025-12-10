@@ -123,4 +123,10 @@ public interface DispositivoRepository extends JpaRepository<Dispositivo, Long> 
     @Query("SELECT d FROM Dispositivo d WHERE d.tenant.id = :tenantId " +
            "AND LOWER(d.nombre) LIKE LOWER(CONCAT('%', :nombre, '%'))")
     List<Dispositivo> buscarPorNombre(@Param("tenantId") Long tenantId, @Param("nombre") String nombre);
+
+    @Query("SELECT d FROM Dispositivo d JOIN FETCH d.tenant WHERE d.token = :token AND d.activo = true")
+    Optional<Dispositivo> findByTokenAndActivoTrueWithTenant(@Param("token") String token);
+
+    @Query("SELECT d FROM Dispositivo d JOIN FETCH d.tenant WHERE d.token = :token AND d.activo = true")
+    Optional<Dispositivo> findByTokenWithTenant(@Param("token") String token);
 }

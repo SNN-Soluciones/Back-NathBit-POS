@@ -71,6 +71,13 @@ public class Dispositivo {
     @Column(name = "ip_registro", length = 45)
     private String ipRegistro;
 
+    // Como las sucursales están en el schema del tenant, guardamos el ID
+    @Column(name = "sucursal_id")
+    private Long sucursalId;
+
+    @Column(name = "sucursal_nombre", length = 100)
+    private String sucursalNombre;
+
     // ==================== Estado ====================
 
     /**

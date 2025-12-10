@@ -53,6 +53,12 @@ public class CodigoRegistro {
     @Column(name = "dispositivo_nombre", nullable = false, length = 100)
     private String dispositivoNombre;
 
+    @Column(name = "sucursal_id")
+    private Long sucursalId;
+
+    @Column(name = "sucursal_nombre", length = 100)
+    private String sucursalNombre;
+
     /**
      * Código OTP de 6 dígitos
      */

@@ -133,15 +133,14 @@ public class FacturaPdfMapperService {
     Cliente cliente = factura.getCliente();
 
     if (cliente != null) {
-      String direccion = construirDireccionCompletaCliente(factura.getCliente().getUbicacion());
-      params.put("receptor_nombre", cliente.getRazonSocial());  // SIN "Cliente: "
-      params.put("receptor_identificacion", cliente.getNumeroIdentificacion()); // SIN "ID: "
+      // String direccion = construirDireccionCompletaCliente(factura.getCliente().getUbicacion()); // ❌ BORRAR ESTA LÍNEA
+      params.put("receptor_nombre", cliente.getRazonSocial());
+      params.put("receptor_identificacion", cliente.getNumeroIdentificacion());
       params.put("receptor_correo",
-          factura.getEmailReceptor() != null ? factura.getEmailReceptor() : ""); // SIN "Correo: "
+          factura.getEmailReceptor() != null ? factura.getEmailReceptor() : "");
       params.put("receptor_telefono",
-          cliente.getTelefonoNumero() != null ? cliente.getTelefonoNumero()
-              : ""); // SIN "Teléfono: "
-      params.put("receptor_direccion", ""); // SIN "Dirección: "
+          cliente.getTelefonoNumero() != null ? cliente.getTelefonoNumero() : "");
+      params.put("receptor_direccion", ""); // ✅ Ya está vacío
       params.put("receptor_actividad_economica",
           factura.getActividadReceptor() != null && !factura.getActividadReceptor().trim().isEmpty()
               ? factura.getActividadReceptor().trim()

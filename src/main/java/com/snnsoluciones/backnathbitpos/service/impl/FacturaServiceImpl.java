@@ -144,14 +144,34 @@ public class FacturaServiceImpl implements FacturaService {
     // Versión de catálogos (v4.4)
     factura.setVersionCatalogos(request.getVersionCatalogos());
 
-    // PASO 10: Establecer terminal, sucursal y sesión
-    Terminal terminal = terminalService.buscarPorId(request.getTerminalId())
-        .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
-    factura.setTerminal(terminal);
-    factura.setSucursal(terminal.getSucursal());
 
     Usuario usuario = usuarioRepository.findById(request.getUsuarioId())
         .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+    // PASO 10: Establecer terminal, sucursal y sesión
+    Terminal terminal;
+    if (request.getTerminalId() != null) {
+      terminal = terminalService.buscarPorId(request.getTerminalId())
+          .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
+    } else {
+      if (!usuario.getRol().equals(RolNombre.SUPER_ADMIN)) {
+        throw new BusinessException("Se requiere especificar una terminal");
+      }
+
+      // Buscar terminales de la sucursal
+      List<Terminal> terminales = terminalService.listarPorSucursal(request.getSucursalId());
+
+      if (terminales.isEmpty()) {
+        throw new RuntimeException("No hay terminales disponibles en la sucursal");
+      }
+
+      terminal = terminales.get(0); // Primera terminal disponible
+      log.info("⚠️ SUPER_ADMIN usando terminal automática: {}", terminal.getCodigo());
+    }
+
+    factura.setTerminal(terminal);
+    factura.setSucursal(terminal.getSucursal());
+
 
     if (request.getSesionCajaId() != null) {
       // Si viene sesión, la asignamos normalmente

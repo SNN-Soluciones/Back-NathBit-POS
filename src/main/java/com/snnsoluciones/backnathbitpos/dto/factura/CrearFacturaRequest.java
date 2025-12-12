@@ -52,6 +52,8 @@ public class CrearFacturaRequest {
     // Cliente (opcional para TE)
     private Long clienteId;
 
+    private Long sucursalId;
+
     @DecimalMin(value = "0.00", message = "El vuelto no puede ser negativo")
     private BigDecimal vuelto;
     

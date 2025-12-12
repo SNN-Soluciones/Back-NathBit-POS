@@ -11,7 +11,10 @@ import java.util.Optional;
 
 @Repository
 public interface TerminalRepository extends JpaRepository<Terminal, Long> {
-    
+
+    Optional<Terminal> findFirstBySucursalId(Long sucursalId);
+
+
     // Buscar terminales por sucursal
     List<Terminal> findBySucursalId(Long sucursalId);
     

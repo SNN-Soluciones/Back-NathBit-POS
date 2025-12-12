@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.facturainterna.*;
 import com.snnsoluciones.backnathbitpos.dto.orden.CrearOrdenRequest;
 import com.snnsoluciones.backnathbitpos.dto.orden.OrdenResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
@@ -78,9 +79,18 @@ public class FacturaInternaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Mesa no encontrada"));
         }
 
-        SesionCaja sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
-            .orElseThrow(() -> new ResourceNotFoundException("No hay sesion de caja abierta"));
-
+        SesionCaja sesionCaja = null;
+        if (request.getSesionCajaId() != null) {
+            sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
+                .orElseThrow(() -> new ResourceNotFoundException("Sesión de caja no encontrada"));
+        } else {
+            if (!cajero.getRol().equals(RolNombre.SUPER_ADMIN)) {
+                throw new BadRequestException(
+                    "Se requiere una sesión de caja abierta para crear facturas"
+                );
+            }
+            log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", cajero.getUsername());
+        }
         // ===== 2) Generar el número de factura ANTES (para usarlo en la Orden) =====
         final String numeroFactura = generarNumeroFactura(empresa.getId(), sucursal.getId());
 

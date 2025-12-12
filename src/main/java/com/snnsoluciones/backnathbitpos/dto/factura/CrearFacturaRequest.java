@@ -44,7 +44,6 @@ public class CrearFacturaRequest {
 
     private String actividadReceptor;
     
-    @NotNull(message = "Sesión de caja es requerida")
     private Long sesionCajaId;
     
     @NotNull(message = "Usuario es requerido")

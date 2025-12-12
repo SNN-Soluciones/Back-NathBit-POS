@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.factura.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.mh.*;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
@@ -149,8 +150,27 @@ public class FacturaServiceImpl implements FacturaService {
     factura.setTerminal(terminal);
     factura.setSucursal(terminal.getSucursal());
 
-    sesionCajaRepository.findById(request.getSesionCajaId())
-        .ifPresent(factura::setSesionCaja);
+    Usuario usuario = usuarioRepository.findById(request.getUsuarioId())
+        .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+    if (request.getSesionCajaId() != null) {
+      // Si viene sesión, la asignamos normalmente
+      sesionCajaRepository.findById(request.getSesionCajaId())
+          .ifPresent(factura::setSesionCaja);
+    } else {
+      // Si NO viene sesión, solo permitimos si es SUPER_ADMIN
+      if (!usuario.getRol().equals(RolNombre.SUPER_ADMIN)) {
+        throw new BusinessException(
+            "Se requiere una sesión de caja abierta para crear facturas. " +
+                "Solo usuarios SUPER_ADMIN pueden facturar sin sesión de caja."
+        );
+      }
+      log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", usuario.getUsername());
+    }
+
+// Asignar el usuario (cajero)
+    factura.setCajero(usuario);
+
 
     usuarioRepository.findById(request.getUsuarioId())
         .ifPresent(factura::setCajero);

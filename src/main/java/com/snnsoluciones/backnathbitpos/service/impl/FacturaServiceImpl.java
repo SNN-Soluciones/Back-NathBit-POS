@@ -166,7 +166,7 @@ public class FacturaServiceImpl implements FacturaService {
       }
 
       terminal = terminales.get(0); // Primera terminal disponible
-      log.info("⚠️ SUPER_ADMIN usando terminal automática: {}", terminal.getCodigo());
+      log.info("⚠️ SUPER_ADMIN usando terminal automática: {}", terminal.getNumeroTerminal());
     }
 
     factura.setTerminal(terminal);

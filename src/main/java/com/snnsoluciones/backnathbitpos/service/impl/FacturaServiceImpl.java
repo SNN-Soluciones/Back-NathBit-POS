@@ -192,12 +192,9 @@ public class FacturaServiceImpl implements FacturaService {
     factura.setCajero(usuario);
 
 
-    usuarioRepository.findById(request.getUsuarioId())
-        .ifPresent(factura::setCajero);
-
     // PASO 11: Generar consecutivo único para este tipo de documento
     String consecutivo = terminalService.generarNumeroConsecutivo(
-        request.getTerminalId(),
+        terminal.getId(),
         request.getTipoDocumento()
     );
     factura.setConsecutivo(consecutivo);

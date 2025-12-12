@@ -26,7 +26,6 @@ public class CrearFacturaRequest {
     @NotNull(message = "Tipo de documento es requerido")
     private TipoDocumento tipoDocumento;
     
-    @NotNull(message = "Terminal es requerida")
     private Long terminalId;
 
     private Long facturaReferenciaId;

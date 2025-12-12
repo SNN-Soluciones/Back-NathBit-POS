@@ -557,9 +557,13 @@ public class FacturaPdfMapperService {
         sucursal.getDistrito().getDistrito() :
         (empresa.getDistrito() != null ? empresa.getDistrito().getDistrito() : "");
 
-    String direccion = sucursal.getOtrasSenas() != null ?
-        sucursal.getOtrasSenas() :
-        (empresa.getOtrasSenas() != null ? empresa.getOtrasSenas() : "");
+    // ✅ CORREGIDO - Manejo seguro de null
+    String direccion = "";
+    if (sucursal.getOtrasSenas() != null) {
+      direccion = sucursal.getOtrasSenas();
+    } else if (empresa.getOtrasSenas() != null) {
+      direccion = empresa.getOtrasSenas();
+    }
 
     if (!provincia.isEmpty()) {
       partes.add(provincia);

@@ -150,7 +150,7 @@ public class FacturaServiceImpl implements FacturaService {
 
     // PASO 10: Establecer terminal, sucursal y sesión
     Terminal terminal;
-    if (request.getTerminalId() != null) {
+    if (request.getTerminalId() != null && request.getTerminalId() > 0) {
       terminal = terminalService.buscarPorId(request.getTerminalId())
           .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
     } else {

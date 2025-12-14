@@ -149,7 +149,7 @@ public class OrdenService {
     // Usar precio override si existe, sino el precio del producto
     BigDecimal precioUnitario = request.precioUnitarioOverride() != null
         ? request.precioUnitarioOverride()
-        : producto.getPrecioVenta();
+        : (producto.getPrecioVenta() != null ? producto.getPrecioVenta() : BigDecimal.ZERO);
 
     OrdenItem item = OrdenItem.builder()
         .orden(orden)

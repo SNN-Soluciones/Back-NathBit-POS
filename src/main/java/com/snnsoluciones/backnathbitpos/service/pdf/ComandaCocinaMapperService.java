@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.service.pdf;
 
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
+import com.snnsoluciones.backnathbitpos.repository.OrdenRepository;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
@@ -24,6 +26,7 @@ import java.util.Map;
 public class ComandaCocinaMapperService {
 
     private final FacturaInternaRepository facturaInternaRepository;
+    private final OrdenRepository ordenRepository;
     private static final DateTimeFormatter FECHA_FORMATO = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     /**
@@ -35,31 +38,80 @@ public class ComandaCocinaMapperService {
     public Map<String, Object> mapearComandaCocina(String numeroInterno) {
         log.info("Mapeando comanda cocina para: {}", numeroInterno);
 
-        // Buscar la factura interna
-        FacturaInterna facturaInterna = facturaInternaRepository.findByNumero(numeroInterno)
-            .orElseThrow(() -> new RuntimeException("Factura interna no encontrada: " + numeroInterno));
-
         Map<String, Object> parametros = new HashMap<>();
 
-        // Información básica de la orden
-        parametros.put("numero_orden", facturaInterna.getNumero());
-        parametros.put("mesa", obtenerNumeroMesa(facturaInterna)); // Por ahora null, luego lo expandimos
-        parametros.put("numero_viper", facturaInterna.getNumeroViper()); // ✅ AGREGAR ESTA LÍNEA
-        parametros.put("fecha_hora", facturaInterna.getFecha().format(FECHA_FORMATO));
-        parametros.put("mesero", obtenerNombreMesero(facturaInterna));
-        parametros.put("sucursal", facturaInterna.getSucursal().getNombre());
-        
-        // Observaciones generales de la factura
-        parametros.put("observaciones_generales", facturaInterna.getNotas());
+        // 🔥 Intentar primero como ORDEN, luego como FACTURA
+        Optional<Orden> ordenOpt = ordenRepository.findByNumero(numeroInterno);
 
-        // Mapear detalles (productos)
-        List<DetalleComandaDTO> detalles = mapearDetalles(facturaInterna.getDetalles());
-        
-        // Crear datasource
-        JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(detalles);
-        parametros.put("datasource_detalles", dataSource);
+        if (ordenOpt.isPresent()) {
+            // ✅ Es una ORDEN
+            Orden orden = ordenOpt.get();
+            log.info("✅ Mapeando desde ORDEN: {}", orden.getNumero());
+
+            parametros.put("numero_orden", orden.getNumero());
+            parametros.put("mesa", orden.getMesa() != null ? orden.getMesa().getCodigo() : "VENTANILLA");
+            parametros.put("numero_viper", null);
+            parametros.put("fecha_hora", orden.getFechaCreacion().format(FECHA_FORMATO));
+            parametros.put("mesero", orden.getMesero().getNombre() + " " + orden.getMesero().getApellidos());
+            parametros.put("sucursal", orden.getSucursal().getNombre());
+            parametros.put("observaciones_generales", orden.getObservaciones());
+
+            // Mapear items de la orden
+            List<DetalleComandaDTO> detalles = mapearDetallesOrden(orden.getItems());
+            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(detalles);
+            parametros.put("datasource_detalles", dataSource);
+
+        } else {
+            // Es una FACTURA INTERNA
+            FacturaInterna facturaInterna = facturaInternaRepository.findByNumero(numeroInterno)
+                .orElseThrow(() -> new RuntimeException("Orden o Factura interna no encontrada: " + numeroInterno));
+
+            log.info("✅ Mapeando desde FACTURA INTERNA: {}", facturaInterna.getNumero());
+
+            parametros.put("numero_orden", facturaInterna.getNumero());
+            parametros.put("mesa", obtenerNumeroMesa(facturaInterna));
+                parametros.put("numero_viper", facturaInterna.getNumeroViper());
+            parametros.put("fecha_hora", facturaInterna.getFecha().format(FECHA_FORMATO));
+            parametros.put("mesero", obtenerNombreMesero(facturaInterna));
+            parametros.put("sucursal", facturaInterna.getSucursal().getNombre());
+            parametros.put("observaciones_generales", facturaInterna.getNotas());
+
+            // Mapear detalles de factura
+            List<DetalleComandaDTO> detalles = mapearDetalles(facturaInterna.getDetalles());
+            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(detalles);
+            parametros.put("datasource_detalles", dataSource);
+        }
 
         return parametros;
+    }
+
+    // 🆕 NUEVO MÉTODO para mapear items de orden
+    private List<DetalleComandaDTO> mapearDetallesOrden(List<OrdenItem> items) {
+        List<DetalleComandaDTO> dtos = new ArrayList<>();
+
+        if (items != null) {
+            for (OrdenItem item : items) {
+                DetalleComandaDTO dto = new DetalleComandaDTO();
+                dto.setCantidad(item.getCantidad());
+
+                StringBuilder descripcion = new StringBuilder(item.getProducto().getNombre());
+
+                // Agregar notas (que incluyen las opciones de compuestos)
+                if (item.getNotas() != null && !item.getNotas().trim().isEmpty()) {
+                    String[] lineasNotas = item.getNotas().split("\n");
+                    for (String lineaNota : lineasNotas) {
+                        if (!lineaNota.trim().isEmpty()) {
+                            descripcion.append("\n  ").append(lineaNota.trim());
+                        }
+                    }
+                }
+
+                dto.setDescripcion(descripcion.toString());
+                dtos.add(dto);
+            }
+        }
+
+        return dtos;
     }
 
     /**

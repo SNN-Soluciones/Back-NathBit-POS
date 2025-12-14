@@ -49,7 +49,8 @@ public class OrdenService {
           .orElseThrow(() -> new ResourceNotFoundException("Mesa no encontrada"));
 
       if (mesa.tieneOrdenActiva()) {
-        throw new BusinessException("La mesa " + mesa.getCodigo() + " ya tiene una orden activa. Use el endpoint de agregar items.");
+        throw new BusinessException("La mesa " + mesa.getCodigo()
+            + " ya tiene una orden activa. Use el endpoint de agregar items.");
       }
 
       // Validar estado solo si NO tiene orden activa
@@ -61,7 +62,8 @@ public class OrdenService {
     Sucursal sucursal = sucursalRepository.findById(request.sucursalId())
         .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
 
-    String numeroOrden = request.ordenNumero() != null ? request.ordenNumero() : generarNumeroOrden(request.sucursalId());
+    String numeroOrden = request.ordenNumero() != null ? request.ordenNumero()
+        : generarNumeroOrden(request.sucursalId());
 
     ContextoUsuario contexto = (ContextoUsuario) SecurityContextHolder.getContext()
         .getAuthentication().getPrincipal();
@@ -70,7 +72,6 @@ public class OrdenService {
     // Obtener usuario actual
     Usuario mesero = usuarioRepository.findById(usuarioId)
         .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-
 
     // Crear orden
     Orden orden = Orden.builder()
@@ -101,13 +102,14 @@ public class OrdenService {
 
     for (CrearOrdenRequest.ItemRequest itemReq : request.items()) {
       Producto producto = productoRepository.findById(itemReq.productoId())
-          .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + itemReq.productoId()));
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Producto no encontrado: " + itemReq.productoId()));
 
       OrdenItem item = OrdenItem.builder()
           .orden(orden)
           .producto(producto)
           .cantidad(itemReq.cantidad())
-          .precioUnitario(producto.getPrecioVenta())
+          .precioUnitario(itemReq.precioUnitarioOverride())
           .tarifaImpuesto(obtenerTarifaImpuesto(producto))
           .notas(itemReq.notas())
           .build();
@@ -137,7 +139,6 @@ public class OrdenService {
     Orden orden = ordenRepository.findById(ordenId)
         .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada"));
 
-    // ⚠️ CAMBIO: Mejorar validación de estado
     if (!orden.puedeModificarse()) {
       throw new BusinessException("La orden no puede modificarse en estado: " + orden.getEstado());
     }
@@ -145,59 +146,25 @@ public class OrdenService {
     Producto producto = productoRepository.findById(request.productoId())
         .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
-    // Crear item
+    // Usar precio override si existe, sino el precio del producto
+    BigDecimal precioUnitario = request.precioUnitarioOverride() != null
+        ? request.precioUnitarioOverride()
+        : producto.getPrecioVenta();
+
     OrdenItem item = OrdenItem.builder()
         .orden(orden)
         .producto(producto)
         .cantidad(request.cantidad())
-        .precioUnitario(producto.getPrecioVenta())
+        .precioUnitario(precioUnitario)
         .tarifaImpuesto(obtenerTarifaImpuesto(producto))
         .notas(request.notas())
         .build();
-
-    // Si es producto compuesto, agregar opciones
-    if (producto.getTipo() == TipoProducto.COMPUESTO && request.opciones() != null) {
-      for (OpcionCompuestaRequest opcionReq : request.opciones()) {
-        ProductoCompuestoSlot slot = slotRepository.findById(opcionReq.slotId())
-            .orElseThrow(() -> new ResourceNotFoundException("Slot no encontrado"));
-
-        Producto productoOpcion = productoRepository.findById(opcionReq.productoOpcionId())
-            .orElseThrow(() -> new ResourceNotFoundException("Producto opción no encontrado"));
-
-        OrdenItemOpcion opcion = OrdenItemOpcion.builder()
-            .ordenItemPadre(item)
-            .slot(slot)
-            .productoOpcion(productoOpcion)
-            .cantidad(opcionReq.cantidad() != null ? opcionReq.cantidad() : BigDecimal.ONE)
-            .nombreSlot(slot.getNombre())
-            .nombreOpcion(productoOpcion.getNombre())
-            .build();
-
-        // Calcular precio adicional si aplica
-        slot.getOpciones().stream()
-            .filter(o -> o.getProducto().getId().equals(productoOpcion.getId()))
-            .findFirst()
-            .ifPresent(slotOpcion -> {
-              if (slotOpcion.getPrecioAdicional() != null) {
-                opcion.setPrecioAdicional(slotOpcion.getPrecioAdicional());
-                opcion.setEsGratuita(false);
-              } else {
-                opcion.setPrecioAdicional(BigDecimal.ZERO);
-                opcion.setEsGratuita(true);
-              }
-            });
-
-        item.getOpciones().add(opcion); // ⚠️ AÑADIDO: Agregar la opción al item
-      }
-    }
 
     // Calcular totales del item
     item.calcularTotales();
 
     // Agregar a la orden
     orden.agregarItem(item);
-
-    // ⚠️ AÑADIDO: Recalcular totales de la orden
     orden.recalcularTotales();
 
     orden = ordenRepository.save(orden);
@@ -336,7 +303,8 @@ public class OrdenService {
         if (mesa != null) {
           mesa.actualizarEstadoSegunOrden(); // Verifica órdenes activas y actualiza estado
           mesaRepository.save(mesa);
-          log.info("✅ Mesa {} liberada después de pagar orden {}", mesa.getCodigo(), orden.getNumero());
+          log.info("✅ Mesa {} liberada después de pagar orden {}", mesa.getCodigo(),
+              orden.getNumero());
         }
 
         log.info("✅ Orden {} marcada como PAGADA", orden.getNumero());
@@ -396,9 +364,8 @@ public class OrdenService {
   }
 
   /**
-   * Genera número de orden único por sucursal y día
-   * Formato: ORD-DDMMAA-NNN
-   * Ejemplo: ORD-131125-001 (día 13/11/25, orden #1)
+   * Genera número de orden único por sucursal y día Formato: ORD-DDMMAA-NNN Ejemplo: ORD-131125-001
+   * (día 13/11/25, orden #1)
    */
   private String generarNumeroOrden(Long sucursalId) {
     LocalDate hoy = LocalDate.now();
@@ -527,7 +494,8 @@ public class OrdenService {
         : 0;
 
     String mesaCodigo = "VENTANILLA";
-    if (orden.getMesa() != null && orden.getMesa().getCodigo() != null && !orden.getMesa().getCodigo().isBlank()) {
+    if (orden.getMesa() != null && orden.getMesa().getCodigo() != null && !orden.getMesa()
+        .getCodigo().isBlank()) {
       mesaCodigo = orden.getMesa().getCodigo();
     }
 
@@ -596,7 +564,8 @@ public class OrdenService {
   }
 
   @Transactional
-  public OrdenResponse actualizarNumeroPersonas(Long ordenId, ActualizarNumeroPersonasRequest request) {
+  public OrdenResponse actualizarNumeroPersonas(Long ordenId,
+      ActualizarNumeroPersonasRequest request) {
     log.info("Actualizando número de personas de orden {}: {}", ordenId, request.numeroPersonas());
 
     Orden orden = ordenRepository.findById(ordenId)
@@ -604,7 +573,8 @@ public class OrdenService {
 
     // Validar que la orden esté en estado modificable
     if (!orden.puedeModificarse()) {
-      throw new BusinessException("No se puede modificar el número de personas en estado: " + orden.getEstado());
+      throw new BusinessException(
+          "No se puede modificar el número de personas en estado: " + orden.getEstado());
     }
 
     // Actualizar número de personas

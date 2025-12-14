@@ -15,6 +15,7 @@ import java.util.Optional;
 @Repository
 public interface OrdenRepository extends JpaRepository<Orden, Long> {
 
+
     @Query("""
     SELECT o FROM Orden o 
     WHERE o.sucursal.id = :sucursalId 
@@ -45,4 +46,6 @@ public interface OrdenRepository extends JpaRepository<Orden, Long> {
     // Órdenes para cocina
     @Query("SELECT DISTINCT o FROM Orden o JOIN o.items i WHERE o.sucursal.id = :sucursalId AND i.enviadoCocina = true AND i.preparado = false")
     List<Orden> findOrdenesEnCocina(@Param("sucursalId") Long sucursalId);
+
+    Optional<Orden> findByNumero(String numeroInterno);
 }

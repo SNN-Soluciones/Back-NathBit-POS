@@ -11,29 +11,36 @@ import java.util.List;
 
 public record CrearOrdenRequest(
     Long mesaId,
-
     Long sucursalId,
-    
     Long clienteId,
-    
     String nombreCliente,
-    
-    @Min(value = 1, message = "Número de personas debe ser al menos 1")
-    Integer numeroPersonas,
-    
-    @DecimalMin(value = "0", message = "Porcentaje de servicio no puede ser negativo")
-    @DecimalMax(value = "100", message = "Porcentaje de servicio no puede ser mayor a 100")
-    BigDecimal porcentajeServicio,
-    
-    String observaciones,
 
+    @Min(1)
+    Integer numeroPersonas,
+
+    @DecimalMin("0")
+    @DecimalMax("100")
+    BigDecimal porcentajeServicio,
+
+    String observaciones,
     String ordenNumero,
 
-    @NotEmpty List<ItemRequest> items  // AGREGAR ESTO
+    @NotEmpty
+    List<ItemRequest> items
 ) {
     public record ItemRequest(
         @NotNull Long productoId,
         @NotNull BigDecimal cantidad,
-        String notas
+        String notas,
+
+        BigDecimal precioUnitarioOverride,
+
+        List<OpcionRequest> opciones
+    ) {}
+
+    public record OpcionRequest(
+        @NotNull Long slotId,
+        @NotNull Long productoOpcionId,
+        @NotNull BigDecimal cantidad
     ) {}
 }

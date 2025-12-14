@@ -114,7 +114,9 @@ public class FacturaInternaService {
                 .map(d -> new CrearOrdenRequest.ItemRequest(
                     d.getProductoId(),
                     d.getCantidad(),
-                    d.getNotas()
+                    d.getNotas(),
+                    d.getPrecioUnitario(),
+                    null
                 ))
                 .toList();
 

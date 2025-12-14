@@ -105,11 +105,15 @@ public class OrdenService {
           .orElseThrow(() -> new ResourceNotFoundException(
               "Producto no encontrado: " + itemReq.productoId()));
 
+      BigDecimal precioUnitario = itemReq.precioUnitarioOverride() != null
+          ? itemReq.precioUnitarioOverride()
+          : (producto.getPrecioVenta() != null ? producto.getPrecioVenta() : BigDecimal.ZERO);
+
       OrdenItem item = OrdenItem.builder()
           .orden(orden)
           .producto(producto)
           .cantidad(itemReq.cantidad())
-          .precioUnitario(itemReq.precioUnitarioOverride())
+          .precioUnitario(precioUnitario)
           .tarifaImpuesto(obtenerTarifaImpuesto(producto))
           .notas(itemReq.notas())
           .build();

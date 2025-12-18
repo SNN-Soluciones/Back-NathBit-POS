@@ -47,27 +47,29 @@ public class FacturaRecepcionController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO')")
-    @Operation(summary = "Listar facturas recibidas", 
-               description = "Lista todas las facturas electrónicas recibidas con filtros opcionales")
+    @Operation(summary = "Listar facturas recibidas",
+        description = "Lista todas las facturas electrónicas recibidas con filtros opcionales")
     public ResponseEntity<ApiResponse<Page<FacturaRecepcionListResponse>>> listar(
-            @RequestParam Long empresaId,
-            @RequestParam(required = false) Long sucursalId,
-            @RequestParam(required = false) EstadoFacturaRecepcion estado,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
-            Pageable pageable) {
-        
-        log.info("GET /api/facturas-recepcion - empresa: {}, estado: {}", empresaId, estado);
-        
+        @RequestParam Long empresaId,
+        @RequestParam(required = false) Long sucursalId,
+        @RequestParam(required = false) EstadoFacturaRecepcion estado,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+        @RequestParam(required = false) String clave, // ← NUEVO: Parámetro de búsqueda por clave
+        Pageable pageable) {
+
+        log.info("GET /api/facturas-recepcion - empresa: {}, estado: {}, clave: {}",
+            empresaId, estado, clave != null ? clave.substring(0, Math.min(20, clave.length())) + "..." : "null");
+
         try {
             Page<FacturaRecepcionListResponse> page = facturaRecepcionService.listar(
-                empresaId, sucursalId, estado, fechaInicio, fechaFin, pageable
+                empresaId, sucursalId, estado, fechaInicio, fechaFin, clave, pageable
             );
-            
+
             return ResponseEntity.ok(
                 ApiResponse.success("Facturas encontradas: " + page.getTotalElements(), page)
             );
-            
+
         } catch (Exception e) {
             log.error("Error listando facturas", e);
             return ResponseEntity.badRequest()
@@ -80,17 +82,17 @@ public class FacturaRecepcionController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO')")
-    @Operation(summary = "Obtener detalle de factura recibida", 
-               description = "Obtiene el detalle completo de una factura electrónica recibida")
+    @Operation(summary = "Obtener detalle de factura recibida",
+        description = "Obtiene el detalle completo de una factura electrónica recibida")
     public ResponseEntity<ApiResponse<FacturaRecepcionResponse>> obtenerDetalle(
-            @PathVariable Long id) {
-        
+        @PathVariable Long id) {
+
         log.info("GET /api/facturas-recepcion/{}", id);
-        
+
         try {
             FacturaRecepcionResponse response = facturaRecepcionService.obtenerDetalle(id);
             return ResponseEntity.ok(ApiResponse.success("Factura encontrada", response));
-            
+
         } catch (Exception e) {
             log.error("Error obteniendo factura {}", id, e);
             return ResponseEntity.badRequest()
@@ -103,20 +105,20 @@ public class FacturaRecepcionController {
      */
     @PostMapping("/{id}/decision")
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
-    @Operation(summary = "Tomar decisión sobre factura", 
-               description = "Acepta, acepta parcialmente o rechaza una factura recibida. Envía mensaje receptor a Hacienda.")
+    @Operation(summary = "Tomar decisión sobre factura",
+        description = "Acepta, acepta parcialmente o rechaza una factura recibida. Envía mensaje receptor a Hacienda.")
     public ResponseEntity<ApiResponse<MensajeReceptorResponse>> tomarDecision(
-            @PathVariable Long id,
-            @Valid @RequestBody DecisionMensajeRequest request) {
-        
+        @PathVariable Long id,
+        @Valid @RequestBody DecisionMensajeRequest request) {
+
         log.info("POST /api/facturas-recepcion/{}/decision - decisión: {}", id, request.getDecision());
-        
+
         try {
             MensajeReceptorResponse response = facturaRecepcionService.tomarDecision(id, request);
             return ResponseEntity.ok(
                 ApiResponse.success("Decisión procesada exitosamente", response)
             );
-            
+
         } catch (Exception e) {
             log.error("Error procesando decisión para factura {}", id, e);
             return ResponseEntity.badRequest()
@@ -129,19 +131,19 @@ public class FacturaRecepcionController {
      */
     @PostMapping("/{id}/convertir-compra")
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
-    @Operation(summary = "Convertir a compra", 
-               description = "Convierte una factura recibida ACEPTADA en un registro de Compra y actualiza métricas")
+    @Operation(summary = "Convertir a compra",
+        description = "Convierte una factura recibida ACEPTADA en un registro de Compra y actualiza métricas")
     public ResponseEntity<ApiResponse<ConvertirCompraResponse>> convertirACompra(
-            @PathVariable Long id) {
-        
+        @PathVariable Long id) {
+
         log.info("POST /api/facturas-recepcion/{}/convertir-compra", id);
-        
+
         try {
             ConvertirCompraResponse response = facturaRecepcionService.convertirACompra(id);
             return ResponseEntity.ok(
                 ApiResponse.success("Factura convertida a compra exitosamente", response)
             );
-            
+
         } catch (Exception e) {
             log.error("Error convirtiendo factura {} a compra", id, e);
             return ResponseEntity.badRequest()
@@ -154,14 +156,14 @@ public class FacturaRecepcionController {
      */
     @GetMapping("/estadisticas")
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
-    @Operation(summary = "Estadísticas de facturas recibidas", 
-               description = "Obtiene estadísticas resumidas de facturas recibidas por empresa/sucursal")
+    @Operation(summary = "Estadísticas de facturas recibidas",
+        description = "Obtiene estadísticas resumidas de facturas recibidas por empresa/sucursal")
     public ResponseEntity<ApiResponse<Object>> obtenerEstadisticas(
-            @RequestParam Long empresaId,
-            @RequestParam(required = false) Long sucursalId) {
-        
+        @RequestParam Long empresaId,
+        @RequestParam(required = false) Long sucursalId) {
+
         log.info("GET /api/facturas-recepcion/estadisticas - empresa: {}", empresaId);
-        
+
         // TODO: Implementar si es necesario
         return ResponseEntity.ok(
             ApiResponse.success("Funcionalidad pendiente de implementar", null)

@@ -28,21 +28,20 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
       EstadoFacturaRecepcion estadoInterno
   );
 
-  @Query("""
-          SELECT fr FROM FacturaRecepcion fr
-          WHERE fr.empresa.id = :empresaId
-          AND (:sucursalId IS NULL OR fr.sucursal.id = :sucursalId)
-          AND (:estado IS NULL OR fr.estadoInterno = :estado)
-          AND (CAST(:fechaInicio AS date) IS NULL OR fr.fechaEmision >= :fechaInicio)
-          AND (CAST(:fechaFin AS date) IS NULL OR fr.fechaEmision <= :fechaFin)
-          ORDER BY fr.fechaRecepcion DESC
-      """)
+  @Query("SELECT f FROM FacturaRecepcion f WHERE "
+      + "f.empresa.id = :empresaId "
+      + "AND (:sucursalId IS NULL OR f.sucursal.id = :sucursalId) "
+      + "AND (:estado IS NULL OR f.estadoInterno = :estado) "
+      + "AND (:fechaInicio IS NULL OR f.fechaEmision >= :fechaInicio) "
+      + "AND (:fechaFin IS NULL OR f.fechaEmision <= :fechaFin) "
+      + "AND (:clave IS NULL OR f.clave LIKE CONCAT(:clave, '%'))") // ← NUEVA CONDICIÓN
   Page<FacturaRecepcion> findByFiltros(
       @Param("empresaId") Long empresaId,
       @Param("sucursalId") Long sucursalId,
-      @Param("estado") EstadoFacturaRecepcion estado,  // ✅ AHORA SÍ COINCIDE
+      @Param("estado") EstadoFacturaRecepcion estado,
       @Param("fechaInicio") LocalDate fechaInicio,
       @Param("fechaFin") LocalDate fechaFin,
+      @Param("clave") String clave, // ← NUEVO PARÁMETRO
       Pageable pageable
   );
 

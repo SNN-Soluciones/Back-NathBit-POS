@@ -74,23 +74,24 @@ public class FacturaRecepcionService {
       EstadoFacturaRecepcion estado,
       LocalDate fechaInicio,
       LocalDate fechaFin,
-      String clave, // ← AGREGAR ESTE PARÁMETRO
-      Pageable pageable
+      String clave,
+      Pageable pageable  // ✅ Recibir Pageable directamente del Controller
   ) {
-    log.info("Listando facturas - empresa: {}, sucursal: {}, estado: {}, clave: {}",
-        empresaId, sucursalId, estado,
-        clave != null ? clave.substring(0, Math.min(20, clave.length())) + "..." : "null");
+    log.info("Listando facturas - empresa: {}, sucursal: {}, estado: {}",
+        empresaId, sucursalId, estado);
 
+    // Llamar repository con Pageable
     Page<FacturaRecepcion> pageResult = facturaRecepcionRepository.findByFiltros(
         empresaId,
         sucursalId,
         estado,
         fechaInicio,
         fechaFin,
-        clave, // ← PASAR CLAVE AL REPOSITORY
+        clave,
         pageable
     );
 
+    // Mapear a DTO
     return pageResult.map(this::toListResponse);
   }
 

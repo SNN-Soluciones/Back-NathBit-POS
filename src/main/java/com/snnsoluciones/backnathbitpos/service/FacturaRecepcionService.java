@@ -74,7 +74,6 @@ public class FacturaRecepcionService {
       EstadoFacturaRecepcion estado,
       LocalDate fechaInicio,
       LocalDate fechaFin,
-      String clave,
       Pageable pageable  // ✅ Recibir Pageable directamente del Controller
   ) {
     log.info("Listando facturas - empresa: {}, sucursal: {}, estado: {}",
@@ -87,7 +86,6 @@ public class FacturaRecepcionService {
         estado,
         fechaInicio,
         fechaFin,
-        clave,
         pageable
     );
 

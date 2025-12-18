@@ -55,14 +55,13 @@ public class FacturaRecepcionController {
             @RequestParam(required = false) EstadoFacturaRecepcion estado,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
-            @RequestParam(required = false) String clave,
             Pageable pageable) {
 
         log.info("GET /api/facturas-recepcion - empresa: {}, estado: {}", empresaId, estado);
 
         try {
             Page<FacturaRecepcionListResponse> page = facturaRecepcionService.listar(
-                empresaId, sucursalId, estado, fechaInicio, fechaFin, clave, pageable
+                empresaId, sucursalId, estado, fechaInicio, fechaFin, pageable
             );
 
             return ResponseEntity.ok(

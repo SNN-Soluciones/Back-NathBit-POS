@@ -71,7 +71,7 @@ public class FacturaElectronicaJob {
   private static final int MAX_FACTURAS_POR_CICLO = 15;
   private static final int MAX_INTENTOS = 3;
 
-//  @Scheduled(fixedDelay = 60000, initialDelay = 10000)
+  @Scheduled(fixedDelay = 60000, initialDelay = 10000)
   // IMPORTANTE: NO transaccional aquí
   public void procesarFacturasPendientes() {
     log.info("⏳ Iniciando job de procesamiento de facturas electrónicas...");

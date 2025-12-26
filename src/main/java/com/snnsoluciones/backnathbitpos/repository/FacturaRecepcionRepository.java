@@ -18,6 +18,12 @@ import java.util.Optional;
 @Repository
 public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepcion, Long> {
 
+  List<FacturaRecepcion> findByEmpresaIdAndFechaEmisionBetween(
+      Long empresaId,
+      LocalDateTime fechaDesde,
+      LocalDateTime fechaHasta
+  );
+
   Optional<FacturaRecepcion> findByClave(String clave);
 
   boolean existsByClave(String clave);

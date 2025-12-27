@@ -1258,6 +1258,9 @@ public class FacturaRecepcionService {
         .mensajeReceptorEnviado(fr.getMensajeReceptorEnviado())
         .convertidaACompra(fr.getConvertidaCompra())
 
+        .estadoHacienda(fr.getEstadoHacienda())
+        .mensajeHacienda(fr.getMensajeHacienda())
+
         .build();
   }
 

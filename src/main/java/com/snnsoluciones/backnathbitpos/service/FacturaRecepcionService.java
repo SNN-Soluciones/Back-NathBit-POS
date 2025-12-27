@@ -14,6 +14,7 @@ import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.scheduler.FacturaRecepcionXMLParserService;
 import com.snnsoluciones.backnathbitpos.sign.SignerService;
 import java.io.ByteArrayInputStream;
+import java.io.StringReader;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -21,6 +22,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,6 +41,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
 @Service
 @Slf4j
@@ -236,6 +242,7 @@ public class FacturaRecepcionService {
           "xml",
           respuestaHacienda  // ✅ String directo
       );
+      parsearYActualizarEstadoMensajeReceptor(factura, respuestaHacienda);
 
       // 6. Actualizar factura con las rutas
       factura.setMensajeReceptorEnviado(true);
@@ -355,6 +362,18 @@ public class FacturaRecepcionService {
       log.error("Error convirtiendo a compra", e);
       throw new RuntimeException("Error al convertir a compra: " + e.getMessage());
     }
+  }
+
+  public byte[] descargarXmlRespuesta(Long id) {
+    FacturaRecepcion factura = facturaRecepcionRepository.findById(id)
+        .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
+
+    if (factura.getXmlRespuestaHaciendaPath() == null) {
+      throw new RuntimeException("No hay XML de respuesta disponible");
+    }
+
+    // Descargar desde S3
+    return storageService.obtenerArchivo(factura.getXmlRespuestaHaciendaPath());
   }
 
   // ==================== MÉTODOS PRIVADOS ====================
@@ -716,6 +735,8 @@ public class FacturaRecepcionService {
         .proveedorNombre(factura.getProveedorNombre())
         .proveedorIdentificacion(factura.getProveedorIdentificacion())
         .proveedorCorreo(factura.getProveedorEmail())
+        .estadoHacienda(factura.getEstadoHacienda())
+        .mensajeHacienda(factura.getMensajeHacienda())
 
         .receptorNombre(factura.getReceptorNombre())
         .receptorIdentificacion(factura.getReceptorIdentificacion())
@@ -763,6 +784,8 @@ public class FacturaRecepcionService {
         .estadoInterno(factura.getEstadoInterno())
         .mensajeReceptorEnviado(factura.getMensajeReceptorEnviado())
         .convertidaACompra(factura.getConvertidaCompra())
+        .estadoHacienda(factura.getEstadoHacienda())
+        .mensajeHacienda(factura.getMensajeHacienda())
         .build();
   }
 
@@ -1372,5 +1395,71 @@ public class FacturaRecepcionService {
       case NOTA_DEBITO -> "ND";
       default -> tipo.name();
     };
+  }
+
+  /**
+   * Parsear XML de respuesta de Hacienda y extraer estado
+   */
+  private void parsearYActualizarEstadoMensajeReceptor(FacturaRecepcion factura, String xmlRespuesta) {
+    try {
+      // Parsear XML
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setNamespaceAware(true);
+      DocumentBuilder builder = factory.newDocumentBuilder();
+      Document doc = builder.parse(new InputSource(new StringReader(xmlRespuesta)));
+
+      // Extraer <Mensaje>
+      NodeList mensajeNodes = doc.getElementsByTagName("Mensaje");
+      String codigoMensaje = null;
+      if (mensajeNodes.getLength() > 0) {
+        codigoMensaje = mensajeNodes.item(0).getTextContent().trim();
+      }
+
+      // Extraer <EstadoMensaje> o <DetalleMensaje>
+      NodeList estadoNodes = doc.getElementsByTagName("EstadoMensaje");
+      String estadoTexto = null;
+      if (estadoNodes.getLength() > 0) {
+        estadoTexto = estadoNodes.item(0).getTextContent().trim();
+      }
+
+      NodeList detalleNodes = doc.getElementsByTagName("DetalleMensaje");
+      String detalleMensaje = null;
+      if (detalleNodes.getLength() > 0) {
+        detalleMensaje = detalleNodes.item(0).getTextContent().trim();
+      }
+
+      // Mapear código a estado
+      if (codigoMensaje != null) {
+        switch (codigoMensaje) {
+          case "1":
+            factura.setEstadoHacienda("aceptado");
+            break;
+          case "2":
+            factura.setEstadoHacienda("aceptado_parcial");
+            break;
+          case "3":
+            factura.setEstadoHacienda("rechazado");
+            break;
+          default:
+            factura.setEstadoHacienda("desconocido");
+        }
+      }
+
+      // Guardar detalle
+      if (detalleMensaje != null && !detalleMensaje.isBlank()) {
+        factura.setMensajeHacienda(detalleMensaje);
+      } else if (estadoTexto != null) {
+        factura.setMensajeHacienda(estadoTexto);
+      }
+
+      log.info("✅ Estado MR parseado: código={}, estado={}, detalle={}",
+          codigoMensaje, factura.getEstadoHacienda(), factura.getMensajeHacienda());
+
+    } catch (Exception e) {
+      log.error("Error parseando XML de respuesta MH", e);
+      // No lanzar exception, solo loguear
+      factura.setEstadoHacienda("error_parseo");
+      factura.setMensajeHacienda("Error parseando respuesta: " + e.getMessage());
+    }
   }
 }

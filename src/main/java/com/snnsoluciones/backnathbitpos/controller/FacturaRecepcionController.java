@@ -75,6 +75,24 @@ public class FacturaRecepcionController {
         }
     }
 
+    @GetMapping("/{id}/descargar-xml-respuesta")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS')")
+    public ResponseEntity<byte[]> descargarXmlRespuesta(@PathVariable Long id) {
+        try {
+            byte[] xmlBytes = facturaRecepcionService.descargarXmlRespuesta(id);
+
+            return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_XML)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"respuesta-hacienda.xml\"")
+                .body(xmlBytes);
+
+        } catch (Exception e) {
+            log.error("Error descargando XML respuesta", e);
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     /**
      * Obtener detalle completo de factura
      */

@@ -24,4 +24,6 @@ public class FacturaRecepcionListResponse {
     
     private Boolean mensajeReceptorEnviado;
     private Boolean convertidaACompra;
+    private String estadoHacienda;
+    private String mensajeHacienda;
 }

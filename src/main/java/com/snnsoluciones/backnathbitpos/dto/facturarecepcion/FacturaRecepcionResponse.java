@@ -63,6 +63,8 @@ public class FacturaRecepcionResponse {
     
     // Detalles
     private List<FacturaRecepcionDetalleResponse> detalles;
+    private String estadoHacienda;
+    private String mensajeHacienda;
 
     /**
      * Verifica si la factura fue convertida a compra

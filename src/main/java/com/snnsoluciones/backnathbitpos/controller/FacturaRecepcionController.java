@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -346,6 +347,34 @@ public class FacturaRecepcionController {
             return ResponseEntity.internalServerError().build();
         }
     }
+
+    /**
+     * Migración: Parsear XML de respuesta para facturas existentes
+     * EJECUTAR UNA SOLA VEZ
+     */
+    @PostMapping("/admin/parsear-estados-pendientes")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN')")
+    @Operation(summary = "Parsear estados MR pendientes (migración)",
+        description = "Procesa todas las facturas que tienen XML de respuesta pero no tienen estado parseado")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> parsearEstadosPendientes(
+        @RequestParam Long empresaId) {
+
+        log.info("POST /api/facturas-recepcion/admin/parsear-estados-pendientes - empresa: {}", empresaId);
+
+        try {
+            Map<String, Object> resultado = facturaRecepcionService.parsearEstadosMRPendientes(empresaId);
+
+            return ResponseEntity.ok(
+                ApiResponse.success("Migración completada", resultado)
+            );
+
+        } catch (Exception e) {
+            log.error("Error en migración de estados MR", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error: " + e.getMessage()));
+        }
+    }
+
 
     // DTO
     @Data

@@ -18,6 +18,7 @@ import java.io.StringReader;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -374,6 +375,66 @@ public class FacturaRecepcionService {
 
     // Descargar desde S3
     return storageService.obtenerArchivo(factura.getXmlRespuestaHaciendaPath());
+  }
+
+  /**
+   * Migración: Parsear estados MR de facturas que tienen XML pero no estado parseado
+   */
+  @Transactional
+  public Map<String, Object> parsearEstadosMRPendientes(Long empresaId) {
+    log.info("🔄 Iniciando migración de estados MR para empresa {}", empresaId);
+
+    // Buscar facturas que tienen xmlRespuestaHaciendaPath pero NO tienen estadoHacienda
+    List<FacturaRecepcion> facturasPendientes = facturaRecepcionRepository
+        .findAll()
+        .stream()
+        .filter(f -> f.getEmpresa().getId().equals(empresaId))
+        .filter(f -> f.getXmlRespuestaHaciendaPath() != null && !f.getXmlRespuestaHaciendaPath().isBlank())
+        .filter(f -> f.getEstadoHacienda() == null || f.getEstadoHacienda().isBlank())
+        .collect(Collectors.toList());
+
+    log.info("📋 Encontradas {} facturas pendientes de parsear", facturasPendientes.size());
+
+    int procesadas = 0;
+    int errores = 0;
+    List<String> facturasProcesadas = new ArrayList<>();
+    List<String> facturasConError = new ArrayList<>();
+
+    for (FacturaRecepcion factura : facturasPendientes) {
+      try {
+        // Descargar XML desde S3
+        byte[] xmlBytes = storageService.obtenerArchivo(factura.getXmlRespuestaHaciendaPath());
+        String xmlRespuesta = new String(xmlBytes, StandardCharsets.UTF_8);
+
+        // Parsear y actualizar
+        parsearYActualizarEstadoMensajeReceptor(factura, xmlRespuesta);
+
+        // Guardar
+        facturaRecepcionRepository.save(factura);
+
+        procesadas++;
+        facturasProcesadas.add(factura.getClave());
+
+        log.info("✅ Procesada factura {} - Estado: {}",
+            factura.getClave(), factura.getEstadoHacienda());
+
+      } catch (Exception e) {
+        errores++;
+        facturasConError.add(factura.getClave());
+        log.error("❌ Error procesando factura {}: {}", factura.getClave(), e.getMessage());
+      }
+    }
+
+    Map<String, Object> resultado = new HashMap<>();
+    resultado.put("total", facturasPendientes.size());
+    resultado.put("procesadas", procesadas);
+    resultado.put("errores", errores);
+    resultado.put("facturasProcesadas", facturasProcesadas);
+    resultado.put("facturasConError", facturasConError);
+
+    log.info("🎉 Migración completada: {} procesadas, {} errores", procesadas, errores);
+
+    return resultado;
   }
 
   // ==================== MÉTODOS PRIVADOS ====================
@@ -1457,7 +1518,6 @@ public class FacturaRecepcionService {
 
     } catch (Exception e) {
       log.error("Error parseando XML de respuesta MH", e);
-      // No lanzar exception, solo loguear
       factura.setEstadoHacienda("error_parseo");
       factura.setMensajeHacienda("Error parseando respuesta: " + e.getMessage());
     }

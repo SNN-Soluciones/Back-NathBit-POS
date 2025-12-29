@@ -35,18 +35,18 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
   );
 
   @Query("""
-          SELECT fr FROM FacturaRecepcion fr
-          WHERE fr.empresa.id = :empresaId
-          AND (:sucursalId IS NULL OR fr.sucursal.id = :sucursalId)
-          AND (:estado IS NULL OR fr.estadoInterno = :estado)
-          AND (CAST(:fechaInicio AS date) IS NULL OR fr.fechaEmision >= :fechaInicio)
-          AND (CAST(:fechaFin AS date) IS NULL OR fr.fechaEmision <= :fechaFin)
-          ORDER BY fr.fechaRecepcion DESC
-      """)
+    SELECT fr FROM FacturaRecepcion fr
+    WHERE fr.empresa.id = :empresaId
+    AND (:sucursalId IS NULL OR fr.sucursal.id = :sucursalId)
+    AND (:estado IS NULL OR fr.estadoInterno = :estado)
+    AND (:fechaInicio IS NULL OR CAST(fr.fechaEmision AS date) >= :fechaInicio)
+    AND (:fechaFin IS NULL OR CAST(fr.fechaEmision AS date) <= :fechaFin)
+    ORDER BY fr.fechaRecepcion DESC
+""")
   Page<FacturaRecepcion> findByFiltros(
       @Param("empresaId") Long empresaId,
       @Param("sucursalId") Long sucursalId,
-      @Param("estado") EstadoFacturaRecepcion estado,  // ✅ AHORA SÍ COINCIDE
+      @Param("estado") EstadoFacturaRecepcion estado,
       @Param("fechaInicio") LocalDate fechaInicio,
       @Param("fechaFin") LocalDate fechaFin,
       Pageable pageable

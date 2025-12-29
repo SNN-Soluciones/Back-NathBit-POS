@@ -39,8 +39,8 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
     WHERE fr.empresa.id = :empresaId
     AND (:sucursalId IS NULL OR fr.sucursal.id = :sucursalId)
     AND (:estado IS NULL OR fr.estadoInterno = :estado)
-    AND (:fechaInicio IS NULL OR CAST(fr.fechaEmision AS date) >= :fechaInicio)
-    AND (:fechaFin IS NULL OR CAST(fr.fechaEmision AS date) <= :fechaFin)
+    AND (:fechaInicio IS NULL OR DATE(fr.fechaEmision) >= :fechaInicio)
+    AND (:fechaFin IS NULL OR DATE(fr.fechaEmision) <= :fechaFin)
     ORDER BY fr.fechaRecepcion DESC
 """)
   Page<FacturaRecepcion> findByFiltros(

@@ -18,7 +18,8 @@ public class FacturaRecepcionListResponse {
     
     private String proveedorNombre;
     private String proveedorIdentificacion;
-    
+
+    private BigDecimal totalImpuesto;
     private BigDecimal totalComprobante;
     private EstadoFacturaRecepcion estadoInterno;
     

@@ -25,6 +25,7 @@ public class FacturaRecepcionDetalleResponse {
     private BigDecimal montoTotal;
     private BigDecimal subTotal;
     private BigDecimal montoDescuento;
+    private BigDecimal totalImpuesto;
     private BigDecimal montoTotalLinea;
     
     private Long productoId; // Si se matcheó con producto existente

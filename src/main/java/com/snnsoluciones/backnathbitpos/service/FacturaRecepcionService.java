@@ -847,6 +847,7 @@ public class FacturaRecepcionService {
         .convertidaACompra(factura.getConvertidaCompra())
         .estadoHacienda(factura.getEstadoHacienda())
         .mensajeHacienda(factura.getMensajeHacienda())
+        .totalImpuesto(factura.getTotalImpuesto())
         .build();
   }
 
@@ -864,6 +865,7 @@ public class FacturaRecepcionService {
         .precioUnitario(detalle.getPrecioUnitario())
         .montoTotal(detalle.getMontoTotal())
         .subTotal(detalle.getSubtotal())
+        .totalImpuesto(detalle.getMontoImpuesto())
         .montoDescuento(detalle.getMontoDescuento())
         .montoTotalLinea(detalle.getMontoTotalLinea())
         .productoNombre(detalle.getDescripcion() != null ? detalle.getDescripcion() : null)
@@ -1251,6 +1253,7 @@ public class FacturaRecepcionService {
         .proveedorIdentificacion(fr.getProveedorIdentificacion())
 
         // Montos
+        .totalImpuesto(fr.getTotalImpuesto())
         .totalComprobante(fr.getTotalComprobante())
 
         // Estados

@@ -34,19 +34,28 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
       EstadoFacturaRecepcion estadoInterno
   );
 
-  @Query("""
-    SELECT fr FROM FacturaRecepcion fr
-    WHERE fr.empresa.id = :empresaId
-    AND (:sucursalId IS NULL OR fr.sucursal.id = :sucursalId)
-    AND (:estado IS NULL OR fr.estadoInterno = :estado)
-    AND (:fechaInicio IS NULL OR function('date', fr.fechaEmision) >= :fechaInicio)
-    AND (:fechaFin IS NULL OR function('date', fr.fechaEmision) <= :fechaFin)
-    ORDER BY fr.fechaRecepcion DESC
-""")
+  @Query(value = """
+    SELECT * FROM facturas_recepcion fr
+    WHERE fr.empresa_id = :empresaId
+    AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
+    AND (:estado IS NULL OR fr.estado_interno = :estado)
+    AND (:fechaInicio IS NULL OR fr.fecha_emision::date >= :fechaInicio)
+    AND (:fechaFin IS NULL OR fr.fecha_emision::date <= :fechaFin)
+    ORDER BY fr.fecha_recepcion DESC
+""",
+      countQuery = """
+              SELECT COUNT(*) FROM facturas_recepcion fr
+              WHERE fr.empresa_id = :empresaId
+              AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
+              AND (:estado IS NULL OR fr.estado_interno = :estado)
+              AND (:fechaInicio IS NULL OR fr.fecha_emision::date >= :fechaInicio)
+              AND (:fechaFin IS NULL OR fr.fecha_emision::date <= :fechaFin)
+          """,
+      nativeQuery = true)
   Page<FacturaRecepcion> findByFiltros(
       @Param("empresaId") Long empresaId,
       @Param("sucursalId") Long sucursalId,
-      @Param("estado") EstadoFacturaRecepcion estado,
+      @Param("estado") String estado,  // 👈 String ahora
       @Param("fechaInicio") LocalDate fechaInicio,
       @Param("fechaFin") LocalDate fechaFin,
       Pageable pageable

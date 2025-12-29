@@ -81,16 +81,19 @@ public class FacturaRecepcionService {
       EstadoFacturaRecepcion estado,
       LocalDate fechaInicio,
       LocalDate fechaFin,
-      Pageable pageable  // ✅ Recibir Pageable directamente del Controller
+      Pageable pageable
   ) {
     log.info("Listando facturas - empresa: {}, sucursal: {}, estado: {}",
         empresaId, sucursalId, estado);
 
-    // Llamar repository con Pageable
+    // 👇 Convertir enum a String
+    String estadoString = estado != null ? estado.name() : null;
+
+    // Llamar repository con String
     Page<FacturaRecepcion> pageResult = facturaRecepcionRepository.findByFiltros(
         empresaId,
         sucursalId,
-        estado,
+        estadoString,  // 👈 Pasar String
         fechaInicio,
         fechaFin,
         pageable

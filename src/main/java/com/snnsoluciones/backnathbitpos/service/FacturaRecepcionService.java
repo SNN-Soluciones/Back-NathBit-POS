@@ -87,14 +87,13 @@ public class FacturaRecepcionService {
     log.info("Listando facturas - empresa: {}, sucursal: {}, estado: {}",
         empresaId, sucursalId, estado);
 
-    // 👇 Convertir enum a String
-    String estadoString = estado != null ? estado.name() : null;
-
     // Llamar repository con String
+    String estadoString = estado != null ? estado.name() : "";  // 👈 String vacío en lugar de null
+
     Page<FacturaRecepcion> pageResult = facturaRecepcionRepository.findByFiltros(
         empresaId,
         sucursalId,
-        estadoString,  // 👈 Pasar String
+        estadoString,
         fechaInicio,
         fechaFin,
         pageable

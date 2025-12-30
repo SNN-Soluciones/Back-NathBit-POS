@@ -26,38 +26,22 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
 
   Optional<FacturaRecepcion> findByClave(String clave);
 
-  boolean existsByClave(String clave);
-
-  List<FacturaRecepcion> findByEmpresaIdAndSucursalIdAndEstadoInternoOrderByFechaRecepcionDesc(
-      Long empresaId,
-      Long sucursalId,
-      EstadoFacturaRecepcion estadoInterno
-  );
-
   @Query(value = """
     SELECT * FROM facturas_recepcion fr
     WHERE fr.empresa_id = :empresaId
     AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
-    AND (CAST(:estado AS varchar) IS NULL OR fr.estado_interno = CAST(:estado AS varchar))
-    AND (
-        (:fechaInicio IS NULL AND :fechaFin IS NULL) 
-        OR 
-        fr.fecha_emision::date BETWEEN COALESCE(CAST(:fechaInicio AS date), '1900-01-01') 
-                                   AND COALESCE(CAST(:fechaFin AS date), '2099-12-31')
-    )
+    AND (:estado = '' OR fr.estado_interno = :estado)
+    AND fr.fecha_emision::date >= COALESCE(:fechaInicio, '1900-01-01'::date)
+    AND fr.fecha_emision::date <= COALESCE(:fechaFin, '2099-12-31'::date)
     ORDER BY fr.fecha_recepcion DESC
 """,
       countQuery = """
         SELECT COUNT(*) FROM facturas_recepcion fr
         WHERE fr.empresa_id = :empresaId
         AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
-        AND (CAST(:estado AS varchar) IS NULL OR fr.estado_interno = CAST(:estado AS varchar))
-        AND (
-            (:fechaInicio IS NULL AND :fechaFin IS NULL) 
-            OR 
-            fr.fecha_emision::date BETWEEN COALESCE(CAST(:fechaInicio AS date), '1900-01-01') 
-                                       AND COALESCE(CAST(:fechaFin AS date), '2099-12-31')
-        )
+        AND (:estado = '' OR fr.estado_interno = :estado)
+        AND fr.fecha_emision::date >= COALESCE(:fechaInicio, '1900-01-01'::date)
+        AND fr.fecha_emision::date <= COALESCE(:fechaFin, '2099-12-31'::date)
     """,
       nativeQuery = true)
   Page<FacturaRecepcion> findByFiltros(
@@ -67,12 +51,6 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
       @Param("fechaInicio") LocalDate fechaInicio,
       @Param("fechaFin") LocalDate fechaFin,
       Pageable pageable
-  );
-
-  long countByEmpresaIdAndSucursalIdAndEstadoInterno(
-      Long empresaId,
-      Long sucursalId,
-      EstadoFacturaRecepcion estadoInterno
   );
 
   /**

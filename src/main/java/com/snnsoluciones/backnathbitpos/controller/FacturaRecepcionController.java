@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.*;
 import com.snnsoluciones.backnathbitpos.dto.proveedor.ProveedorDto;
 import com.snnsoluciones.backnathbitpos.entity.FacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.entity.Proveedor;
+import com.snnsoluciones.backnathbitpos.enums.TipoFechaReporte;
 import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.service.FacturaRecepcionService;
 import com.snnsoluciones.backnathbitpos.service.ProveedorService;
@@ -290,65 +291,6 @@ public class FacturaRecepcionController {
     }
 
     /**
-     * Genera un reporte Excel de facturas aceptadas en un rango de fechas
-     *
-     * GET /api/facturas-recepcion/reporte-excel?fechaInicio=2025-01-01&fechaFin=2025-01-31
-     *
-     * @param fechaInicio Fecha de inicio del rango (formato: yyyy-MM-dd)
-     * @param fechaFin Fecha de fin del rango (formato: yyyy-MM-dd)
-     * @return Archivo Excel descargable
-     */
-    @GetMapping("/reporte-excel")
-    public ResponseEntity<byte[]> generarReporteExcel(
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
-    ) {
-        log.info("🚀 Generando reporte Excel - Rango: {} a {}", fechaInicio, fechaFin);
-
-        // Validaciones
-        if (fechaInicio.isAfter(fechaFin)) {
-            log.warn("❌ Fecha inicio es posterior a fecha fin");
-            return ResponseEntity.badRequest().build();
-        }
-
-        // Validar rango no mayor a 1 año (opcional, por performance)
-        if (fechaInicio.plusYears(1).isBefore(fechaFin)) {
-            log.warn("❌ Rango de fechas excede 1 año");
-            return ResponseEntity.badRequest().build();
-        }
-
-        try {
-            // Generar Excel
-            byte[] excelBytes = facturaRecepcionService.generarReporteExcel(fechaInicio, fechaFin);
-
-            // Nombre del archivo
-            String filename = String.format("Facturas_Aceptadas_%s_%s.xlsx",
-                fechaInicio.format(DateTimeFormatter.BASIC_ISO_DATE),
-                fechaFin.format(DateTimeFormatter.BASIC_ISO_DATE)
-            );
-
-            // Headers HTTP
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.parseMediaType(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ));
-            headers.setContentDispositionFormData("attachment", filename);
-            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
-            headers.setContentLength(excelBytes.length);
-
-            log.info("✅ Reporte Excel generado exitosamente: {} bytes", excelBytes.length);
-
-            return ResponseEntity.ok()
-                .headers(headers)
-                .body(excelBytes);
-
-        } catch (Exception e) {
-            log.error("❌ Error generando reporte Excel", e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    /**
      * Migración: Parsear XML de respuesta para facturas existentes
      * EJECUTAR UNA SOLA VEZ
      */
@@ -372,6 +314,73 @@ public class FacturaRecepcionController {
             log.error("Error en migración de estados MR", e);
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error("Error: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Genera un reporte Excel de facturas aceptadas en un rango de fechas
+     *
+     * GET /api/facturas-recepcion/reporte-excel?fechaInicio=2025-01-01&fechaFin=2025-01-31&tipoFecha=EMISION
+     *
+     * @param fechaInicio Fecha de inicio del rango (formato: yyyy-MM-dd)
+     * @param fechaFin Fecha de fin del rango (formato: yyyy-MM-dd)
+     * @param tipoFecha Tipo de fecha: EMISION (default) o RECEPCION
+     * @return Archivo Excel descargable
+     */
+    @GetMapping("/reporte-excel")
+    public ResponseEntity<byte[]> generarReporteExcel(
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+        @RequestParam(required = false, defaultValue = "EMISION") TipoFechaReporte tipoFecha
+    ) {
+        log.info("🚀 Generando reporte Excel - Rango: {} a {} (TipoFecha: {})",
+            fechaInicio, fechaFin, tipoFecha);
+
+        // Validaciones
+        if (fechaInicio.isAfter(fechaFin)) {
+            log.warn("❌ Fecha inicio es posterior a fecha fin");
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Validar rango no mayor a 1 año (opcional, por performance)
+        if (fechaInicio.plusYears(1).isBefore(fechaFin)) {
+            log.warn("❌ Rango de fechas excede 1 año");
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            // Generar Excel con tipo de fecha
+            byte[] excelBytes = facturaRecepcionService.generarReporteExcel(
+                fechaInicio,
+                fechaFin,
+                tipoFecha
+            );
+
+            // Nombre del archivo
+            String filename = String.format("Facturas_Aceptadas_%s_%s_%s.xlsx",
+                tipoFecha.name(),
+                fechaInicio.format(DateTimeFormatter.BASIC_ISO_DATE),
+                fechaFin.format(DateTimeFormatter.BASIC_ISO_DATE)
+            );
+
+            // Headers HTTP
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ));
+            headers.setContentDispositionFormData("attachment", filename);
+            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+            headers.setContentLength(excelBytes.length);
+
+            log.info("✅ Reporte Excel generado exitosamente: {} bytes", excelBytes.length);
+
+            return ResponseEntity.ok()
+                .headers(headers)
+                .body(excelBytes);
+
+        } catch (Exception e) {
+            log.error("❌ Error generando reporte Excel", e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 

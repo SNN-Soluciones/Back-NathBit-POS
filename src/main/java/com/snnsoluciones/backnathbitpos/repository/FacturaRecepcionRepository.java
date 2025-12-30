@@ -87,4 +87,25 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
   WHERE d.facturaRecepcion.id IN :facturaIds
   """)
   List<FacturaRecepcionDetalle> cargarImpuestosDeDetalles(@Param("facturaIds") List<Long> facturaIds);
+
+  /**
+   * Buscar facturas ACEPTADAS por fecha de RECEPCIÓN
+   * Para reportes que filtran por cuando se aceptó en el sistema
+   *
+   * @param fechaInicio Inicio del rango (inclusive)
+   * @param fechaFin    Fin del rango (inclusive)
+   * @return Lista de facturas ordenadas por fecha de recepción
+   */
+  @Query("""
+      SELECT DISTINCT fr FROM FacturaRecepcion fr
+      LEFT JOIN FETCH fr.detalles
+      WHERE fr.estadoInterno = 'ACEPTADA'
+      AND fr.fechaRecepcion >= :fechaInicio
+      AND fr.fechaRecepcion <= :fechaFin
+      ORDER BY fr.fechaRecepcion ASC
+      """)
+  List<FacturaRecepcion> findAceptadasPorFechaRecepcion(
+      @Param("fechaInicio") LocalDateTime fechaInicio,
+      @Param("fechaFin") LocalDateTime fechaFin
+  );
 }

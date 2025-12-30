@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.service;
 import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.*;
 import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.DecisionMensajeRequest.TipoDecision;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.enums.TipoFechaReporte;
 import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.enums.factura.TipoMensajeReceptor;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoCompra;
@@ -1530,5 +1531,53 @@ public class FacturaRecepcionService {
       factura.setEstadoHacienda("error_parseo");
       factura.setMensajeHacienda("Error parseando respuesta: " + e.getMessage());
     }
+  }
+
+  /**
+   * Genera un reporte Excel de facturas aceptadas en un rango de fechas
+   *
+   * @param fechaInicio Fecha inicio del rango (LocalDate)
+   * @param fechaFin    Fecha fin del rango (LocalDate)
+   * @param tipoFecha   Tipo de fecha para filtrar (EMISION o RECEPCION)
+   * @return Archivo Excel como byte array
+   */
+  public byte[] generarReporteExcel(LocalDate fechaInicio, LocalDate fechaFin, TipoFechaReporte tipoFecha) {
+    log.info("✅ Generando reporte Excel de facturas aceptadas - Rango: {} a {} (TipoFecha: {})",
+        fechaInicio, fechaFin, tipoFecha);
+
+    // Convertir LocalDate a LocalDateTime (inicio y fin del día)
+    LocalDateTime inicio = fechaInicio.atStartOfDay();
+    LocalDateTime fin = fechaFin.atTime(23, 59, 59);
+
+    // 1️⃣ Obtener facturas según el tipo de fecha
+    List<FacturaRecepcion> facturas;
+
+    if (tipoFecha == TipoFechaReporte.RECEPCION) {
+      facturas = facturaRecepcionRepository.findAceptadasPorFechaRecepcion(inicio, fin);
+      log.info("📦 Filtrando por FECHA DE RECEPCIÓN");
+    } else {
+      facturas = facturaRecepcionRepository.findAceptadasParaReporte(inicio, fin);
+      log.info("📦 Filtrando por FECHA DE EMISIÓN");
+    }
+
+    log.info("📦 Se encontraron {} facturas aceptadas en el rango", facturas.size());
+
+    // 2️⃣ Si hay facturas, cargar impuestos en query separada
+    if (!facturas.isEmpty()) {
+      List<Long> facturaIds = facturas.stream()
+          .map(FacturaRecepcion::getId)
+          .collect(Collectors.toList());
+
+      log.info("🔍 Cargando impuestos para {} facturas...", facturaIds.size());
+      facturaRecepcionRepository.cargarImpuestosDeDetalles(facturaIds);
+    }
+
+    // 3️⃣ Transformar a DTO con datos YA cargados
+    List<FacturaRecepcionReporteDTO> datos = facturas.stream()
+        .map(this::toReporteDTO)
+        .collect(Collectors.toList());
+
+    // 4️⃣ Llamar al generador de Excel
+    return facturaRecepcionExcelService.generarExcel(datos, fechaInicio, fechaFin);
   }
 }

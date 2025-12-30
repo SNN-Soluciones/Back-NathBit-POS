@@ -39,8 +39,12 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
     WHERE fr.empresa_id = :empresaId
     AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
     AND (CAST(:estado AS varchar) IS NULL OR fr.estado_interno = CAST(:estado AS varchar))
-    AND (CAST(:fechaInicio AS date) IS NULL OR fr.fecha_emision::date >= CAST(:fechaInicio AS date))
-    AND (CAST(:fechaFin AS date) IS NULL OR fr.fecha_emision::date <= CAST(:fechaFin AS date))
+    AND (
+        (:fechaInicio IS NULL AND :fechaFin IS NULL) 
+        OR 
+        fr.fecha_emision::date BETWEEN COALESCE(CAST(:fechaInicio AS date), '1900-01-01') 
+                                   AND COALESCE(CAST(:fechaFin AS date), '2099-12-31')
+    )
     ORDER BY fr.fecha_recepcion DESC
 """,
       countQuery = """
@@ -48,8 +52,12 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
         WHERE fr.empresa_id = :empresaId
         AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
         AND (CAST(:estado AS varchar) IS NULL OR fr.estado_interno = CAST(:estado AS varchar))
-        AND (CAST(:fechaInicio AS date) IS NULL OR fr.fecha_emision::date >= CAST(:fechaInicio AS date))
-        AND (CAST(:fechaFin AS date) IS NULL OR fr.fecha_emision::date <= CAST(:fechaFin AS date))
+        AND (
+            (:fechaInicio IS NULL AND :fechaFin IS NULL) 
+            OR 
+            fr.fecha_emision::date BETWEEN COALESCE(CAST(:fechaInicio AS date), '1900-01-01') 
+                                       AND COALESCE(CAST(:fechaFin AS date), '2099-12-31')
+        )
     """,
       nativeQuery = true)
   Page<FacturaRecepcion> findByFiltros(

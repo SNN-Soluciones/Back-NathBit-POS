@@ -38,24 +38,24 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
     SELECT * FROM facturas_recepcion fr
     WHERE fr.empresa_id = :empresaId
     AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
-    AND (:estado IS NULL OR fr.estado_interno = :estado)
-    AND (:fechaInicio IS NULL OR fr.fecha_emision::date >= :fechaInicio)
-    AND (:fechaFin IS NULL OR fr.fecha_emision::date <= :fechaFin)
+    AND (CAST(:estado AS varchar) IS NULL OR fr.estado_interno = CAST(:estado AS varchar))
+    AND (CAST(:fechaInicio AS date) IS NULL OR fr.fecha_emision::date >= CAST(:fechaInicio AS date))
+    AND (CAST(:fechaFin AS date) IS NULL OR fr.fecha_emision::date <= CAST(:fechaFin AS date))
     ORDER BY fr.fecha_recepcion DESC
 """,
       countQuery = """
-              SELECT COUNT(*) FROM facturas_recepcion fr
-              WHERE fr.empresa_id = :empresaId
-              AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
-              AND (:estado IS NULL OR fr.estado_interno = :estado)
-              AND (:fechaInicio IS NULL OR fr.fecha_emision::date >= :fechaInicio)
-              AND (:fechaFin IS NULL OR fr.fecha_emision::date <= :fechaFin)
-          """,
+        SELECT COUNT(*) FROM facturas_recepcion fr
+        WHERE fr.empresa_id = :empresaId
+        AND (:sucursalId IS NULL OR fr.sucursal_id = :sucursalId)
+        AND (CAST(:estado AS varchar) IS NULL OR fr.estado_interno = CAST(:estado AS varchar))
+        AND (CAST(:fechaInicio AS date) IS NULL OR fr.fecha_emision::date >= CAST(:fechaInicio AS date))
+        AND (CAST(:fechaFin AS date) IS NULL OR fr.fecha_emision::date <= CAST(:fechaFin AS date))
+    """,
       nativeQuery = true)
   Page<FacturaRecepcion> findByFiltros(
       @Param("empresaId") Long empresaId,
       @Param("sucursalId") Long sucursalId,
-      @Param("estado") String estado,  // 👈 String ahora
+      @Param("estado") String estado,
       @Param("fechaInicio") LocalDate fechaInicio,
       @Param("fechaFin") LocalDate fechaFin,
       Pageable pageable

@@ -134,7 +134,8 @@ public class SecurityConfig {
             "Authorization",
             "Content-Type",
             "Access-Control-Allow-Origin",
-            "Access-Control-Allow-Credentials"
+            "Access-Control-Allow-Credentials",
+            "Content-Disposition"
         ));
 
         // Permitir credenciales (cookies, authorization headers)

@@ -350,34 +350,32 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
 
             switch (tipoArchivo.toLowerCase()) {
                 case "carta":
-                    // PDF se genera on-demand
                     contenido = facturaPdfService.generarFacturaCarta(factura.getClave());
-                    nombreArchivo = bitacora.getClave() + "-carta-" + TipoArchivoFactura.PDF_FACTURA;
+                    nombreArchivo = bitacora.getClave() + "_factura.pdf";
                     mediaType = MediaType.APPLICATION_PDF;
                     break;
 
                 case "ticket":
-                    // PDF se genera on-demand
                     contenido = facturaPdfService.generarFacturaTicket(factura.getClave());
-                    nombreArchivo = factura.getClave()+ "-ticket-" + TipoArchivoFactura.PDF_FACTURA;
+                    nombreArchivo = bitacora.getClave() + "_ticket.pdf";
                     mediaType = MediaType.APPLICATION_PDF;
                     break;
 
                 case "xml":
                     contenido = storageService.obtenerArchivo(bitacora.getXmlPath());
-                    nombreArchivo = factura.getClave() +TipoArchivoFactura.XML_UNSIGNED;
+                    nombreArchivo = bitacora.getClave() + "_factura.xml";
                     mediaType = MediaType.APPLICATION_XML;
                     break;
 
                 case "xml_firmado":
                     contenido = storageService.obtenerArchivo(bitacora.getXmlFirmadoPath());
-                    nombreArchivo = factura.getClave() + TipoArchivoFactura.XML_SIGNED;
+                    nombreArchivo = bitacora.getClave() + "_factura_firmada.xml";
                     mediaType = MediaType.APPLICATION_XML;
                     break;
 
                 case "xml_respuesta":
                     contenido = storageService.obtenerArchivo(bitacora.getXmlRespuestaPath());
-                    nombreArchivo = factura.getClave() + TipoArchivoFactura.XML_RESPUESTA;
+                    nombreArchivo = bitacora.getClave() + "_respuesta.xml";
                     mediaType = MediaType.APPLICATION_XML;
                     break;
 

@@ -359,25 +359,25 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
                 case "ticket":
                     // PDF se genera on-demand
                     contenido = facturaPdfService.generarFacturaTicket(factura.getClave());
-                    nombreArchivo = bitacora.getClave()+ "-ticket-" + TipoArchivoFactura.PDF_FACTURA;
+                    nombreArchivo = factura.getClave()+ "-ticket-" + TipoArchivoFactura.PDF_FACTURA;
                     mediaType = MediaType.APPLICATION_PDF;
                     break;
 
                 case "xml":
                     contenido = storageService.obtenerArchivo(bitacora.getXmlPath());
-                    nombreArchivo = bitacora.getClave() +TipoArchivoFactura.XML_UNSIGNED;
+                    nombreArchivo = factura.getClave() +TipoArchivoFactura.XML_UNSIGNED;
                     mediaType = MediaType.APPLICATION_XML;
                     break;
 
                 case "xml_firmado":
                     contenido = storageService.obtenerArchivo(bitacora.getXmlFirmadoPath());
-                    nombreArchivo = bitacora.getClave() + TipoArchivoFactura.XML_SIGNED;
+                    nombreArchivo = factura.getClave() + TipoArchivoFactura.XML_SIGNED;
                     mediaType = MediaType.APPLICATION_XML;
                     break;
 
                 case "xml_respuesta":
                     contenido = storageService.obtenerArchivo(bitacora.getXmlRespuestaPath());
-                    nombreArchivo = bitacora.getClave() + TipoArchivoFactura.XML_RESPUESTA;
+                    nombreArchivo = factura.getClave() + TipoArchivoFactura.XML_RESPUESTA;
                     mediaType = MediaType.APPLICATION_XML;
                     break;
 

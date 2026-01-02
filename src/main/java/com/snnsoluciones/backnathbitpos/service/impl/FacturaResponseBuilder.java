@@ -176,12 +176,32 @@ public class FacturaResponseBuilder {
 
   /**
    * Construir ubicación Sucursal (null-safe)
+   * SIEMPRE retorna un objeto UbicacionDto (aunque sea vacío)
    */
   private UbicacionDto construirUbicacionSucursal(Sucursal sucursal) {
-    if (sucursal == null) return null;
-    // Si no hay provincia, consideramos que no hay ubicación cargada
-    if (sucursal.getProvincia() == null) return null;
+    // Si no hay sucursal, retornar ubicación vacía
+    if (sucursal == null) {
+      return UbicacionDto.builder()
+          .provincia("")
+          .canton("")
+          .distrito("")
+          .barrio("")
+          .otrasSenas("")
+          .build();
+    }
 
+    // Si no hay provincia, retornar ubicación vacía
+    if (sucursal.getProvincia() == null) {
+      return UbicacionDto.builder()
+          .provincia("")
+          .canton("")
+          .distrito("")
+          .barrio("")
+          .otrasSenas("")
+          .build();
+    }
+
+    // Si hay provincia, construir ubicación normalmente
     return UbicacionDto.builder()
         .provincia(s(sucursal.getProvincia().getProvincia()))
         .canton(sucursal.getCanton() != null ? s(sucursal.getCanton().getCanton()) : "")

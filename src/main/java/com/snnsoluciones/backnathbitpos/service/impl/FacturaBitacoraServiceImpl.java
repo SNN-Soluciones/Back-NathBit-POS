@@ -8,11 +8,19 @@ import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaBitacoraListResponse
 import com.snnsoluciones.backnathbitpos.dto.bitacora.FacturaResumenDto;
 import com.snnsoluciones.backnathbitpos.dto.bitacora.ReintentarProcesamientoRequest;
 import com.snnsoluciones.backnathbitpos.dto.email.EmailFacturaDto;
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse;
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.DetalleFacturaDto;
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.EmisorDto;
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.ImpuestoDto;
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.ReceptorDto;
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.ResumenFacturaDto;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.TipoArchivoFactura;
+import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
 import com.snnsoluciones.backnathbitpos.enums.mh.EstadoBitacora;
+import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.EmailService;
@@ -708,7 +716,7 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
     }
 
     /**
-     * Convierte entidad a DTO detallado
+     * Convierte entidad a DTO detallado CON TODA LA INFO NECESARIA PARA EL TICKET
      */
     private FacturaBitacoraDetailResponse convertirADetailResponse(FacturaBitacora bitacora) {
         // Obtener factura completa
@@ -732,6 +740,142 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
             facturaResumen.setClienteIdentificacion(factura.getCliente().getNumeroIdentificacion());
         }
 
+        // 🔥 CONSTRUIR EMISOR
+        FacturaResponse.EmisorDto emisor = FacturaResponse.EmisorDto.builder()
+            .nombre(factura.getSucursal().getEmpresa().getNombreRazonSocial())
+            .numeroIdentificacion(factura.getSucursal().getEmpresa().getIdentificacion())
+            .tipoIdentificacion(factura.getSucursal().getEmpresa().getTipoIdentificacion())
+            .correoElectronico(factura.getSucursal().getEmail() != null && !factura.getSucursal().getEmail().isEmpty() ?
+                factura.getSucursal().getEmail() :
+                factura.getSucursal().getEmpresa().getEmail())
+            .build();
+
+        // Teléfono del emisor
+        String telefonoEmisor = factura.getSucursal().getTelefono() != null ?
+            factura.getSucursal().getTelefono() :
+            factura.getSucursal().getEmpresa().getTelefono();
+
+        if (telefonoEmisor != null) {
+            emisor.setTelefono(FacturaResponse.TelefonoDto.builder()
+                .codigoPais("506")
+                .numTelefono(telefonoEmisor)
+                .build());
+        }
+
+        // Dirección del emisor
+        String direccionEmisor = factura.getSucursal().getOtrasSenas() != null ?
+            factura.getSucursal().getOtrasSenas() :
+            factura.getSucursal().getEmpresa().getOtrasSenas();
+
+        if (direccionEmisor != null) {
+            emisor.setUbicacion(FacturaResponse.UbicacionDto.builder()
+                .otrasSenas(direccionEmisor)
+                .build());
+        }
+
+        // 🔥 CONSTRUIR RECEPTOR
+        FacturaResponse.ReceptorDto receptor = null;
+        if (factura.getCliente() != null || factura.getNombreReceptor() != null) {
+            FacturaResponse.ReceptorDto.ReceptorDtoBuilder receptorBuilder = FacturaResponse.ReceptorDto.builder()
+                .nombre(factura.getCliente() != null ?
+                    factura.getCliente().getRazonSocial() :
+                    factura.getNombreReceptor())
+                .numeroIdentificacion(factura.getCliente() != null ?
+                    factura.getCliente().getNumeroIdentificacion() : null)
+                .correoElectronico(factura.getEmailReceptor())
+                .codigoActividadReceptor(factura.getActividadReceptor());
+
+            if (factura.getCliente() != null) {
+                receptorBuilder
+                    .clienteId(factura.getCliente().getId())
+                    .tipoIdentificacion(factura.getCliente().getTipoIdentificacion());
+
+                // Teléfono del cliente
+                if (factura.getCliente().getTelefonoNumero() != null) {
+                    receptorBuilder.telefono(FacturaResponse.TelefonoDto.builder()
+                        .codigoPais(factura.getCliente().getTelefonoCodigoPais() != null ?
+                            factura.getCliente().getTelefonoCodigoPais() : "506")
+                        .numTelefono(factura.getCliente().getTelefonoNumero())
+                        .build());
+                }
+
+                // Dirección del cliente
+                if (factura.getCliente().getUbicacion() != null &&
+                    factura.getCliente().getUbicacion().getOtrasSenas() != null) {
+                    receptorBuilder.ubicacion(FacturaResponse.UbicacionDto.builder()
+                        .otrasSenas(factura.getCliente().getUbicacion().getOtrasSenas())
+                        .build());
+                }
+            }
+
+            receptor = receptorBuilder.build();
+        }
+
+        // 🔥 CONSTRUIR LÍNEAS/DETALLES
+        List<FacturaResponse.DetalleFacturaDto> lineas = new ArrayList<>();
+        if (factura.getDetalles() != null) {
+            lineas = factura.getDetalles().stream()
+                .map(detalle -> {
+                    // Construir lista de impuestos
+                    List<FacturaResponse.ImpuestoDto> impuestos = new ArrayList<>();
+                    if (detalle.getImpuestos() != null) {
+                        impuestos = detalle.getImpuestos().stream()
+                            .map(imp -> FacturaResponse.ImpuestoDto.builder()
+                                .codigo(imp.getProductoImpuesto() != null ?
+                                    imp.getProductoImpuesto().getTipoImpuesto() : null)
+                                .codigoTarifaIVA(imp.getProductoImpuesto() != null ?
+                                    imp.getProductoImpuesto().getCodigoTarifaIVA() : null)
+                                .tarifa(imp.getTarifa())
+                                .monto(imp.getMontoImpuesto())
+                                .build())
+                            .collect(Collectors.toList());
+                    }
+
+                    return FacturaResponse.DetalleFacturaDto.builder()
+                        .numeroLinea(detalle.getNumeroLinea())
+                        .detalle(detalle.getDetalle())
+                        .cantidad(detalle.getCantidad())
+                        .precioUnitario(detalle.getPrecioUnitario())
+                        .montoTotal(detalle.getMontoTotal())
+                        .montoTotalLinea(detalle.getMontoTotalLinea())
+                        .subTotal(detalle.getSubtotal())
+                        .impuestos(impuestos)
+                        .build();
+                })
+                .collect(Collectors.toList());
+        }
+
+        // 🔥 CONSTRUIR RESUMEN TOTALES
+        FacturaResponse.ResumenFacturaDto resumenFactura = FacturaResponse.ResumenFacturaDto.builder()
+            .totalVenta(factura.getTotalVenta())
+            .totalDescuentos(factura.getTotalDescuentos())
+            .totalVentaNeta(factura.getTotalVentaNeta())
+            .totalImpuesto(factura.getTotalImpuesto())
+            .totalExonerado(factura.getTotalExonerado() != null ?
+                factura.getTotalExonerado() : BigDecimal.ZERO)
+            .totalOtrosCargos(factura.getTotalOtrosCargos() != null ?
+                factura.getTotalOtrosCargos() : BigDecimal.ZERO)
+            .totalComprobante(factura.getTotalComprobante())
+            .build();
+
+        // 🔥 MEDIOS DE PAGO
+        BigDecimal efectivo = BigDecimal.ZERO;
+        BigDecimal tarjeta = BigDecimal.ZERO;
+        BigDecimal cheque = BigDecimal.ZERO;
+        BigDecimal transferencia = BigDecimal.ZERO;
+        BigDecimal vuelto = factura.getVuelto() != null ? factura.getVuelto() : BigDecimal.ZERO;
+
+        if (factura.getMediosPago() != null) {
+            for (FacturaMedioPago mp : factura.getMediosPago()) {
+                switch (mp.getMedioPago()) {
+                    case EFECTIVO -> efectivo = efectivo.add(mp.getMonto());
+                    case TARJETA -> tarjeta = tarjeta.add(mp.getMonto());
+                    case CHEQUE -> cheque = cheque.add(mp.getMonto());
+                    case TRANSFERENCIA, SINPE_MOVIL -> transferencia = transferencia.add(mp.getMonto());
+                }
+            }
+        }
+
         // Construir respuesta completa
         return FacturaBitacoraDetailResponse.builder()
             .id(bitacora.getId())
@@ -745,11 +889,29 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
             .rutaXml(bitacora.getXmlPath())
             .rutaXmlFirmado(bitacora.getXmlFirmadoPath())
             .rutaXmlRespuesta(bitacora.getXmlRespuestaPath())
-//            .rutaPdf(bitacora.getRutaPdf())
             .ultimoError(bitacora.getUltimoError())
             .haciendaMensaje(bitacora.getHaciendaMensaje())
-//            .haciendaDetalle(bitacora.getHaciendaDetalle())
             .factura(facturaResumen)
+
+            // 🔥 DATOS PARA EL TICKET
+            .emisor(emisor)
+            .receptor(receptor)
+            .lineas(lineas)
+            .resumenFactura(resumenFactura)
+            .condicionVenta(factura.getCondicionVenta().name())
+            .plazoCreditoDias(factura.getPlazoCredito())
+            .numeroInterno(factura.getId().toString())
+            .vendedor(factura.getCajero() != null ?
+                factura.getCajero().getNombre() + " " + factura.getCajero().getApellidos() : null)
+            .observaciones(factura.getObservaciones())
+
+            // Medios de pago
+            .efectivo(efectivo)
+            .tarjeta(tarjeta)
+            .cheque(cheque)
+            .transferencia(transferencia)
+            .vuelto(vuelto)
+
             // URLs para descargar archivos
             .urlDescargaXml(bitacora.getXmlPath() != null ?
                 "/api/factura-bitacora/" + bitacora.getId() + "/archivo/xml" : null)

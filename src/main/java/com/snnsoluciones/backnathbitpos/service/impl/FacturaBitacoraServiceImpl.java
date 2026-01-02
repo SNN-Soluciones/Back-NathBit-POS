@@ -838,7 +838,9 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
 
             return FacturaResponse.DetalleFacturaDto.builder()
                 .numeroLinea(detalle.getNumeroLinea())
-                .detalle(detalle.getDetalle())
+                .detalle(Objects.nonNull(detalle.getDescripcionPersonalizada()) ?
+                    detalle.getDetalle().concat(", ").concat(detalle.getDescripcionPersonalizada()) :
+                    detalle.getDetalle())
                 .cantidad(detalle.getCantidad())
                 .precioUnitario(detalle.getPrecioUnitario())
                 .montoTotal(detalle.getMontoTotal())

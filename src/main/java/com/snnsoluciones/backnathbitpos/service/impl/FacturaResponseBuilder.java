@@ -37,6 +37,7 @@ public class FacturaResponseBuilder {
     try { return Enum.valueOf(type, name); } catch (Exception ex) { return fallback; }
   }
 
+
   private static <T> T firstNonNull(T v, T fallback) { return v != null ? v : fallback; }
 
   // ====== API ======

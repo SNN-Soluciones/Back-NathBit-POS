@@ -14,6 +14,7 @@ import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.EmisorDto;
 import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.ImpuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.ReceptorDto;
 import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.ResumenFacturaDto;
+import com.snnsoluciones.backnathbitpos.dto.factura.FacturaResponse.UbicacionDto;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.EstadoEmail;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
@@ -769,10 +770,13 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
         .build());
 
     // Dirección del emisor
-    String direccionEmisor = hacerDirreccion(emisor.getUbicacion().getProvincia(),
-        emisor.getUbicacion().getCanton(),
-        emisor.getUbicacion().getDistrito(), emisor.getUbicacion().getDistrito(),
-        emisor.getUbicacion().getOtrasSenas());
+    UbicacionDto direccionEmisor = hacerDirreccion(factura.getSucursal().getEmpresa().getProvincia().getProvincia(),
+        factura.getSucursal().getEmpresa().getCanton().getCanton(),
+        factura.getSucursal().getEmpresa().getDistrito().getDistrito(),
+        factura.getSucursal().getEmpresa().getBarrio().getBarrio(),
+        factura.getSucursal().getEmpresa().getOtrasSenas());
+
+    emisor.setUbicacion(direccionEmisor);
 
     // 🔥 CONSTRUIR RECEPTOR
     FacturaResponse.ReceptorDto receptor = null;
@@ -1033,25 +1037,25 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
     }
   }
 
-  private String hacerDirreccion(String provincia, String canton, String distrito,
+  private UbicacionDto hacerDirreccion(String provincia, String canton, String distrito,
       String barrio, String direccion) {
-    String dir = "";
+    UbicacionDto ubicacionDto = new UbicacionDto();
     if (provincia != null) {
-      dir.concat(provincia);
+      ubicacionDto.setProvincia(provincia);
     }
     if (canton != null) {
-      dir.concat(", ").concat(canton);
+      ubicacionDto.setCanton(canton);
     }
     if (distrito != null) {
-      dir.concat(", ").concat(distrito);
+      ubicacionDto.setDistrito(distrito);
     }
     if (barrio != null) {
-      dir.concat(", ").concat(barrio);
+      ubicacionDto.setBarrio(barrio);
     }
     if (direccion != null) {
-      dir.concat(", ").concat(direccion);
+      ubicacionDto.setOtrasSenas(direccion);
     }
 
-    return dir;
+    return ubicacionDto;
   }
 }

@@ -750,17 +750,25 @@ public class FacturaBitacoraServiceImpl implements FacturaBitacoraService {
                 factura.getSucursal().getEmpresa().getEmail())
             .build();
 
+        String telefonoEmisor;
         // Teléfono del emisor
-        String telefonoEmisor = factura.getSucursal().getTelefono() != null ?
-            factura.getSucursal().getTelefono() :
-            factura.getSucursal().getEmpresa().getTelefono();
+        if(factura.getSucursal().getTelefono() != null && !factura.getSucursal().getTelefono().isEmpty()) {
+            telefonoEmisor = factura.getSucursal().getTelefono();
 
-        if (telefonoEmisor != null) {
-            emisor.setTelefono(FacturaResponse.TelefonoDto.builder()
-                .codigoPais("506")
-                .numTelefono(telefonoEmisor)
-                .build());
+          emisor.setTelefono(FacturaResponse.TelefonoDto.builder()
+              .codigoPais("506")
+              .numTelefono(telefonoEmisor)
+              .build());
         }
+        else {
+            telefonoEmisor = factura.getSucursal().getEmpresa().getTelefono();
+        }
+
+        emisor.setTelefono(FacturaResponse.TelefonoDto.builder()
+            .codigoPais("506")
+            .numTelefono(telefonoEmisor)
+            .build());
+
 
         // Dirección del emisor
         String direccionEmisor = factura.getSucursal().getOtrasSenas() != null ?

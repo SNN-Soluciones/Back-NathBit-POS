@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.service.pdf;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
 import com.snnsoluciones.backnathbitpos.repository.OrdenRepository;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -85,20 +86,23 @@ public class ComandaCocinaMapperService {
         return parametros;
     }
 
-    // 🆕 NUEVO MÉTODO para mapear items de orden
+    /**
+     * Mapea items de orden agrupando los que son idénticos
+     */
     private List<DetalleComandaDTO> mapearDetallesOrden(List<OrdenItem> items) {
-        List<DetalleComandaDTO> dtos = new ArrayList<>();
+        // Map para agrupar: clave = nombreProducto|notas, valor = DTO acumulado
+        Map<String, DetalleComandaDTO> agrupados = new LinkedHashMap<>();
 
         if (items != null) {
             for (OrdenItem item : items) {
-                DetalleComandaDTO dto = new DetalleComandaDTO();
-                dto.setCantidad(item.getCantidad());
-
+                // Construir descripción completa
                 StringBuilder descripcion = new StringBuilder(item.getProducto().getNombre());
+                String notasLimpias = "";
 
-                // Agregar notas (que incluyen las opciones de compuestos)
+                // Procesar notas
                 if (item.getNotas() != null && !item.getNotas().trim().isEmpty()) {
-                    String[] lineasNotas = item.getNotas().split("\n");
+                    notasLimpias = item.getNotas().trim();
+                    String[] lineasNotas = notasLimpias.split("\n");
                     for (String lineaNota : lineasNotas) {
                         if (!lineaNota.trim().isEmpty()) {
                             descripcion.append("\n  ").append(lineaNota.trim());
@@ -106,45 +110,70 @@ public class ComandaCocinaMapperService {
                     }
                 }
 
-                dto.setDescripcion(descripcion.toString());
-                dtos.add(dto);
+                // Crear clave única: nombreProducto + notas
+                String claveAgrupacion = item.getProducto().getNombre() + "|" + notasLimpias;
+
+                // Agrupar o crear nuevo
+                if (agrupados.containsKey(claveAgrupacion)) {
+                    // Ya existe, sumar cantidad
+                    DetalleComandaDTO dtoExistente = agrupados.get(claveAgrupacion);
+                    dtoExistente.setCantidad(dtoExistente.getCantidad().add(item.getCantidad()));
+                } else {
+                    // Nuevo item
+                    DetalleComandaDTO dto = new DetalleComandaDTO();
+                    dto.setCantidad(item.getCantidad());
+                    dto.setDescripcion(descripcion.toString());
+                    agrupados.put(claveAgrupacion, dto);
+                }
             }
         }
 
-        return dtos;
+        return new ArrayList<>(agrupados.values());
     }
 
     /**
-     * Mapea los detalles de la factura interna a DTOs para la comanda
+     * Mapea detalles de factura agrupando los que son idénticos
      */
     private List<DetalleComandaDTO> mapearDetalles(List<FacturaInternaDetalle> detalles) {
-        List<DetalleComandaDTO> dtos = new ArrayList<>();
+        // Map para agrupar: clave = nombreProducto|notas, valor = DTO acumulado
+        Map<String, DetalleComandaDTO> agrupados = new LinkedHashMap<>();
 
         if (detalles != null) {
             for (FacturaInternaDetalle detalle : detalles) {
-                DetalleComandaDTO dto = new DetalleComandaDTO();
-                dto.setCantidad(detalle.getCantidad());
-                
-                // Construir descripción con producto y notas
+                // Construir descripción completa
                 StringBuilder descripcion = new StringBuilder(detalle.getNombreProducto());
-                
-                // Si hay notas/observaciones, agregarlas en líneas separadas
+                String notasLimpias = "";
+
+                // Procesar notas
                 if (detalle.getNotas() != null && !detalle.getNotas().trim().isEmpty()) {
-                    // Las notas vienen separadas por saltos de línea
-                    String[] lineasNotas = detalle.getNotas().split("\n");
+                    notasLimpias = detalle.getNotas().trim();
+                    String[] lineasNotas = notasLimpias.split("\n");
                     for (String lineaNota : lineasNotas) {
                         if (!lineaNota.trim().isEmpty()) {
                             descripcion.append("\n  ").append(lineaNota.trim());
                         }
                     }
                 }
-                
-                dto.setDescripcion(descripcion.toString());
-                dtos.add(dto);
+
+                // Crear clave única: nombreProducto + notas
+                String claveAgrupacion = detalle.getNombreProducto() + "|" + notasLimpias;
+
+                // Agrupar o crear nuevo
+                if (agrupados.containsKey(claveAgrupacion)) {
+                    // Ya existe, sumar cantidad
+                    DetalleComandaDTO dtoExistente = agrupados.get(claveAgrupacion);
+                    dtoExistente.setCantidad(dtoExistente.getCantidad().add(detalle.getCantidad()));
+                } else {
+                    // Nuevo item
+                    DetalleComandaDTO dto = new DetalleComandaDTO();
+                    dto.setCantidad(detalle.getCantidad());
+                    dto.setDescripcion(descripcion.toString());
+                    agrupados.put(claveAgrupacion, dto);
+                }
             }
         }
 
-        return dtos;
+        return new ArrayList<>(agrupados.values());
     }
 
     /**

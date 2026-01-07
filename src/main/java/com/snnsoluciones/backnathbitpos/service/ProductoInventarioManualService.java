@@ -5,12 +5,15 @@ import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimiento;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
+import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.repository.*;
-import com.snnsoluciones.backnathbitpos.security.SecurityContext;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +41,7 @@ public class ProductoInventarioManualService {
     private final ProductoMovimientoRepository movimientoRepository;
     private final ProductoRepository productoRepository;
     private final SucursalRepository sucursalRepository;
-    private final UsuarioRepository usuarioRepository;
-    private final SecurityContext securityContext;
+    private final UsuarioService usuarioService;
 
     // ==================== CARGA INICIAL EN LOTE ====================
 
@@ -378,12 +380,21 @@ public class ProductoInventarioManualService {
     }
 
     private Usuario obtenerUsuarioActual() {
-        Long usuarioId = securityContext.getCurrentUserId();
-        return usuarioRepository.findById(usuarioId)
-            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
+            throw new BusinessException("No hay usuario autenticado");
+        }
+
+        String email = auth.getName(); // El email es el principal en tu sistema
+
+        return usuarioService.buscarPorEmail(email)
+            .orElseThrow(() -> new BusinessException("Usuario no encontrado: " + email));
     }
 
-    // ==================== MAPPERS ====================
+
+        // ==================== MAPPERS ====================
 
     private InventarioActualDTO mapearAInventarioActualDTO(ProductoInventario inventario) {
         BigDecimal disponible = inventario.getCantidadActual()

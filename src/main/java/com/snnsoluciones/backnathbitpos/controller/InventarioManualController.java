@@ -41,7 +41,7 @@ public class InventarioManualController {
     @Operation(summary = "Carga inicial de inventarios en lote",
         description = "Permite cargar inventario inicial de múltiples productos en una sucursal")
     @PostMapping("/carga-inicial")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<List<InventarioActualDTO>>> cargarInventarioInicial(
             @Valid @RequestBody CargaInicialInventarioDTO request) {
 
@@ -75,7 +75,7 @@ public class InventarioManualController {
     @Operation(summary = "Ajustar inventario (entrada o salida manual)",
         description = "Permite ajustes manuales de inventario: entradas, salidas, mermas, etc.")
     @PostMapping("/ajuste")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<InventarioActualDTO>> ajustarInventario(
             @Valid @RequestBody AjusteInventarioDTO ajuste) {
 
@@ -106,7 +106,7 @@ public class InventarioManualController {
     @Operation(summary = "Obtener kardex de un producto en una sucursal",
         description = "Historial completo de movimientos de un producto")
     @GetMapping("/kardex/producto/{productoId}/sucursal/{sucursalId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CAJERO', 'ROOT')")
     public ResponseEntity<ApiResponse<Page<MovimientoInventarioDTO>>> obtenerKardex(
             @PathVariable Long productoId,
             @PathVariable Long sucursalId,
@@ -133,7 +133,7 @@ public class InventarioManualController {
     @Operation(summary = "Obtener todos los movimientos de una sucursal",
         description = "Historial de movimientos de inventario de todos los productos")
     @GetMapping("/movimientos/sucursal/{sucursalId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<Page<MovimientoInventarioDTO>>> obtenerMovimientosSucursal(
             @PathVariable Long sucursalId,
             @RequestParam(defaultValue = "0") int page,
@@ -160,7 +160,7 @@ public class InventarioManualController {
     @Operation(summary = "Obtener inventario actual de una sucursal",
         description = "Listado completo de productos con su stock actual")
     @GetMapping("/actual/sucursal/{sucursalId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CAJERO', 'ROOT')")
     public ResponseEntity<ApiResponse<List<InventarioActualDTO>>> obtenerInventarioSucursal(
             @PathVariable Long sucursalId) {
 
@@ -184,7 +184,7 @@ public class InventarioManualController {
     @Operation(summary = "Obtener productos con stock bajo",
         description = "Productos que están por debajo del stock mínimo configurado")
     @GetMapping("/bajo-minimo/sucursal/{sucursalId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CAJERO', 'ROOT')")
     public ResponseEntity<ApiResponse<List<InventarioActualDTO>>> obtenerProductosBajoMinimo(
             @PathVariable Long sucursalId) {
 
@@ -210,7 +210,7 @@ public class InventarioManualController {
     @Operation(summary = "Tipos de movimiento disponibles",
         description = "Lista de tipos de movimiento válidos para ajustes manuales")
     @GetMapping("/tipos-movimiento")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<List<TipoMovimientoInfo>>> obtenerTiposMovimiento() {
         List<TipoMovimientoInfo> tipos = List.of(
             // ENTRADAS

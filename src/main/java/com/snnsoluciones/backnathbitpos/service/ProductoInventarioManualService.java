@@ -380,15 +380,23 @@ public class ProductoInventarioManualService {
     }
 
     private Usuario obtenerUsuarioActual() {
-
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
             throw new BusinessException("No hay usuario autenticado");
         }
 
-        String email = auth.getName(); // El email es el principal en tu sistema
+        // Obtener el contexto del usuario desde el principal
+        if (auth.getPrincipal() instanceof ContextoUsuario) {
+            ContextoUsuario contexto = (ContextoUsuario) auth.getPrincipal();
 
+            // Buscar usuario por ID directamente (más eficiente)
+            return usuarioService.buscarPorId(contexto.getUserId())
+                .orElseThrow(() -> new BusinessException("Usuario no encontrado: " + contexto.getUserId()));
+        }
+
+        // Fallback: buscar por email
+        String email = auth.getName();
         return usuarioService.buscarPorEmail(email)
             .orElseThrow(() -> new BusinessException("Usuario no encontrado: " + email));
     }

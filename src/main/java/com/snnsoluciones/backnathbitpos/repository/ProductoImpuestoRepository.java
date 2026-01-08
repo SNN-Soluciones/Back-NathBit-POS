@@ -12,6 +12,12 @@ import java.util.Optional;
 
 @Repository
 public interface ProductoImpuestoRepository extends JpaRepository<ProductoImpuesto, Long> {
+
+    /**
+     * Buscar todos los impuestos de un producto (activos e inactivos)
+     * Usado por el handler para operaciones de actualización/eliminación
+     */
+    List<ProductoImpuesto> findByProductoId(Long productoId);
     
     // Buscar por producto
     List<ProductoImpuesto> findByProductoIdAndActivoTrue(Long productoId);

@@ -76,4 +76,11 @@ public class ProductoUpdateDto {
     private BigDecimal factorConversionReceta;
 
     private String zonaPreparacion;
+
+    /**
+     * IDs de categorías a asignar al producto
+     * Si viene null, no se modifican las categorías
+     * Si viene vacío, se eliminan todas las categorías
+     */
+    private List<Long> categoriaIds;
 }

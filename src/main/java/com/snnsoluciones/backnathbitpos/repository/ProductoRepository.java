@@ -16,6 +16,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
+  Page<Producto> findByFamiliaIdAndActivoTrue(Long familiaId, Pageable pageable);
+
   List<Producto> findByFamiliaIdAndActivoTrue(Long familiaId);
 
   // Buscar por código interno y empresa

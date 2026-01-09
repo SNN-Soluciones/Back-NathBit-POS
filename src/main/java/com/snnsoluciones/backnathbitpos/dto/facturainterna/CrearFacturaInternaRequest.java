@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.facturainterna;
 
 import jakarta.validation.constraints.*;
+import java.time.LocalDateTime;
 import lombok.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -10,6 +11,9 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CrearFacturaInternaRequest {
+
+    private LocalDateTime fechaEmision;
+
 
     // Contexto requerido
     @NotNull(message = "La empresa es requerida")

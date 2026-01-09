@@ -145,7 +145,7 @@ public class FacturaInternaService {
             .cajero(cajero)
             .mesero(mesero)
             .mesa(mesa)
-            .fecha(LocalDateTime.now())
+            .fecha(request.getFechaEmision() != null ? request.getFechaEmision() : LocalDateTime.now())
             .estado("PAGADA")
             .notas(request.getNotas())
             .build();

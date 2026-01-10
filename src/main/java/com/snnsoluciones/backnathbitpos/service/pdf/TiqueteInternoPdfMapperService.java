@@ -21,6 +21,7 @@ import java.text.DecimalFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,17 +59,48 @@ public class TiqueteInternoPdfMapperService {
 
     Map<String, Object> parametros = new HashMap<>();
 
-    // Datos de la empresa
+    // Datos de la empresa y sucursal
     Empresa empresa = empresaService.buscarPorId(facturaInterna.getEmpresa().getId());
     Sucursal sucursal = sucursalService.finById(facturaInterna.getSucursal().getId()).orElse(null);
-    parametros.put("empresa_nombre", empresa.getNombreRazonSocial() != null ?
-        empresa.getNombreRazonSocial() : empresa.getNombreComercial());
+
+    // Nombre comercial: Sucursal primero, si no Empresa
+    String nombreComercial = "";
+    if (sucursal != null && sucursal.getNombre() != null && !sucursal.getNombre().trim().isEmpty()) {
+      nombreComercial = sucursal.getNombre();
+    } else if (empresa.getNombreComercial() != null && !empresa.getNombreComercial().trim().isEmpty()) {
+      nombreComercial = empresa.getNombreComercial();
+    }
+    parametros.put("empresa_nombre", nombreComercial);
+
+    // Razón Social: Solo de empresa
+    String razonSocial = empresa.getNombreRazonSocial() != null && !empresa.getNombreRazonSocial().trim().isEmpty()
+        ? empresa.getNombreRazonSocial()
+        : "";
+    parametros.put("empresa_razon_social", razonSocial);
+
     parametros.put("empresa_identificacion", formatearIdentificacion(empresa));
-    parametros.put("email_empresa", sucursal.getEmail() != null ? sucursal.getEmail()
-        : empresa.getEmail() != null ? empresa.getEmail() : "");
-    parametros.put("telefono_empresa", sucursal.getTelefono() != null ? sucursal.getTelefono()
-        : empresa.getTelefono() != null ? empresa.getTelefono() : "");
-    parametros.put("empresa_direccion", obtenerDireccionEmpresa(empresa));
+
+    // Email: Sucursal primero, si no Empresa
+    String email = "";
+    if (sucursal != null && sucursal.getEmail() != null && !sucursal.getEmail().trim().isEmpty()) {
+      email = sucursal.getEmail();
+    } else if (empresa.getEmail() != null && !empresa.getEmail().trim().isEmpty()) {
+      email = empresa.getEmail();
+    }
+    parametros.put("email_empresa", email);
+
+    // Teléfono: Sucursal primero, si no Empresa
+    String telefono = "";
+    if (sucursal != null && sucursal.getTelefono() != null && !sucursal.getTelefono().trim().isEmpty()) {
+      telefono = sucursal.getTelefono();
+    } else if (empresa.getTelefono() != null && !empresa.getTelefono().trim().isEmpty()) {
+      telefono = empresa.getTelefono();
+    }
+    parametros.put("telefono_empresa", telefono);
+
+    // Dirección completa: Sucursal primero, si no Empresa
+    String direccion = construirDireccionCompleta(sucursal, empresa);
+    parametros.put("empresa_direccion", direccion);
 
     if (sucursal != null && !sucursal.getLogoSucursalPath().isEmpty()) {
       parametros.put("logo_empresa", new ByteArrayInputStream(
@@ -93,14 +125,41 @@ public class TiqueteInternoPdfMapperService {
     parametros.put("cajero_nombre", obtenerNombreCajero(facturaInterna));
     parametros.put("numero_viper", facturaInterna.getNumeroViper());
 
-    // Cliente
+    // Cliente - Información completa
+    String clienteNombre = "";
+    String clienteCedula = "";
+    String clienteEmail = "";
+
     if (facturaInterna.getCliente() != null) {
-      parametros.put("cliente_referencia", facturaInterna.getCliente().getRazonSocial());
+      Cliente cliente = facturaInterna.getCliente();
+
+      // Nombre
+      clienteNombre = cliente.getRazonSocial() != null ? cliente.getRazonSocial() : "";
+
+      // Cédula
+      clienteCedula = cliente.getNumeroIdentificacion() != null ? cliente.getNumeroIdentificacion() : "";
+
+      // Email principal
+      if (cliente.getClienteEmails() != null && !cliente.getClienteEmails().isEmpty()) {
+        // Buscar email principal, si no existe tomar el primero
+        clienteEmail = cliente.getClienteEmails().stream()
+            .filter(ce -> ce.getEsPrincipal() != null && ce.getEsPrincipal())
+            .findFirst()
+            .map(ClienteEmail::getEmail)
+            .orElse(cliente.getClienteEmails().stream()
+                .findFirst()
+                .map(ClienteEmail::getEmail)
+                .orElse(""));
+      }
     } else if (facturaInterna.getNombreCliente() != null) {
-      parametros.put("cliente_referencia", facturaInterna.getNombreCliente());
+      clienteNombre = facturaInterna.getNombreCliente();
     } else {
-      parametros.put("cliente_referencia", "Cliente General");
+      clienteNombre = "Cliente General";
     }
+
+    parametros.put("cliente_nombre", clienteNombre);
+    parametros.put("cliente_cedula", clienteCedula);
+    parametros.put("cliente_email", clienteEmail);
 
     // Totales (formateados como string para el reporte)
     parametros.put("subtotal", DECIMAL_FORMAT.format(facturaInterna.getSubtotal()));
@@ -115,8 +174,8 @@ public class TiqueteInternoPdfMapperService {
 
     parametros.put("total", DECIMAL_FORMAT.format(facturaInterna.getTotal()));
 
-    // Detalles para el subreporte
-    List<DetalleDTO> detalles = mapearDetalles(facturaInterna.getDetalles());
+    // Detalles para el subreporte (agrupados si son iguales)
+    List<DetalleDTO> detalles = mapearYAgruparDetalles(facturaInterna.getDetalles());
     parametros.put("detalles", detalles); // Para referencia
 
     // IMPORTANTE: El datasource debe ir como parámetro del reporte principal
@@ -138,129 +197,253 @@ public class TiqueteInternoPdfMapperService {
     // Mensaje de cortesía
     parametros.put("mensaje_cortesia", "¡Gracias por su preferencia!");
 
-    // Vuelto (si aplica)
-    if (facturaInterna.getVuelto() != null
-        && facturaInterna.getVuelto().compareTo(BigDecimal.ZERO) > 0) {
-      parametros.put("vuelto", DECIMAL_FORMAT.format(facturaInterna.getVuelto()));
-    }
-
     return parametros;
   }
 
   /**
-   * Calcula el impuesto de servicio (10%) sobre los items que son servicios
-   *
-   * @param facturaInterna La factura interna
-   * @return Monto total del impuesto de servicio
+   * Construye la dirección completa concatenando provincia, canton, distrito, barrio y otras señas
+   * Prioridad: Sucursal primero, si no hay datos usa Empresa
    */
-  private BigDecimal calcularImpuestoServicio(FacturaInterna facturaInterna) {
-    BigDecimal impuestoServicio = BigDecimal.ZERO;
+  private String construirDireccionCompleta(Sucursal sucursal, Empresa empresa) {
+    List<String> partes = new ArrayList<>();
 
-    if (facturaInterna.getDetalles() == null || facturaInterna.getDetalles().isEmpty()) {
-      return impuestoServicio;
-    }
+    // Variables para almacenar los datos
+    String provincia = "";
+    String canton = "";
+    String distrito = "";
+    String barrio = "";
+    String otrasSenas = "";
 
-    for (FacturaInternaDetalle detalle : facturaInterna.getDetalles()) {
-      // Verificar si el producto es un servicio
-      if (detalle.getProducto() != null
-          && Boolean.TRUE.equals(detalle.getProducto().getEsServicio())) {
-
-        // Base imponible = subtotal del detalle (ya incluye descuentos a nivel de línea)
-        BigDecimal baseImponible = detalle.getSubtotal();
-
-        // Calcular 10% de servicio
-        BigDecimal servicioDetalle = baseImponible
-            .multiply(new BigDecimal("10"))
-            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-
-        impuestoServicio = impuestoServicio.add(servicioDetalle);
+    // Intentar primero con datos de sucursal
+    if (sucursal != null) {
+      if (sucursal.getProvincia() != null && sucursal.getProvincia().getProvincia() != null) {
+        provincia = sucursal.getProvincia().getProvincia();
+      }
+      if (sucursal.getCanton() != null && sucursal.getCanton().getCanton() != null) {
+        canton = sucursal.getCanton().getCanton();
+      }
+      if (sucursal.getDistrito() != null && sucursal.getDistrito().getDistrito() != null) {
+        distrito = sucursal.getDistrito().getDistrito();
+      }
+      if (sucursal.getBarrio() != null && sucursal.getBarrio().getBarrio() != null) {
+        barrio = sucursal.getBarrio().getBarrio();
+      }
+      if (sucursal.getOtrasSenas() != null && !sucursal.getOtrasSenas().trim().isEmpty()) {
+        otrasSenas = sucursal.getOtrasSenas();
       }
     }
 
-    return impuestoServicio;
-  }
-
-  /**
-   * Mapea los detalles de la factura interna a DTOs para el reporte
-   */
-  private List<DetalleDTO> mapearDetalles(List<FacturaInternaDetalle> detalles) {
-    List<DetalleDTO> dtos = new ArrayList<>();
-
-    if (detalles != null) {
-      for (FacturaInternaDetalle detalle : detalles) {
-        DetalleDTO dto = new DetalleDTO();
-        dto.setCantidad(detalle.getCantidad());
-        dto.setDescripcion(!detalle.getNotas().isEmpty() ?
-            detalle.getNombreProducto().concat("\n").concat(detalle.getNotas()) :
-            detalle.getNombreProducto());
-        dto.setPrecioUnitario(detalle.getPrecioUnitario());
-        dto.setSubtotal(detalle.getSubtotal());
-        dtos.add(dto);
-      }
+    // Si no hay datos de sucursal, usar datos de empresa
+    if (provincia.isEmpty() && empresa.getProvincia() != null && empresa.getProvincia().getProvincia() != null) {
+      provincia = empresa.getProvincia().getProvincia();
+    }
+    if (canton.isEmpty() && empresa.getCanton() != null && empresa.getCanton().getCanton() != null) {
+      canton = empresa.getCanton().getCanton();
+    }
+    if (distrito.isEmpty() && empresa.getDistrito() != null && empresa.getDistrito().getDistrito() != null) {
+      distrito = empresa.getDistrito().getDistrito();
+    }
+    if (barrio.isEmpty() && empresa.getBarrio() != null && empresa.getBarrio().getBarrio() != null) {
+      barrio = empresa.getBarrio().getBarrio();
+    }
+    if (otrasSenas.isEmpty() && empresa.getOtrasSenas() != null && !empresa.getOtrasSenas().trim().isEmpty()) {
+      otrasSenas = empresa.getOtrasSenas();
     }
 
-    return dtos;
-  }
-
-  /**
-   * Formatea la identificación de la empresa
-   */
-  private String formatearIdentificacion(Empresa empresa) {
-    if (empresa.getTipoIdentificacion() != null && empresa.getIdentificacion() != null) {
-      return empresa.getTipoIdentificacion() + ": " + empresa.getIdentificacion();
+    // Construir la dirección concatenando las partes que existan
+    if (!provincia.isEmpty()) {
+      partes.add(provincia);
     }
-    return "";
-  }
-
-  /**
-   * Obtiene la dirección formateada de la empresa
-   */
-  private String obtenerDireccionEmpresa(Empresa empresa) {
-    StringBuilder direccion = new StringBuilder();
-
-    if (empresa.getOtrasSenas() != null) {
-      direccion.append(empresa.getOtrasSenas());
+    if (!canton.isEmpty()) {
+      partes.add(canton);
+    }
+    if (!distrito.isEmpty()) {
+      partes.add(distrito);
+    }
+    if (!barrio.isEmpty()) {
+      partes.add(barrio);
+    }
+    if (!otrasSenas.isEmpty()) {
+      partes.add(otrasSenas);
     }
 
-    // Si la empresa tiene distrito configurado
-    if (empresa.getDistrito() != null) {
-      if (!direccion.isEmpty()) {
-        direccion.append(", ");
-      }
-      direccion.append(empresa.getDistrito().getDistrito());
-      direccion.append(", ").append(empresa.getCanton().getCanton());
-      direccion.append(", ").append(empresa.getProvincia().getProvincia());
-    }
-
-    return direccion.toString();
+    return String.join(", ", partes);
   }
 
-  /**
-   * Obtiene el nombre del cajero
-   */
   private String obtenerNombreCajero(FacturaInterna facturaInterna) {
-    if (facturaInterna.getCajero() != null) {
-      Usuario usuario = facturaInterna.getCajero();
-      return usuario.getNombre() + " " + usuario.getApellidos();
+    if (facturaInterna.getSesionCaja() != null
+        && facturaInterna.getSesionCaja().getUsuario() != null) {
+      return facturaInterna.getSesionCaja().getUsuario().getNombre();
     }
     return "Sistema";
   }
 
+  private BigDecimal calcularImpuestoServicio(FacturaInterna facturaInterna) {
+    // Si la factura interna tiene impuesto servicio, retornarlo
+    if (facturaInterna.getImpuestoServicio() != null) {
+      return facturaInterna.getImpuestoServicio();
+    }
+
+    // Si no, calcularlo como 10% del subtotal
+    BigDecimal subtotal = facturaInterna.getSubtotal();
+    BigDecimal descuento = facturaInterna.getDescuento() != null ?
+        facturaInterna.getDescuento() : BigDecimal.ZERO;
+
+    BigDecimal base = subtotal.subtract(descuento);
+    return base.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP);
+  }
+
   /**
-   * Formatea los medios de pago para mostrar en el tiquete
+   * Mapea y agrupa detalles que sean idénticos (mismo producto, notas y precio)
+   * Suma las cantidades de items iguales
    */
+  private List<DetalleDTO> mapearYAgruparDetalles(List<FacturaInternaDetalle> detalles) {
+    // Mapa para agrupar: key = nombreProducto|notas|precioUnitario, value = DetalleDTO acumulado
+    Map<String, DetalleDTO> detallesAgrupados = new LinkedHashMap<>();
+
+    for (FacturaInternaDetalle detalle : detalles) {
+      // Crear la clave única para agrupar
+      String nombreProducto = detalle.getNombreProducto() != null ? detalle.getNombreProducto() : "";
+      String notas = detalle.getNotas() != null ? detalle.getNotas() : "";
+      BigDecimal precioUnitario = detalle.getPrecioUnitario() != null ? detalle.getPrecioUnitario() : BigDecimal.ZERO;
+
+      // Clave única: nombreProducto|notas|precio
+      String clave = nombreProducto + "|" + notas + "|" + precioUnitario.toPlainString();
+
+      if (detallesAgrupados.containsKey(clave)) {
+        // Ya existe, sumar cantidad y recalcular subtotal
+        DetalleDTO existente = detallesAgrupados.get(clave);
+        BigDecimal nuevaCantidad = existente.getCantidad().add(detalle.getCantidad());
+        BigDecimal nuevoSubtotal = nuevaCantidad.multiply(precioUnitario);
+
+        existente.setCantidad(nuevaCantidad);
+        existente.setSubtotal(nuevoSubtotal);
+      } else {
+        // Nuevo item, agregarlo
+        DetalleDTO dto = new DetalleDTO();
+        dto.setCantidad(detalle.getCantidad());
+
+        // Construir descripción completa (nombreProducto + notas si existen)
+        String descripcionCompleta = nombreProducto;
+        if (notas != null && !notas.trim().isEmpty()) {
+          descripcionCompleta = nombreProducto + " - " + notas;
+        }
+        dto.setDescripcion(descripcionCompleta);
+
+        dto.setPrecioUnitario(precioUnitario);
+        dto.setSubtotal(detalle.getSubtotal());
+
+        detallesAgrupados.put(clave, dto);
+      }
+    }
+
+    return new ArrayList<>(detallesAgrupados.values());
+  }
+
+  private List<DetalleDTO> mapearDetalles(List<FacturaInternaDetalle> detalles) {
+    List<DetalleDTO> resultado = new ArrayList<>();
+
+    for (FacturaInternaDetalle detalle : detalles) {
+      DetalleDTO dto = new DetalleDTO();
+      dto.setCantidad(detalle.getCantidad());
+      dto.setDescripcion(detalle.getNombreProducto());
+      dto.setPrecioUnitario(detalle.getPrecioUnitario());
+      dto.setSubtotal(detalle.getSubtotal());
+      resultado.add(dto);
+    }
+
+    return resultado;
+  }
+
   private String formatearMediosPago(List<FacturaInternaMedioPago> mediosPago) {
     if (mediosPago == null || mediosPago.isEmpty()) {
       return "Efectivo";
     }
 
     StringBuilder sb = new StringBuilder();
-    for (FacturaInternaMedioPago mp : mediosPago) {
-      if (!sb.isEmpty()) {
+    for (int i = 0; i < mediosPago.size(); i++) {
+      FacturaInternaMedioPago medio = mediosPago.get(i);
+      sb.append(traducirMedioPago(MedioPago.valueOf(medio.getTipo())));
+      sb.append(": ");
+      sb.append(DECIMAL_FORMAT.format(medio.getMonto()));
+
+      if (i < mediosPago.size() - 1) {
+        sb.append(" | ");
+      }
+    }
+    return sb.toString();
+  }
+
+  private String traducirMedioPago(MedioPago medioPago) {
+    switch (medioPago) {
+      case EFECTIVO:
+        return "Efectivo";
+      case TARJETA:
+        return "Tarjeta";
+      case TRANSFERENCIA:
+        return "Transferencia";
+      case CHEQUE:
+        return "Cheque";
+      case SINPE_MOVIL:
+        return "SINPE Móvil";
+      default:
+        return medioPago.name();
+    }
+  }
+
+  private String formatearIdentificacion(Empresa empresa) {
+    if (empresa.getIdentificacion() == null) {
+      return "";
+    }
+
+    String cedula = empresa.getIdentificacion();
+
+    // Si es cédula jurídica (10 dígitos)
+    if (cedula.length() == 10) {
+      return cedula.substring(0, 1) + "-" +
+          cedula.substring(1, 4) + "-" +
+          cedula.substring(4);
+    }
+
+    // Si es cédula física (9 dígitos)
+    if (cedula.length() == 9) {
+      return cedula.substring(0, 1) + "-" +
+          cedula.substring(1, 5) + "-" +
+          cedula.substring(5);
+    }
+
+    // Si no coincide con ningún formato, retornar tal cual
+    return cedula;
+  }
+
+  private String obtenerDireccionEmpresa(Empresa empresa) {
+    StringBuilder sb = new StringBuilder();
+
+    if (empresa.getProvincia() != null) {
+      sb.append(empresa.getProvincia().getProvincia());
+    }
+
+    if (empresa.getCanton() != null) {
+      if (sb.length() > 0) {
         sb.append(", ");
       }
-      sb.append(mp.getTipo()); // EFECTIVO, TARJETA, etc.
+      sb.append(empresa.getCanton().getCanton());
     }
+
+    if (empresa.getDistrito() != null) {
+      if (sb.length() > 0) {
+        sb.append(", ");
+      }
+      sb.append(empresa.getDistrito().getDistrito());
+    }
+
+    if (empresa.getOtrasSenas() != null && !empresa.getOtrasSenas().isEmpty()) {
+      if (sb.length() > 0) {
+        sb.append(", ");
+      }
+      sb.append(empresa.getOtrasSenas());
+    }
+
     return sb.toString();
   }
 

@@ -165,6 +165,25 @@ public class DispositivoController {
                 .body(ApiResponse.error(e.getMessage()));
         }
     }
+
+    @Operation(summary = "Listar sucursales de una empresa (simplificado)",
+        description = "Retorna lista simple de sucursales para selección en registro de PDV")
+    @GetMapping("/admin/dispositivos/empresa/{empresaId}/sucursales")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<SucursalSimpleDTO>>> listarSucursales(
+        @PathVariable Long empresaId) {
+
+        log.info("GET /api/admin/dispositivos/empresa/{}/sucursales", empresaId);
+
+        try {
+            List<SucursalSimpleDTO> sucursales = dispositivoService.listarSucursalesPorEmpresa(empresaId);
+            return ResponseEntity.ok(ApiResponse.success("Sucursales obtenidas", sucursales));
+        } catch (Exception e) {
+            log.error("Error listando sucursales: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getMessage()));
+        }
+    }
     
     // ==================== HELPERS ====================
     

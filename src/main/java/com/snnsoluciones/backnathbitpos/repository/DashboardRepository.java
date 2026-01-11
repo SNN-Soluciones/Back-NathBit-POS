@@ -132,18 +132,17 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
     @Query("SELECT " +
         "  s.id, " +
         "  s.nombre, " +
-        "  COALESCE(SUM(CASE WHEN CAST(f.fechaEmision AS date) = :fechaHoy " +
-        "                    AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
-        "                    AND f.estado NOT IN ('ANULADA', 'RECHAZADA') " +
-        "                    THEN f.totalComprobante ELSE 0 END), 0), " +
-        "  COUNT(DISTINCT CASE WHEN sc.estado = 'ABIERTA' THEN sc.id ELSE NULL END), " +
-        "  COUNT(DISTINCT CASE WHEN t.activa = true THEN t.id ELSE NULL END) " +
+        "  COALESCE((SELECT SUM(f2.totalComprobante) FROM Factura f2 " +
+        "            WHERE f2.sucursal.id = s.id " +
+        "            AND CAST(f2.fechaEmision AS date) = :fechaHoy " +
+        "            AND f2.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "            AND f2.estado NOT IN ('ANULADA', 'RECHAZADA')), 0), " +
+        "  (SELECT COUNT(sc2) FROM SesionCaja sc2 " +
+        "   WHERE sc2.terminal.sucursal.id = s.id AND sc2.estado = 'ABIERTA'), " +
+        "  (SELECT COUNT(t2) FROM Terminal t2 " +
+        "   WHERE t2.sucursal.id = s.id AND t2.activa = true) " +
         "FROM Sucursal s " +
-        "LEFT JOIN Factura f ON f.sucursal.id = s.id " +
-        "LEFT JOIN Terminal t ON t.sucursal.id = s.id " +
-        "LEFT JOIN SesionCaja sc ON sc.terminal.sucursal.id = s.id AND sc.estado = 'ABIERTA' " +
         "WHERE s.empresa.id = :empresaId " +
-        "GROUP BY s.id, s.nombre " +
         "ORDER BY s.nombre")
     List<Object[]> obtenerMetricasSucursales(
         @Param("empresaId") Long empresaId,

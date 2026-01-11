@@ -89,7 +89,7 @@ public class DashboardAdminController {
      * @param empresaId ID de la empresa
      * @return Dashboard detallado de la empresa
      */
-    @GetMapping("-empresa/{empresaId}")
+    @GetMapping("/empresa/{empresaId}")
     @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
     @Operation(
         summary = "Obtener dashboard detallado de empresa",

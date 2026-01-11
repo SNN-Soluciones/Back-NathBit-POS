@@ -72,7 +72,7 @@ public class Usuario {
     private Integer pinLongitud = 4;
 
     @Column(name = "requiere_cambio_pin")
-    private Boolean requiereCambioPin = false;
+    private Boolean requiereCambioPin = true;
 
     @Column(name = "migrado_a_global")
     private Boolean migradoAGlobal = false;

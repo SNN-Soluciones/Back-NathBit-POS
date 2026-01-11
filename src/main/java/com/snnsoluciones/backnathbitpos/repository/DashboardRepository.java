@@ -24,6 +24,7 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
 
     /**
      * Calcula el total de ventas de HOY para una empresa específica
+     * Excluye: Notas de crédito y facturas anuladas
      *
      * @param empresaId ID de la empresa
      * @return Total de ventas del día actual (0 si no hay ventas)
@@ -31,12 +32,15 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
     @Query("SELECT COALESCE(SUM(f.totalComprobante), 0) " +
         "FROM Factura f " +
         "WHERE f.sucursal.empresa.id = :empresaId " +
-        "AND CAST(f.fechaEmision AS date) = CURRENT_DATE")
+        "AND CAST(f.fechaEmision AS date) = CURRENT_DATE " +
+        "AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "AND f.estado NOT IN ('ANULADA', 'RECHAZADA')")
     BigDecimal calcularVentasHoyPorEmpresa(@Param("empresaId") Long empresaId);
 
     /**
      * Calcula ventas de HOY para múltiples empresas en una sola query (bulk)
      * Más eficiente que llamar calcularVentasHoyPorEmpresa() en loop
+     * Excluye: Notas de crédito y facturas anuladas
      *
      * @param empresasIds Lista de IDs de empresas
      * @return Lista de Object[] donde [0]=empresaId (Long), [1]=totalVentas (BigDecimal)
@@ -45,6 +49,8 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
         "FROM Factura f " +
         "WHERE f.sucursal.empresa.id IN :empresasIds " +
         "AND CAST(f.fechaEmision AS date) = CURRENT_DATE " +
+        "AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "AND f.estado NOT IN ('ANULADA', 'RECHAZADA') " +
         "GROUP BY f.sucursal.empresa.id")
     List<Object[]> calcularVentasHoyPorEmpresas(@Param("empresasIds") List<Long> empresasIds);
 
@@ -53,6 +59,7 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
     /**
      * Calcula métricas de ventas (hoy, semana, mes) en una sola query
      * Retorna List<Object[]> con un solo elemento: [0]=ventasHoy, [1]=ventasSemana, [2]=ventasMes
+     * Excluye: Notas de crédito y facturas anuladas
      *
      * @param empresaId ID de la empresa
      * @param fechaHoy Fecha actual
@@ -65,7 +72,9 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
         "  COALESCE(SUM(CASE WHEN CAST(f.fechaEmision AS date) >= :fechaInicioSemana THEN f.totalComprobante ELSE 0 END), 0), " +
         "  COALESCE(SUM(CASE WHEN CAST(f.fechaEmision AS date) >= :fechaInicioMes THEN f.totalComprobante ELSE 0 END), 0) " +
         "FROM Factura f " +
-        "WHERE f.sucursal.empresa.id = :empresaId")
+        "WHERE f.sucursal.empresa.id = :empresaId " +
+        "AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "AND f.estado NOT IN ('ANULADA', 'RECHAZADA')")
     List<Object[]> calcularMetricasVentas(
         @Param("empresaId") Long empresaId,
         @Param("fechaHoy") LocalDate fechaHoy,
@@ -114,6 +123,7 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
     /**
      * Obtiene métricas por sucursal (ventas hoy, cajas abiertas, pdvs activos)
      * Retorna Object[] con: [0]=sucursalId, [1]=nombre, [2]=ventasHoy, [3]=cajasAbiertas, [4]=pdvsActivos
+     * Excluye: Notas de crédito y facturas anuladas
      *
      * @param empresaId ID de la empresa
      * @param fechaHoy Fecha actual
@@ -122,7 +132,10 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
     @Query("SELECT " +
         "  s.id, " +
         "  s.nombre, " +
-        "  COALESCE(SUM(CASE WHEN CAST(f.fechaEmision AS date) = :fechaHoy THEN f.totalComprobante ELSE 0 END), 0), " +
+        "  COALESCE(SUM(CASE WHEN CAST(f.fechaEmision AS date) = :fechaHoy " +
+        "                    AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "                    AND f.estado NOT IN ('ANULADA', 'RECHAZADA') " +
+        "                    THEN f.totalComprobante ELSE 0 END), 0), " +
         "  COUNT(DISTINCT CASE WHEN sc.estado = 'ABIERTA' THEN sc.id ELSE NULL END), " +
         "  COUNT(DISTINCT CASE WHEN t.activa = true THEN t.id ELSE NULL END) " +
         "FROM Sucursal s " +
@@ -140,6 +153,7 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
     /**
      * Obtiene ventas agrupadas por día (últimos 7 días)
      * Retorna Object[] con: [0]=fecha, [1]=totalVentas
+     * Excluye: Notas de crédito y facturas anuladas
      *
      * @param empresaId ID de la empresa
      * @param fechaInicio Fecha de inicio (hace 7 días)
@@ -149,6 +163,8 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
         "FROM Factura f " +
         "WHERE f.sucursal.empresa.id = :empresaId " +
         "AND CAST(f.fechaEmision AS date) >= :fechaInicio " +
+        "AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "AND f.estado NOT IN ('ANULADA', 'RECHAZADA') " +
         "GROUP BY CAST(f.fechaEmision AS date) " +
         "ORDER BY CAST(f.fechaEmision AS date) ASC")
     List<Object[]> obtenerVentasPorDia(
@@ -159,6 +175,7 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
     /**
      * Obtiene top productos más vendidos HOY
      * Retorna Object[] con: [0]=nombreProducto, [1]=cantidadVendida, [2]=montoTotal
+     * Excluye: Notas de crédito y facturas anuladas
      *
      * @param empresaId ID de la empresa
      * @param fechaHoy Fecha actual
@@ -174,6 +191,8 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
         "JOIN fd.factura f " +
         "WHERE f.sucursal.empresa.id = :empresaId " +
         "AND CAST(f.fechaEmision AS date) = :fechaHoy " +
+        "AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "AND f.estado NOT IN ('ANULADA', 'RECHAZADA') " +
         "GROUP BY p.id, p.nombre " +
         "ORDER BY SUM(fd.cantidad) DESC")
     List<Object[]> obtenerTopProductosHoy(

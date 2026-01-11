@@ -171,7 +171,7 @@ public class EmailService {
   }
 
   /**
-   * Envía email con código de registro de dispositivo (OTP)
+   * Envía email con código de registro de dispositivoPdv (OTP)
    */
   public void enviarCodigoRegistroDispositivo(String destinatario,
       String nombreDestinatario,
@@ -181,9 +181,9 @@ public class EmailService {
       String ipSolicitante,
       String plataforma,
       int minutosExpiracion) {
-    log.info("Enviando código OTP a {} para dispositivo {}", destinatario, nombreDispositivo);
+    log.info("Enviando código OTP a {} para dispositivoPdv {}", destinatario, nombreDispositivo);
 
-    String asunto = "🔐 Código de registro de dispositivo - " + nombreEmpresa;
+    String asunto = "🔐 Código de registro de dispositivoPdv - " + nombreEmpresa;
     String htmlContent = generarHtmlCodigoRegistro(
         nombreDestinatario, nombreEmpresa, nombreDispositivo,
         codigo, ipSolicitante, plataforma, minutosExpiracion
@@ -222,7 +222,7 @@ public class EmailService {
             <div style="background: #f8f9fa; padding: 30px; border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 10px 10px;">
                 <p style="margin-top: 0;">Hola <strong>%s</strong>,</p>
                 
-                <p>Un nuevo dispositivo está solicitando acceso al sistema:</p>
+                <p>Un nuevo dispositivoPdv está solicitando acceso al sistema:</p>
                 
                 <div style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px 0;">
                     <table style="width: 100%%; border-collapse: collapse;">

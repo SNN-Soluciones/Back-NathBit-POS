@@ -29,7 +29,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Dispositivo {
+public class DispositivoPdv {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

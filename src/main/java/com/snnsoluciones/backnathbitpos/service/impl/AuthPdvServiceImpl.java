@@ -3,13 +3,13 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 import com.snnsoluciones.backnathbitpos.dto.auth.CambiarPinRequest;
 import com.snnsoluciones.backnathbitpos.dto.auth.LoginPdvRequest;
 import com.snnsoluciones.backnathbitpos.dto.auth.LoginPdvResponse;
-import com.snnsoluciones.backnathbitpos.entity.Dispositivo;
+import com.snnsoluciones.backnathbitpos.entity.DispositivoPdv;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
-import com.snnsoluciones.backnathbitpos.repository.DispositivoRepository;
+import com.snnsoluciones.backnathbitpos.repository.DispositivoPdvRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.AuthPdvService;
@@ -29,7 +29,7 @@ import java.security.SecureRandom;
 @RequiredArgsConstructor
 public class AuthPdvServiceImpl implements AuthPdvService {
 
-    private final DispositivoRepository dispositivoRepository;
+    private final DispositivoPdvRepository dispositivoPdvRepository;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
@@ -42,7 +42,7 @@ public class AuthPdvServiceImpl implements AuthPdvService {
         log.info("Login PDV - Usuario: {}, Dispositivo: {}", request.getUsuarioId(), deviceToken);
 
         // 1. Validar dispositivo
-        Dispositivo dispositivo = dispositivoRepository.findByDeviceTokenAndActivoTrue(deviceToken)
+        DispositivoPdv dispositivoPdv = dispositivoPdvRepository.findByDeviceTokenAndActivoTrue(deviceToken)
             .orElseThrow(() -> new UnauthorizedException("Dispositivo no autorizado o inactivo"));
 
         // 2. Buscar usuario
@@ -61,7 +61,7 @@ public class AuthPdvServiceImpl implements AuthPdvService {
 
         // 5. Validar que el usuario pertenece a la empresa del dispositivo
         boolean perteneceAEmpresa = usuario.getUsuarioEmpresas().stream()
-            .anyMatch(ue -> ue.getEmpresa().getId().equals(dispositivo.getEmpresa().getId()));
+            .anyMatch(ue -> ue.getEmpresa().getId().equals(dispositivoPdv.getEmpresa().getId()));
 
         if (!perteneceAEmpresa && !usuario.esRolSistema()) {
             throw new UnauthorizedException("El usuario no pertenece a esta empresa");
@@ -74,20 +74,20 @@ public class AuthPdvServiceImpl implements AuthPdvService {
         }
 
         // 7. Actualizar último uso del dispositivo
-        dispositivo.registrarUso();
-        dispositivoRepository.save(dispositivo);
+        dispositivoPdv.registrarUso();
+        dispositivoPdvRepository.save(dispositivoPdv);
 
         // 8. Generar JWT con contexto de empresa y sucursal
         String token = jwtTokenProvider.generateTokenWithContext(
             usuario.getId(),
             usuario.getEmail(),
             usuario.getRol().name(),
-            dispositivo.getEmpresa().getId(),
-            dispositivo.getSucursal().getId()
+            dispositivoPdv.getEmpresa().getId(),
+            dispositivoPdv.getSucursal().getId()
         );
 
         // 9. Determinar ruta de destino según rol
-        String rutaDestino = determinarRutaDestino(usuario, dispositivo);
+        String rutaDestino = determinarRutaDestino(usuario, dispositivoPdv);
 
         log.info("Login exitoso - Usuario: {}, Rol: {}", usuario.getId(), usuario.getRol());
 
@@ -103,12 +103,12 @@ public class AuthPdvServiceImpl implements AuthPdvService {
                 .rol(usuario.getRol().name())
                 .build())
             .empresa(LoginPdvResponse.EmpresaInfo.builder()
-                .id(dispositivo.getEmpresa().getId())
-                .nombreComercial(dispositivo.getEmpresa().getNombreComercial())
+                .id(dispositivoPdv.getEmpresa().getId())
+                .nombreComercial(dispositivoPdv.getEmpresa().getNombreComercial())
                 .build())
             .sucursal(LoginPdvResponse.SucursalInfo.builder()
-                .id(dispositivo.getSucursal().getId())
-                .nombre(dispositivo.getSucursal().getNombre())
+                .id(dispositivoPdv.getSucursal().getId())
+                .nombre(dispositivoPdv.getSucursal().getNombre())
                 .build())
             .requiereCambioPin(usuario.getRequiereCambioPin())
             .rutaDestino(rutaDestino)
@@ -193,12 +193,12 @@ public class AuthPdvServiceImpl implements AuthPdvService {
     /**
      * Determina la ruta de destino según el rol del usuario
      */
-    private String determinarRutaDestino(Usuario usuario, Dispositivo dispositivo) {
+    private String determinarRutaDestino(Usuario usuario, DispositivoPdv dispositivoPdv) {
         RolNombre rol = usuario.getRol();
 
         // SUPER_ADMIN y ADMIN van al dashboard de su empresa
         if (rol == RolNombre.SUPER_ADMIN || rol == RolNombre.ADMIN) {
-            return "/dashboard-admin-empresa/" + dispositivo.getEmpresa().getId();
+            return "/dashboard-admin-empresa/" + dispositivoPdv.getEmpresa().getId();
         }
 
         // ROOT y SOPORTE van al dashboard global

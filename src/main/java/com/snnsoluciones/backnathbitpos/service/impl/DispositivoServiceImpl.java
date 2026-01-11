@@ -25,51 +25,51 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DispositivoServiceImpl implements DispositivoService {
-    
-    private final DispositivoRepository dispositivoRepository;
+
+    private final DispositivoPdvRepository dispositivoRepository;
     private final TokenRegistroRepository tokenRegistroRepository;
     private final EmpresaRepository empresaRepository;
     private final SucursalRepository sucursalRepository;
     private final UsuarioRepository usuarioRepository;
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
-    
+
     private static final String BASE_URL_FRONTEND = "https://pos.nathbit.com"; // TODO: Mover a properties
     private static final String BASE_URL_API = "https://api.nathbit.com"; // TODO: Mover a properties
-    
+
     @Override
     @Transactional
     public GenerarTokenResponse generarTokenRegistro(GenerarTokenRequest request) {
-        log.info("Generando token de registro - Empresa: {}, Sucursal: {}, Dispositivo: {}", 
+        log.info("Generando token de registro - Empresa: {}, Sucursal: {}, Dispositivo: {}",
             request.getEmpresaId(), request.getSucursalId(), request.getNombreDispositivo());
-        
+
         // 1. Validar que empresa existe
         Empresa empresa = empresaRepository.findById(request.getEmpresaId())
             .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
-        
+
         // 2. Validar que sucursal existe y pertenece a la empresa
         Sucursal sucursal = sucursalRepository.findById(request.getSucursalId())
             .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
-        
+
         if (!sucursal.getEmpresa().getId().equals(empresa.getId())) {
             throw new BadRequestException("La sucursal no pertenece a la empresa especificada");
         }
-        
+
         // 3. Verificar si ya existe un token activo para esta sucursal y nombre
         boolean existeTokenActivo = tokenRegistroRepository.existsTokenActivoBySucursalAndNombre(
-            sucursal.getId(), 
-            request.getNombreDispositivo(), 
+            sucursal.getId(),
+            request.getNombreDispositivo(),
             LocalDateTime.now()
         );
-        
+
         if (existeTokenActivo) {
             throw new BadRequestException(
                 "Ya existe un token activo para un dispositivo con ese nombre en esta sucursal"
             );
         }
-        
+
         // 4. Generar token único
         String token = generarTokenUnico();
-        
+
         // 5. Crear registro de token (expira en 24 horas)
         TokenRegistro tokenRegistro = TokenRegistro.builder()
             .token(token)
@@ -79,11 +79,11 @@ public class DispositivoServiceImpl implements DispositivoService {
             .usado(false)
             .expiraEn(LocalDateTime.now().plusHours(24))
             .build();
-        
+
         tokenRegistroRepository.save(tokenRegistro);
-        
+
         log.info("Token de registro generado exitosamente: {}", token);
-        
+
         // 6. Construir response
         return GenerarTokenResponse.builder()
             .token(token)
@@ -94,32 +94,32 @@ public class DispositivoServiceImpl implements DispositivoService {
             .sucursalNombre(sucursal.getNombre())
             .build();
     }
-    
+
     @Override
     @Transactional
     public RegistrarDispositivoResponse registrarDispositivo(RegistrarDispositivoRequest request, String ipCliente) {
         log.info("Registrando dispositivo con token: {}", request.getToken());
-        
+
         // 1. Buscar y validar token
         TokenRegistro tokenRegistro = tokenRegistroRepository
             .findByTokenAndValidoTrue(request.getToken(), LocalDateTime.now())
             .orElseThrow(() -> new BadRequestException("Token inválido, expirado o ya utilizado"));
-        
+
         // 2. Verificar si ya existe un dispositivo con ese UUID
         if (request.getDeviceInfo() != null && request.getDeviceInfo().getUuid() != null) {
-            Optional<Dispositivo> dispositivoExistente = dispositivoRepository
+            Optional<DispositivoPdv> dispositivoExistente = dispositivoRepository
                 .findByUuidHardware(request.getDeviceInfo().getUuid());
-            
+
             if (dispositivoExistente.isPresent()) {
                 throw new BadRequestException("Este dispositivo ya está registrado");
             }
         }
-        
+
         // 3. Generar device token permanente
         String deviceToken = generarDeviceToken();
-        
+
         // 4. Crear dispositivo
-        Dispositivo dispositivo = Dispositivo.builder()
+        DispositivoPdv dispositivo = DispositivoPdv.builder()
             .deviceToken(deviceToken)
             .nombre(tokenRegistro.getNombreDispositivo())
             .empresa(tokenRegistro.getEmpresa())
@@ -129,7 +129,7 @@ public class DispositivoServiceImpl implements DispositivoService {
             .ultimoUso(LocalDateTime.now())
             .ipRegistro(ipCliente)
             .build();
-        
+
         // 5. Agregar info técnica del dispositivo si está disponible
         if (request.getDeviceInfo() != null) {
             dispositivo.setUuidHardware(request.getDeviceInfo().getUuid());
@@ -137,20 +137,20 @@ public class DispositivoServiceImpl implements DispositivoService {
             dispositivo.setPlataforma(request.getDeviceInfo().getPlataforma());
             dispositivo.setUserAgent(request.getDeviceInfo().getUserAgent());
         }
-        
+
         dispositivoRepository.save(dispositivo);
-        
+
         // 6. Marcar token como usado
         tokenRegistro.marcarComoUsado();
         tokenRegistroRepository.save(tokenRegistro);
-        
-        log.info("Dispositivo registrado exitosamente - ID: {}, Token: {}", 
+
+        log.info("Dispositivo registrado exitosamente - ID: {}, Token: {}",
             dispositivo.getId(), deviceToken);
-        
+
         // 7. Construir response
         Empresa empresa = tokenRegistro.getEmpresa();
         Sucursal sucursal = tokenRegistro.getSucursal();
-        
+
         return RegistrarDispositivoResponse.builder()
             .deviceToken(deviceToken)
             .empresa(RegistrarDispositivoResponse.EmpresaInfo.builder()
@@ -164,25 +164,25 @@ public class DispositivoServiceImpl implements DispositivoService {
                 .build())
             .build();
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public DispositivoUsuariosResponse obtenerUsuariosDispositivo(String deviceToken) {
         log.info("Obteniendo usuarios para dispositivo");
-        
+
         // 1. Validar dispositivo
-        Dispositivo dispositivo = dispositivoRepository.findByDeviceTokenAndActivoTrue(deviceToken)
+        DispositivoPdv dispositivo = dispositivoRepository.findByDeviceTokenAndActivoTrue(deviceToken)
             .orElseThrow(() -> new UnauthorizedException("Dispositivo no autorizado o inactivo"));
-        
+
         // 2. Actualizar último uso (en transacción aparte para no afectar la consulta)
         registrarUso(dispositivo);
-        
+
         // 3. Obtener usuarios de la empresa (excluyendo ROOT y SOPORTE)
         List<Usuario> usuarios = usuarioRepository.findByEmpresaId(dispositivo.getEmpresa().getId())
             .stream()
             .filter(u -> u.getActivo() && !u.esRolSistema())
             .collect(Collectors.toList());
-        
+
         // 4. Mapear a DTOs
         List<DispositivoUsuariosResponse.UsuarioInfo> usuariosInfo = usuarios.stream()
             .map(u -> DispositivoUsuariosResponse.UsuarioInfo.builder()
@@ -194,7 +194,7 @@ public class DispositivoServiceImpl implements DispositivoService {
                 .tienePin(u.getPin() != null)
                 .build())
             .collect(Collectors.toList());
-        
+
         // 5. Construir response
         return DispositivoUsuariosResponse.builder()
             .empresa(DispositivoUsuariosResponse.EmpresaInfo.builder()
@@ -208,62 +208,81 @@ public class DispositivoServiceImpl implements DispositivoService {
             .usuarios(usuariosInfo)
             .build();
     }
-    
+
     @Override
     @Transactional(readOnly = true)
-    public Optional<Dispositivo> buscarPorToken(String deviceToken) {
+    public Optional<DispositivoPdv> buscarPorToken(String deviceToken) {
         return dispositivoRepository.findByDeviceToken(deviceToken);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
-    public Optional<Dispositivo> buscarActivoPorToken(String deviceToken) {
+    public Optional<DispositivoPdv> buscarActivoPorToken(String deviceToken) {
         return dispositivoRepository.findByDeviceTokenAndActivoTrue(deviceToken);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public List<DispositivoDTO> listarDispositivosPorEmpresa(Long empresaId) {
-        List<Dispositivo> dispositivos = dispositivoRepository.findByEmpresaIdWithRelations(empresaId);
-        
+        List<DispositivoPdv> dispositivos = dispositivoRepository.findByEmpresaIdWithRelations(empresaId);
+
         return dispositivos.stream()
             .map(this::mapToDTO)
             .collect(Collectors.toList());
     }
-    
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SucursalSimpleDTO> listarSucursalesPorEmpresa(Long empresaId) {
+        // Validar que empresa existe
+        Empresa empresa = empresaRepository.findById(empresaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
+
+        // Obtener sucursales activas
+        List<Sucursal> sucursales = sucursalRepository.findAllByEmpresaIdAndActivaTrue(empresaId);
+
+        // Mapear a DTO simple
+        return sucursales.stream()
+            .map(s -> SucursalSimpleDTO.builder()
+                .id(s.getId())
+                .nombre(s.getNombre())
+                .build())
+            .collect(Collectors.toList());
+    }
+
     @Override
     @Transactional
     public void activarDispositivo(Long id) {
-        Dispositivo dispositivo = dispositivoRepository.findById(id)
+        DispositivoPdv dispositivo = dispositivoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Dispositivo no encontrado"));
-        
+
         dispositivo.activar();
         dispositivoRepository.save(dispositivo);
-        
+
         log.info("Dispositivo activado - ID: {}", id);
     }
-    
+
     @Override
     @Transactional
     public void desactivarDispositivo(Long id) {
-        Dispositivo dispositivo = dispositivoRepository.findById(id)
+        DispositivoPdv dispositivo = dispositivoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Dispositivo no encontrado"));
-        
+
         dispositivo.desactivar();
         dispositivoRepository.save(dispositivo);
-        
+
         log.info("Dispositivo desactivado - ID: {}", id);
     }
-    
+
     @Override
     @Transactional
-    public void registrarUso(Dispositivo dispositivo) {
+    public void registrarUso(DispositivoPdv dispositivo) {
         dispositivo.registrarUso();
         dispositivoRepository.save(dispositivo);
     }
-    
+
     // ==================== MÉTODOS PRIVADOS ====================
-    
+
     /**
      * Genera un token único para registro (formato: REG-uuid)
      */
@@ -271,7 +290,7 @@ public class DispositivoServiceImpl implements DispositivoService {
         String uuid = UUID.randomUUID().toString().substring(0, 13);
         return "REG-" + uuid;
     }
-    
+
     /**
      * Genera un device token permanente (formato: DEV-uuid)
      */
@@ -279,11 +298,11 @@ public class DispositivoServiceImpl implements DispositivoService {
         String uuid = UUID.randomUUID().toString();
         return "DEV-" + uuid;
     }
-    
+
     /**
      * Mapea Dispositivo a DTO
      */
-    private DispositivoDTO mapToDTO(Dispositivo dispositivo) {
+    private DispositivoDTO mapToDTO(DispositivoPdv dispositivo) {
         return DispositivoDTO.builder()
             .id(dispositivo.getId())
             .deviceToken(dispositivo.getDeviceToken())

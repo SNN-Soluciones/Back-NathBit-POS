@@ -236,10 +236,16 @@ public class DashboardAdminServiceImpl implements DashboardAdminService {
         List<Object[]> resultados = dashboardRepository.obtenerVentasPorDia(empresaId, inicioSemana);
 
         return resultados.stream()
-            .map(obj -> VentaDiariaDTO.builder()
-                .fecha((LocalDate) obj[0])
-                .monto((BigDecimal) obj[1])
-                .build())
+            .map(obj -> {
+                // Convertir java.sql.Date a LocalDate
+                java.sql.Date sqlDate = (java.sql.Date) obj[0];
+                LocalDate fecha = sqlDate.toLocalDate();
+
+                return VentaDiariaDTO.builder()
+                    .fecha(fecha)
+                    .monto((BigDecimal) obj[1])
+                    .build();
+            })
             .collect(Collectors.toList());
     }
 

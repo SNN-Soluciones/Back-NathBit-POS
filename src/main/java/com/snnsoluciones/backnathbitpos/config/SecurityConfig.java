@@ -71,6 +71,9 @@ public class SecurityConfig {
                     "/api/auth/login",
                     "/api/auth/refresh",
                     "/nathbit/api/auth/login",
+                    "/api/dispositivos/registrar",      // ← PÚBLICO
+                    "/api/auth/login-pdv",              // ← PÚBLICO (con device token)
+                    "/api/dispositivos/usuarios",
 
                     // Auth multi-tenant (NUEVOS)
                     "/api/auth/global/login",

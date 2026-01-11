@@ -192,8 +192,11 @@ public class DashboardAdminServiceImpl implements DashboardAdminService {
      * Obtiene métricas generales (ventas, cajas, usuarios)
      */
     private MetricasDTO obtenerMetricas(Long empresaId, LocalDate hoy, LocalDate inicioSemana, LocalDate inicioMes) {
-        // Query que retorna [ventasHoy, ventasSemana, ventasMes]
-        Object[] ventasData = dashboardRepository.calcularMetricasVentas(empresaId, hoy, inicioSemana, inicioMes);
+        // Query que retorna List<Object[]> con un solo elemento
+        List<Object[]> resultado = dashboardRepository.calcularMetricasVentas(empresaId, hoy, inicioSemana, inicioMes);
+
+        // Obtener el primer (y único) elemento del resultado
+        Object[] ventasData = resultado.isEmpty() ? new Object[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO} : resultado.get(0);
 
         Long cajasAbiertas = dashboardRepository.contarCajasAbiertas(empresaId);
         Long pdvsActivos = dashboardRepository.contarPdvsActivos(empresaId);

@@ -52,13 +52,13 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
 
     /**
      * Calcula métricas de ventas (hoy, semana, mes) en una sola query
-     * Retorna Object[] con: [0]=ventasHoy, [1]=ventasSemana, [2]=ventasMes
+     * Retorna List<Object[]> con un solo elemento: [0]=ventasHoy, [1]=ventasSemana, [2]=ventasMes
      *
      * @param empresaId ID de la empresa
      * @param fechaHoy Fecha actual
      * @param fechaInicioSemana Fecha de inicio de la semana (hace 7 días)
      * @param fechaInicioMes Fecha de inicio del mes actual
-     * @return Object[] con las 3 métricas
+     * @return List con un solo Object[] con las 3 métricas
      */
     @Query("SELECT " +
         "  COALESCE(SUM(CASE WHEN CAST(f.fechaEmision AS date) = :fechaHoy THEN f.totalComprobante ELSE 0 END), 0), " +
@@ -66,7 +66,7 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
         "  COALESCE(SUM(CASE WHEN CAST(f.fechaEmision AS date) >= :fechaInicioMes THEN f.totalComprobante ELSE 0 END), 0) " +
         "FROM Factura f " +
         "WHERE f.sucursal.empresa.id = :empresaId")
-    Object[] calcularMetricasVentas(
+    List<Object[]> calcularMetricasVentas(
         @Param("empresaId") Long empresaId,
         @Param("fechaHoy") LocalDate fechaHoy,
         @Param("fechaInicioSemana") LocalDate fechaInicioSemana,

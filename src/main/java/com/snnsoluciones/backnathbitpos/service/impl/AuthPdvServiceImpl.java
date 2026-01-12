@@ -12,6 +12,7 @@ import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.repository.DispositivoPdvRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
+import com.snnsoluciones.backnathbitpos.service.AsistenciaService;
 import com.snnsoluciones.backnathbitpos.service.AuthPdvService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class AuthPdvServiceImpl implements AuthPdvService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AsistenciaService asistenciaService; // ← AGREGADO
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -89,9 +91,12 @@ public class AuthPdvServiceImpl implements AuthPdvService {
         // 9. Determinar ruta de destino según rol
         String rutaDestino = determinarRutaDestino(usuario, dispositivoPdv);
 
+        // 10. Verificar si tiene entrada activa ← AGREGADO
+        boolean tieneEntradaActiva = asistenciaService.tieneEntradaActiva(usuario.getId());
+
         log.info("Login exitoso - Usuario: {}, Rol: {}", usuario.getId(), usuario.getRol());
 
-        // 10. Construir response
+        // 11. Construir response ← ACTUALIZADO
         return LoginPdvResponse.builder()
             .token(token)
             .usuario(LoginPdvResponse.UsuarioInfo.builder()
@@ -111,6 +116,7 @@ public class AuthPdvServiceImpl implements AuthPdvService {
                 .nombre(dispositivoPdv.getSucursal().getNombre())
                 .build())
             .requiereCambioPin(usuario.getRequiereCambioPin())
+            .tieneEntradaActiva(tieneEntradaActiva) // ← AGREGADO
             .rutaDestino(rutaDestino)
             .build();
     }
@@ -148,7 +154,7 @@ public class AuthPdvServiceImpl implements AuthPdvService {
         // 5. Hashear y guardar nuevo PIN
         usuario.setPin(passwordEncoder.encode(request.getNuevoPin()));
         usuario.setPinLongitud(request.getNuevoPin().length());
-        usuario.setRequiereCambioPassword(false); // Marca que ya no requiere cambio
+        usuario.setRequiereCambioPin(false); // Marca que ya no requiere cambio
 
         usuarioRepository.save(usuario);
 

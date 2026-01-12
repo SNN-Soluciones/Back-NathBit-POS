@@ -12,38 +12,43 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LoginPdvResponse {
-    
+
     /**
      * JWT token para autenticación de sesión
      */
     private String token;
-    
+
     /**
      * Información del usuario autenticado
      */
     private UsuarioInfo usuario;
-    
+
     /**
      * Información de la empresa
      */
     private EmpresaInfo empresa;
-    
+
     /**
      * Información de la sucursal
      */
     private SucursalInfo sucursal;
-    
+
     /**
      * Indica si el usuario debe cambiar su PIN
      */
     private Boolean requiereCambioPin;
-    
+
+    /**
+     * Indica si el usuario tiene entrada activa hoy (no ha marcado salida)
+     */
+    private Boolean tieneEntradaActiva;
+
     /**
      * Ruta a la que debe redirigir el frontend
      * Ejemplos: "/pos", "/dashboard-admin-empresa/2"
      */
     private String rutaDestino;
-    
+
     /**
      * DTO anidado con info de usuario
      */
@@ -60,7 +65,7 @@ public class LoginPdvResponse {
         private String email;
         private String rol;
     }
-    
+
     /**
      * DTO anidado con info de empresa
      */
@@ -73,7 +78,7 @@ public class LoginPdvResponse {
         private Long id;
         private String nombreComercial;
     }
-    
+
     /**
      * DTO anidado con info de sucursal
      */

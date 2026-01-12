@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.repository.*;
+import com.snnsoluciones.backnathbitpos.service.AsistenciaService;
 import com.snnsoluciones.backnathbitpos.service.DispositivoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class DispositivoServiceImpl implements DispositivoService {
     private final SucursalRepository sucursalRepository;
     private final UsuarioRepository usuarioRepository;
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
+    private final AsistenciaService asistenciaService;
 
     private static final String BASE_URL_FRONTEND = "https://pos.nathbit.com"; // TODO: Mover a properties
     private static final String BASE_URL_API = "https://api.nathbit.com"; // TODO: Mover a properties
@@ -180,19 +182,38 @@ public class DispositivoServiceImpl implements DispositivoService {
         // 3. Obtener usuarios de la empresa (excluyendo ROOT y SOPORTE)
         List<Usuario> usuarios = usuarioRepository.findByEmpresaId(dispositivo.getEmpresa().getId())
             .stream()
-            .filter(u -> u.getActivo() && !u.esRolSistema())
+            .filter(u -> u.getActivo() && !u.esRolSistema() && u.getPin() != null)
             .collect(Collectors.toList());
 
-        // 4. Mapear a DTOs
+        // 4. Mapear a DTOs con campos adicionales
         List<DispositivoUsuariosResponse.UsuarioInfo> usuariosInfo = usuarios.stream()
-            .map(u -> DispositivoUsuariosResponse.UsuarioInfo.builder()
-                .id(u.getId())
-                .nombre(u.getNombre())
-                .apellidos(u.getApellidos())
-                .nombreCompleto(u.getNombre() + " " + (u.getApellidos() != null ? u.getApellidos() : ""))
-                .rol(u.getRol().name())
-                .tienePin(u.getPin() != null)
-                .build())
+            .map(u -> {
+                // Calcular longitud del PIN
+                Integer longitudPin = null;
+                if (u.getPin() != null) {
+                    longitudPin = u.getPinLongitud() != null
+                        ? u.getPinLongitud()
+                        : u.getPin().length(); // Fallback si no está en pinLongitud
+                }
+
+                // Verificar si tiene entrada activa hoy
+                boolean tieneEntradaActiva = asistenciaService.tieneEntradaActiva(u.getId());
+
+                // Generar color de avatar
+                String avatarColor = generarAvatarColor(u.getId());
+
+                return DispositivoUsuariosResponse.UsuarioInfo.builder()
+                    .id(u.getId())
+                    .nombre(u.getNombre())
+                    .apellidos(u.getApellidos())
+                    .nombreCompleto(u.getNombre() + " " + (u.getApellidos() != null ? u.getApellidos() : ""))
+                    .rol(u.getRol().name())
+                    .tienePin(u.getPin() != null)
+                    .longitudPin(longitudPin)
+                    .tieneEntradaActiva(tieneEntradaActiva)
+                    .avatarColor(avatarColor)
+                    .build();
+            })
             .collect(Collectors.toList());
 
         // 5. Construir response
@@ -317,5 +338,24 @@ public class DispositivoServiceImpl implements DispositivoService {
             .ultimoUso(dispositivo.getUltimoUso())
             .createdAt(dispositivo.getCreatedAt())
             .build();
+    }
+
+    /**
+     * Genera un color único para el avatar del usuario basado en su ID
+     */
+    private String generarAvatarColor(Long usuarioId) {
+        String[] colores = {
+            "#9333ea", // purple
+            "#3b82f6", // blue
+            "#10b981", // green
+            "#f59e0b", // amber
+            "#ef4444", // red
+            "#8b5cf6", // violet
+            "#06b6d4", // cyan
+            "#f97316"  // orange
+        };
+
+        int index = (int) (usuarioId % colores.length);
+        return colores[index];
     }
 }

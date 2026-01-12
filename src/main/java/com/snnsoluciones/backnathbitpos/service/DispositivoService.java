@@ -34,7 +34,7 @@ public interface DispositivoService {
      * @param deviceToken Token del dispositivo
      * @return Response con lista de usuarios
      */
-    DispositivoUsuariosResponse obtenerUsuariosDispositivo(String deviceToken);
+    DispositivoUsuariosResponse obtenerUsuariosDispositivo(String deviceToken, Boolean includeRoot);
 
     /**
      * Busca un dispositivo por su token

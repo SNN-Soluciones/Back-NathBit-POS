@@ -174,8 +174,8 @@ public class DispositivoServiceImpl implements DispositivoService {
 
     @Override
     @Transactional(readOnly = true)
-    public DispositivoUsuariosResponse obtenerUsuariosDispositivo(String deviceToken) {
-        log.info("Obteniendo usuarios para dispositivo");
+    public DispositivoUsuariosResponse obtenerUsuariosDispositivo(String deviceToken, Boolean includeRoot) {
+        log.info("Obteniendo usuarios para dispositivo - includeRoot: {}", includeRoot);
 
         // 1. Validar dispositivo
         DispositivoPdv dispositivo = dispositivoRepository.findByDeviceTokenAndActivoTrue(deviceToken)
@@ -184,11 +184,30 @@ public class DispositivoServiceImpl implements DispositivoService {
         // 2. Actualizar último uso (en transacción aparte para no afectar la consulta)
         registrarUso(dispositivo);
 
-        // 3. Obtener usuarios de la empresa (excluyendo ROOT y SOPORTE)
+        // 3. Obtener usuarios de la empresa
         List<Usuario> usuarios = usuarioRepository.findByEmpresaId(dispositivo.getEmpresa().getId())
             .stream()
-            .filter(u -> u.getActivo() && !u.esRolSistema() && u.getPin() != null)
+            .filter(u -> {
+                // Usuario debe estar activo
+                if (!u.getActivo()) {
+                    return false;
+                }
+
+                // Usuario debe tener PIN configurado
+                if (u.getPin() == null) {
+                    return false;
+                }
+
+                // Si includeRoot es false, excluir ROOT y SOPORTE
+                if (!includeRoot && u.esRolSistema()) {
+                    return false;
+                }
+
+                return true;
+            })
             .collect(Collectors.toList());
+
+        log.info("Usuarios encontrados: {} (includeRoot: {})", usuarios.size(), includeRoot);
 
         // 4. Mapear a DTOs con campos adicionales
         List<DispositivoUsuariosResponse.UsuarioInfo> usuariosInfo = usuarios.stream()

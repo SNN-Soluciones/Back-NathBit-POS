@@ -1278,7 +1278,7 @@ public class FacturaRecepcionService {
    * @param fechaFin    Fecha fin del rango (LocalDate)
    * @return Archivo Excel como byte array
    */
-  public byte[] generarReporteExcel(LocalDate fechaInicio, LocalDate fechaFin) {
+  public byte[] generarReporteExcel(LocalDate fechaInicio, LocalDate fechaFin, Long sucursalId) {
     log.info("✅ Generando reporte Excel de facturas aceptadas - Rango: {} a {}", fechaInicio,
         fechaFin);
 
@@ -1288,7 +1288,7 @@ public class FacturaRecepcionService {
 
     // 1️⃣ Obtener facturas con detalles (SIN impuestos todavía)
     List<FacturaRecepcion> facturas = facturaRecepcionRepository.findAceptadasParaReporte(inicio,
-        fin);
+        fin, sucursalId);
     log.info("📦 Se encontraron {} facturas aceptadas en el rango", facturas.size());
 
     // 2️⃣ Si hay facturas, cargar impuestos en query separada

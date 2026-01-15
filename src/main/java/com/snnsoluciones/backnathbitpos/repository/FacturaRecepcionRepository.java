@@ -67,11 +67,13 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
       WHERE fr.estadoInterno = 'ACEPTADA'
       AND fr.fechaEmision >= :fechaInicio
       AND fr.fechaEmision <= :fechaFin
+      AND fr.sucursal.id = :sucursalId
       ORDER BY fr.fechaEmision ASC
       """)
   List<FacturaRecepcion> findAceptadasParaReporte(
       @Param("fechaInicio") LocalDateTime fechaInicio,
-      @Param("fechaFin") LocalDateTime fechaFin
+      @Param("fechaFin") LocalDateTime fechaFin,
+      @Param("sucursalId") Long sucursalId
   );
 
   /**
@@ -102,10 +104,12 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
       WHERE fr.estadoInterno = 'ACEPTADA'
       AND fr.fechaRecepcion >= :fechaInicio
       AND fr.fechaRecepcion <= :fechaFin
+      AND fr.sucursal.id = :sucursalId
       ORDER BY fr.fechaRecepcion ASC
       """)
   List<FacturaRecepcion> findAceptadasPorFechaRecepcion(
       @Param("fechaInicio") LocalDateTime fechaInicio,
-      @Param("fechaFin") LocalDateTime fechaFin
+      @Param("fechaFin") LocalDateTime fechaFin,
+      @Param("sucursalId") Long sucursalId
   );
 }

@@ -1541,7 +1541,7 @@ public class FacturaRecepcionService {
    * @param tipoFecha   Tipo de fecha para filtrar (EMISION o RECEPCION)
    * @return Archivo Excel como byte array
    */
-  public byte[] generarReporteExcel(LocalDate fechaInicio, LocalDate fechaFin, TipoFechaReporte tipoFecha) {
+  public byte[] generarReporteExcel(LocalDate fechaInicio, LocalDate fechaFin, TipoFechaReporte tipoFecha, Long sucursalId) {
     log.info("✅ Generando reporte Excel de facturas aceptadas - Rango: {} a {} (TipoFecha: {})",
         fechaInicio, fechaFin, tipoFecha);
 
@@ -1553,10 +1553,10 @@ public class FacturaRecepcionService {
     List<FacturaRecepcion> facturas;
 
     if (tipoFecha == TipoFechaReporte.RECEPCION) {
-      facturas = facturaRecepcionRepository.findAceptadasPorFechaRecepcion(inicio, fin);
+      facturas = facturaRecepcionRepository.findAceptadasPorFechaRecepcion(inicio, fin, sucursalId);
       log.info("📦 Filtrando por FECHA DE RECEPCIÓN");
     } else {
-      facturas = facturaRecepcionRepository.findAceptadasParaReporte(inicio, fin);
+      facturas = facturaRecepcionRepository.findAceptadasParaReporte(inicio, fin, sucursalId);
       log.info("📦 Filtrando por FECHA DE EMISIÓN");
     }
 

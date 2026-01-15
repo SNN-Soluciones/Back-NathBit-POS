@@ -331,8 +331,9 @@ public class FacturaRecepcionController {
     public ResponseEntity<byte[]> generarReporteExcel(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
-        @RequestParam(required = false, defaultValue = "EMISION") TipoFechaReporte tipoFecha
-    ) {
+        @RequestParam(required = false, defaultValue = "EMISION") TipoFechaReporte tipoFecha,
+        @RequestParam(required = false) Long sucursalId
+        ) {
         log.info("🚀 Generando reporte Excel - Rango: {} a {} (TipoFecha: {})",
             fechaInicio, fechaFin, tipoFecha);
 
@@ -353,7 +354,8 @@ public class FacturaRecepcionController {
             byte[] excelBytes = facturaRecepcionService.generarReporteExcel(
                 fechaInicio,
                 fechaFin,
-                tipoFecha
+                tipoFecha,
+                sucursalId
             );
 
             // Nombre del archivo

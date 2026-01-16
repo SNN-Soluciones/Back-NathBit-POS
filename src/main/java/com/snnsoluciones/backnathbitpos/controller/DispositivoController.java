@@ -2,17 +2,21 @@ package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.dispositivo.*;
+import com.snnsoluciones.backnathbitpos.entity.Usuario;
+import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.DispositivoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,6 +43,7 @@ import java.util.List;
 public class DispositivoController {
 
   private final DispositivoService dispositivoService;
+  private final UsuarioRepository usuarioRepository;
 
   private static final String HEADER_DEVICE_TOKEN = "X-Device-Token";
 
@@ -186,6 +191,27 @@ public class DispositivoController {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
           .body(ApiResponse.error(e.getMessage()));
     }
+  }
+
+  @PutMapping("/admin/usuarios/{id}/resetear-pin")
+  @PreAuthorize("hasRole('ROOT')")
+  public ResponseEntity<ApiResponse<Void>> resetearPin(
+      @PathVariable Long id,
+      @RequestBody Map<String, Object> request) {
+
+    Usuario usuario = usuarioRepository.findById(id)
+        .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+    String nuevoPin = (String) request.get("nuevoPin");
+    Boolean requiereCambio = (Boolean) request.getOrDefault("requiereCambio", true);
+
+    BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    usuario.setPin(encoder.encode(nuevoPin));
+    usuario.setRequiereCambioPin(requiereCambio);
+
+    usuarioRepository.save(usuario);
+
+    return ResponseEntity.ok(ApiResponse.success("PIN reseteado exitosamente", null));
   }
 
   // ==================== HELPERS ====================

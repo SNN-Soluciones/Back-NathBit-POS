@@ -39,19 +39,18 @@ public interface DashboardRepository extends Repository<com.snnsoluciones.backna
 
     /**
      * Calcula ventas de HOY para múltiples empresas en una sola query (bulk)
-     * Más eficiente que llamar calcularVentasHoyPorEmpresa() en loop
-     * Excluye: Notas de crédito y facturas anuladas
-     *
-     * @param empresasIds Lista de IDs de empresas
-     * @return Lista de Object[] donde [0]=empresaId (Long), [1]=totalVentas (BigDecimal)
+     * INCLUYE empresas sin ventas (retorna 0 para ellas)
+     * Excluye: Notas de crédito/débito y facturas anuladas
      */
-    @Query("SELECT f.sucursal.empresa.id, COALESCE(SUM(f.totalComprobante), 0) " +
-        "FROM Factura f " +
-        "WHERE f.sucursal.empresa.id IN :empresasIds " +
-        "AND CAST(f.fechaEmision AS date) = CURRENT_DATE " +
-        "AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
-        "AND f.estado NOT IN ('ANULADA', 'RECHAZADA') " +
-        "GROUP BY f.sucursal.empresa.id")
+    @Query("SELECT e.id, COALESCE(SUM(f.totalComprobante), 0) " +
+        "FROM Empresa e " +
+        "LEFT JOIN Sucursal s ON s.empresa.id = e.id " +
+        "LEFT JOIN Factura f ON f.sucursal.id = s.id " +
+        "  AND CAST(f.fechaEmision AS date) = CURRENT_DATE " +
+        "  AND f.tipoDocumento NOT IN ('NOTA_CREDITO', 'NOTA_DEBITO') " +
+        "  AND f.estado NOT IN ('ANULADA', 'RECHAZADA') " +
+        "WHERE e.id IN :empresasIds " +
+        "GROUP BY e.id")
     List<Object[]> calcularVentasHoyPorEmpresas(@Param("empresasIds") List<Long> empresasIds);
 
     // ==================== QUERIES ENDPOINT 2 (Dashboard Detallado) ====================

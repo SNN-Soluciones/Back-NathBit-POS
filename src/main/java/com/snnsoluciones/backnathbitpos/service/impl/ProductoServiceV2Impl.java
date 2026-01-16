@@ -267,14 +267,6 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
 
         producto.setEmpresaCabys(cabysSinMesa);
 
-        // Crear IVA exento
-        ProductoImpuesto impuestoExento = new ProductoImpuesto();
-        impuestoExento.setProducto(producto);
-        impuestoExento.setTipoImpuesto(TipoImpuesto.IVA);
-        impuestoExento.setCodigoTarifaIVA(CodigoTarifaIVA.TARIFA_EXENTA);
-        impuestoExento.setPorcentaje(BigDecimal.ZERO);
-        impuestoExento.setActivo(true);
-
         if (dto.getZonaPreparacion() != null) {
           try {
             producto.setZonaPreparacion(ZonaPreparacion.valueOf(dto.getZonaPreparacion()));
@@ -284,6 +276,14 @@ public class ProductoServiceV2Impl implements ProductoServiceV2 {
         } else {
           producto.setZonaPreparacion(ZonaPreparacion.NINGUNA);
         }
+
+        // Crear IVA exento
+        ProductoImpuesto impuestoExento = new ProductoImpuesto();
+        impuestoExento.setProducto(producto);
+        impuestoExento.setTipoImpuesto(TipoImpuesto.IVA);
+        impuestoExento.setCodigoTarifaIVA(CodigoTarifaIVA.TARIFA_EXENTA);
+        impuestoExento.setPorcentaje(BigDecimal.ZERO);
+        impuestoExento.setActivo(true);
 
         producto.setImpuestos(Set.of(impuestoExento));
 

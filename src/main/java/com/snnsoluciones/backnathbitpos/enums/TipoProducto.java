@@ -5,35 +5,26 @@ package com.snnsoluciones.backnathbitpos.enums;
  * Define la naturaleza y comportamiento del producto
  */
 public enum TipoProducto {
+    MIXTO("MIXTO", "Se vende y/o es ingrediente"),
+    MATERIA_PRIMA("MATERIA_PRIMA", "Solo ingrediente, no se vende"),
+    VENTA("VENTA", "Solo para venta directa"),
+    COMBO("COMBO", "Conjunto con precio especial"),
+    COMPUESTO("COMPUESTO", "Personalizable con opciones"),
+    CATEGORIA_MENU("CATEGORIA_MENU", "Categoría que agrupa productos");
 
-    /**
-     * Productos con inventario simple que pueden venderse directamente
-     * O usarse como ingrediente en recetas
-     * Ejemplo: Coca Cola (se vende como bebida o se usa en Cuba Libre)
-     */
-    MIXTO,
+    private final String codigo;
+    private final String descripcion;
 
-    /**
-     * Productos que solo sirven como ingredientes, no se venden al público
-     * Ejemplo: 200g de arroz, perejil, sal, aceite
-     */
-    MATERIA_PRIMA,
+    TipoProducto(String codigo, String descripcion) {
+        this.codigo = codigo;
+        this.descripcion = descripcion;
+    }
 
-    /**
-     * Productos destinados únicamente a la venta
-     * Ejemplo: Casado con pollo, botella de agua
-     */
-    VENTA,
+    public String getCodigo() {
+        return codigo;
+    }
 
-    /**
-     * Conjunto fijo de productos con precio especial
-     * Ejemplo: Hamburguesa + Papas + Bebida = Combo #1
-     */
-    COMBO,
-
-    /**
-     * Producto personalizable con opciones variables
-     * Ejemplo: Papas con curry (tipo papa + tipo carne + salsas)
-     */
-    COMPUESTO
+    public String getDescripcion() {
+        return descripcion;
+    }
 }

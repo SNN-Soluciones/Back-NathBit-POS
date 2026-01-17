@@ -2,6 +2,7 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.compuesto.ActualizarConfiguracionRequest;
+import com.snnsoluciones.backnathbitpos.dto.compuesto.CalcularPrecioCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.CalculoPrecioResponse;
 import com.snnsoluciones.backnathbitpos.dto.compuesto.CrearConfiguracionRequest;
 import com.snnsoluciones.backnathbitpos.dto.compuesto.ProductoCompuestoConfiguracionDTO;
@@ -30,7 +31,7 @@ public interface ProductoCompuestoService {
     /**
      * Calcula el precio total según las opciones seleccionadas
      */
-    CalculoPrecioResponse calcularPrecio(Long productoId, Long sucursalId, List<Long> opcionesSeleccionadas);
+    CalculoPrecioResponse calcularPrecio(CalcularPrecioCompuestoRequest request);
 
     /**
      * Valida que la selección cumpla las reglas y tenga stock

@@ -16,6 +16,7 @@ import java.util.List;
  * NUEVO: Ahora soporta dos modos de operación:
  * 1. Opciones Manuales (usaFamilia = false) - Como antes
  * 2. Opciones desde Familia (usaFamilia = true) - DINÁMICO
+ * 3. Cantidad por opción (permiteCantidadPorOpcion = true) - NUEVO
  */
 @Entity
 @Table(name = "producto_compuesto_slot",
@@ -36,143 +37,97 @@ public class ProductoCompuestoSlot {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * Producto compuesto al que pertenece
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "compuesto_id", nullable = false)
     private ProductoCompuesto compuesto;
 
-    /**
-     * Nombre del slot
-     * Ej: "Tipo de Papa", "Proteína", "Salsa"
-     */
     @Column(nullable = false, length = 100)
     private String nombre;
 
-    /**
-     * Descripción adicional
-     * Ej: "Seleccione el tipo de papa de su preferencia"
-     */
     @Column(columnDefinition = "TEXT")
     private String descripcion;
 
-    /**
-     * Cantidad mínima de opciones a seleccionar
-     */
     @Column(name = "cantidad_minima", nullable = false)
     @Builder.Default
     private Integer cantidadMinima = 1;
 
-    /**
-     * Cantidad máxima de opciones a seleccionar
-     */
     @Column(name = "cantidad_maxima", nullable = false)
     @Builder.Default
     private Integer cantidadMaxima = 1;
 
-    /**
-     * Indica si este slot es obligatorio
-     */
     @Column(name = "es_requerido", nullable = false)
     @Builder.Default
     private Boolean esRequerido = true;
 
-    /**
-     * Orden de presentación
-     */
     @Column(nullable = false)
     @Builder.Default
     private Integer orden = 0;
 
     /**
-     * Opciones manuales del slot (cuando usa_familia = false)
+     * NUEVO: Permite especificar cantidad individual por cada opción
+     * true = Usuario puede decir "5 de Birria, 4 de Carne, 3 de Pollo"
+     * false = Usuario solo selecciona opciones sin cantidad (comportamiento actual)
+     *
+     * Ejemplo uso:
+     * Taquiza (12 tacos de 3 sabores):
+     *   permite_cantidad_por_opcion = true
+     *   cantidadMinima = 12, cantidadMaxima = 12
+     *   Usuario selecciona: Birria x5, Carne x4, Pollo x3 = 12 total
      */
+    @Column(name = "permite_cantidad_por_opcion", nullable = false)
+    @Builder.Default
+    private Boolean permiteCantidadPorOpcion = false;
+
     @OneToMany(mappedBy = "slot", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orden ASC")
     @Builder.Default
     private List<ProductoCompuestoOpcion> opciones = new ArrayList<>();
 
-    // ========== NUEVOS CAMPOS PARA FAMILIAS ==========
-
-    /**
-     * Familia de productos a usar como opciones dinámicas
-     * Solo se usa cuando usa_familia = true
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "familia_id", nullable = true,
-        foreignKey = @ForeignKey(name = "fk_slot_familia"))
-    private FamiliaProducto familia;
-
-    /**
-     * Indica si este slot usa familia (true) u opciones manuales (false)
-     * Default: false (opciones manuales)
-     */
     @Column(name = "usa_familia", nullable = false)
     @Builder.Default
     private Boolean usaFamilia = false;
 
-    /**
-     * Precio adicional que se suma a CADA opción cuando usa familia
-     * Ejemplo: Familia BEBIDAS, precio adicional +$1.50 por cualquier bebida
-     * Si es null o 0, las opciones de la familia no tienen precio adicional
-     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "familia_id")
+    private FamiliaProducto familia;
+
     @Column(name = "precio_adicional_por_opcion", precision = 18, scale = 5)
     private BigDecimal precioAdicionalPorOpcion;
-
-    // ========== FIN NUEVOS CAMPOS ==========
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // Métodos helper
+    // ==================== MÉTODOS HELPER ====================
 
-    /**
-     * Agrega una opción al slot (solo para opciones manuales)
-     */
     public void agregarOpcion(ProductoCompuestoOpcion opcion) {
         opciones.add(opcion);
         opcion.setSlot(this);
     }
 
-    /**
-     * Remueve una opción
-     */
     public void removerOpcion(ProductoCompuestoOpcion opcion) {
         opciones.remove(opcion);
         opcion.setSlot(null);
     }
 
-    /**
-     * Valida si una cantidad de selecciones es válida
-     */
-    public boolean validarCantidadSeleccionada(int cantidad) {
-        if (esRequerido && cantidad < cantidadMinima) {
+    public boolean esCantidadValida(int cantidad) {
+        if (cantidad < cantidadMinima) {
             return false;
         }
         return cantidad <= cantidadMaxima;
     }
 
-    /**
-     * Obtiene las opciones disponibles (activas) - solo para opciones manuales
-     */
     public List<ProductoCompuestoOpcion> getOpcionesDisponibles() {
         return opciones.stream()
             .filter(ProductoCompuestoOpcion::getDisponible)
             .toList();
     }
 
-    /**
-     * Verifica si tiene al menos una opción disponible (opciones manuales)
-     */
     public boolean tieneOpcionesDisponibles() {
         return opciones.stream()
             .anyMatch(ProductoCompuestoOpcion::getDisponible);
     }
 
-    /**
-     * Obtiene la opción por defecto si existe (opciones manuales)
-     */
     public ProductoCompuestoOpcion getOpcionDefault() {
         return opciones.stream()
             .filter(ProductoCompuestoOpcion::getEsDefault)
@@ -180,25 +135,21 @@ public class ProductoCompuestoSlot {
             .orElse(null);
     }
 
-    // ========== NUEVOS MÉTODOS HELPER PARA FAMILIAS ==========
-
-    /**
-     * Verifica si el slot usa familia
-     */
     public boolean usaFamilia() {
         return Boolean.TRUE.equals(this.usaFamilia);
     }
 
-    /**
-     * Verifica si el slot usa opciones manuales
-     */
     public boolean usaOpcionesManuales() {
         return !usaFamilia();
     }
 
     /**
-     * Obtiene el nombre de la familia (si usa familia)
+     * NUEVO: Verifica si permite cantidad por opción
      */
+    public boolean permiteCantidadPorOpcion() {
+        return Boolean.TRUE.equals(this.permiteCantidadPorOpcion);
+    }
+
     public String getNombreFamilia() {
         if (usaFamilia() && familia != null) {
             return familia.getNombre();
@@ -206,23 +157,15 @@ public class ProductoCompuestoSlot {
         return null;
     }
 
-    /**
-     * Verifica si tiene precio adicional
-     */
     public boolean tienePrecioAdicional() {
         return precioAdicionalPorOpcion != null &&
             precioAdicionalPorOpcion.compareTo(BigDecimal.ZERO) > 0;
     }
 
-    /**
-     * Obtiene el precio adicional formateado
-     */
     public BigDecimal getPrecioAdicionalODefault() {
         return precioAdicionalPorOpcion != null ?
             precioAdicionalPorOpcion : BigDecimal.ZERO;
     }
-
-    // ========== FIN NUEVOS MÉTODOS ==========
 
     @Override
     public boolean equals(Object o) {

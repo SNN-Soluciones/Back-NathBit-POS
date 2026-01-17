@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.compuesto.ActualizarConfiguracionRequest;
+import com.snnsoluciones.backnathbitpos.dto.compuesto.CalcularPrecioCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.compuesto.CrearConfiguracionRequest;
 import com.snnsoluciones.backnathbitpos.dto.compuesto.ProductoCompuestoConfiguracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.compuesto.SlotConfiguracionDTO;
@@ -9,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoSlotDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoOpcionDto;
+import com.snnsoluciones.backnathbitpos.dto.producto.SlotSeleccionDTO;
 import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
 import com.snnsoluciones.backnathbitpos.dto.productocompuesto.ConfiguracionFlujoDTO;
 import com.snnsoluciones.backnathbitpos.dto.productocompuesto.OpcionPreguntaInicialDTO;
@@ -53,6 +55,7 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   private final ProductoCompuestoConfiguracionRepository configuracionRepository;
   private final ProductoCompuestoSlotConfiguracionRepository slotConfigRepository;
   private final ProductoCompuestoOpcionRepository productoCompuestoOpcionRepository;
+  private final SlotSeleccionValidator slotSeleccionValidator;
 
   @Override
   @Transactional
@@ -271,44 +274,80 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
 
   @Override
   @Transactional(readOnly = true)
-  public CalculoPrecioResponse calcularPrecio(Long productoId, Long sucursalId,
-      List<Long> opcionesSeleccionadas) {
-    log.info("Calculando precio para producto {} con {} opciones", productoId,
-        opcionesSeleccionadas.size());
+  public CalculoPrecioResponse calcularPrecio(CalcularPrecioCompuestoRequest request) {
+    log.info("Calculando precio para producto {} con {} selecciones de slots",
+        request.getProductoId(), request.getSelecciones().size());
 
-    // Obtener producto y validar
-    Producto producto = productoRepository.findById(productoId)
+    // 1. Obtener producto y validar
+    Producto producto = productoRepository.findById(request.getProductoId())
         .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
     if (producto.getTipo() != TipoProducto.COMPUESTO) {
       throw new BusinessException("El producto no es de tipo COMPUESTO");
     }
 
-    BigDecimal precioBase =
-        producto.getPrecioBase() != null ? producto.getPrecioBase() : producto.getPrecioVenta();
+    // 2. Validar sucursal
+    sucursalRepository.findById(request.getSucursalId())
+        .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+
+    // 3. Precio base
+    BigDecimal precioBase = producto.getPrecioBase() != null ?
+        producto.getPrecioBase() : producto.getPrecioVenta();
+
     BigDecimal totalAdicionales = BigDecimal.ZERO;
     List<CalculoPrecioResponse.DetalleOpcion> detalles = new ArrayList<>();
 
-    // Procesar cada opción seleccionada
-    for (Long opcionId : opcionesSeleccionadas) {
-      ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionId)
-          .orElseThrow(() -> new ResourceNotFoundException("Opción no encontrada: " + opcionId));
+    // 4. Procesar cada slot seleccionado
+    for (SlotSeleccionDTO seleccion : request.getSelecciones()) {
 
-      // Verificar disponibilidad en sucursal
-      boolean disponibleEnSucursal = verificarDisponibilidadEnSucursal(opcion, sucursalId);
+      // Obtener slot
+      ProductoCompuestoSlot slot = slotRepository.findById(seleccion.getSlotId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Slot no encontrado: " + seleccion.getSlotId()));
 
-      totalAdicionales = totalAdicionales.add(opcion.getPrecioAdicional());
+      // Validar selección (cantidad total, min/max, etc)
+      slotSeleccionValidator.validarSeleccion(slot, seleccion);
 
-      detalles.add(CalculoPrecioResponse.DetalleOpcion.builder()
-          .opcionId(opcionId)
-          .productoNombre(opcion.getProducto().getNombre())
-          .slotNombre(opcion.getSlot().getNombre())
-          .precioAdicional(opcion.getPrecioAdicional())
-          .disponibleEnSucursal(disponibleEnSucursal)
-          .build());
+      // Procesar cada opción del slot
+      for (SlotSeleccionDTO.OpcionSeleccionada opcionSel : seleccion.getOpciones()) {
+
+        ProductoCompuestoOpcion opcion = opcionRepository.findById(opcionSel.getOpcionId())
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Opción no encontrada: " + opcionSel.getOpcionId()));
+
+        // Verificar disponibilidad en sucursal
+        boolean disponibleEnSucursal = verificarDisponibilidadEnSucursal(
+            opcion, request.getSucursalId());
+
+        // Precio unitario de la opción
+        BigDecimal precioUnitario = opcion.getPrecioAdicional() != null ?
+            opcion.getPrecioAdicional() : BigDecimal.ZERO;
+
+        // Cantidad (si el slot permite cantidad por opción, usar la cantidad; si no, siempre es 1)
+        Integer cantidad = Boolean.TRUE.equals(slot.getPermiteCantidadPorOpcion()) ?
+            opcionSel.getCantidad() : 1;
+
+        // Subtotal = precio unitario × cantidad
+        BigDecimal subtotal = precioUnitario.multiply(BigDecimal.valueOf(cantidad));
+        totalAdicionales = totalAdicionales.add(subtotal);
+
+        // Agregar detalle
+        detalles.add(CalculoPrecioResponse.DetalleOpcion.builder()
+            .opcionId(opcionSel.getOpcionId())
+            .productoNombre(opcion.getNombreEfectivo())
+            .slotNombre(slot.getNombre())
+            .cantidad(cantidad)
+            .precioUnitario(precioUnitario)
+            .precioAdicional(subtotal) // Subtotal de esta opción
+            .disponibleEnSucursal(disponibleEnSucursal)
+            .build());
+      }
     }
 
     BigDecimal precioFinal = precioBase.add(totalAdicionales);
+
+    log.info("Precio calculado - Base: {}, Adicionales: {}, Final: {}",
+        precioBase, totalAdicionales, precioFinal);
 
     return CalculoPrecioResponse.builder()
         .precioBase(precioBase)

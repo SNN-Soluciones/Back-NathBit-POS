@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.controller;
 
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
+import com.snnsoluciones.backnathbitpos.dto.compuesto.CalcularPrecioCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.service.ProductoCompuestoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,19 +27,21 @@ public class ProductoCompuestoOperacionesController {
 
     @PostMapping("/{productoId}/calcular-precio")
     @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
-    @Operation(summary = "Calcular precio", 
-               description = "Calcula el precio total según las opciones seleccionadas")
+    @Operation(summary = "Calcular precio",
+        description = "Calcula el precio total según las opciones seleccionadas (soporta cantidad por opción)")
     public ResponseEntity<ApiResponse<CalculoPrecioResponse>> calcularPrecio(
-            @PathVariable Long productoId,
-            @RequestParam Long sucursalId, // IMPORTANTE: Para validar disponibilidad
-            @Valid @RequestBody CalculoPrecioRequest request) {
-        
+        @PathVariable Long productoId,
+        @Valid @RequestBody CalcularPrecioCompuestoRequest request) {
+
         try {
-            CalculoPrecioResponse calculo = compuestoService.calcularPrecio(
-                productoId, sucursalId, request.getOpcionesSeleccionadas()
-            );
+            // Asegurar que el productoId del path coincide con el del body
+            request.setProductoId(productoId);
+
+            CalculoPrecioResponse calculo = compuestoService.calcularPrecio(request);
+
             return ResponseEntity.ok(ApiResponse.ok("Precio calculado", calculo));
         } catch (Exception e) {
+            log.error("Error calculando precio para producto {}: {}", productoId, e.getMessage(), e);
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error("Error: " + e.getMessage()));
         }

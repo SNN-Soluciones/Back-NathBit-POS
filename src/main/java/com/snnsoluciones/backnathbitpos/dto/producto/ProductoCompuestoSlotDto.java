@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * DTO para ProductoCompuestoSlot
- * Incluye soporte para familias dinámicas
+ * Incluye soporte para familias dinámicas y cantidad por opción
  */
 @Data
 @Builder
@@ -27,37 +27,20 @@ public class ProductoCompuestoSlotDto {
     private Integer orden;
 
     /**
+     * NUEVO: Permite cantidad individual por opción
+     */
+    private Boolean permiteCantidadPorOpcion;
+
+    /**
      * Opciones manuales del slot (cuando usa_familia = false)
      */
     private List<ProductoCompuestoOpcionDto> opciones;
 
-    // ========== NUEVOS CAMPOS PARA FAMILIAS ==========
+    // ========== CAMPOS PARA FAMILIAS ==========
 
-    /**
-     * ID de la familia asociada (nullable)
-     */
     private Long familiaId;
-
-    /**
-     * Nombre de la familia (para mostrar en UI)
-     */
     private String familiaNombre;
-
-    /**
-     * Código de la familia (opcional)
-     */
     private String familiaCodigo;
-
-    /**
-     * Indica si usa familia (true) u opciones manuales (false)
-     */
     private Boolean usaFamilia;
-
-    /**
-     * Precio adicional por opción (cuando usa familia)
-     * Se suma a cada producto de la familia
-     */
     private BigDecimal precioAdicionalPorOpcion;
-
-    // ========== FIN NUEVOS CAMPOS ==========
 }

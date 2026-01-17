@@ -9,8 +9,7 @@ public enum TipoProducto {
     MATERIA_PRIMA("MATERIA_PRIMA", "Solo ingrediente, no se vende"),
     VENTA("VENTA", "Solo para venta directa"),
     COMBO("COMBO", "Conjunto con precio especial"),
-    COMPUESTO("COMPUESTO", "Personalizable con opciones"),
-    CATEGORIA_MENU("CATEGORIA_MENU", "Categoría que agrupa productos");
+    COMPUESTO("COMPUESTO", "Personalizable con opciones");
 
     private final String codigo;
     private final String descripcion;

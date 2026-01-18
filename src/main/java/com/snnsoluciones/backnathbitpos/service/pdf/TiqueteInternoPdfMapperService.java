@@ -102,19 +102,7 @@ public class TiqueteInternoPdfMapperService {
     String direccion = construirDireccionCompleta(sucursal, empresa);
     parametros.put("empresa_direccion", direccion);
 
-    if (sucursal != null && !sucursal.getLogoSucursalPath().isEmpty()) {
-      parametros.put("logo_empresa", new ByteArrayInputStream(
-          storageService.downloadFileAsBytes(sucursal.getLogoSucursalPath())));
-      parametros.put("tiene_logo", true);
-    } else {
-      if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().isEmpty()) {
-        parametros.put("logo_empresa", new ByteArrayInputStream(
-            storageService.downloadFileAsBytes(empresa.getLogoUrl())));
-        parametros.put("tiene_logo", true);
-      } else {
-        parametros.put("tiene_logo", false);
-      }
-    }
+    cargarLogoEmpresa(parametros, empresa, sucursal);
 
     // Datos de la factura interna
     parametros.put("numero_interno", facturaInterna.getNumero());
@@ -445,6 +433,76 @@ public class TiqueteInternoPdfMapperService {
     }
 
     return sb.toString();
+  }
+
+  /**
+   * Carga el logo de la empresa/sucursal con manejo robusto de errores.
+   * Prioridad: Logo de sucursal → Logo de empresa → Sin logo
+   *
+   * @param parametros Mapa de parámetros del reporte
+   * @param empresa Empresa
+   * @param sucursal Sucursal (puede ser null)
+   */
+  private void cargarLogoEmpresa(Map<String, Object> parametros, Empresa empresa, Sucursal sucursal) {
+    try {
+      // Intentar logo de sucursal primero
+      if (sucursal != null &&
+          sucursal.getLogoSucursalPath() != null &&
+          !sucursal.getLogoSucursalPath().trim().isEmpty()) {
+
+        String logoKey = sucursal.getLogoSucursalPath();
+        log.debug("Intentando cargar logo de sucursal: {}", logoKey);
+
+        byte[] logoBytes = storageService.downloadFileAsBytes(logoKey);
+        parametros.put("logo_empresa", new ByteArrayInputStream(logoBytes));
+        parametros.put("tiene_logo", true);
+
+        log.debug("Logo de sucursal cargado exitosamente, tamaño: {} bytes", logoBytes.length);
+        return; // ✅ Logo encontrado, salir
+      }
+
+      // Si no hay logo de sucursal, intentar logo de empresa
+      if (empresa.getLogoUrl() != null && !empresa.getLogoUrl().trim().isEmpty()) {
+        String logoKey = empresa.getLogoUrl();
+
+        // Limpiar URL si viene completa (extraer solo la key)
+        if (logoKey.startsWith("http")) {
+          int startIndex = logoKey.indexOf("NathBit-POS/");
+          if (startIndex != -1) {
+            logoKey = logoKey.substring(startIndex);
+          } else {
+            String bucketPattern = "/snn-soluciones/";
+            startIndex = logoKey.indexOf(bucketPattern);
+            if (startIndex != -1) {
+              logoKey = logoKey.substring(startIndex + bucketPattern.length());
+            }
+          }
+        }
+
+        log.debug("Intentando cargar logo de empresa: {}", logoKey);
+
+        byte[] logoBytes = storageService.downloadFileAsBytes(logoKey);
+        parametros.put("logo_empresa", new ByteArrayInputStream(logoBytes));
+        parametros.put("tiene_logo", true);
+
+        log.debug("Logo de empresa cargado exitosamente, tamaño: {} bytes", logoBytes.length);
+        return; // ✅ Logo encontrado, salir
+      }
+
+      // No hay logo configurado
+      log.debug("No hay logo configurado para empresa {} / sucursal {}",
+          empresa.getId(),
+          sucursal != null ? sucursal.getId() : "N/A");
+      parametros.put("tiene_logo", false);
+
+    } catch (Exception e) {
+      // ⚠️ Si falla la descarga, continuar sin logo (no romper el PDF)
+      log.error("Error cargando logo para tiquete interno (empresa: {}, sucursal: {}): {}",
+          empresa.getId(),
+          sucursal != null ? sucursal.getId() : "N/A",
+          e.getMessage());
+      parametros.put("tiene_logo", false);
+    }
   }
 
   /**

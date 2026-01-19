@@ -1,21 +1,24 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
-import lombok.*;
-import jakarta.validation.constraints.*;
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-// DTO para respuesta
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Categoría de producto")
 public class CategoriaProductoDto {
+
+    @Schema(description = "ID de la categoría", example = "1")
     private Long id;
-    private Long empresaId;
+
+    @Schema(description = "Nombre de la categoría", example = "Bebidas")
     private String nombre;
-    private String descripcion;
+
+    @Schema(description = "Color en formato hex", example = "#3498db")
     private String color;
-    private String icono;
-    private Integer orden;
-    private Long cantidadProductos;
-    private Boolean activo;
 }

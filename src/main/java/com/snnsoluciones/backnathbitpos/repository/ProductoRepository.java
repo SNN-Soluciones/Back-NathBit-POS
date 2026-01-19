@@ -16,71 +16,98 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
+  // ==================== MÉTODOS EXISTENTES (NO TOCAR) ====================
+  
   Page<Producto> findByFamiliaIdAndActivoTrue(Long familiaId, Pageable pageable);
-
   List<Producto> findByFamiliaIdAndActivoTrue(Long familiaId);
-
-  // Buscar por código interno y empresa
   Optional<Producto> findByCodigoInternoAndEmpresaId(String codigoInterno, Long empresaId);
-
-  // Buscar por código de barras
   Optional<Producto> findByCodigoBarrasAndEmpresaId(String codigoBarras, Long empresaId);
-
-  // Verificar duplicados
   boolean existsByCodigoInternoAndEmpresaId(String codigoInterno, Long empresaId);
-
   boolean existsByNombreAndEmpresaId(String nombre, Long empresaId);
-
   boolean existsByCodigoBarrasAndEmpresaId(String codigoBarras, Long empresaId);
-
-  // Productos de una empresa (solo activos)
   Page<Producto> findByEmpresaId(Long empresaId, Pageable pageable);
-
   Page<Producto> findByEmpresaIdAndActivoTrue(Long empresaId, Pageable pageable);
-
-  Page<Producto> findBySucursalId(Long empresaId, Pageable pageable);
+  long countByEmpresaIdAndActivoTrue(Long empresaId);
 
   /**
-   * Encuentra todos los productos que tienen imagen pero no tienen thumbnail
-   * Útil para migración de thumbnails
-   * @return Lista de productos sin thumbnail
+   * Encuentra productos que tienen imagen pero no tienen thumbnail
+   * (Usado para migración/generación de thumbnails)
    */
   List<Producto> findAllByImagenUrlNotNullAndThumbnailUrlNull();
 
   /**
-   * Encuentra producto por empresa y código interno
-   * @param empresaId ID de la empresa
-   * @param codigoInterno Código interno del producto
-   * @return Producto si existe
+   * Busca productos activos por empresa y tipo
    */
-  Optional<Producto> findByEmpresaIdAndCodigoInterno(Long empresaId, String codigoInterno);
+  List<Producto> findByEmpresaIdAndTipoAndActivoTrue(Long empresaId, TipoProducto tipo);
 
-  // Búsqueda general
+  /**
+   * Busca productos activos por empresa y tipo (con paginación)
+   */
+  Page<Producto> findByEmpresaIdAndTipoAndActivoTrue(Long empresaId, TipoProducto tipo, Pageable pageable);
+
+  /**
+   * Busca productos por empresa con término de búsqueda
+   */
   @Query("""
-    SELECT DISTINCT p FROM Producto p
+    SELECT p
+    FROM Producto p
     WHERE p.empresa.id = :empresaId
-      AND p.activo = true
       AND (
-          LOWER(p.codigoInterno) = LOWER(:busqueda) OR
-          LOWER(p.codigoInterno) LIKE LOWER(CONCAT(:busqueda, '%')) OR
-          LOWER(p.codigoBarras) = LOWER(:busqueda) OR
-          LOWER(p.codigoBarras) LIKE LOWER(CONCAT(:busqueda, '%')) OR
-          LOWER(p.nombre) LIKE LOWER(CONCAT(:busqueda, ' %')) OR
-          LOWER(p.nombre) LIKE LOWER(CONCAT('% ', :busqueda, ' %')) OR
-          LOWER(p.nombre) LIKE LOWER(CONCAT('% ', :busqueda)) OR
-          LOWER(p.nombre) = LOWER(:busqueda) OR
-          LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :busqueda, '%'))
+        LOWER(p.codigoInterno) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+        LOWER(p.codigoBarras) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+        LOWER(p.nombre) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+        LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :busqueda, '%'))
       )
     """)
   Page<Producto> buscarPorEmpresa(@Param("empresaId") Long empresaId,
       @Param("busqueda") String busqueda,
       Pageable pageable);
+  /**
+   * Busca producto por empresa y código interno
+   */
+  Optional<Producto> findByEmpresaIdAndCodigoInterno(Long empresaId, String codigoInterno);
+
+  /**
+   * Busca productos por sucursal
+   */
+  List<Producto> findBySucursalId(Long sucursalId);
+
+  /**
+   * Busca productos por sucursal actualizados después de una fecha
+   */
+  List<Producto> findBySucursalIdAndUpdatedAtAfter(Long sucursalId, LocalDateTime lastSync);
+
+  /**
+   * Obtiene todos los productos con sus relaciones cargadas (para evitar N+1)
+   */
+  @Query("""
+    SELECT DISTINCT p
+    FROM Producto p
+    LEFT JOIN FETCH p.categorias
+    LEFT JOIN FETCH p.impuestos
+    LEFT JOIN FETCH p.familia
+    """)
+  List<Producto> findAllWithRelaciones();
+
+  /**
+   * Busca un producto por ID y empresa (validación de pertenencia)
+   */
+  Optional<Producto> findByIdAndEmpresaId(Long id, Long empresaId);
+
+  /**
+   * Verifica si existe un producto con código interno en empresa y sucursal específica
+   */
+  boolean existsByCodigoInternoAndEmpresaIdAndSucursalId(String codigoInterno, Long empresaId, Long sucursalId);
 
   @Query("""
-    SELECT DISTINCT p FROM Producto p
-    WHERE p.sucursal.id = :sucursalId
-      AND p.activo = true
-      AND (
+      SELECT p
+      FROM Producto p
+      LEFT JOIN FETCH p.categorias
+      LEFT JOIN FETCH p.impuestos
+      WHERE p.empresa.id = :empresaId
+        AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+        AND p.activo = true
+        AND (
           LOWER(p.codigoInterno) = LOWER(:busqueda) OR
           LOWER(p.codigoInterno) LIKE LOWER(CONCAT(:busqueda, '%')) OR
           LOWER(p.codigoBarras) = LOWER(:busqueda) OR
@@ -90,13 +117,12 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
           LOWER(p.nombre) LIKE LOWER(CONCAT('% ', :busqueda)) OR
           LOWER(p.nombre) = LOWER(:busqueda) OR
           LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :busqueda, '%'))
-      )
-    """)
+        )
+      """)
   Page<Producto> buscarPorSucursal(@Param("sucursalId") Long sucursalId,
       @Param("busqueda") String busqueda,
       Pageable pageable);
 
-  // Por categoría (solo activos)
   @Query("""
       SELECT p
       FROM Producto p
@@ -106,7 +132,6 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       """)
   Page<Producto> findByCategoriaId(@Param("categoriaId") Long categoriaId, Pageable pageable);
 
-  // Productos sin categoría (solo activos) por empresa
   @Query("""
       SELECT p
       FROM Producto p
@@ -116,55 +141,235 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       """)
   List<Producto> findProductosSinCategoria(@Param("empresaId") Long empresaId);
 
-  // Productos con servicio aplicable
+  // ==================== NUEVOS MÉTODOS V3 ====================
 
-  // Contar productos activos por empresa
-  long countByEmpresaIdAndActivoTrue(Long empresaId);
+  // ========== PRODUCTOS GLOBALES (sucursalId = NULL) ==========
 
-  // Fetch de relaciones necesarias (sin intentar fetch de enums)
+  /**
+   * Obtiene productos GLOBALES de una empresa (sucursalId = NULL)
+   */
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNull(Long empresaId, Pageable pageable);
+
+  /**
+   * Obtiene productos GLOBALES activos de una empresa
+   */
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNullAndActivoTrue(Long empresaId, Pageable pageable);
+
+  // ========== PRODUCTOS GLOBALES + LOCALES ==========
+
+  /**
+   * Obtiene productos GLOBALES (sucursalId = NULL) + LOCALES de una sucursal específica
+   * SQL: WHERE empresa_id = ? AND (sucursal_id IS NULL OR sucursal_id = ?)
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      WHERE p.empresa.id = :empresaId
+        AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+      """)
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNullOrSucursalId(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      Pageable pageable);
+
+  /**
+   * Obtiene productos GLOBALES + LOCALES activos
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      WHERE p.empresa.id = :empresaId
+        AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+        AND p.activo = true
+      """)
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNullOrSucursalIdAndActivoTrue(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      Pageable pageable);
+
+  // ========== BÚSQUEDAS POR TÉRMINO ==========
+
+  /**
+   * Busca productos GLOBALES por término (código interno, código barras, nombre)
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      WHERE p.empresa.id = :empresaId
+        AND p.sucursal.id IS NULL
+        AND (
+          LOWER(p.codigoInterno) LIKE :termino OR
+          LOWER(p.codigoBarras) LIKE :termino OR
+          LOWER(p.nombre) LIKE :termino OR
+          LOWER(p.descripcion) LIKE :termino
+        )
+      """)
+  Page<Producto> buscarGlobalesPorTermino(
+      @Param("empresaId") Long empresaId,
+      @Param("termino") String termino,
+      Pageable pageable);
+
+  /**
+   * Busca productos GLOBALES + LOCALES por término
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      WHERE p.empresa.id = :empresaId
+        AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+        AND (
+          LOWER(p.codigoInterno) LIKE :termino OR
+          LOWER(p.codigoBarras) LIKE :termino OR
+          LOWER(p.nombre) LIKE :termino OR
+          LOWER(p.descripcion) LIKE :termino
+        )
+      """)
+  Page<Producto> buscarGlobalesYLocalesPorTermino(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("termino") String termino,
+      Pageable pageable);
+
+  // ========== BÚSQUEDAS POR CATEGORÍA ==========
+
+  /**
+   * Busca productos GLOBALES de una categoría
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      JOIN p.categorias c
+      WHERE c.id = :categoriaId
+        AND p.empresa.id = :empresaId
+        AND p.sucursal.id IS NULL
+      """)
+  Page<Producto> findByCategoriasIdAndEmpresaIdAndSucursalIdIsNull(
+      @Param("categoriaId") Long categoriaId,
+      @Param("empresaId") Long empresaId,
+      Pageable pageable);
+
+  /**
+   * Busca productos GLOBALES + LOCALES de una categoría
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      JOIN p.categorias c
+      WHERE c.id = :categoriaId
+        AND p.empresa.id = :empresaId
+        AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+      """)
+  Page<Producto> findByCategoriasIdAndEmpresaIdAndSucursalIdIsNullOrSucursalId(
+      @Param("categoriaId") Long categoriaId,
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      Pageable pageable);
+
+  // ========== BÚSQUEDAS POR FAMILIA ==========
+
+  /**
+   * Busca productos GLOBALES de una familia
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      WHERE p.familia.id = :familiaId
+        AND p.empresa.id = :empresaId
+        AND p.sucursal.id IS NULL
+      """)
+  Page<Producto> findByFamiliaIdAndEmpresaIdAndSucursalIdIsNull(
+      @Param("familiaId") Long familiaId,
+      @Param("empresaId") Long empresaId,
+      Pageable pageable);
+
+  /**
+   * Busca productos GLOBALES + LOCALES de una familia
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      WHERE p.familia.id = :familiaId
+        AND p.empresa.id = :empresaId
+        AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+      """)
+  Page<Producto> findByFamiliaIdAndEmpresaIdAndSucursalIdIsNullOrSucursalId(
+      @Param("familiaId") Long familiaId,
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      Pageable pageable);
+
+  // ========== UTILIDADES ==========
+
+  /**
+   * Obtiene el último código interno de la empresa para generar el siguiente
+   * Retorna el código con el número más alto (ej: PROD-00025)
+   */
+  @Query("""
+      SELECT p.codigoInterno
+      FROM Producto p
+      WHERE p.empresa.id = :empresaId
+        AND p.codigoInterno LIKE 'PROD-%'
+      ORDER BY p.codigoInterno DESC
+      LIMIT 1
+      """)
+  String findUltimoCodigoInternoByEmpresa(@Param("empresaId") Long empresaId);
+
+  /**
+   * Verifica si existe un código de barras (en cualquier empresa)
+   */
+  boolean existsByCodigoBarras(String codigoBarras);
+
+  /**
+   * Verifica si existe un código interno en una empresa específica
+   * (ya existe pero lo dejamos documentado)
+   */
+  // boolean existsByCodigoInternoAndEmpresaId(String codigoInterno, Long empresaId);
+
+  // ========== QUERIES OPTIMIZADAS CON FETCH ==========
+
+  /**
+   * Obtiene un producto por ID con todas sus relaciones cargadas (para evitar N+1)
+   */
+  @Query("""
+      SELECT p
+      FROM Producto p
+      LEFT JOIN FETCH p.categorias
+      LEFT JOIN FETCH p.impuestos
+      LEFT JOIN FETCH p.familia
+      WHERE p.id = :id
+      """)
+  Optional<Producto> findByIdWithRelations(@Param("id") Long id);
+
+  /**
+   * Busca producto por nombre y empresa
+   */
+  Optional<Producto> findByNombreAndEmpresaId(String nombre, Long empresaId);
+
+  /**
+   * Método alias para compatibilidad (mismo que findByIdWithRelations)
+   */
+  @Query("""
+        SELECT p
+        FROM Producto p
+        LEFT JOIN FETCH p.categorias
+        LEFT JOIN FETCH p.impuestos
+        LEFT JOIN FETCH p.familia
+        WHERE p.id = :id
+        """)
+  Optional<Producto> findByIdConRelaciones(@Param("id") Long id);
+
+  /**
+   * Busca productos con relaciones para listados
+   */
   @Query("""
       SELECT DISTINCT p
       FROM Producto p
-      LEFT JOIN FETCH p.categorias
-      LEFT JOIN FETCH p.empresaCabys ec
-      LEFT JOIN FETCH ec.codigoCabys
-      WHERE p.id = :id
+      LEFT JOIN FETCH p.familia
+      WHERE p.empresa.id = :empresaId
+        AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
       """)
-  Optional<Producto> findByIdConRelaciones(@Param("id") Long id);
-
-  Optional<Producto> findByNombreAndEmpresaId(String nombre, Long empresaId);
-
-  Optional<Producto> findAllByEmpresaIdAndEmpresaCabys_CodigoCabys_Codigo(Long empresaId,
-      String codigoCabysId);
-
-  /**
-   * Contar productos activos globales
-   */
-  long countByEmpresaIdAndSucursalIdIsNullAndActivoTrue(Long empresaId);
-
-  List<Producto> findByEmpresaIdAndTipoAndActivoTrue(Long empresaId, TipoProducto tipoProducto);
-
-  Optional<Producto> findByIdAndEmpresaId(Long productoId, Long empresaId);
-
-  @Query("SELECT DISTINCT p FROM Producto p " +
-      "LEFT JOIN FETCH p.empresaCabys ec " +
-      "LEFT JOIN FETCH ec.codigoCabys")
-  List<Producto> findAllWithRelaciones();
-
-  // En ProductoRepository.java
-
-  // Validar código único por sucursal
-  boolean existsByCodigoInternoAndSucursalId(String codigoInterno, Long sucursalId);
-
-  // Validar código único para productos globales (sin sucursal)
-  boolean existsByCodigoInternoAndEmpresaIdAndSucursalIdIsNull(String codigoInterno, Long empresaId);
-
-  // Para contar productos (usado en generarCodigoInterno)
-  long countBySucursalIdAndActivoTrue(Long sucursalId);
-
-  boolean existsByCodigoInternoAndEmpresaIdAndSucursalId(String codigoInterno, Long empresaId, Long sucursalId);
-
-  List<Producto> findBySucursalIdAndUpdatedAtAfter(Long sucursalId, LocalDateTime updatedAt);
-
-  List<Producto> findBySucursalId(Long sucursalId);
+  Page<Producto> findByEmpresaAndSucursalWithFamilia(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      Pageable pageable);
 }

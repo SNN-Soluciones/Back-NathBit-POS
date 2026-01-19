@@ -7,19 +7,16 @@ import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteUbicacionDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ExoneracionClienteDto;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
+import com.snnsoluciones.backnathbitpos.dto.producto.ProductoDto;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.ClienteActividad;
 import com.snnsoluciones.backnathbitpos.entity.ClienteEmail;
-import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracion;
 import com.snnsoluciones.backnathbitpos.entity.ClienteExoneracionCabys;
-import com.snnsoluciones.backnathbitpos.entity.CodigoCAByS;
-import com.snnsoluciones.backnathbitpos.entity.EmpresaCAByS;
-import com.snnsoluciones.backnathbitpos.mappers.ClienteMapper;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionCabysRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteExoneracionRepository;
 import com.snnsoluciones.backnathbitpos.repository.ClienteRepository;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
-import com.snnsoluciones.backnathbitpos.service.ProductoCrudService;
+import com.snnsoluciones.backnathbitpos.service.producto.ProductoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
@@ -51,7 +48,7 @@ public class ClientePOSController {
   private final ClienteExoneracionCabysRepository exoneracionCabysRepository;
   private final ClienteExoneracionRepository exoneracionRepository;
   private final ClienteRepository clienteRepository;
-  private final ProductoCrudService productoCrudService;
+  private final ProductoService productoService; // ✅ CAMBIADO: ProductoCrudService → ProductoService
   private final ModelMapper modelMapper;
 
   @Operation(summary = "Buscar cliente por identificación exacta")
@@ -153,16 +150,18 @@ public class ClientePOSController {
   ) {
     String cabys = null;
     try {
-      // 1) Producto + CAByS
-      var producto = productoCrudService.obtenerEntidadPorId(productoId);
-      if (producto == null) {
+      // ✅ CAMBIADO: Usar ProductoService V3
+      ProductoDto productoDto = productoService.obtenerPorId(productoId);
+
+      if (productoDto == null) {
         return ResponseEntity.badRequest()
             .body(ApiResponse.error("Producto no encontrado: " + productoId));
       }
 
-      cabys = Optional.ofNullable(producto.getEmpresaCabys())
-          .map(EmpresaCAByS::getCodigoCabys)
-          .map(CodigoCAByS::getCodigo)
+      // Obtener CAByS desde el DTO
+      cabys = Optional.ofNullable(productoDto.getEmpresaCabys())
+          .map(ec -> ec.getCodigoCabys())
+          .map(cc -> cc.getCodigo())
           .orElse(null);
 
       if (cabys == null || !cabys.matches("\\d{13}")) {
@@ -179,7 +178,7 @@ public class ClientePOSController {
 
       // 3) Exoneración vigente (toma la última activa)
       var exOpt = exoneracionRepository
-          .findByClienteIdAndActivoTrue(clienteId); // <-- agrega este método en el repo
+          .findByClienteIdAndActivoTrue(clienteId);
 
       if (exOpt.isEmpty()) {
         return ResponseEntity.ok(ApiResponse.ok("Cliente sin exoneración activa", false));

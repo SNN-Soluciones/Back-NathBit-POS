@@ -1,86 +1,108 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
 import com.snnsoluciones.backnathbitpos.enums.TipoInventario;
-import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.enums.mh.Moneda;
 import com.snnsoluciones.backnathbitpos.enums.mh.UnidadMedida;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.math.BigDecimal;
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * DTO para actualizar un producto existente.
+ * 
+ * REGLAS:
+ * - NO se puede cambiar empresaId
+ * - NO se puede cambiar sucursalId
+ * - NO se puede cambiar codigoInterno (es único e inmutable)
+ * - Todos los campos son opcionales (solo se actualizan los que vienen)
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Datos para actualizar un producto existente")
 public class ProductoUpdateDto {
-    
-    @NotBlank(message = "Código interno es requerido")
-    @Size(max = 20, message = "Código interno máximo 20 caracteres")
-    private String codigoInterno;
-    
-    @Size(max = 30, message = "Código de barras máximo 30 caracteres")
-    private String codigoBarras;
-    
-    @NotBlank(message = "Nombre es requerido")
-    @Size(max = 200, message = "Nombre máximo 200 caracteres")
+
+    // ==================== IDENTIFICACIÓN ====================
+
+    @Size(max = 200, message = "El nombre no puede exceder 200 caracteres")
+    @Schema(description = "Nombre del producto", example = "Hamburguesa Premium")
     private String nombre;
-    
+
+    @Size(max = 500, message = "La descripción no puede exceder 500 caracteres")
+    @Schema(description = "Descripción del producto", example = "Hamburguesa premium con queso suizo")
     private String descripcion;
-    
-    @NotNull(message = "Código CAByS es requerido")
-    private Long empresaCabysId;
-    
-    private Long categoriaId;
 
-    private Long familiaId;
-    
-    @NotNull(message = "Unidad de medida es requerida")
-    private UnidadMedida unidadMedida;  // ENUM directamente
-    
-    @NotNull(message = "Moneda es requerida")
-    private Moneda moneda;  // ENUM directamente
-    
-    @NotNull(message = "Precio de venta es requerido")
-    @DecimalMin(value = "0.00", message = "Precio debe ser mayor o igual a 0")
-    @Digits(integer = 13, fraction = 5, message = "Precio formato inválido")
-    private BigDecimal precioVenta;
+    @Size(max = 50, message = "El código de barras no puede exceder 50 caracteres")
+    @Schema(description = "Código de barras del producto", example = "7501234567890")
+    private String codigoBarras;
 
-    @Builder.Default
-    private Boolean esServicio = false;
-    
-    @Builder.Default
-    private Boolean activo = true;
+    // ==================== CLASIFICACIÓN ====================
 
-    private TipoProducto tipo;
-
-    private BigDecimal precioCompra;
-
-    @Schema(description = "Indica si se debe actualizar la configuración tributaria (CABYS, impuestos, unidad medida)")
-    @Builder.Default
-    private Boolean actualizarConfigTributaria = false;
-
-    // Campos tributarios (solo se usan si actualizarConfigTributaria = true)
-    private List<ProductoImpuestoCreateDto> impuestos;
-
+    @Schema(description = "Tipo de inventario", 
+            example = "LOTES",
+            allowableValues = {"SIMPLE", "LOTES", "REFERENCIA", "NINGUNO"})
     private TipoInventario tipoInventario;
 
+    @Schema(description = "IDs de categorías a las que pertenece el producto", 
+            example = "[1, 5, 8]")
+    private Set<Long> categoriaIds;
+
+    @Schema(description = "ID de la familia de productos", example = "3")
+    private Long familiaId;
+
+    // ==================== CABYS (HACIENDA CR) ====================
+
+    @Schema(description = "ID del registro empresa-CABYS", example = "42")
+    private Long empresaCabysId;
+
+    // ==================== PRECIOS ====================
+
+    @DecimalMin(value = "0.0", inclusive = false, message = "El precio debe ser mayor a 0")
+    @Schema(description = "Precio de venta del producto", example = "4200.00")
+    private BigDecimal precioVenta;
+
+    @Schema(description = "Unidad de medida", example = "UNIDAD")
+    private UnidadMedida unidadMedida;
+
+    @Schema(description = "Moneda del precio", example = "CRC")
+    private Moneda moneda;
+
+    @Schema(description = "Si el precio incluye IVA", example = "true")
+    private Boolean incluyeIVA;
+
+    @Schema(description = "Si es un servicio (afecta facturación)", example = "false")
+    private Boolean esServicio;
+
+    // ==================== IMPUESTOS ====================
+
+    @Schema(description = "Lista de impuestos del producto (reemplaza los existentes)")
+    private List<CrearImpuestoDto> impuestos;
+
+    // ==================== INVENTARIO ====================
+
+    @DecimalMin(value = "0.0", message = "El factor de conversión debe ser positivo")
+    @Schema(description = "Factor de conversión entre unidad de venta y receta", example = "1000.0")
     private BigDecimal factorConversionReceta;
 
-    private String zonaPreparacion;
+    // ==================== PRODUCTO COMPUESTO ====================
 
-    /**
-     * IDs de categorías a asignar al producto
-     * Si viene null, no se modifican las categorías
-     * Si viene vacío, se eliminan todas las categorías
-     */
-    private List<Long> categoriaIds;
+    @Schema(description = "Indica si el producto requiere personalización al venderlo", example = "true")
+    private Boolean requierePersonalizacion;
+
+    @Schema(description = "Precio base para productos compuestos", example = "2500.00")
+    private BigDecimal precioBase;
+
+    // ==================== ESTADO ====================
+
+    @Schema(description = "Si el producto está activo", example = "true")
+    private Boolean activo;
 }

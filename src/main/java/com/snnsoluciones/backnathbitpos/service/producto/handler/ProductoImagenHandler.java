@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.service.producto.handler;
 
 import com.snnsoluciones.backnathbitpos.entity.Producto;
+import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
@@ -15,7 +16,11 @@ import java.util.List;
 
 /**
  * Handler encargado de gestionar las imágenes de productos.
- * Maneja subida, eliminación y validación de imágenes.
+ * Maneja subida, eliminación y validación de imágenes en DigitalOcean Spaces.
+ * 
+ * ESTRUCTURA DE CARPETAS:
+ * - Productos GLOBALES: NathBit-POS/{empresaId}/productos/globales/{codigoInterno}.jpg
+ * - Productos LOCALES:  NathBit-POS/{empresaId}/productos/sucursal_{sucursalId}/{codigoInterno}.jpg
  */
 @Slf4j
 @Component
@@ -28,6 +33,9 @@ public class ProductoImagenHandler {
     @Value("${app.storage.max-file-size:5242880}") // 5MB por defecto
     private long maxFileSize;
 
+    @Value("${storage.spaces.base-folder:NathBit-POS}")
+    private String baseFolder;
+
     private static final List<String> EXTENSIONES_PERMITIDAS = Arrays.asList(
         ".jpg", ".jpeg", ".png", ".webp"
     );
@@ -36,33 +44,46 @@ public class ProductoImagenHandler {
         "image/jpeg", "image/jpg", "image/png", "image/webp"
     );
 
+    // ==================== MÉTODOS PÚBLICOS ====================
+
     /**
-     * Sube una imagen para un producto
+     * Sube una imagen para un producto nuevo
      */
     public void subirImagen(Producto producto, MultipartFile imagen) {
-        log.debug("Subiendo imagen para producto ID: {}", producto.getId());
+        log.debug("Subiendo imagen para producto ID: {}, código: {}", 
+            producto.getId(), producto.getCodigoInterno());
 
         // Validar imagen
         validarImagen(imagen);
 
         try {
-            // Construir ruta
-            String carpeta = construirRuta(producto);
-            String nombreArchivo = producto.getCodigoInterno();
-
-            // Subir a storage
-            String urlImagen = storageService.subirArchivo(imagen, carpeta, nombreArchivo, false);
-
-            // Construir key
+            // Construir la carpeta según si es global o local
+            String carpeta = construirCarpeta(producto);
+            
+            // Construir nombre del archivo (código interno + extensión)
             String extension = obtenerExtension(imagen.getOriginalFilename());
-            String imagenKey = carpeta + "/" + nombreArchivo + extension;
+            String nombreArchivo = producto.getCodigoInterno() + extension;
+            
+            // Construir key completa (ruta en S3)
+            String key = carpeta + "/" + nombreArchivo;
+            
+            log.debug("Subiendo imagen a: {}", key);
 
-            // Actualizar producto
+            // Subir a DigitalOcean Spaces (PÚBLICO)
+            String urlImagen = storageService.subirArchivo(
+                imagen, 
+                carpeta, 
+                producto.getCodigoInterno(), 
+                false  // isPrivate = false → imagen PÚBLICA
+            );
+
+            // Actualizar producto con URL y key
             producto.setImagenUrl(urlImagen);
-            producto.setImagenKey(imagenKey);
+            producto.setImagenKey(key);
             productoRepository.save(producto);
 
-            log.info("Imagen subida exitosamente para producto ID: {}", producto.getId());
+            log.info("Imagen subida exitosamente para producto ID: {} - URL: {}", 
+                producto.getId(), urlImagen);
 
         } catch (Exception e) {
             log.error("Error al subir imagen para producto ID: {}", producto.getId(), e);
@@ -76,17 +97,21 @@ public class ProductoImagenHandler {
     public void actualizarImagen(Producto producto, MultipartFile nuevaImagen) {
         log.debug("Actualizando imagen para producto ID: {}", producto.getId());
 
-        // Si tiene imagen anterior, eliminarla
-        if (producto.getImagenKey() != null) {
+        // Validar nueva imagen
+        validarImagen(nuevaImagen);
+
+        // Si tiene imagen anterior, eliminarla de S3
+        if (producto.getImagenKey() != null && !producto.getImagenKey().isEmpty()) {
             try {
-                eliminarImagenDeStorage(producto.getImagenKey());
+                log.debug("Eliminando imagen anterior: {}", producto.getImagenKey());
+                storageService.eliminarArchivo(producto.getImagenKey());
             } catch (Exception e) {
-                log.warn("No se pudo eliminar imagen anterior: {}", e.getMessage());
-                // Continuar con la subida de la nueva imagen
+                log.warn("No se pudo eliminar imagen anterior: {} - Continuando...", e.getMessage());
+                // No fallar la actualización si no se pudo borrar la anterior
             }
         }
 
-        // Subir nueva imagen
+        // Subir nueva imagen (reutiliza el método subirImagen)
         subirImagen(producto, nuevaImagen);
     }
 
@@ -96,18 +121,19 @@ public class ProductoImagenHandler {
     public void eliminarImagen(Producto producto) {
         log.debug("Eliminando imagen de producto ID: {}", producto.getId());
 
-        if (producto.getImagenKey() == null) {
+        if (producto.getImagenKey() == null || producto.getImagenKey().isEmpty()) {
             log.warn("El producto no tiene imagen asociada");
             return;
         }
 
         try {
-            // Eliminar de storage
-            eliminarImagenDeStorage(producto.getImagenKey());
+            // Eliminar de DigitalOcean Spaces
+            storageService.eliminarArchivo(producto.getImagenKey());
 
             // Limpiar campos en producto
             producto.setImagenUrl(null);
             producto.setImagenKey(null);
+            producto.setThumbnailUrl(null); // Por si en el futuro tenemos thumbnails
             productoRepository.save(producto);
 
             log.info("Imagen eliminada exitosamente para producto ID: {}", producto.getId());
@@ -118,105 +144,108 @@ public class ProductoImagenHandler {
         }
     }
 
+    // ==================== MÉTODOS PRIVADOS DE VALIDACIÓN ====================
+
     /**
      * Valida que la imagen cumple con los requisitos
      */
     private void validarImagen(MultipartFile imagen) {
         if (imagen == null || imagen.isEmpty()) {
-            throw new BusinessException("La imagen está vacía");
+            throw new BadRequestException("La imagen está vacía o es nula");
         }
 
         // Validar tamaño
         if (imagen.getSize() > maxFileSize) {
-            throw new BusinessException(
-                String.format("La imagen es muy grande. Tamaño máximo: %d MB", 
-                    maxFileSize / (1024 * 1024))
+            long maxSizeMB = maxFileSize / (1024 * 1024);
+            throw new BadRequestException(
+                String.format("La imagen es muy grande. Tamaño máximo: %d MB", maxSizeMB)
             );
         }
 
         // Validar content type
         String contentType = imagen.getContentType();
         if (contentType == null || !CONTENT_TYPES_PERMITIDOS.contains(contentType.toLowerCase())) {
-            throw new BusinessException(
-                "Tipo de archivo no permitido. Use: " + String.join(", ", CONTENT_TYPES_PERMITIDOS)
+            throw new BadRequestException(
+                "Tipo de archivo no permitido. Solo se permiten: JPG, PNG, WEBP"
             );
         }
 
         // Validar extensión
         String nombreArchivo = imagen.getOriginalFilename();
-        if (nombreArchivo == null || nombreArchivo.isEmpty()) {
-            throw new BusinessException("El nombre del archivo es inválido");
+        if (nombreArchivo == null || nombreArchivo.trim().isEmpty()) {
+            throw new BadRequestException("El archivo debe tener un nombre");
         }
 
-        String extension = obtenerExtension(nombreArchivo);
-        if (!EXTENSIONES_PERMITIDAS.contains(extension.toLowerCase())) {
-            throw new BusinessException(
-                "Extensión no permitida. Use: " + String.join(", ", EXTENSIONES_PERMITIDAS)
+        String extension = obtenerExtension(nombreArchivo).toLowerCase();
+        if (!EXTENSIONES_PERMITIDAS.contains(extension)) {
+            throw new BadRequestException(
+                "Extensión de archivo no permitida. Solo se permiten: " +
+                String.join(", ", EXTENSIONES_PERMITIDAS)
             );
         }
 
-        log.debug("Imagen validada correctamente: {} - {} bytes", nombreArchivo, imagen.getSize());
+        log.debug("Imagen validada correctamente: {} - {} bytes", 
+            nombreArchivo, imagen.getSize());
     }
 
-    /**
-     * Construye la ruta de almacenamiento para la imagen
-     */
-    private String construirRuta(Producto producto) {
-        String nombreComercial;
+    // ==================== MÉTODOS PRIVADOS DE CONSTRUCCIÓN ====================
 
-        if (producto.getSucursal() != null) {
-            nombreComercial = producto.getSucursal().getNombre();
+    /**
+     * Construye la carpeta en S3 según si el producto es global o local
+     * 
+     * EJEMPLOS:
+     * - Producto GLOBAL (sucursalId = null):
+     *   NathBit-POS/5/productos/globales
+     * 
+     * - Producto LOCAL (sucursalId = 12):
+     *   NathBit-POS/5/productos/sucursal_12
+     */
+    private String construirCarpeta(Producto producto) {
+        Long empresaId = producto.getEmpresa().getId();
+        
+        // Construir base: NathBit-POS/{empresaId}/productos
+        String carpetaBase = String.format("%s/%d/productos", baseFolder, empresaId);
+
+        // Agregar subcarpeta según si es global o local
+        if (producto.getSucursal() == null) {
+            // Producto GLOBAL
+            return carpetaBase + "/globales";
         } else {
-            nombreComercial = producto.getEmpresa().getNombreComercial() != null
-                ? producto.getEmpresa().getNombreComercial()
-                : producto.getEmpresa().getNombreRazonSocial();
+            // Producto LOCAL de una sucursal
+            Long sucursalId = producto.getSucursal().getId();
+            return carpetaBase + "/sucursal_" + sucursalId;
         }
-
-        String nombreLimpio = limpiarNombreParaRuta(nombreComercial);
-        return String.format("NathBit-POS/%s/productos", nombreLimpio);
     }
 
     /**
-     * Limpia un nombre para usarlo en rutas de archivos
-     */
-    private String limpiarNombreParaRuta(String nombre) {
-        if (nombre == null || nombre.isEmpty()) {
-            return "sin_nombre";
-        }
-
-        return nombre
-            .trim()
-            .replaceAll("[^a-zA-Z0-9-_]", "_")
-            .replaceAll("_{2,}", "_")
-            .toLowerCase();
-    }
-
-    /**
-     * Obtiene la extensión de un archivo
+     * Extrae la extensión del nombre de archivo
+     * 
+     * @param nombreArchivo Nombre del archivo (ej: "imagen.jpg")
+     * @return Extensión con punto (ej: ".jpg")
      */
     private String obtenerExtension(String nombreArchivo) {
-        if (nombreArchivo == null || nombreArchivo.isEmpty()) {
-            return "";
+        if (nombreArchivo == null || !nombreArchivo.contains(".")) {
+            return ".jpg"; // Extensión por defecto
         }
-
-        int lastDot = nombreArchivo.lastIndexOf('.');
-        if (lastDot == -1 || lastDot == nombreArchivo.length() - 1) {
-            return "";
-        }
-
+        
+        int lastDot = nombreArchivo.lastIndexOf(".");
         return nombreArchivo.substring(lastDot).toLowerCase();
     }
 
     /**
-     * Elimina una imagen del storage usando su key
+     * Limpia un nombre para usarlo en rutas (remueve caracteres especiales)
+     * 
+     * @param nombre Nombre a limpiar
+     * @return Nombre limpio (solo letras, números, guiones y guiones bajos)
      */
-    private void eliminarImagenDeStorage(String imagenKey) {
-        try {
-            storageService.eliminarArchivo(imagenKey);
-            log.debug("Imagen eliminada del storage: {}", imagenKey);
-        } catch (Exception e) {
-            log.error("Error al eliminar imagen del storage: {}", imagenKey, e);
-            throw new BusinessException("No se pudo eliminar la imagen del almacenamiento");
+    private String limpiarNombreParaRuta(String nombre) {
+        if (nombre == null || nombre.trim().isEmpty()) {
+            return "sin_nombre";
         }
+
+        return nombre.trim()
+            .replaceAll("\\s+", "_")           // Espacios → guion bajo
+            .replaceAll("[^a-zA-Z0-9_-]", "")  // Solo alfanuméricos, _ y -
+            .toLowerCase();                     // Minúsculas
     }
 }

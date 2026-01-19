@@ -77,17 +77,6 @@ public class ProductoValidador {
         Long empresaId = productoExistente.getEmpresa().getId();
         Long productoId = productoExistente.getId();
 
-        // Validar duplicado de código interno (si cambió)
-        if (dto.getCodigoInterno() != null && 
-            !dto.getCodigoInterno().equals(productoExistente.getCodigoInterno())) {
-            
-            if (existeCodigoInterno(dto.getCodigoInterno(), empresaId, productoId)) {
-                throw new BusinessException(
-                    "Ya existe otro producto con el código interno: " + dto.getCodigoInterno()
-                );
-            }
-        }
-
         // Validar duplicado de código de barras (si cambió)
         if (dto.getCodigoBarras() != null && 
             !dto.getCodigoBarras().equals(productoExistente.getCodigoBarras())) {

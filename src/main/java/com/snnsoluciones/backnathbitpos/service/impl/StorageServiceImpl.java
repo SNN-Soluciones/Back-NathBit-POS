@@ -121,21 +121,39 @@ public class StorageServiceImpl implements StorageService {
     }
 
 
+    /**
+     * Sube un archivo a S3 con configuración específica
+     *
+     * @param archivo Archivo a subir
+     * @param carpeta Carpeta destino (sin slash al final)
+     * @param nombreArchivo Nombre del archivo SIN extensión
+     * @param privado Si el archivo debe ser privado o público
+     * @return URL completa del archivo (si es público) o key (si es privado)
+     */
     @Override
     public String subirArchivo(MultipartFile archivo, String carpeta, String nombreArchivo, boolean privado) {
         try {
+            log.debug("Subiendo archivo: carpeta={}, nombre={}, privado={}",
+                carpeta, nombreArchivo, privado);
+
+            // Obtener extensión del archivo original
             String originalFilename = archivo.getOriginalFilename();
             String extension = "";
             if (originalFilename != null && originalFilename.contains(".")) {
                 extension = originalFilename.substring(originalFilename.lastIndexOf("."));
             }
 
+            // Construir key completa: carpeta/nombreArchivo.ext
             String key = carpeta + "/" + nombreArchivo + extension;
 
+            // Configurar metadata
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentType(archivo.getContentType());
             metadata.setContentLength(archivo.getSize());
+            metadata.addUserMetadata("uploaded-by", "NathBit-POS-V3");
+            metadata.addUserMetadata("upload-date", Instant.now().toString());
 
+            // Crear request
             PutObjectRequest putRequest = new PutObjectRequest(
                 bucketName,
                 key,
@@ -143,19 +161,32 @@ public class StorageServiceImpl implements StorageService {
                 metadata
             );
 
-            if (!privado) {
+            // ✅ CONFIGURAR ACL SEGÚN SI ES PÚBLICO O PRIVADO
+            if (privado) {
+                putRequest.setCannedAcl(CannedAccessControlList.Private);
+                log.debug("Archivo configurado como PRIVADO");
+            } else {
                 putRequest.setCannedAcl(CannedAccessControlList.PublicRead);
+                log.debug("Archivo configurado como PÚBLICO");
             }
 
+            // Subir archivo
             s3Client.putObject(putRequest);
 
+            // Retornar URL o key según si es público o privado
             if (privado) {
-                return key; // Solo la key para archivos privados
+                // Para archivos privados, retornar solo la key
+                log.info("Archivo PRIVADO subido exitosamente: {}", key);
+                return key;
             } else {
-                return s3Client.getUrl(bucketName, key).toString(); // URL completa para públicos
+                // Para archivos públicos, retornar URL completa
+                String url = s3Client.getUrl(bucketName, key).toString();
+                log.info("Archivo PÚBLICO subido exitosamente: {}", url);
+                return url;
             }
 
         } catch (Exception e) {
+            log.error("Error al subir archivo a S3: {}", e.getMessage(), e);
             throw new RuntimeException("Error al subir archivo: " + e.getMessage(), e);
         }
     }
@@ -208,13 +239,24 @@ public class StorageServiceImpl implements StorageService {
         }
     }
 
+    /**
+     * Elimina un archivo de S3
+     *
+     * @param key Ruta completa del archivo en S3
+     */
     @Override
     public void eliminarArchivo(String key) {
         try {
-            s3Client.deleteObject(new DeleteObjectRequest(bucketName, key));
-            log.info("Archivo eliminado correctamente: {}", key);
+            log.debug("Eliminando archivo: {}", key);
+
+            DeleteObjectRequest deleteRequest = new DeleteObjectRequest(bucketName, key);
+            s3Client.deleteObject(deleteRequest);
+
+            log.info("Archivo eliminado exitosamente: {}", key);
+
         } catch (Exception e) {
-            log.error("Error al eliminar archivo: {}", e.getMessage());
+            log.error("Error al eliminar archivo de S3: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al eliminar archivo: " + e.getMessage(), e);
         }
     }
 

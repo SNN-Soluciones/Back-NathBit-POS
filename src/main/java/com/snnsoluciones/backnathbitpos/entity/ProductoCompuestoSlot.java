@@ -59,6 +59,9 @@ public class ProductoCompuestoSlot {
     @Builder.Default
     private Boolean esRequerido = true;
 
+    @Column(name = "max_opciones_diferentes")
+    private Integer maxOpcionesDiferentes;
+
     @Column(nullable = false)
     @Builder.Default
     private Integer orden = 0;

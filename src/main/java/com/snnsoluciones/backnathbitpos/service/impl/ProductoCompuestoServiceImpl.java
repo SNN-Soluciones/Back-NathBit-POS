@@ -1322,6 +1322,8 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
             slot.getUsaFamilia() ? slot.getPrecioAdicionalPorOpcion() : null
         )
 
+        .permiteCantidadPorOpcion(slot.getPermiteCantidadPorOpcion())
+        .maxOpcionesDiferentes(slot.getMaxOpcionesDiferentes())
         // Overrides de esta configuración
         .cantidadMinimaOverride(slotConfig.getCantidadMinimaOverride())
         .cantidadMaximaOverride(slotConfig.getCantidadMaximaOverride())

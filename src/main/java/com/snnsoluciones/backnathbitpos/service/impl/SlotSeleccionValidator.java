@@ -13,66 +13,54 @@ import org.springframework.stereotype.Component;
 @Component
 public class SlotSeleccionValidator {
 
-    /**
-     * Valida que la selección de un slot cumple con las reglas
-     * 
-     * @param slot Slot a validar
-     * @param seleccion Selección del usuario
-     * @throws BusinessException si la selección es inválida
-     */
-    public void validarSeleccion(ProductoCompuestoSlot slot, SlotSeleccionDTO seleccion) {
-        
-        if (seleccion.getOpciones() == null || seleccion.getOpciones().isEmpty()) {
-            if (Boolean.TRUE.equals(slot.getEsRequerido())) {
-                throw new BusinessException(
-                    "El slot '" + slot.getNombre() + "' es requerido"
-                );
-            }
-            return; // Slot opcional sin selección está OK
-        }
+  /**
+   * Valida que la selección de un slot cumple con las reglas
+   *
+   * @param slot      Slot a validar
+   * @param seleccion Selección del usuario
+   * @throws BusinessException si la selección es inválida
+   */
+  public void validarSeleccion(ProductoCompuestoSlot slot, SlotSeleccionDTO seleccion) {
+    // Calcular cantidad total
+    int cantidadTotal = seleccion.getOpciones().stream()
+        .mapToInt(SlotSeleccionDTO.OpcionSeleccionada::getCantidad)
+        .sum();
 
-        // Calcular cantidad total seleccionada
-        int cantidadTotal = seleccion.getOpciones().stream()
-            .mapToInt(SlotSeleccionDTO.OpcionSeleccionada::getCantidad)
-            .sum();
-
-        // Validar cantidad mínima
-        if (cantidadTotal < slot.getCantidadMinima()) {
-            throw new BusinessException(
-                String.format("El slot '%s' requiere mínimo %d %s. Seleccionaste: %d",
-                    slot.getNombre(),
-                    slot.getCantidadMinima(),
-                    slot.getCantidadMinima() == 1 ? "opción" : "opciones",
-                    cantidadTotal
-                )
-            );
-        }
-
-        // Validar cantidad máxima
-        if (cantidadTotal > slot.getCantidadMaxima()) {
-            throw new BusinessException(
-                String.format("El slot '%s' permite máximo %d %s. Seleccionaste: %d",
-                    slot.getNombre(),
-                    slot.getCantidadMaxima(),
-                    slot.getCantidadMaxima() == 1 ? "opción" : "opciones",
-                    cantidadTotal
-                )
-            );
-        }
-
-        // Si el slot NO permite cantidad por opción, validar que todas sean 1
-        if (!Boolean.TRUE.equals(slot.getPermiteCantidadPorOpcion())) {
-            boolean tieneCantidadMayorA1 = seleccion.getOpciones().stream()
-                .anyMatch(o -> o.getCantidad() != null && o.getCantidad() > 1);
-            
-            if (tieneCantidadMayorA1) {
-                throw new BusinessException(
-                    "El slot '" + slot.getNombre() + "' no permite especificar cantidad por opción"
-                );
-            }
-        }
-
-        log.debug("Selección válida para slot '{}': {} opciones, cantidad total: {}",
-            slot.getNombre(), seleccion.getOpciones().size(), cantidadTotal);
+    // Validar cantidad total (min/max)
+    if (cantidadTotal < slot.getCantidadMinima()) {
+      throw new BusinessException(
+          slot.getNombre() + " requiere mínimo " + slot.getCantidadMinima()
+      );
     }
+
+    if (cantidadTotal > slot.getCantidadMaxima()) {
+      throw new BusinessException(
+          slot.getNombre() + " permite máximo " + slot.getCantidadMaxima()
+      );
+    }
+
+    // ⭐ NUEVA VALIDACIÓN: máximo de opciones diferentes
+    if (slot.getMaxOpcionesDiferentes() != null) {
+      int opcionesDiferentes = seleccion.getOpciones().size();
+
+      if (opcionesDiferentes > slot.getMaxOpcionesDiferentes()) {
+        throw new BusinessException(
+            slot.getNombre() + " permite máximo " +
+                slot.getMaxOpcionesDiferentes() + " opciones diferentes"
+        );
+      }
+    }
+
+    // Validar permite_cantidad_por_opcion
+    if (!slot.permiteCantidadPorOpcion()) {
+      boolean todasSonUno = seleccion.getOpciones().stream()
+          .allMatch(o -> o.getCantidad() == 1);
+
+      if (!todasSonUno) {
+        throw new BusinessException(
+            slot.getNombre() + " no permite especificar cantidades"
+        );
+      }
+    }
+  }
 }

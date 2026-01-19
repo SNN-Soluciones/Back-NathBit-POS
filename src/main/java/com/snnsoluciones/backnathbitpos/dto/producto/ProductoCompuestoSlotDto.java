@@ -30,6 +30,7 @@ public class ProductoCompuestoSlotDto {
      * NUEVO: Permite cantidad individual por opción
      */
     private Boolean permiteCantidadPorOpcion;
+    private Integer maxOpcionesDiferentes;
 
     /**
      * Opciones manuales del slot (cuando usa_familia = false)

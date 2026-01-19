@@ -32,6 +32,8 @@ public class SlotConfiguracionDTO {
     private Integer cantidadMinimaOriginal;
     private Integer cantidadMaximaOriginal;
     private Boolean esRequeridoOriginal;
+    private Boolean permiteCantidadPorOpcion;
+    private Integer maxOpcionesDiferentes;
     private BigDecimal precioAdicionalOriginal;
 
     // Overrides específicos de esta configuración (nullable)

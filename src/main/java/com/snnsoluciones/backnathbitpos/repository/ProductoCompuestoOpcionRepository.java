@@ -14,12 +14,13 @@ import java.util.List;
 public interface ProductoCompuestoOpcionRepository extends JpaRepository<ProductoCompuestoOpcion, Long> {
     List<ProductoCompuestoOpcion> findBySlotId(Long slotId);
     Optional<ProductoCompuestoOpcion> findById(Long id);
+
     @Query("""
-    select o
-    from ProductoCompuestoOpcion o
-    join fetch o.producto p
-    where o.slot.id = :slotId
-    order by o.orden
+    SELECT o
+    FROM ProductoCompuestoOpcion o
+    LEFT JOIN FETCH o.producto p
+    WHERE o.slot.id = :slotId
+    ORDER BY o.orden
   """)
     List<ProductoCompuestoOpcion> findBySlotIdOrderByOrdenWithProducto(@Param("slotId") Long slotId);
 

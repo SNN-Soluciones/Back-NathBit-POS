@@ -1,9 +1,12 @@
 package com.snnsoluciones.backnathbitpos.service.producto.handler;
 
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Producto;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
+import com.snnsoluciones.backnathbitpos.service.ImageProcessingService;
 import com.snnsoluciones.backnathbitpos.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,10 +20,21 @@ import java.util.List;
 /**
  * Handler encargado de gestionar las imágenes de productos.
  * Maneja subida, eliminación y validación de imágenes en DigitalOcean Spaces.
- * 
- * ESTRUCTURA DE CARPETAS:
- * - Productos GLOBALES: NathBit-POS/{empresaId}/productos/globales/{codigoInterno}.jpg
- * - Productos LOCALES:  NathBit-POS/{empresaId}/productos/sucursal_{sucursalId}/{codigoInterno}.jpg
+ *
+ * ESTRUCTURA DE CARPETAS V2 (Con Nombres Comerciales):
+ *
+ * ESTRATEGIA:
+ * - Si empresa.productosPorSucursal = FALSE → Productos GLOBALES
+ *   Carpeta: NathBit-POS/{nombreComercialEmpresa}/productos/{codigo}.jpg
+ *   Ejemplo: NathBit-POS/TACO_BELL/productos/BURRITO-001.jpg
+ *
+ * - Si empresa.productosPorSucursal = TRUE → Productos LOCALES (por sucursal)
+ *   Carpeta: NathBit-POS/{nombreSucursal}/productos/{codigo}.jpg
+ *   Ejemplo: NathBit-POS/VIAJE_AL_SABOR_ESCAZU/productos/GALLO-PINTO.jpg
+ *
+ * THUMBNAILS:
+ * - Original: {codigo}.jpg
+ * - Thumbnail: {codigo}_thumb.jpg (150x150px)
  */
 @Slf4j
 @Component
@@ -29,6 +43,7 @@ public class ProductoImagenHandler {
 
     private final StorageService storageService;
     private final ProductoRepository productoRepository;
+    private final ImageProcessingService imageProcessingService;
 
     @Value("${app.storage.max-file-size:5242880}") // 5MB por defecto
     private long maxFileSize;
@@ -47,46 +62,90 @@ public class ProductoImagenHandler {
     // ==================== MÉTODOS PÚBLICOS ====================
 
     /**
-     * Sube una imagen para un producto nuevo
+     * Sube una imagen para un producto nuevo (con thumbnail automático)
      */
     public void subirImagen(Producto producto, MultipartFile imagen) {
-        log.debug("Subiendo imagen para producto ID: {}, código: {}", 
+        log.debug("Subiendo imagen para producto ID: {}, código: {}",
             producto.getId(), producto.getCodigoInterno());
 
         // Validar imagen
         validarImagen(imagen);
 
         try {
-            // Construir la carpeta según si es global o local
+            // Construir la carpeta según estrategia de negocio
             String carpeta = construirCarpeta(producto);
-            
-            // Construir nombre del archivo (código interno + extensión)
-            String extension = obtenerExtension(imagen.getOriginalFilename());
-            String nombreArchivo = producto.getCodigoInterno() + extension;
-            
-            // Construir key completa (ruta en S3)
-            String key = carpeta + "/" + nombreArchivo;
-            
-            log.debug("Subiendo imagen a: {}", key);
 
-            // Subir a DigitalOcean Spaces (PÚBLICO)
-            String urlImagen = storageService.subirArchivo(
-                imagen, 
-                carpeta, 
-                producto.getCodigoInterno(), 
+            // Construir nombres de archivos SIN extensión (storageService la agrega)
+            String nombreArchivoOriginal = producto.getCodigoInterno();
+            String nombreArchivoThumbnail = producto.getCodigoInterno() + "_thumb";
+
+            // Obtener extensión para construir las keys después
+            String extension = obtenerExtension(imagen.getOriginalFilename());
+
+            log.debug("📁 Carpeta destino: {}", carpeta);
+            log.debug("🖼️ Nombre archivo: {}", nombreArchivoOriginal);
+
+            // 1️⃣ GENERAR THUMBNAIL PRIMERO (antes de consumir el InputStream)
+            byte[] thumbnailBytes = null;
+            try {
+                thumbnailBytes = imageProcessingService.generarThumbnail(imagen, 150, 150);
+                log.debug("✅ Thumbnail generado en memoria ({} bytes)", thumbnailBytes.length);
+            } catch (Exception e) {
+                log.error("⚠️ Error generando thumbnail: {}", e.getMessage(), e);
+                // Continuar sin thumbnail
+            }
+
+            // 2️⃣ SUBIR IMAGEN ORIGINAL (PÚBLICA)
+            // Firma antigua: subirArchivo(MultipartFile, carpeta, nombreSinExtension, privado)
+            String urlOriginal = storageService.subirArchivo(
+                imagen,
+                carpeta,
+                nombreArchivoOriginal,
                 false  // isPrivate = false → imagen PÚBLICA
             );
 
-            // Actualizar producto con URL y key
-            producto.setImagenUrl(urlImagen);
-            producto.setImagenKey(key);
+            // Construir key completa para guardar en BD
+            String keyOriginal = carpeta + "/" + nombreArchivoOriginal + extension;
+
+            // 3️⃣ SUBIR THUMBNAIL (si se generó exitosamente)
+            String urlThumbnail = null;
+            String keyThumbnail = null;
+
+            if (thumbnailBytes != null && thumbnailBytes.length > 0) {
+                try {
+                    // Construir key completa para thumbnail
+                    keyThumbnail = carpeta + "/" + nombreArchivoThumbnail + ".jpg";
+
+                    log.debug("🔳 Subiendo thumbnail a: {}", keyThumbnail);
+
+                    // Subir thumbnail usando firma con bytes
+                    urlThumbnail = storageService.subirArchivo(
+                        thumbnailBytes,
+                        keyThumbnail,
+                        "image/jpeg",
+                        false
+                    );
+                    log.info("✅ Thumbnail subido: {}", keyThumbnail);
+                } catch (Exception e) {
+                    log.error("❌ Error subiendo thumbnail a S3: {}", e.getMessage(), e);
+                    // No fallar la subida principal
+                }
+            } else {
+                log.warn("⚠️ No se generó thumbnail (continuando sin él)");
+            }
+
+            // 4️⃣ ACTUALIZAR PRODUCTO CON URLs Y KEYS
+            producto.setImagenUrl(urlOriginal);
+            producto.setImagenKey(keyOriginal);
+            producto.setThumbnailUrl(urlThumbnail);
+            producto.setThumbnailKey(keyThumbnail);
             productoRepository.save(producto);
 
-            log.info("Imagen subida exitosamente para producto ID: {} - URL: {}", 
-                producto.getId(), urlImagen);
+            log.info("✅ Imagen subida exitosamente para producto ID: {} - URL: {}",
+                producto.getId(), urlOriginal);
 
         } catch (Exception e) {
-            log.error("Error al subir imagen para producto ID: {}", producto.getId(), e);
+            log.error("❌ Error al subir imagen para producto ID: {}", producto.getId(), e);
             throw new BusinessException("Error al subir la imagen: " + e.getMessage());
         }
     }
@@ -100,16 +159,8 @@ public class ProductoImagenHandler {
         // Validar nueva imagen
         validarImagen(nuevaImagen);
 
-        // Si tiene imagen anterior, eliminarla de S3
-        if (producto.getImagenKey() != null && !producto.getImagenKey().isEmpty()) {
-            try {
-                log.debug("Eliminando imagen anterior: {}", producto.getImagenKey());
-                storageService.eliminarArchivo(producto.getImagenKey());
-            } catch (Exception e) {
-                log.warn("No se pudo eliminar imagen anterior: {} - Continuando...", e.getMessage());
-                // No fallar la actualización si no se pudo borrar la anterior
-            }
-        }
+        // Eliminar imágenes anteriores (original + thumbnail)
+        eliminarImagenesAnteriores(producto);
 
         // Subir nueva imagen (reutiliza el método subirImagen)
         subirImagen(producto, nuevaImagen);
@@ -126,25 +177,83 @@ public class ProductoImagenHandler {
             return;
         }
 
-        try {
-            // Eliminar de DigitalOcean Spaces
-            storageService.eliminarArchivo(producto.getImagenKey());
+        eliminarImagenesAnteriores(producto);
 
-            // Limpiar campos en producto
-            producto.setImagenUrl(null);
-            producto.setImagenKey(null);
-            producto.setThumbnailUrl(null); // Por si en el futuro tenemos thumbnails
-            productoRepository.save(producto);
+        // Limpiar campos en producto
+        producto.setImagenUrl(null);
+        producto.setImagenKey(null);
+        producto.setThumbnailUrl(null);
+        producto.setThumbnailKey(null);
+        productoRepository.save(producto);
 
-            log.info("Imagen eliminada exitosamente para producto ID: {}", producto.getId());
-
-        } catch (Exception e) {
-            log.error("Error al eliminar imagen de producto ID: {}", producto.getId(), e);
-            throw new BusinessException("Error al eliminar la imagen: " + e.getMessage());
-        }
+        log.info("✅ Imagen eliminada exitosamente para producto ID: {}", producto.getId());
     }
 
-    // ==================== MÉTODOS PRIVADOS DE VALIDACIÓN ====================
+    // ==================== MÉTODOS PRIVADOS ====================
+
+    /**
+     * Construye la carpeta donde se guardará la imagen según la estrategia de negocio.
+     *
+     * REGLA DE NEGOCIO:
+     * - Si empresa.productosPorSucursal = FALSE → Usa nombreComercial de EMPRESA
+     * - Si empresa.productosPorSucursal = TRUE  → Usa nombre de SUCURSAL
+     *
+     * @param producto Producto con empresa/sucursal cargados
+     * @return Ruta de carpeta sin trailing slash (ej: "NathBit-POS/TACO_BELL/productos")
+     */
+    private String construirCarpeta(Producto producto) {
+        Empresa empresa = producto.getEmpresa();
+        Sucursal sucursal = producto.getSucursal();
+
+        // Verificar flag de configuración
+        boolean productosPorSucursal = Boolean.TRUE.equals(empresa.getProductosPorSucursal());
+
+        String nombreCarpeta;
+
+        if (!productosPorSucursal) {
+            // ✅ PRODUCTOS GLOBALES → Usar nombre comercial de EMPRESA
+            nombreCarpeta = limpiarNombreParaRuta(empresa.getNombreComercial());
+            log.debug("📦 Producto GLOBAL - Usando nombre comercial empresa: {}", nombreCarpeta);
+
+        } else {
+            // ✅ PRODUCTOS LOCALES → Usar nombre de SUCURSAL
+            if (sucursal == null) {
+                throw new BusinessException(
+                    "La empresa tiene productos por sucursal pero el producto no tiene sucursal asignada"
+                );
+            }
+            nombreCarpeta = limpiarNombreParaRuta(sucursal.getNombre());
+            log.debug("📦 Producto LOCAL - Usando nombre sucursal: {}", nombreCarpeta);
+        }
+
+        // Construir ruta completa: NathBit-POS/{nombreCarpeta}/productos
+        return baseFolder + "/" + nombreCarpeta + "/productos";
+    }
+
+    /**
+     * Elimina imágenes anteriores (original + thumbnail) de S3
+     */
+    private void eliminarImagenesAnteriores(Producto producto) {
+        // Eliminar imagen original
+        if (producto.getImagenKey() != null && !producto.getImagenKey().isEmpty()) {
+            try {
+                log.debug("🗑️ Eliminando imagen original: {}", producto.getImagenKey());
+                storageService.eliminarArchivo(producto.getImagenKey());
+            } catch (Exception e) {
+                log.warn("⚠️ No se pudo eliminar imagen anterior: {} - Continuando...", e.getMessage());
+            }
+        }
+
+        // Eliminar thumbnail
+        if (producto.getThumbnailKey() != null && !producto.getThumbnailKey().isEmpty()) {
+            try {
+                log.debug("🗑️ Eliminando thumbnail: {}", producto.getThumbnailKey());
+                storageService.eliminarArchivo(producto.getThumbnailKey());
+            } catch (Exception e) {
+                log.warn("⚠️ No se pudo eliminar thumbnail anterior: {} - Continuando...", e.getMessage());
+            }
+        }
+    }
 
     /**
      * Valida que la imagen cumple con los requisitos
@@ -180,72 +289,56 @@ public class ProductoImagenHandler {
         if (!EXTENSIONES_PERMITIDAS.contains(extension)) {
             throw new BadRequestException(
                 "Extensión de archivo no permitida. Solo se permiten: " +
-                String.join(", ", EXTENSIONES_PERMITIDAS)
+                    String.join(", ", EXTENSIONES_PERMITIDAS)
             );
         }
-
-        log.debug("Imagen validada correctamente: {} - {} bytes", 
-            nombreArchivo, imagen.getSize());
-    }
-
-    // ==================== MÉTODOS PRIVADOS DE CONSTRUCCIÓN ====================
-
-    /**
-     * Construye la carpeta en S3 según si el producto es global o local
-     * 
-     * EJEMPLOS:
-     * - Producto GLOBAL (sucursalId = null):
-     *   NathBit-POS/5/productos/globales
-     * 
-     * - Producto LOCAL (sucursalId = 12):
-     *   NathBit-POS/5/productos/sucursal_12
-     */
-    private String construirCarpeta(Producto producto) {
-        Long empresaId = producto.getEmpresa().getId();
-        
-        // Construir base: NathBit-POS/{empresaId}/productos
-        String carpetaBase = String.format("%s/%d/productos", baseFolder, empresaId);
-
-        // Agregar subcarpeta según si es global o local
-        if (producto.getSucursal() == null) {
-            // Producto GLOBAL
-            return carpetaBase + "/globales";
-        } else {
-            // Producto LOCAL de una sucursal
-            Long sucursalId = producto.getSucursal().getId();
-            return carpetaBase + "/sucursal_" + sucursalId;
-        }
     }
 
     /**
-     * Extrae la extensión del nombre de archivo
-     * 
-     * @param nombreArchivo Nombre del archivo (ej: "imagen.jpg")
-     * @return Extensión con punto (ej: ".jpg")
+     * Obtiene la extensión del archivo (incluyendo el punto)
      */
     private String obtenerExtension(String nombreArchivo) {
         if (nombreArchivo == null || !nombreArchivo.contains(".")) {
             return ".jpg"; // Extensión por defecto
         }
-        
-        int lastDot = nombreArchivo.lastIndexOf(".");
-        return nombreArchivo.substring(lastDot).toLowerCase();
+        return nombreArchivo.substring(nombreArchivo.lastIndexOf(".")).toLowerCase();
     }
 
     /**
-     * Limpia un nombre para usarlo en rutas (remueve caracteres especiales)
-     * 
-     * @param nombre Nombre a limpiar
-     * @return Nombre limpio (solo letras, números, guiones y guiones bajos)
+     * Limpia un nombre para usarlo en rutas de S3.
+     *
+     * TRANSFORMACIONES:
+     * - "Viaje al Sabor - Escazú" → "VIAJE_AL_SABOR_ESCAZU"
+     * - "Taco Bell" → "TACO_BELL"
+     * - "La Esquina del Café" → "LA_ESQUINA_DEL_CAFE"
+     *
+     * @param nombre Nombre original
+     * @return Nombre limpio para usar en rutas
      */
     private String limpiarNombreParaRuta(String nombre) {
         if (nombre == null || nombre.trim().isEmpty()) {
-            return "sin_nombre";
+            return "SIN_NOMBRE";
         }
 
         return nombre.trim()
-            .replaceAll("\\s+", "_")           // Espacios → guion bajo
-            .replaceAll("[^a-zA-Z0-9_-]", "")  // Solo alfanuméricos, _ y -
-            .toLowerCase();                     // Minúsculas
+            // Reemplazar espacios por guiones bajos
+            .replaceAll("\\s+", "_")
+            // Eliminar acentos y caracteres especiales
+            .replaceAll("[áàäâ]", "a")
+            .replaceAll("[éèëê]", "e")
+            .replaceAll("[íìïî]", "i")
+            .replaceAll("[óòöô]", "o")
+            .replaceAll("[úùüû]", "u")
+            .replaceAll("[ñ]", "n")
+            .replaceAll("[ÁÀÄÂ]", "A")
+            .replaceAll("[ÉÈËÊ]", "E")
+            .replaceAll("[ÍÌÏÎ]", "I")
+            .replaceAll("[ÓÒÖÔ]", "O")
+            .replaceAll("[ÚÙÜÛ]", "U")
+            .replaceAll("[Ñ]", "N")
+            // Eliminar guiones, puntos y caracteres especiales
+            .replaceAll("[^a-zA-Z0-9_]", "")
+            // Convertir a mayúsculas
+            .toUpperCase();
     }
 }

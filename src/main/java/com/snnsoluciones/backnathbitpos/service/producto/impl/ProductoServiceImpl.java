@@ -43,13 +43,14 @@ public class ProductoServiceImpl implements ProductoService {
     private final ProductoImagenHandler imagenHandler;
     private final ProductoCategoriaHandler categoriaHandler;
     private final ProductoImpuestoHandler impuestoHandler;
+    private final ProductoTributacionHandler tributacionHandler;
 
     // ==================== CREAR ====================
 
     @Override
     @Transactional
     public ProductoDto crear(ProductoCreateDto dto, MultipartFile imagen) {
-        log.info("Creando producto: {} para empresa: {}, sucursal: {}", 
+        log.info("Creando producto: {} para empresa: {}, sucursal: {}",
             dto.getNombre(), dto.getEmpresaId(), dto.getSucursalId());
 
         // 1. Validar datos
@@ -69,7 +70,7 @@ public class ProductoServiceImpl implements ProductoService {
             if (!sucursal.getEmpresa().getId().equals(empresa.getId())) {
                 throw new BusinessException("La sucursal no pertenece a la empresa especificada");
             }
-            
+
             log.debug("Producto LOCAL para sucursal: {}", sucursal.getNombre());
         } else {
             log.debug("Producto GLOBAL para toda la empresa");
@@ -85,11 +86,15 @@ public class ProductoServiceImpl implements ProductoService {
         // 5. Construir producto base
         Producto producto = construirProductoBase(dto, empresa, sucursal, codigoInterno);
 
-        // 6. Guardar producto (sin imagen ni categorías todavía)
+        // 6. Guardar producto (sin imagen, categorías ni tributación todavía)
         producto = productoRepository.save(producto);
         log.debug("Producto base guardado con ID: {}", producto.getId());
 
-        // 7. Procesar imagen (si viene)
+        // 7. 🆕 CONFIGURAR TRIBUTACIÓN (CABYS + Impuestos)
+        tributacionHandler.configurarTributacion(producto, dto);
+        log.debug("Tributación configurada");
+
+        // 8. Procesar imagen (si viene)
         if (imagen != null && !imagen.isEmpty()) {
             try {
                 imagenHandler.subirImagen(producto, imagen);
@@ -100,16 +105,10 @@ public class ProductoServiceImpl implements ProductoService {
             }
         }
 
-        // 8. Asignar categorías (si vienen)
+        // 9. Asignar categorías (si vienen)
         if (dto.getCategoriaIds() != null && !dto.getCategoriaIds().isEmpty()) {
             categoriaHandler.asignarCategorias(producto, dto.getCategoriaIds());
             log.debug("Categorías asignadas: {}", dto.getCategoriaIds().size());
-        }
-
-        // 9. Crear impuestos (si vienen)
-        if (dto.getImpuestos() != null && !dto.getImpuestos().isEmpty()) {
-            impuestoHandler.crearImpuestos(producto, dto.getImpuestos());
-            log.debug("Impuestos creados: {}", dto.getImpuestos().size());
         }
 
         log.info("Producto creado exitosamente con ID: {}", producto.getId());
@@ -648,7 +647,12 @@ public class ProductoServiceImpl implements ProductoService {
             .thumbnailUrl(producto.getThumbnailUrl())
             .activo(producto.getActivo())
             .esGlobal(producto.getSucursal() == null)
-            // ✅ AGREGAR CONVERSIÓN DE IMPUESTOS
+            .unidadMedida(producto.getUnidadMedida().name())
+            .zonaPreparacion(producto.getZonaPreparacion())  // 🆕 AGREGAR
+            .esServicio(producto.getEsServicio())             // 🆕 AGREGAR
+            .empresaCabys(producto.getEmpresaCabys() != null
+                ? convertirEmpresaCabysADto(producto.getEmpresaCabys())
+                : null)
             .impuestos(producto.getImpuestos() != null
                 ? producto.getImpuestos().stream()
                 .map(this::convertirImpuestoADto)
@@ -745,5 +749,38 @@ public class ProductoServiceImpl implements ProductoService {
         }
 
         return precioBase.add(totalImpuestos);
+    }
+
+    /**
+     * Convierte EmpresaCabys a DTO
+     */
+    private EmpresaCABySSelectDto convertirEmpresaCabysADto(EmpresaCAByS empresaCabys) {
+        if (empresaCabys == null) {
+            return null;
+        }
+
+        return EmpresaCABySSelectDto.builder()
+            .id(empresaCabys.getId())
+            .codigo(empresaCabys.getCodigoCabys().getCodigo())
+            .codigoCabys(empresaCabys.getCodigoCabys() != null
+                ? convertirCodigoCabysADto(empresaCabys.getCodigoCabys())
+                : null)
+            .activo(empresaCabys.getActivo())
+            .build();
+    }
+
+    /**
+     * Convierte CodigoCAByS a DTO
+     */
+    private CodigoCABySDto convertirCodigoCabysADto(CodigoCAByS codigoCabys) {
+        if (codigoCabys == null) {
+            return null;
+        }
+
+        return CodigoCABySDto.builder()
+            .codigo(codigoCabys.getCodigo())
+            .descripcion(codigoCabys.getDescripcion())
+            .impuestoSugerido(codigoCabys.getImpuestoSugerido())
+            .build();
     }
 }

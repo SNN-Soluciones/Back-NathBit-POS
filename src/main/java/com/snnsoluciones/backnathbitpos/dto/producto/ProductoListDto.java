@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.dto.producto;
 
+import com.snnsoluciones.backnathbitpos.enums.ZonaPreparacion;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -71,10 +72,23 @@ public class ProductoListDto {
     @Schema(description = "Si es un producto global (sin sucursal específica)")
     private Boolean esGlobal;
 
-    // ✅ AGREGAR IMPUESTOS
+    @Schema(description = "Unidad de medida", example = "UNIDAD")
+    private String unidadMedida;
+
+    // 🆕 AGREGAR ZONA DE PREPARACIÓN
+    @Schema(description = "Zona de preparación", example = "COCINA")
+    private ZonaPreparacion zonaPreparacion;
+
+    // 🆕 AGREGAR FLAG ES SERVICIO
+    @Schema(description = "Si es un servicio (afecta facturación)", example = "false")
+    private Boolean esServicio;
+
     @Schema(description = "Lista de impuestos del producto")
     private List<ProductoImpuestoDto> impuestos;
 
     @Schema(description = "Lista de categorías del producto")
     private List<CategoriaProductoDto> categorias;
+
+    @Schema(description = "Información del CAByS asignado")
+    private EmpresaCABySSelectDto empresaCabys;
 }

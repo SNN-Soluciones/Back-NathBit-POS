@@ -53,6 +53,12 @@ public class ProductoCreateDto {
     @Schema(description = "Código de barras del producto", example = "7501234567890", nullable = true)
     private String codigoBarras;
 
+    @Schema(description = "Zona de preparación para restaurantes",
+        example = "COCINA",
+        allowableValues = {"NINGUNA", "COCINA", "BAR", "PARRILLA", "POSTRES"},
+        nullable = true)
+    private String zonaPreparacion;
+
     // ==================== CLASIFICACIÓN ====================
 
     @NotBlank(message = "El tipo de producto es obligatorio")

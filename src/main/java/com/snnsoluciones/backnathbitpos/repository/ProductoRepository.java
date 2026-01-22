@@ -242,6 +242,7 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       WHERE c.id = :categoriaId
         AND p.empresa.id = :empresaId
         AND p.sucursal.id IS NULL
+              AND p.activo = true
       """)
   Page<Producto> findByCategoriasIdAndEmpresaIdAndSucursalIdIsNull(
       @Param("categoriaId") Long categoriaId,
@@ -258,6 +259,7 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       WHERE c.id = :categoriaId
         AND p.empresa.id = :empresaId
         AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+              AND p.activo = true
       """)
   Page<Producto> findByCategoriasIdAndEmpresaIdAndSucursalIdIsNullOrSucursalId(
       @Param("categoriaId") Long categoriaId,

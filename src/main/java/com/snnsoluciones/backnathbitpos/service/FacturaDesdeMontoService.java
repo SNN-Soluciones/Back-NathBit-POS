@@ -47,9 +47,9 @@ public class FacturaDesdeMontoService {
     private static final String VERSION_CATALOGOS = "MH-4.4-2025-08-21";
 
     // Si preferís inyectarlos, cambiá estos getters por servicio/config
-    private Long getTerminalIdDefault() { return 1L; }        // TODO: tu terminal
-    private Long getSesionCajaIdDefault() { return 3L; }      // TODO: tu sesión de caja vigente
-    private Long getUsuarioIdDefault() { return 6L; }         // TODO: usuario que ejecuta
+    private Long getTerminalIdDefault() { return 3L; }        // TODO: tu terminal
+    private Long getSesionCajaIdDefault() { return 99L; }      // TODO: tu sesión de caja vigente
+    private Long getUsuarioIdDefault() { return 2L; }         // TODO: usuario que ejecuta
 
     // ===== Callbacks para modo asíncrono =====
     @FunctionalInterface public interface OnEach { void tick(); }

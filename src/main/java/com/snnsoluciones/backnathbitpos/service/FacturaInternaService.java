@@ -9,6 +9,7 @@ import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import java.math.RoundingMode;
+import java.time.ZoneId;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -145,7 +146,7 @@ public class FacturaInternaService {
             .cajero(cajero)
             .mesero(mesero)
             .mesa(mesa)
-            .fecha(request.getFechaEmision() != null ? request.getFechaEmision() : LocalDateTime.now())
+            .fecha(LocalDateTime.now(ZoneId.of("America/Costa_Rica")))
             .estado("PAGADA")
             .notas(request.getNotas())
             .build();

@@ -11,8 +11,8 @@ WORKDIR /app
 # Copiar JAR
 COPY --from=build /app/build/libs/Back-NathBit-POS-0.0.1-SNAPSHOT.jar app.jar
 
-# Configuración
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+# Configuración con timezone
+ENV JAVA_OPTS="-Xmx512m -Xms256m -Duser.timezone=America/Costa_Rica"
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

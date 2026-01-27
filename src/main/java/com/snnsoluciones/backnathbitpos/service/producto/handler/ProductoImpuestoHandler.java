@@ -39,7 +39,7 @@ public class ProductoImpuestoHandler {
 
         for (CrearImpuestoDto dto : impuestosDto) {
             validarImpuesto(dto);
-            
+
             ProductoImpuesto impuesto = ProductoImpuesto.builder()
                 .producto(producto)
                 .tipoImpuesto(dto.getTipo())  // ← TipoImpuesto del DTO
@@ -67,17 +67,37 @@ public class ProductoImpuestoHandler {
 
     /**
      * Actualiza los impuestos de un producto (elimina los viejos y crea nuevos)
+     *
+     * FIX: Hace flush después del delete para evitar constraint violations
+     * cuando se intenta insertar un impuesto del mismo tipo que ya existía
      */
     @Transactional
     public void actualizarImpuestos(Producto producto, List<CrearImpuestoDto> impuestosDto) {
         log.debug("Actualizando impuestos del producto ID: {}", producto.getId());
 
-        // Eliminar impuestos existentes
-        impuestoRepository.deleteByProductoId(producto.getId());
+        // 1. Obtener impuestos existentes
+        List<ProductoImpuesto> impuestosExistentes = impuestoRepository.findByProductoId(producto.getId());
 
-        // Crear nuevos impuestos
+        if (!impuestosExistentes.isEmpty()) {
+            log.debug("Eliminando {} impuestos existentes", impuestosExistentes.size());
+
+            // 2. Eliminar impuestos existentes individualmente
+            impuestosExistentes.forEach(impuesto -> {
+                impuestoRepository.delete(impuesto);
+                log.debug("Impuesto eliminado: {} - {}", impuesto.getTipoImpuesto(), impuesto.getPorcentaje());
+            });
+
+            // 3. ⚡ CRÍTICO: Forzar flush para que se ejecute el DELETE antes del INSERT
+            // Esto evita el error: "duplicate key value violates unique constraint"
+            impuestoRepository.flush();
+            log.debug("✅ Flush ejecutado - impuestos eliminados de la BD");
+        }
+
+        // 4. Crear nuevos impuestos (ahora sí, sin constraint violations)
         if (impuestosDto != null && !impuestosDto.isEmpty()) {
             crearImpuestos(producto, impuestosDto);
+        } else {
+            log.debug("No hay impuestos nuevos para crear");
         }
     }
 

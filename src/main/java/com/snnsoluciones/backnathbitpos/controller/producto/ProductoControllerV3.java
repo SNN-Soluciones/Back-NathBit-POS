@@ -197,53 +197,57 @@ public class ProductoControllerV3 {
     @Operation(
         summary = "Listar productos con paginación y filtros",
         description = """
-            Lista productos según los parámetros proporcionados.
-            
-            ESTRATEGIA DE CONSULTA:
-            - Solo empresaId → Devuelve SOLO productos GLOBALES (sucursalId = NULL)
-            - empresaId + sucursalId → Devuelve productos GLOBALES + LOCALES de esa sucursal
-            - termino → Busca en código interno, código barras, nombre y descripción
-            - activo → Filtra solo productos activos
-            
-            PAGINACIÓN:
-            - page: Número de página (inicia en 0)
-            - size: Elementos por página (default: 15)
-            - sortBy: Campo para ordenar (default: nombre)
-            - sortDir: Dirección (asc/desc, default: asc)
-            """
+        Lista productos según los parámetros proporcionados.
+        
+        ESTRATEGIA DE CONSULTA:
+        - Solo empresaId → Devuelve SOLO productos GLOBALES (sucursalId = NULL)
+        - empresaId + sucursalId → Devuelve productos GLOBALES + LOCALES de esa sucursal
+        - termino → Busca en código interno, código barras, nombre y descripción
+        - activo → Filtra solo productos activos
+        - tipo → Filtra por tipo de producto (VENTA, MATERIA_PRIMA, COMPUESTO, COMBO, RECETA) ✨ NUEVO
+        
+        PAGINACIÓN:
+        - page: Número de página (inicia en 0)
+        - size: Elementos por página (default: 15)
+        - sortBy: Campo para ordenar (default: nombre)
+        - sortDir: Dirección (asc/desc, default: asc)
+        """
     )
     public ResponseEntity<ApiResponse<Page<ProductoListDto>>> listar(
-            @Parameter(description = "ID de la empresa", required = true)
-            @RequestParam Long empresaId,
-            
-            @Parameter(description = "ID de sucursal (opcional, NULL = solo globales)")
-            @RequestParam(required = false) Long sucursalId,
-            
-            @Parameter(description = "Término de búsqueda (opcional)")
-            @RequestParam(required = false) String termino,
-            
-            @Parameter(description = "Filtrar solo activos (default: false)")
-            @RequestParam(defaultValue = "false") boolean activo,
-            
-            @Parameter(description = "Número de página (inicia en 0)")
-            @RequestParam(defaultValue = "0") int page,
-            
-            @Parameter(description = "Elementos por página")
-            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
-            
-            @Parameter(description = "Campo para ordenar")
-            @RequestParam(defaultValue = DEFAULT_SORT_BY) String sortBy,
-            
-            @Parameter(description = "Dirección de ordenamiento")
-            @RequestParam(defaultValue = "asc") String sortDir) {
+        @Parameter(description = "ID de la empresa", required = true)
+        @RequestParam Long empresaId,
 
-        log.debug("GET /api/v3/productos - empresaId={}, sucursalId={}, termino={}, activo={}", 
-            empresaId, sucursalId, termino, activo);
+        @Parameter(description = "ID de sucursal (opcional, NULL = solo globales)")
+        @RequestParam(required = false) Long sucursalId,
+
+        @Parameter(description = "Término de búsqueda (opcional)")
+        @RequestParam(required = false) String termino,
+
+        @Parameter(description = "Filtrar solo activos (default: false)")
+        @RequestParam(defaultValue = "false") boolean activo,
+
+        @Parameter(description = "Tipo de producto (opcional): VENTA, MATERIA_PRIMA, COMPUESTO, COMBO, RECETA") // ✨ NUEVO
+        @RequestParam(required = false) String tipo, // ✨ NUEVO
+
+        @Parameter(description = "Número de página (inicia en 0)")
+        @RequestParam(defaultValue = "0") int page,
+
+        @Parameter(description = "Elementos por página")
+        @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
+
+        @Parameter(description = "Campo para ordenar")
+        @RequestParam(defaultValue = DEFAULT_SORT_BY) String sortBy,
+
+        @Parameter(description = "Dirección de ordenamiento")
+        @RequestParam(defaultValue = "asc") String sortDir) {
+
+        log.debug("GET /api/v3/productos - empresaId={}, sucursalId={}, termino={}, activo={}, tipo={}",
+            empresaId, sucursalId, termino, activo, tipo); // ✨ AGREGADO tipo al log
 
         try {
             // Crear Pageable
-            Sort.Direction direction = sortDir.equalsIgnoreCase("desc") 
-                ? Sort.Direction.DESC 
+            Sort.Direction direction = sortDir.equalsIgnoreCase("desc")
+                ? Sort.Direction.DESC
                 : Sort.Direction.ASC;
             Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
@@ -251,14 +255,14 @@ public class ProductoControllerV3 {
             Page<ProductoListDto> productos;
 
             if (termino != null && !termino.trim().isEmpty()) {
-                // BÚSQUEDA con término
-                productos = productoService.buscar(empresaId, sucursalId, termino, pageable);
+                // BÚSQUEDA con término (puede combinarse con tipo)
+                productos = productoService.buscar(empresaId, sucursalId, termino, tipo, activo, pageable); // ✨ AGREGADO tipo
             } else if (activo) {
-                // LISTAR solo activos
-                productos = productoService.listarActivos(empresaId, sucursalId, pageable);
+                // LISTAR solo activos (puede combinarse con tipo)
+                productos = productoService.listarActivos(empresaId, sucursalId, tipo, pageable); // ✨ AGREGADO tipo
             } else {
-                // LISTAR todos
-                productos = productoService.listar(empresaId, sucursalId, pageable);
+                // LISTAR todos (puede combinarse con tipo)
+                productos = productoService.listar(empresaId, sucursalId, tipo, pageable); // ✨ AGREGADO tipo
             }
 
             return ResponseEntity.ok(ApiResponse.<Page<ProductoListDto>>builder()

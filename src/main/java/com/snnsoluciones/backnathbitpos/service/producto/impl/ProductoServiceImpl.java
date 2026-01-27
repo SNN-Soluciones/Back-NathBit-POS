@@ -245,20 +245,41 @@ public class ProductoServiceImpl implements ProductoService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductoListDto> listar(Long empresaId, Long sucursalId, Pageable pageable) {
-        log.debug("Listando productos - empresa: {}, sucursal: {}", empresaId, sucursalId);
+    public Page<ProductoListDto> listar(Long empresaId, Long sucursalId, String tipo, Pageable pageable) {
+        log.debug("Listando productos - empresa: {}, sucursal: {}, tipo: {}", empresaId, sucursalId, tipo);
 
         Page<Producto> productos;
+
+        // Convertir String tipo a TipoProducto enum (si viene)
+        TipoProducto tipoProducto = tipo != null && !tipo.trim().isEmpty()
+            ? TipoProducto.valueOf(tipo.trim().toUpperCase())
+            : null;
 
         if (sucursalId == null) {
             // Solo productos GLOBALES (sucursalId = NULL)
             log.debug("Consultando productos GLOBALES");
-            productos = productoRepository.findByEmpresaIdAndSucursalIdIsNull(empresaId, pageable);
+
+            if (tipoProducto != null) {
+                // ✨ CON FILTRO DE TIPO
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullAndTipo(
+                    empresaId, tipoProducto, pageable);
+            } else {
+                // Sin filtro de tipo (comportamiento original)
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNull(empresaId, pageable);
+            }
         } else {
             // Productos GLOBALES + LOCALES de la sucursal
             log.debug("Consultando productos GLOBALES + LOCALES de sucursal: {}", sucursalId);
-            productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullOrSucursalId(
-                empresaId, sucursalId, pageable);
+
+            if (tipoProducto != null) {
+                // ✨ CON FILTRO DE TIPO
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullOrSucursalIdAndTipo(
+                    empresaId, sucursalId, tipoProducto, pageable);
+            } else {
+                // Sin filtro de tipo (comportamiento original)
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullOrSucursalId(
+                    empresaId, sucursalId, pageable);
+            }
         }
 
         return productos.map(this::convertirAListDto);
@@ -266,19 +287,38 @@ public class ProductoServiceImpl implements ProductoService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductoListDto> listarActivos(Long empresaId, Long sucursalId, Pageable pageable) {
-        log.debug("Listando productos ACTIVOS - empresa: {}, sucursal: {}", empresaId, sucursalId);
+    public Page<ProductoListDto> listarActivos(Long empresaId, Long sucursalId, String tipo, Pageable pageable) {
+        log.debug("Listando productos ACTIVOS - empresa: {}, sucursal: {}, tipo: {}", empresaId, sucursalId, tipo);
 
         Page<Producto> productos;
 
+        // Convertir String tipo a TipoProducto enum (si viene)
+        TipoProducto tipoProducto = tipo != null && !tipo.trim().isEmpty()
+            ? TipoProducto.valueOf(tipo.trim().toUpperCase())
+            : null;
+
         if (sucursalId == null) {
             // Solo productos GLOBALES activos
-            productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrue(
-                empresaId, pageable);
+            if (tipoProducto != null) {
+                // ✨ CON FILTRO DE TIPO
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrueAndTipo(
+                    empresaId, tipoProducto, pageable);
+            } else {
+                // Sin filtro de tipo (comportamiento original)
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullAndActivoTrue(
+                    empresaId, pageable);
+            }
         } else {
             // Productos GLOBALES + LOCALES activos
-            productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullOrSucursalIdAndActivoTrue(
-                empresaId, sucursalId, pageable);
+            if (tipoProducto != null) {
+                // ✨ CON FILTRO DE TIPO
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullOrSucursalIdAndActivoTrueAndTipo(
+                    empresaId, sucursalId, tipoProducto, pageable);
+            } else {
+                // Sin filtro de tipo (comportamiento original)
+                productos = productoRepository.findByEmpresaIdAndSucursalIdIsNullOrSucursalIdAndActivoTrue(
+                    empresaId, sucursalId, pageable);
+            }
         }
 
         return productos.map(this::convertirAListDto);
@@ -288,25 +328,68 @@ public class ProductoServiceImpl implements ProductoService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductoListDto> buscar(Long empresaId, Long sucursalId, String termino, Pageable pageable) {
-        log.debug("Buscando productos con término: '{}' - empresa: {}, sucursal: {}",
-            termino, empresaId, sucursalId);
+    public Page<ProductoListDto> buscar(Long empresaId, Long sucursalId, String termino,
+        String tipo, boolean activo, Pageable pageable) {
+        log.debug("Buscando productos con término: '{}' - empresa: {}, sucursal: {}, tipo: {}, activo: {}",
+            termino, empresaId, sucursalId, tipo, activo);
 
         if (termino == null || termino.trim().isEmpty()) {
-            return listar(empresaId, sucursalId, pageable);
+            // Si no hay término, usar listar
+            return activo
+                ? listarActivos(empresaId, sucursalId, tipo, pageable)
+                : listar(empresaId, sucursalId, tipo, pageable);
         }
 
         String terminoLimpio = "%" + termino.trim().toLowerCase() + "%";
         Page<Producto> productos;
 
+        // Convertir String tipo a TipoProducto enum (si viene)
+        TipoProducto tipoProducto = tipo != null && !tipo.trim().isEmpty()
+            ? TipoProducto.valueOf(tipo.trim().toUpperCase())
+            : null;
+
         if (sucursalId == null) {
             // Buscar solo en productos GLOBALES
-            productos = productoRepository.buscarGlobalesPorTermino(
-                empresaId, terminoLimpio, pageable);
+            if (tipoProducto != null) {
+                // ✨ CON FILTRO DE TIPO
+                if (activo) {
+                    productos = productoRepository.buscarGlobalesPorTerminoYTipoActivos(
+                        empresaId, terminoLimpio, tipoProducto, pageable);
+                } else {
+                    productos = productoRepository.buscarGlobalesPorTerminoYTipo(
+                        empresaId, terminoLimpio, tipoProducto, pageable);
+                }
+            } else {
+                // Sin filtro de tipo (comportamiento original)
+                if (activo) {
+                    productos = productoRepository.buscarGlobalesPorTerminoActivos(
+                        empresaId, terminoLimpio, pageable);
+                } else {
+                    productos = productoRepository.buscarGlobalesPorTermino(
+                        empresaId, terminoLimpio, pageable);
+                }
+            }
         } else {
             // Buscar en productos GLOBALES + LOCALES
-            productos = productoRepository.buscarGlobalesYLocalesPorTermino(
-                empresaId, sucursalId, terminoLimpio, pageable);
+            if (tipoProducto != null) {
+                // ✨ CON FILTRO DE TIPO
+                if (activo) {
+                    productos = productoRepository.buscarGlobalesYLocalesPorTerminoYTipoActivos(
+                        empresaId, sucursalId, terminoLimpio, tipoProducto, pageable);
+                } else {
+                    productos = productoRepository.buscarGlobalesYLocalesPorTerminoYTipo(
+                        empresaId, sucursalId, terminoLimpio, tipoProducto, pageable);
+                }
+            } else {
+                // Sin filtro de tipo (comportamiento original)
+                if (activo) {
+                    productos = productoRepository.buscarGlobalesYLocalesPorTerminoActivos(
+                        empresaId, sucursalId, terminoLimpio, pageable);
+                } else {
+                    productos = productoRepository.buscarGlobalesYLocalesPorTermino(
+                        empresaId, sucursalId, terminoLimpio, pageable);
+                }
+            }
         }
 
         return productos.map(this::convertirAListDto);

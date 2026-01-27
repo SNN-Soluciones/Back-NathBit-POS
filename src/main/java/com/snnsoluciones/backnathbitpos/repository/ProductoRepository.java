@@ -374,4 +374,191 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       @Param("empresaId") Long empresaId,
       @Param("sucursalId") Long sucursalId,
       Pageable pageable);
+
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNullAndTipo(
+      Long empresaId,
+      TipoProducto tipo,
+      Pageable pageable
+  );
+
+  /**
+   * Productos GLOBALES + LOCALES filtrados por tipo
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.tipo = :tipo
+    AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+    """)
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNullOrSucursalIdAndTipo(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("tipo") TipoProducto tipo,
+      Pageable pageable
+  );
+
+  /**
+   * Productos GLOBALES ACTIVOS filtrados por tipo
+   */
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNullAndActivoTrueAndTipo(
+      Long empresaId,
+      TipoProducto tipo,
+      Pageable pageable
+  );
+
+  /**
+   * Productos GLOBALES + LOCALES ACTIVOS filtrados por tipo
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.tipo = :tipo
+    AND p.activo = true
+    AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+    """)
+  Page<Producto> findByEmpresaIdAndSucursalIdIsNullOrSucursalIdAndActivoTrueAndTipo(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("tipo") TipoProducto tipo,
+      Pageable pageable
+  );
+
+// ==================== BÚSQUEDA CON FILTRO DE TIPO ====================
+
+  /**
+   * Buscar GLOBALES por término Y tipo
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.sucursal.id IS NULL
+    AND p.tipo = :tipo
+    AND (
+        LOWER(p.codigoInterno) LIKE :termino OR
+        LOWER(p.codigoBarras) LIKE :termino OR
+        LOWER(p.nombre) LIKE :termino OR
+        LOWER(p.descripcion) LIKE :termino
+    )
+    """)
+  Page<Producto> buscarGlobalesPorTerminoYTipo(
+      @Param("empresaId") Long empresaId,
+      @Param("termino") String termino,
+      @Param("tipo") TipoProducto tipo,
+      Pageable pageable
+  );
+
+  /**
+   * Buscar GLOBALES ACTIVOS por término Y tipo
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.sucursal.id IS NULL
+    AND p.tipo = :tipo
+    AND p.activo = true
+    AND (
+        LOWER(p.codigoInterno) LIKE :termino OR
+        LOWER(p.codigoBarras) LIKE :termino OR
+        LOWER(p.nombre) LIKE :termino OR
+        LOWER(p.descripcion) LIKE :termino
+    )
+    """)
+  Page<Producto> buscarGlobalesPorTerminoYTipoActivos(
+      @Param("empresaId") Long empresaId,
+      @Param("termino") String termino,
+      @Param("tipo") TipoProducto tipo,
+      Pageable pageable
+  );
+
+  /**
+   * Buscar GLOBALES + LOCALES por término Y tipo
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.tipo = :tipo
+    AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+    AND (
+        LOWER(p.codigoInterno) LIKE :termino OR
+        LOWER(p.codigoBarras) LIKE :termino OR
+        LOWER(p.nombre) LIKE :termino OR
+        LOWER(p.descripcion) LIKE :termino
+    )
+    """)
+  Page<Producto> buscarGlobalesYLocalesPorTerminoYTipo(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("termino") String termino,
+      @Param("tipo") TipoProducto tipo,
+      Pageable pageable
+  );
+
+  /**
+   * Buscar GLOBALES + LOCALES ACTIVOS por término Y tipo
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.tipo = :tipo
+    AND p.activo = true
+    AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+    AND (
+        LOWER(p.codigoInterno) LIKE :termino OR
+        LOWER(p.codigoBarras) LIKE :termino OR
+        LOWER(p.nombre) LIKE :termino OR
+        LOWER(p.descripcion) LIKE :termino
+    )
+    """)
+  Page<Producto> buscarGlobalesYLocalesPorTerminoYTipoActivos(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("termino") String termino,
+      @Param("tipo") TipoProducto tipo,
+      Pageable pageable
+  );
+
+// ==================== BÚSQUEDA SOLO ACTIVOS (SIN TIPO) ====================
+
+  /**
+   * Buscar GLOBALES ACTIVOS por término (sin filtro de tipo)
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.sucursal.id IS NULL
+    AND p.activo = true
+    AND (
+        LOWER(p.codigoInterno) LIKE :termino OR
+        LOWER(p.codigoBarras) LIKE :termino OR
+        LOWER(p.nombre) LIKE :termino OR
+        LOWER(p.descripcion) LIKE :termino
+    )
+    """)
+  Page<Producto> buscarGlobalesPorTerminoActivos(
+      @Param("empresaId") Long empresaId,
+      @Param("termino") String termino,
+      Pageable pageable
+  );
+
+  /**
+   * Buscar GLOBALES + LOCALES ACTIVOS por término (sin filtro de tipo)
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.activo = true
+    AND (p.sucursal.id IS NULL OR p.sucursal.id = :sucursalId)
+    AND (
+        LOWER(p.codigoInterno) LIKE :termino OR
+        LOWER(p.codigoBarras) LIKE :termino OR
+        LOWER(p.nombre) LIKE :termino OR
+        LOWER(p.descripcion) LIKE :termino
+    )
+    """)
+  Page<Producto> buscarGlobalesYLocalesPorTerminoActivos(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("termino") String termino,
+      Pageable pageable
+  );
 }

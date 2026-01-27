@@ -96,7 +96,7 @@ public interface ProductoService {
      * @param pageable Configuración de paginación
      * @return Página de productos (optimizada con ProductoListDto)
      */
-    Page<ProductoListDto> listar(Long empresaId, Long sucursalId, Pageable pageable);
+    Page<ProductoListDto> listar(Long empresaId, Long sucursalId, String tipo, Pageable pageable);
 
     /**
      * Lista solo productos activos
@@ -106,7 +106,7 @@ public interface ProductoService {
      * @param pageable Configuración de paginación
      * @return Página de productos activos
      */
-    Page<ProductoListDto> listarActivos(Long empresaId, Long sucursalId, Pageable pageable);
+    Page<ProductoListDto> listarActivos(Long empresaId, Long sucursalId, String tipo, Pageable pageable);
 
     // ==================== BÚSQUEDAS ====================
 
@@ -123,7 +123,7 @@ public interface ProductoService {
      * @param pageable Configuración de paginación
      * @return Página de productos que coinciden
      */
-    Page<ProductoListDto> buscar(Long empresaId, Long sucursalId, String termino, Pageable pageable);
+    Page<ProductoListDto> buscar(Long empresaId, Long sucursalId, String termino, String tipo, boolean activo, Pageable pageable);
 
     /**
      * Busca productos por categoría

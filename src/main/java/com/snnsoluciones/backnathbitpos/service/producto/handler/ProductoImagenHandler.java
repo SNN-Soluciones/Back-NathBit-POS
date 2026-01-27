@@ -21,14 +21,14 @@ import java.util.List;
  * Handler encargado de gestionar las imágenes de productos.
  * Maneja subida, eliminación y validación de imágenes en DigitalOcean Spaces.
  *
- * ESTRUCTURA DE CARPETAS V2 (Con Nombres Comerciales):
+ * ESTRUCTURA DE CARPETAS V3 (Soporta GLOBALES y LOCALES):
  *
  * ESTRATEGIA:
- * - Si empresa.productosPorSucursal = FALSE → Productos GLOBALES
+ * - Producto GLOBAL (sucursalId = NULL) → Carpeta por empresa
  *   Carpeta: NathBit-POS/{nombreComercialEmpresa}/productos/{codigo}.jpg
  *   Ejemplo: NathBit-POS/TACO_BELL/productos/BURRITO-001.jpg
  *
- * - Si empresa.productosPorSucursal = TRUE → Productos LOCALES (por sucursal)
+ * - Producto LOCAL (sucursalId != NULL) → Carpeta por sucursal
  *   Carpeta: NathBit-POS/{nombreSucursal}/productos/{codigo}.jpg
  *   Ejemplo: NathBit-POS/VIAJE_AL_SABOR_ESCAZU/productos/GALLO-PINTO.jpg
  *
@@ -192,11 +192,15 @@ public class ProductoImagenHandler {
     // ==================== MÉTODOS PRIVADOS ====================
 
     /**
-     * Construye la carpeta donde se guardará la imagen según la estrategia de negocio.
+     * ✅ CORREGIDO: Construye la carpeta donde se guardará la imagen.
      *
-     * REGLA DE NEGOCIO:
-     * - Si empresa.productosPorSucursal = FALSE → Usa nombreComercial de EMPRESA
-     * - Si empresa.productosPorSucursal = TRUE  → Usa nombre de SUCURSAL
+     * NUEVA ESTRATEGIA (soporta productos GLOBALES y LOCALES):
+     *
+     * 1. Si producto.sucursal == NULL → Producto GLOBAL
+     *    → Usar nombreComercial de EMPRESA
+     *
+     * 2. Si producto.sucursal != NULL → Producto LOCAL
+     *    → Usar nombre de SUCURSAL
      *
      * @param producto Producto con empresa/sucursal cargados
      * @return Ruta de carpeta sin trailing slash (ej: "NathBit-POS/TACO_BELL/productos")
@@ -205,23 +209,15 @@ public class ProductoImagenHandler {
         Empresa empresa = producto.getEmpresa();
         Sucursal sucursal = producto.getSucursal();
 
-        // Verificar flag de configuración
-        boolean productosPorSucursal = Boolean.TRUE.equals(empresa.getProductosPorSucursal());
-
         String nombreCarpeta;
 
-        if (!productosPorSucursal) {
-            // ✅ PRODUCTOS GLOBALES → Usar nombre comercial de EMPRESA
+        if (sucursal == null) {
+            // ✅ PRODUCTO GLOBAL → Usar nombre comercial de EMPRESA
             nombreCarpeta = limpiarNombreParaRuta(empresa.getNombreComercial());
             log.debug("📦 Producto GLOBAL - Usando nombre comercial empresa: {}", nombreCarpeta);
 
         } else {
-            // ✅ PRODUCTOS LOCALES → Usar nombre de SUCURSAL
-            if (sucursal == null) {
-                throw new BusinessException(
-                    "La empresa tiene productos por sucursal pero el producto no tiene sucursal asignada"
-                );
-            }
+            // ✅ PRODUCTO LOCAL → Usar nombre de SUCURSAL
             nombreCarpeta = limpiarNombreParaRuta(sucursal.getNombre());
             log.debug("📦 Producto LOCAL - Usando nombre sucursal: {}", nombreCarpeta);
         }

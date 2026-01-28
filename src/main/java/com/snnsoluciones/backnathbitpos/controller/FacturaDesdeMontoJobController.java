@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.controller;
 
+import com.snnsoluciones.backnathbitpos.dto.dashboard.UsuarioSimpleDTO;
 import com.snnsoluciones.backnathbitpos.dto.pago.FacturaDesdeMontoRequest;
 import com.snnsoluciones.backnathbitpos.dto.pago.JobCreateResponse;
 import com.snnsoluciones.backnathbitpos.dto.pago.JobErrorResponse;
@@ -11,6 +12,7 @@ import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.impl.SecurityContextService;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -184,6 +186,29 @@ public class FacturaDesdeMontoJobController {
                     .path("/tickets/jobs/" + jobId + "/cancel")
                     .build()
             );
+        }
+    }
+
+    @GetMapping("/usuarios/cajeros-con-sesion-abierta")
+    public ResponseEntity<List<UsuarioSimpleDTO>> getCajerosConSesionAbierta() {
+        try {
+            Long sucursalId = securityContextService.getCurrentSucursalId();
+
+            // Buscar todos los usuarios con sesión abierta en esta sucursal
+            List<Usuario> cajeros = usuarioRepository.findCajerosConSesionAbierta(sucursalId);
+
+            List<UsuarioSimpleDTO> dtos = cajeros.stream()
+                .map(u -> UsuarioSimpleDTO.builder()
+                    .id(u.getId())
+                    .nombre(u.getNombre())
+                    .rol(u.getRol().name())
+                    .build())
+                .toList();
+
+            return ResponseEntity.ok(dtos);
+        } catch (Exception e) {
+            log.error("Error obteniendo cajeros con sesión abierta", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

@@ -88,4 +88,14 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     List<Usuario> findByUsuarioEmpresas_Empresa_IdAndUpdatedAtAfter(Long empresaId, LocalDateTime updatedAt);
 
     List<Usuario> findByUsuarioEmpresas_Empresa_Id(Long empresaId);
+
+    @Query("""
+    SELECT DISTINCT u FROM Usuario u
+    JOIN SesionCaja sc ON sc.usuario.id = u.id
+    WHERE sc.terminal.sucursal.id = :sucursalId
+    AND sc.estado = 'ABIERTA'
+    AND sc.fechaHoraCierre IS NULL
+    ORDER BY u.nombre, u.apellidos
+    """)
+    List<Usuario> findCajerosConSesionAbierta(@Param("sucursalId") Long sucursalId);
 }

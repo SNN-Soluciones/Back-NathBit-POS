@@ -209,12 +209,18 @@ public class ProductoCompuestoController {
     return ResponseEntity.ok(configuracion);
   }
 
+  /**
+   * ⭐ AGREGADO @PathVariable Long productoId
+   */
   @GetMapping("/slots/{slotId}/opciones-con-subconfig")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
   public ResponseEntity<List<OpcionSlotConSubConfigDTO>> obtenerOpcionesConSubConfig(
+      @PathVariable Long productoId,  // ⭐ AGREGADO
       @PathVariable Long slotId,
       @RequestParam Long sucursalId) {
 
-    log.info("GET /slots/{}/opciones-con-subconfig?sucursalId={}", slotId, sucursalId);
+    log.info("GET /productos/{}/compuesto/slots/{}/opciones-con-subconfig?sucursalId={}",
+        productoId, slotId, sucursalId);
 
     List<OpcionSlotConSubConfigDTO> opciones = compuestoService
         .obtenerOpcionesSlotConSubConfig(slotId, sucursalId);
@@ -222,12 +228,18 @@ public class ProductoCompuestoController {
     return ResponseEntity.ok(opciones);
   }
 
+  /**
+   * ⭐ AGREGADO @PathVariable Long productoId
+   */
   @GetMapping("/opciones/{opcionId}/sub-configuracion")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
   public ResponseEntity<ProductoCompuestoConfiguracionDTO> cargarSubConfiguracion(
+      @PathVariable Long productoId,  // ⭐ AGREGADO
       @PathVariable Long opcionId,
       @RequestParam Long sucursalId) {
 
-    log.info("GET /opciones/{}/sub-configuracion?sucursalId={}", opcionId, sucursalId);
+    log.info("GET /productos/{}/compuesto/opciones/{}/sub-configuracion?sucursalId={}",
+        productoId, opcionId, sucursalId);
 
     ProductoCompuestoConfiguracionDTO config = compuestoService
         .cargarSubConfiguracionPorOpcion(opcionId, sucursalId);

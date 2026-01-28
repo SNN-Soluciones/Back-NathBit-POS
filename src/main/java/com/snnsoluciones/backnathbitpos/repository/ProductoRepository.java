@@ -81,12 +81,14 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
    * Obtiene todos los productos con sus relaciones cargadas (para evitar N+1)
    */
   @Query("""
-    SELECT DISTINCT p
-    FROM Producto p
-    LEFT JOIN FETCH p.categorias
-    LEFT JOIN FETCH p.impuestos
-    LEFT JOIN FETCH p.familia
-    """)
+  SELECT DISTINCT p
+  FROM Producto p
+  LEFT JOIN FETCH p.categorias
+  LEFT JOIN FETCH p.impuestos
+  LEFT JOIN FETCH p.familia
+  LEFT JOIN FETCH p.empresaCabys ec
+  LEFT JOIN FETCH ec.codigoCabys
+  """)
   List<Producto> findAllWithRelaciones();
 
   /**

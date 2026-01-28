@@ -65,6 +65,11 @@ public class Orden {
     @Builder.Default
     private List<OrdenItem> items = new ArrayList<>();
 
+    // ===== NUEVO: Personas en la orden =====
+    @OneToMany(mappedBy = "orden", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<OrdenPersona> personas = new ArrayList<>();
+
     // Totales
     @Column(precision = 18, scale = 2, nullable = false)
     @Builder.Default
@@ -336,5 +341,52 @@ public class Orden {
      */
     public boolean puedePagarParcial() {
         return estado.puedePagarse() && tieneItemsPendientes();
+    }
+
+
+    // ==================== MÉTODOS HELPER - PERSONAS ====================
+
+    /**
+     * Agrega una persona a la orden
+     */
+    public void agregarPersona(OrdenPersona persona) {
+        personas.add(persona);
+        persona.setOrden(this);
+    }
+
+    /**
+     * Remueve una persona de la orden
+     */
+    public void removerPersona(OrdenPersona persona) {
+        personas.remove(persona);
+        persona.setOrden(null);
+    }
+
+    /**
+     * Verifica si la orden tiene personas asignadas
+     */
+    @Transient
+    public boolean tienePersonas() {
+        return !personas.isEmpty();
+    }
+
+    /**
+     * Obtiene items que NO tienen persona asignada (compartidos)
+     */
+    @Transient
+    public List<OrdenItem> getItemsCompartidos() {
+        return items.stream()
+            .filter(item -> item.getOrdenPersona() == null)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Cuenta items compartidos
+     */
+    @Transient
+    public long contarItemsCompartidos() {
+        return items.stream()
+            .filter(item -> item.getOrdenPersona() == null)
+            .count();
     }
 }

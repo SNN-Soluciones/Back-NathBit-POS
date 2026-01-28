@@ -2,6 +2,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
+import com.snnsoluciones.backnathbitpos.enums.TipoFormaMesa;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -47,6 +48,11 @@ public class Mesa {
   @Column(nullable = false)
   @Builder.Default
   private Integer orden = 0;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "tipo_forma", nullable = false, length = 30)
+  @Builder.Default
+  private TipoFormaMesa tipoForma = TipoFormaMesa.CUADRADA;
 
   @OneToMany(mappedBy = "mesa")
   @Builder.Default

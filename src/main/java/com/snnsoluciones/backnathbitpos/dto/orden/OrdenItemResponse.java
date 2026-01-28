@@ -29,5 +29,10 @@ public record OrdenItemResponse(
     List<OrdenItemOpcionResponse> opciones,
     String estadoPago,
     Long facturaInternaId,
-    LocalDateTime fechaPago
+    LocalDateTime fechaPago,
+
+    // ===== NUEVOS CAMPOS - PERSONA =====
+    Long ordenPersonaId,
+    String ordenPersonaNombre,
+    String ordenPersonaColor
 ) {}

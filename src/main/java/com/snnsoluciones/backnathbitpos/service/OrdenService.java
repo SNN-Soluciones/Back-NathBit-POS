@@ -37,6 +37,8 @@ public class OrdenService {
   private final ClienteRepository clienteRepository;
   private final ProductoCompuestoSlotRepository slotRepository;
   private final SucursalRepository sucursalRepository;
+  private final OrdenPersonaRepository ordenPersonaRepository;
+
 
   @Transactional
   public OrdenResponse crearOrden(CrearOrdenRequest request) {
@@ -417,6 +419,14 @@ public class OrdenService {
         .map(this::mapItemToResponse)
         .collect(Collectors.toList());
 
+    List<OrdenPersonaDTO> personasDTO = orden.getPersonas().stream()
+        .map(this::mapPersonaToDTO)
+        .collect(Collectors.toList());
+
+    boolean tienePersonas = !orden.getPersonas().isEmpty();
+    int cantidadPersonas = orden.getPersonas().size();
+    long itemsCompartidos = orden.contarItemsCompartidos();
+
     return new OrdenResponse(
         orden.getId(),
         orden.getNumero(),
@@ -444,7 +454,13 @@ public class OrdenService {
         orden.getFechaActualizacion(),
         orden.getFechaCierre(),
         orden.getFactura() != null ? orden.getFactura().getId() : null,
-        orden.getFactura() != null ? orden.getFactura().getConsecutivo() : null
+        orden.getFactura() != null ? orden.getFactura().getConsecutivo() : null, // ⭐ String
+
+        // ===== NUEVOS CAMPOS - PERSONAS =====
+        tienePersonas,
+        cantidadPersonas,
+        personasDTO,
+        (int) itemsCompartidos
     );
   }
 
@@ -484,10 +500,14 @@ public class OrdenService {
         item.getEntregado(),
         item.getFechaEntregado(),
         opciones,
-        // ===== NUEVOS CAMPOS =====
         item.getEstadoPago() != null ? item.getEstadoPago().name() : "PENDIENTE",
         item.getFacturaInterna() != null ? item.getFacturaInterna().getId() : null,
-        item.getFechaPago()
+        item.getFechaPago(),
+
+        // ===== NUEVOS CAMPOS - PERSONA =====
+        item.getOrdenPersona() != null ? item.getOrdenPersona().getId() : null,
+        item.getOrdenPersona() != null ? item.getOrdenPersona().getNombre() : null,
+        item.getOrdenPersona() != null ? item.getOrdenPersona().getColor() : null
     );
   }
 
@@ -617,5 +637,42 @@ public class OrdenService {
         .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada con ID: " + ordenId));
 
     return mapToResponse(orden);
+  }
+
+  private OrdenPersonaDTO mapPersonaToDTO(OrdenPersona persona) {
+    List<Long> itemIds = persona.getItems().stream()
+        .map(OrdenItem::getId)
+        .collect(Collectors.toList());
+
+    String estadoPago = determinarEstadoPagoPersona(persona);
+
+    return new OrdenPersonaDTO(
+        persona.getId(),
+        persona.getNombre(),
+        persona.getColor(),
+        persona.getOrdenVisualizacion(),
+        persona.getCantidadItems(),
+        persona.getTotal(),
+        estadoPago,
+        persona.getCreatedAt(),
+        itemIds
+    );
+  }
+
+  private String determinarEstadoPagoPersona(OrdenPersona persona) {
+    if (persona.getItems().isEmpty()) {
+      return "PENDIENTE";
+    }
+
+    boolean todosPagados = persona.todoPagado();
+    boolean algunoPagado = persona.tienePagosParciales();
+
+    if (todosPagados) {
+      return "PAGADO";
+    } else if (algunoPagado) {
+      return "PARCIAL";
+    } else {
+      return "PENDIENTE";
+    }
   }
 }

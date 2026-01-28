@@ -33,5 +33,9 @@ public record OrdenResponse(
     LocalDateTime fechaActualizacion,
     LocalDateTime fechaCierre,
     Long facturaId,
-    String facturaNumero
+    String facturaNumero,
+    Boolean tienePersonas,
+    Integer cantidadPersonas,
+    List<OrdenPersonaDTO> personas,
+    Integer itemsCompartidos
 ) {}

@@ -1,4 +1,4 @@
-// MesaService.java - Con manejo de sucursal
+// service/mesas/MesaService.java - ACTUALIZADO
 package com.snnsoluciones.backnathbitpos.service.mesas;
 
 import com.snnsoluciones.backnathbitpos.dto.mesas.*;
@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.entity.Mesa;
 import com.snnsoluciones.backnathbitpos.entity.MesaEstadoHist;
 import com.snnsoluciones.backnathbitpos.entity.ZonaMesa;
 import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
+import com.snnsoluciones.backnathbitpos.enums.TipoFormaMesa;
 import com.snnsoluciones.backnathbitpos.repository.MesaEstadoHistRepository;
 import com.snnsoluciones.backnathbitpos.repository.MesaRepository;
 import com.snnsoluciones.backnathbitpos.repository.ZonaMesaRepository;
@@ -14,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
@@ -32,20 +32,41 @@ public class MesaService {
     mesaRepo.findByZonaIdAndCodigo(zonaId, req.codigo().trim())
         .ifPresent(m -> { throw new IllegalArgumentException("Código de mesa ya existe en la zona"); });
 
+    // ✅ Determinar capacidad según tipo de forma
+    Integer capacidadFinal = req.capacidad();
+    if (capacidadFinal == null) {
+        capacidadFinal = calcularCapacidadDefault(req.tipoForma());
+    }
+
+    // ✅ Tipo de forma (default CUADRADA)
+    TipoFormaMesa tipoForma = req.tipoForma() != null ? req.tipoForma() : TipoFormaMesa.CUADRADA;
+
     Mesa m = Mesa.builder()
         .zona(zona)
-        .sucursal(zona.getSucursal()) // IMPORTANTE: Obtener sucursal de la zona
+        .sucursal(zona.getSucursal())
         .codigo(req.codigo().trim())
         .nombre(req.nombre() != null ? req.nombre() : req.codigo())
-        .capacidad(req.capacidad() == null ? 4 : req.capacidad())
+        .capacidad(capacidadFinal)
         .orden(req.orden() == null ? 0 : req.orden())
         .estado(EstadoMesa.DISPONIBLE)
         .activo(true)
+        .tipoForma(tipoForma) // ✅ NUEVO
         .build();
 
     mesaRepo.save(m);
     registrarHistorial(m, EstadoMesa.DISPONIBLE, "CREADA", null);
     return toDto(m);
+  }
+
+  // ✅ NUEVO: Helper para capacidad por defecto
+  private Integer calcularCapacidadDefault(TipoFormaMesa tipo) {
+      if (tipo == null) return 4;
+      
+      return switch (tipo) {
+          case CUADRADA -> 4;
+          case RECTANGULAR -> 6;
+          case REDONDA -> 4;
+      };
   }
 
   @Transactional(readOnly = true)
@@ -76,10 +97,6 @@ public class MesaService {
     Mesa m = mesaRepo.findById(mesaId)
         .orElseThrow(() -> new EntityNotFoundException("Mesa no encontrada"));
 
-    // Validaciones básicas de estado
-    if (req.nuevoEstado() == EstadoMesa.OCUPADA) {
-      throw new IllegalStateException("No se puede ocupar una mesa bloqueada");
-    }
     if (req.nuevoEstado() == EstadoMesa.RESERVADA && m.getEstado() != EstadoMesa.DISPONIBLE) {
       throw new IllegalStateException("Solo se puede reservar una mesa libre");
     }
@@ -100,7 +117,7 @@ public class MesaService {
         .ifPresent(x -> { throw new IllegalArgumentException("Código ya usado en la zona destino"); });
 
     m.setZona(nueva);
-    m.setSucursal(nueva.getSucursal()); // Actualizar también la sucursal
+    m.setSucursal(nueva.getSucursal());
     return toDto(m);
   }
 
@@ -120,7 +137,6 @@ public class MesaService {
   }
 
   private void registrarHistorial(Mesa m, EstadoMesa estadoNuevo, String motivo, Long usuarioId) {
-    // Obtener el estado anterior (puede ser null en creación)
     String estadoAnteriorStr = m.getId() != null ? m.getEstado().name() : null;
 
     MesaEstadoHist h = MesaEstadoHist.builder()
@@ -129,12 +145,13 @@ public class MesaService {
         .estadoNuevo(estadoNuevo.name())
         .observacion(motivo)
         .usuarioId(usuarioId)
-        .ordenId(null) // Por ahora null, se llenará cuando implementes órdenes
+        .ordenId(null)
         .build();
 
     histRepo.save(h);
   }
 
+  // ✅ ACTUALIZADO: Incluir tipoForma y sucursalId
   private MesaResponse toDto(Mesa m) {
     return new MesaResponse(
         m.getId(),
@@ -145,7 +162,9 @@ public class MesaService {
         m.getEstado(),
         m.getActivo(),
         m.getZona().getId(),
-        m.getUnionGroupId()
+        m.getUnionGroupId(),
+        m.getTipoForma(), // ✅ NUEVO
+        m.getSucursal().getId() // ✅ NUEVO
     );
   }
 }

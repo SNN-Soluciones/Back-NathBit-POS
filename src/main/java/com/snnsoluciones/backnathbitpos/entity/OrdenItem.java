@@ -35,6 +35,11 @@ public class OrdenItem {
     @Builder.Default
     private BigDecimal cantidad = BigDecimal.ONE;
 
+    // ===== NUEVO: Relación con persona =====
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "orden_persona_id")
+    private OrdenPersona ordenPersona; // Persona a la que pertenece este item
+
     // Precio al momento de la venta (puede cambiar en el futuro)
     @Column(name = "precio_unitario", precision = 18, scale = 2, nullable = false)
     private BigDecimal precioUnitario;

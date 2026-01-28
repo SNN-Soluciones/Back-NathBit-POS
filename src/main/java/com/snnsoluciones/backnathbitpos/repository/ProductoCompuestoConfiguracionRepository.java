@@ -24,11 +24,6 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
     List<ProductoCompuestoConfiguracion> findByCompuestoIdAndActivaTrueOrderByOrden(Long compuestoId);
 
     /**
-     * Busca la configuración que se activa con una opción específica
-     */
-    Optional<ProductoCompuestoConfiguracion> findByOpcionTriggerId(Long opcionTriggerId);
-
-    /**
      * Busca configuraciones activas que se activan con una opción específica
      */
     @Query("SELECT c FROM ProductoCompuestoConfiguracion c " +
@@ -46,11 +41,6 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
            "WHERE c.compuesto.id = :compuestoId " +
            "ORDER BY c.orden ASC")
     List<ProductoCompuestoConfiguracion> findByCompuestoIdWithSlots(@Param("compuestoId") Long compuestoId);
-
-    /**
-     * Verifica si existe una configuración para una opción trigger específica
-     */
-    boolean existsByOpcionTriggerId(Long opcionTriggerId);
 
     /**
      * Cuenta las configuraciones activas de un compuesto
@@ -76,16 +66,18 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
         @Param("compuestoId") Long compuestoId
     );
 
-    // EN: ProductoCompuestoConfiguracionRepository.java
+    boolean existsByOpcionTriggerId(Long opcionId);
+
+    Optional<ProductoCompuestoConfiguracion> findByOpcionTriggerId(Long opcionTriggerId);
 
     @Query("""
-    SELECT DISTINCT c 
-    FROM ProductoCompuestoConfiguracion c
-    LEFT JOIN FETCH c.slots sc
-    LEFT JOIN FETCH sc.slot s
-    WHERE c.opcionTrigger.id = :opcionId
-    AND c.activa = true
-    """)
+      SELECT DISTINCT c 
+      FROM ProductoCompuestoConfiguracion c
+      LEFT JOIN FETCH c.slots sc
+      LEFT JOIN FETCH sc.slot s
+      WHERE c.opcionTrigger.id = :opcionId
+      AND c.activa = true
+  """)
     Optional<ProductoCompuestoConfiguracion> findByOpcionTriggerIdWithSlots(
         @Param("opcionId") Long opcionId
     );

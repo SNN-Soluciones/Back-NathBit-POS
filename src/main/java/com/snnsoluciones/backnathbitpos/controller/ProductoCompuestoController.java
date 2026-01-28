@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.dto.compuesto.CrearConfiguracionRequest;
 import com.snnsoluciones.backnathbitpos.dto.compuesto.ProductoCompuestoConfiguracionDTO;
 import com.snnsoluciones.backnathbitpos.dto.producto.*;
 import com.snnsoluciones.backnathbitpos.dto.productocompuesto.ConfiguracionFlujoDTO;
+import com.snnsoluciones.backnathbitpos.dto.productocompuesto.OpcionSlotConSubConfigDTO;
 import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -208,4 +209,29 @@ public class ProductoCompuestoController {
     return ResponseEntity.ok(configuracion);
   }
 
+  @GetMapping("/slots/{slotId}/opciones-con-subconfig")
+  public ResponseEntity<List<OpcionSlotConSubConfigDTO>> obtenerOpcionesConSubConfig(
+      @PathVariable Long slotId,
+      @RequestParam Long sucursalId) {
+
+    log.info("GET /slots/{}/opciones-con-subconfig?sucursalId={}", slotId, sucursalId);
+
+    List<OpcionSlotConSubConfigDTO> opciones = compuestoService
+        .obtenerOpcionesSlotConSubConfig(slotId, sucursalId);
+
+    return ResponseEntity.ok(opciones);
+  }
+
+  @GetMapping("/opciones/{opcionId}/sub-configuracion")
+  public ResponseEntity<ProductoCompuestoConfiguracionDTO> cargarSubConfiguracion(
+      @PathVariable Long opcionId,
+      @RequestParam Long sucursalId) {
+
+    log.info("GET /opciones/{}/sub-configuracion?sucursalId={}", opcionId, sucursalId);
+
+    ProductoCompuestoConfiguracionDTO config = compuestoService
+        .cargarSubConfiguracionPorOpcion(opcionId, sucursalId);
+
+    return ResponseEntity.ok(config);
+  }
 }

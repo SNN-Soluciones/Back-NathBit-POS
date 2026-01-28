@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCompuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.producto.ValidacionSeleccionResponse;
 import com.snnsoluciones.backnathbitpos.dto.productocompuesto.ConfiguracionFlujoDTO;
+import com.snnsoluciones.backnathbitpos.dto.productocompuesto.OpcionSlotConSubConfigDTO;
 import com.snnsoluciones.backnathbitpos.dto.slots.OpcionSlotDTO;
 import java.util.List;
 
@@ -115,4 +116,8 @@ public interface ProductoCompuestoService {
         Long opcionId,
         Long sucursalId
     );
+
+    List<OpcionSlotConSubConfigDTO> obtenerOpcionesSlotConSubConfig(Long slotId, Long sucursalId);
+
+    ProductoCompuestoConfiguracionDTO cargarSubConfiguracionPorOpcion(Long opcionId, Long sucursalId);
 }

@@ -189,25 +189,41 @@ public class FacturaDesdeMontoJobController {
         }
     }
 
-    @GetMapping("/usuarios/cajeros-con-sesion-abierta")
-    public ResponseEntity<List<UsuarioSimpleDTO>> getCajerosConSesionAbierta() {
+    @GetMapping("/cajeros-disponibles")
+    public ResponseEntity<List<UsuarioSimpleDTO>> getCajerosConSesionAbierta(
+        @RequestParam(required = false) Long sucursalId) {  // 👈 Parámetro opcional
         try {
-            Long sucursalId = securityContextService.getCurrentSucursalId();
+            // Si no viene por parámetro, intentar obtenerlo del contexto
+            if (sucursalId == null) {
+                sucursalId = securityContextService.getCurrentSucursalId();
+            }
 
-            // Buscar todos los usuarios con sesión abierta en esta sucursal
+            if (sucursalId == null) {
+                log.error("❌ No se pudo determinar la sucursal");
+                return ResponseEntity.badRequest().body(
+                    List.of() // O puedes lanzar una excepción
+                );
+            }
+
+            log.info("🔍 Buscando cajeros con sesión abierta en sucursal ID: {}", sucursalId);
+
             List<Usuario> cajeros = usuarioRepository.findCajerosConSesionAbierta(sucursalId);
+            log.info("✅ Cajeros encontrados: {}", cajeros.size());
+
+            cajeros.forEach(c -> log.info("   - {} {} (ID: {})",
+                c.getNombre(), c.getApellidos(), c.getId()));
 
             List<UsuarioSimpleDTO> dtos = cajeros.stream()
                 .map(u -> UsuarioSimpleDTO.builder()
                     .id(u.getId())
-                    .nombre(u.getNombre())
+                    .nombre(u.getNombre() + " " + u.getApellidos())
                     .rol(u.getRol().name())
                     .build())
                 .toList();
 
             return ResponseEntity.ok(dtos);
         } catch (Exception e) {
-            log.error("Error obteniendo cajeros con sesión abierta", e);
+            log.error("❌ Error obteniendo cajeros con sesión abierta", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

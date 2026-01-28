@@ -861,28 +861,45 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
       Long opcionId,
       Long sucursalId) {
 
-    log.info("Cargando sub-configuración activada por opción {} en sucursal {}",
-        opcionId, sucursalId);
+    log.info("Cargando sub-configuración para opción {}", opcionId);
 
-    // ⭐ Buscar sin JOIN FETCH - solo la entidad base
+    // 1. Cargar config básica
     ProductoCompuestoConfiguracion config = configuracionRepository
         .findByOpcionTriggerId(opcionId)
-        .orElseThrow(() -> new BusinessException(
-            "La opción seleccionada no activa ninguna configuración"
-        ));
+        .orElseThrow(() -> new ResourceNotFoundException("No existe sub-configuración"));
 
-    if (!config.getActiva()) {
-      throw new BusinessException(
-          "La configuración '" + config.getNombre() + "' está inactiva"
-      );
+    // 2. Slot que dispara el flujo (Almuerzo) para no repetirlo
+    Long slotTriggerId = config.getOpcionTrigger().getSlot().getId();
+
+    // 3. Mapeo manual seguro
+    ProductoCompuestoConfiguracionDTO dto = ProductoCompuestoConfiguracionDTO.builder()
+        .id(config.getId())
+        .compuestoId(config.getCompuesto().getId()) // ⭐ Corregido: ya no saldrá null
+        .nombre(config.getNombre())
+        .descripcion(config.getDescripcion())
+        .orden(config.getOrden())
+        .activa(config.getActiva())
+        .opcionTriggerId(opcionId)
+        .build();
+
+    // 4. Cargar slots evitando el bucle y el error de sesión
+    List<ProductoCompuestoSlotConfiguracion> allSlots = slotConfigRepository
+        .findByConfiguracionIdOrderByOrden(config.getId());
+
+    List<SlotConfiguracionDTO> slotsDto = new ArrayList<>();
+    for (ProductoCompuestoSlotConfiguracion sc : allSlots) {
+      // ⭐ SALTAMOS EL SLOT PADRE (Tipo de Almuerzo)
+      if (sc.getSlot().getId().equals(slotTriggerId)) continue;
+
+      try {
+        slotsDto.add(convertirSlotConfigADto(sc, sucursalId));
+      } catch (Exception e) {
+        log.warn("Error en slot sub-config: {}", e.getMessage());
+      }
     }
 
-    log.info("Sub-configuración '{}' encontrada con ID {}",
-        config.getNombre(),
-        config.getId());
-
-    // ⭐ Convertir a DTO (este método maneja sus propias transacciones internas)
-    return convertirConfiguracionADto(config, sucursalId);
+    dto.setSlots(slotsDto);
+    return dto;
   }
 
   /**
@@ -1091,7 +1108,7 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   }
 
   /**
-   * Carga opciones manuales del slot
+   * Carga opciones manuales del slot manejando casos sin producto y stock defensivo
    */
   private List<OpcionSlotDTO> cargarOpcionesManuales(
       ProductoCompuestoSlot slot,
@@ -1099,48 +1116,69 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   ) {
     List<OpcionSlotDTO> opciones = new ArrayList<>();
 
-    // ✅ Trae opciones + producto inicializados (sin lazy)
+    // 1. Cargamos las opciones del slot con query directa
     List<ProductoCompuestoOpcion> opcionesManuales =
         opcionRepository.findBySlotIdOrderByOrdenWithProducto(slot.getId());
 
-    log.info("Slot tiene {} opciones manuales", opcionesManuales.size());
+    // 2. ⭐ CLAVE: En lugar de usar slot.getCompuesto().getConfigs(), usamos el REPO
+    // Esto evita la LazyInitializationException de una vez por todas.
+    List<ProductoCompuestoConfiguracion> todasLasConfigs =
+        configuracionRepository.findByCompuestoIdOrderByOrden(slot.getCompuesto().getId());
+
+    // 3. Creamos el mapa de triggers usando los IDs de configuración para contar slots de forma segura
+    Map<Long, Integer> conteoSlotsPorTrigger = todasLasConfigs.stream()
+        .filter(c -> c.getOpcionTrigger() != null && Boolean.TRUE.equals(c.getActiva()))
+        .collect(Collectors.toMap(
+            c -> c.getOpcionTrigger().getId(),
+            c -> configuracionRepository.countSlotsByConfiguracionId(c.getId()), // Query directa al conteo
+            (a, b) -> a
+        ));
+
+    // Mapa para metadata rápida
+    Map<Long, ProductoCompuestoConfiguracion> metadataTrigger = todasLasConfigs.stream()
+        .filter(c -> c.getOpcionTrigger() != null)
+        .collect(Collectors.toMap(c -> c.getOpcionTrigger().getId(), c -> c, (a, b) -> a));
 
     for (ProductoCompuestoOpcion opcionManual : opcionesManuales) {
-      Producto producto = opcionManual.getProducto(); // ya inicializado
+      Producto producto = opcionManual.getProducto();
 
-      // Verificar stock en sucursal
-      boolean tieneStock = verificarStockProducto(producto.getId(), sucursal.getId());
-      Integer stockDisponible = obtenerStockDisponible(producto.getId(), sucursal.getId());
+      // Stock Defensivo
+      boolean disponibleFinal = verificarStockOpcionDefensivo(opcionManual, sucursal.getId());
+      if (Boolean.FALSE.equals(opcionManual.getDisponible())) {
+        disponibleFinal = false;
+      }
 
-      boolean disponibleFinal = Boolean.TRUE.equals(opcionManual.getDisponible()) && tieneStock;
-      BigDecimal precioAdicional = opcionManual.getPrecioAdicional() != null
-          ? opcionManual.getPrecioAdicional()
-          : BigDecimal.ZERO;
+      Integer stockDisponible = 0;
+      if (producto != null) {
+        stockDisponible = obtenerCantidadDisponibleSafe(producto.getId(), sucursal.getId()).intValue();
+      }
 
-      boolean esGratuita = precioAdicional.compareTo(BigDecimal.ZERO) == 0;
+      // Creamos DTO enriquecido
+      OpcionSlotConSubConfigDTO dto = new OpcionSlotConSubConfigDTO();
+      dto.setOpcionId(opcionManual.getId());
+      dto.setProductoId(producto != null ? producto.getId() : null);
+      dto.setNombre(opcionManual.getNombreEfectivo());
+      dto.setCodigoInterno(producto != null ? producto.getCodigoInterno() : "N/A");
+      dto.setPrecioAdicional(opcionManual.getPrecioAdicional() != null ? opcionManual.getPrecioAdicional() : BigDecimal.ZERO);
+      dto.setDisponible(disponibleFinal);
+      dto.setEsDefault(Boolean.TRUE.equals(opcionManual.getEsDefault()));
+      dto.setStockDisponible(stockDisponible);
+      dto.setOrden(opcionManual.getOrden());
+      dto.setOrigen("MANUAL");
 
-      OpcionSlotDTO opcion = OpcionSlotDTO.builder()
-          .opcionId(opcionManual.getId())
-          .productoId(producto.getId())
-          .nombre(producto.getNombre())
-          .codigoInterno(producto.getCodigoInterno())
-          .imagen(producto.getImagenUrl())
-          .precioBase(producto.getPrecioBase() != null ? producto.getPrecioBase() : BigDecimal.ZERO)
-          .precioAdicional(precioAdicional)
-          .esGratuita(esGratuita)
-          .disponible(disponibleFinal)
-          .esDefault(Boolean.TRUE.equals(opcionManual.getEsDefault()))
-          .stockDisponible(stockDisponible)
-          .orden(opcionManual.getOrden())
-          .origen("MANUAL")
-          .build();
+      // Verificamos si activa sub-config (usando los mapas cargados con REPO)
+      if (conteoSlotsPorTrigger.containsKey(opcionManual.getId())) {
+        ProductoCompuestoConfiguracion configMeta = metadataTrigger.get(opcionManual.getId());
+        dto.setActivaSubConfiguracion(true);
+        dto.setConfiguracionActivadaId(configMeta.getId());
+        dto.setConfiguracionActivadaNombre(configMeta.getNombre());
+        dto.setCantidadSlotsAdicionales(conteoSlotsPorTrigger.get(opcionManual.getId()));
+      } else {
+        dto.setActivaSubConfiguracion(false);
+      }
 
-      opciones.add(opcion);
-
-      log.debug("Opción manual {} - Stock: {}, Disponible config: {}, Final: {}",
-          producto.getNombre(), stockDisponible, opcionManual.getDisponible(), disponibleFinal);
+      opciones.add(dto);
     }
-
     return opciones;
   }
 
@@ -2088,5 +2126,35 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     log.info("Configuración '{}' eliminada exitosamente (tenía {} slots)",
         nombreConfig,
         cantidadSlots);
+  }
+
+  // Sustituye o agrega esto para que las proteínas dejen de salir en gris (disponible: false)
+  private boolean verificarStockOpcionDefensivo(ProductoCompuestoOpcion opcion, Long sucursalId) {
+    Producto producto = opcion.getProducto();
+    if (producto == null) return true;
+
+    // Si el producto es NINGUNO (como las proteínas del casado), está disponible siempre
+    if (producto.getTipoInventario() == null ||
+        producto.getTipoInventario() == com.snnsoluciones.backnathbitpos.enums.TipoInventario.NINGUNO) {
+      return true;
+    }
+
+    try {
+      BigDecimal disponible = obtenerCantidadDisponibleSafe(producto.getId(), sucursalId);
+      return disponible.compareTo(BigDecimal.ZERO) > 0;
+    } catch (Exception e) {
+      return true; // Ante la duda, permitimos la selección
+    }
+  }
+
+  private BigDecimal obtenerCantidadDisponibleSafe(Long productoId, Long sucursalId) {
+    try {
+      ProductoInventario inventario = productoInventarioService.obtenerInventario(productoId, sucursalId);
+      if (inventario == null) return BigDecimal.ZERO;
+      return (inventario.getCantidadActual() != null ? inventario.getCantidadActual() : BigDecimal.ZERO)
+          .subtract(inventario.getCantidadBloqueada() != null ? inventario.getCantidadBloqueada() : BigDecimal.ZERO);
+    } catch (Exception e) {
+      return BigDecimal.ZERO; // No rompe la transacción
+    }
   }
 }

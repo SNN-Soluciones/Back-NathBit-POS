@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -98,6 +99,7 @@ public class ProductoCompuestoConfiguracion {
      * Slots asociados a esta configuración
      * Define qué slots se muestran y con qué reglas
      */
+    @BatchSize(size = 15)
     @OneToMany(mappedBy = "configuracion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orden ASC")
     @Builder.Default

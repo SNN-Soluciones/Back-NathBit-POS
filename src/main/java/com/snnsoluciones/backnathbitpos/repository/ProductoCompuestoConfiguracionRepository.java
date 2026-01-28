@@ -88,4 +88,22 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
     Optional<ProductoCompuestoConfiguracion> findByOpcionTriggerIdWithSlots(
         @Param("opcionId") Long opcionId
     );
+
+
+    /**
+     * Carga configuración con TODOS los datos necesarios en UNA query
+     * Esto evita lazy loading errors
+     */
+    @Query("""
+    SELECT DISTINCT c 
+    FROM ProductoCompuestoConfiguracion c
+    LEFT JOIN FETCH c.slots sc
+    LEFT JOIN FETCH sc.slot s
+    LEFT JOIN FETCH s.familia f
+    WHERE c.opcionTrigger.id = :opcionId
+    AND c.activa = true
+""")
+    Optional<ProductoCompuestoConfiguracion> findByOpcionTriggerIdWithSlotsFull(
+        @Param("opcionId") Long opcionId
+    );
 }

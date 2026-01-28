@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.entity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -81,6 +82,7 @@ public class ProductoCompuestoSlot {
     @Builder.Default
     private Boolean permiteCantidadPorOpcion = false;
 
+    @BatchSize(size = 15)
     @OneToMany(mappedBy = "slot", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orden ASC")
     @Builder.Default

@@ -716,39 +716,66 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   }
 
   private OpcionSlotConSubConfigDTO enriquecerConSubConfiguracion(OpcionSlotDTO opcionDto) {
-    boolean activaConfig = opcionActivaSubConfiguracion(opcionDto.getOpcionId());
 
-    OpcionSlotConSubConfigDTO dtoExtendido = OpcionSlotConSubConfigDTO.extendedBuilder()
-        .opcionId(opcionDto.getOpcionId())
-        .productoId(opcionDto.getProductoId())
-        .nombre(opcionDto.getNombre())
-        .codigoInterno(opcionDto.getCodigoInterno())
-        .imagen(opcionDto.getImagen())
-        .precioBase(opcionDto.getPrecioBase())
-        .precioAdicional(opcionDto.getPrecioAdicional())
-        .esGratuita(opcionDto.getEsGratuita())
-        .disponible(opcionDto.getDisponible())
-        .esDefault(opcionDto.getEsDefault())
-        .stockDisponible(opcionDto.getStockDisponible())
-        .orden(opcionDto.getOrden())
-        .origen(opcionDto.getOrigen())
-        .activaSubConfiguracion(activaConfig)
-        .build();
+    // Verificar si activa configuración (query independiente)
+    boolean activaConfig = false;
+    Long configuracionId = null;
+    String configuracionNombre = null;
+    Integer cantidadSlots = null;
 
-    if (activaConfig) {
-      obtenerConfiguracionActivadaPorOpcion(opcionDto.getOpcionId())
-          .ifPresent(config -> {
-            dtoExtendido.setConfiguracionActivadaId(config.getId());
-            dtoExtendido.setConfiguracionActivadaNombre(config.getNombre());
-            dtoExtendido.setCantidadSlotsAdicionales(config.getSlots().size());
-          });
+    try {
+      activaConfig = configuracionRepository.existsByOpcionTriggerId(opcionDto.getOpcionId());
+
+      if (activaConfig) {
+        // Obtener metadata de la configuración
+        Optional<ProductoCompuestoConfiguracion> configOpt =
+            configuracionRepository.findByOpcionTriggerId(opcionDto.getOpcionId());
+
+        if (configOpt.isPresent()) {
+          ProductoCompuestoConfiguracion config = configOpt.get();
+          configuracionId = config.getId();
+          configuracionNombre = config.getNombre();
+
+          // Contar slots (query separado si es lazy)
+          cantidadSlots = configuracionRepository
+              .countSlotsByConfiguracionId(configuracionId);
+        }
+      }
+    } catch (Exception e) {
+      log.warn("Error verificando sub-config para opción {}: {}",
+          opcionDto.getOpcionId(), e.getMessage());
+      // Continuar sin sub-config metadata
+      activaConfig = false;
     }
+
+    // Crear DTO extendido
+    OpcionSlotConSubConfigDTO dtoExtendido = new OpcionSlotConSubConfigDTO();
+
+    // Copiar campos de OpcionSlotDTO
+    dtoExtendido.setOpcionId(opcionDto.getOpcionId());
+    dtoExtendido.setProductoId(opcionDto.getProductoId());
+    dtoExtendido.setNombre(opcionDto.getNombre());
+    dtoExtendido.setCodigoInterno(opcionDto.getCodigoInterno());
+    dtoExtendido.setImagen(opcionDto.getImagen());
+    dtoExtendido.setPrecioBase(opcionDto.getPrecioBase());
+    dtoExtendido.setPrecioAdicional(opcionDto.getPrecioAdicional());
+    dtoExtendido.setEsGratuita(opcionDto.getEsGratuita());
+    dtoExtendido.setDisponible(opcionDto.getDisponible());
+    dtoExtendido.setEsDefault(opcionDto.getEsDefault());
+    dtoExtendido.setStockDisponible(opcionDto.getStockDisponible());
+    dtoExtendido.setOrden(opcionDto.getOrden());
+    dtoExtendido.setOrigen(opcionDto.getOrigen());
+
+    // Agregar metadata de sub-configuración
+    dtoExtendido.setActivaSubConfiguracion(activaConfig);
+    dtoExtendido.setConfiguracionActivadaId(configuracionId);
+    dtoExtendido.setConfiguracionActivadaNombre(configuracionNombre);
+    dtoExtendido.setCantidadSlotsAdicionales(cantidadSlots);
 
     return dtoExtendido;
   }
 
   @Override
-  @Transactional(readOnly = true)
   public List<OpcionSlotConSubConfigDTO> obtenerOpcionesSlotConSubConfig(
       Long slotId,
       Long sucursalId) {
@@ -756,24 +783,80 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     log.info("Obteniendo opciones con sub-config para slot {} en sucursal {}",
         slotId, sucursalId);
 
+    // 1. Obtener opciones normales
     List<OpcionSlotDTO> opcionesBase = obtenerOpcionesSlot(slotId, sucursalId);
 
+    // 2. Obtener TODAS las configuraciones activas de UNA VEZ
+    List<ProductoCompuestoConfiguracion> todasLasConfiguraciones =
+        configuracionRepository.findAll();
+
+    // 3. Crear Map para lookup rápido: opcionId -> configuracionId
+    Map<Long, ProductoCompuestoConfiguracion> mapaTriggers = new HashMap<>();
+
+    for (ProductoCompuestoConfiguracion config : todasLasConfiguraciones) {
+      if (config.getOpcionTrigger() != null && config.getActiva()) {
+        mapaTriggers.put(config.getOpcionTrigger().getId(), config);
+      }
+    }
+
+    // 4. Enriquecer opciones
     List<OpcionSlotConSubConfigDTO> opcionesEnriquecidas = opcionesBase.stream()
-        .map(this::enriquecerConSubConfiguracion)
+        .map(opcionDto -> {
+          OpcionSlotConSubConfigDTO dto = new OpcionSlotConSubConfigDTO();
+
+          // Copiar campos base
+          dto.setOpcionId(opcionDto.getOpcionId());
+          dto.setProductoId(opcionDto.getProductoId());
+          dto.setNombre(opcionDto.getNombre());
+          dto.setCodigoInterno(opcionDto.getCodigoInterno());
+          dto.setImagen(opcionDto.getImagen());
+          dto.setPrecioBase(opcionDto.getPrecioBase());
+          dto.setPrecioAdicional(opcionDto.getPrecioAdicional());
+          dto.setEsGratuita(opcionDto.getEsGratuita());
+          dto.setDisponible(opcionDto.getDisponible());
+          dto.setEsDefault(opcionDto.getEsDefault());
+          dto.setStockDisponible(opcionDto.getStockDisponible());
+          dto.setOrden(opcionDto.getOrden());
+          dto.setOrigen(opcionDto.getOrigen());
+
+          // Verificar si activa sub-config (lookup en memoria)
+          ProductoCompuestoConfiguracion config = mapaTriggers.get(opcionDto.getOpcionId());
+
+          if (config != null) {
+            dto.setActivaSubConfiguracion(true);
+            dto.setConfiguracionActivadaId(config.getId());
+            dto.setConfiguracionActivadaNombre(config.getNombre());
+
+            // Contar slots de forma segura
+            try {
+              dto.setCantidadSlotsAdicionales(config.getSlots().size());
+            } catch (Exception e) {
+              log.warn("Error contando slots de config {}: {}",
+                  config.getId(), e.getMessage());
+              dto.setCantidadSlotsAdicionales(null);
+            }
+          } else {
+            dto.setActivaSubConfiguracion(false);
+            dto.setConfiguracionActivadaId(null);
+            dto.setConfiguracionActivadaNombre(null);
+            dto.setCantidadSlotsAdicionales(null);
+          }
+
+          return dto;
+        })
         .collect(Collectors.toList());
 
+    long conSubConfig = opcionesEnriquecidas.stream()
+        .filter(o -> Boolean.TRUE.equals(o.getActivaSubConfiguracion()))
+        .count();
+
     log.info("Encontradas {} opciones, {} activan sub-configuraciones",
-        opcionesEnriquecidas.size(),
-        opcionesEnriquecidas.stream()
-            .filter(OpcionSlotConSubConfigDTO::tieneSubConfiguracion)
-            .count()
-    );
+        opcionesEnriquecidas.size(), conSubConfig);
 
     return opcionesEnriquecidas;
   }
 
   @Override
-  @Transactional(readOnly = true)
   public ProductoCompuestoConfiguracionDTO cargarSubConfiguracionPorOpcion(
       Long opcionId,
       Long sucursalId) {
@@ -781,8 +864,9 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
     log.info("Cargando sub-configuración activada por opción {} en sucursal {}",
         opcionId, sucursalId);
 
+    // ⭐ Buscar sin JOIN FETCH - solo la entidad base
     ProductoCompuestoConfiguracion config = configuracionRepository
-        .findByOpcionTriggerIdWithSlots(opcionId)
+        .findByOpcionTriggerId(opcionId)
         .orElseThrow(() -> new BusinessException(
             "La opción seleccionada no activa ninguna configuración"
         ));
@@ -793,10 +877,11 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
       );
     }
 
-    log.info("Sub-configuración '{}' cargada con {} slots",
+    log.info("Sub-configuración '{}' encontrada con ID {}",
         config.getNombre(),
-        config.getSlots().size());
+        config.getId());
 
+    // ⭐ Convertir a DTO (este método maneja sus propias transacciones internas)
     return convertirConfiguracionADto(config, sucursalId);
   }
 
@@ -1358,11 +1443,33 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         .updatedAt(configuracion.getUpdatedAt())
         .build();
 
-    // Cargar slots con sus opciones
-    List<SlotConfiguracionDTO> slotsDto = configuracion.getSlots().stream()
-        .sorted(Comparator.comparingInt(ProductoCompuestoSlotConfiguracion::getOrden))
-        .map(slotConfig -> convertirSlotConfigADto(slotConfig, sucursalId))
-        .collect(Collectors.toList());
+    // ⭐ Cargar slots - MANEJAR ERRORES para evitar rollback
+    List<SlotConfiguracionDTO> slotsDto = new ArrayList<>();
+
+    try {
+      // Obtener slots de la configuración
+      List<ProductoCompuestoSlotConfiguracion> slots = configuracion.getSlots();
+
+      if (slots != null && !slots.isEmpty()) {
+        slotsDto = slots.stream()
+            .sorted(Comparator.comparingInt(ProductoCompuestoSlotConfiguracion::getOrden))
+            .map(slotConfig -> {
+              try {
+                return convertirSlotConfigADto(slotConfig, sucursalId);
+              } catch (Exception e) {
+                log.error("Error convirtiendo slot config {}: {}",
+                    slotConfig.getId(), e.getMessage());
+                return null; // Retornar null si falla
+              }
+            })
+            .filter(Objects::nonNull) // Filtrar nulls
+            .collect(Collectors.toList());
+      }
+    } catch (Exception e) {
+      log.error("Error cargando slots de configuración {}: {}",
+          configuracion.getId(), e.getMessage());
+      slotsDto = new ArrayList<>(); // Lista vacía si falla
+    }
 
     dto.setSlots(slotsDto);
 

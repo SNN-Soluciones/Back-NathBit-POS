@@ -68,6 +68,13 @@ public interface ProductoCompuestoConfiguracionRepository extends JpaRepository<
 
     boolean existsByOpcionTriggerId(Long opcionId);
 
+    /**
+     * Cuenta la cantidad de slots de una configuración
+     * Útil para evitar lazy loading
+     */
+    @Query("SELECT COUNT(sc) FROM ProductoCompuestoSlotConfiguracion sc WHERE sc.configuracion.id = :configId")
+    Integer countSlotsByConfiguracionId(@Param("configId") Long configId);
+
     Optional<ProductoCompuestoConfiguracion> findByOpcionTriggerId(Long opcionTriggerId);
 
     @Query("""

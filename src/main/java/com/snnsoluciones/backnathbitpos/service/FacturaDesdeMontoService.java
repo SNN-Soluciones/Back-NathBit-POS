@@ -60,6 +60,7 @@ public class FacturaDesdeMontoService {
      * @param sesionCajaId ID de la sesión de caja activa del cajero
      * @param terminalId ID del terminal de la sesión
      * @param usuarioId ID del cajero (usuario que emite las facturas)
+     * @param sucursalId ID de la sucursal
      * @param onEach Callback ejecutado después de cada factura generada
      * @param shouldStop Función que indica si se debe cancelar el proceso
      * @param sleeper Función para dormir entre facturas
@@ -70,6 +71,7 @@ public class FacturaDesdeMontoService {
         Long sesionCajaId,
         Long terminalId,
         Long usuarioId,
+        Long sucursalId,
         OnEach onEach,
         ShouldStop shouldStop,
         Sleeper sleeper
@@ -84,7 +86,7 @@ public class FacturaDesdeMontoService {
         Random rnd = new Random();
 
         // Productos disponibles - IMPORTANTE: Cargar con EAGER las relaciones necesarias
-        List<Producto> productos = cargarProductosConRelaciones();
+        List<Producto> productos = cargarProductosConRelaciones(sucursalId);
         if (productos.isEmpty()) {
             throw new IllegalStateException("No hay productos disponibles para generar tiquetes.");
         }
@@ -186,9 +188,8 @@ public class FacturaDesdeMontoService {
      * Esto evita LazyInitializationException en contexto asíncrono
      */
     @Transactional(readOnly = true)
-    public List<Producto> cargarProductosConRelaciones() {
-        // Opción 1: Query personalizada con JPQL
-        return productoRepository.findAllWithRelaciones();
+    public List<Producto> cargarProductosConRelaciones(Long sucursalId) {
+        return productoRepository.findAllWithRelaciones(sucursalId);
     }
 
     /**

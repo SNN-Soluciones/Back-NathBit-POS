@@ -32,6 +32,7 @@ public class FacturaDesdeMontoJobRunner {
      * @param sesionCajaId ID de la sesión de caja del cajero
      * @param terminalId ID del terminal
      * @param cajeroId ID del cajero que emite las facturas
+     * @param sucursalId ID de la sucursal
      */
     @Async("invoiceGenExecutor")
     public void run(
@@ -39,7 +40,8 @@ public class FacturaDesdeMontoJobRunner {
         FacturaDesdeMontoRequest request,
         Long sesionCajaId,
         Long terminalId,
-        Long cajeroId
+        Long cajeroId,
+        Long sucursalId
     ) {
         log.info("🚀 Iniciando job {} - Cajero: {}, Sesión: {}, Terminal: {}",
             jobId, cajeroId, sesionCajaId, terminalId);
@@ -57,6 +59,7 @@ public class FacturaDesdeMontoJobRunner {
                 sesionCajaId,
                 terminalId,
                 cajeroId,
+                sucursalId,
                 // callback por cada factura emitida:
                 () -> {
                     var i = JobRegistry.get(jobId);

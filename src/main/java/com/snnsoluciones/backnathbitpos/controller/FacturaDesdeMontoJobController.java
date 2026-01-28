@@ -83,7 +83,8 @@ public class FacturaDesdeMontoJobController {
                 request,
                 sesionCaja.getId(),
                 sesionCaja.getTerminal().getId(),
-                request.getCajeroId()
+                request.getCajeroId(),
+                sucursalId
             );
 
             log.info("🚀 Job creado exitosamente: {}", jobId);

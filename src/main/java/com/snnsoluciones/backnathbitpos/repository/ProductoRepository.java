@@ -88,8 +88,10 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
   LEFT JOIN FETCH p.familia
   LEFT JOIN FETCH p.empresaCabys ec
   LEFT JOIN FETCH ec.codigoCabys
+  WHERE p.sucursal.id = :sucursalId
+  AND p.activo = true
   """)
-  List<Producto> findAllWithRelaciones();
+  List<Producto> findAllWithRelaciones(@Param("sucursalId") Long sucursalId);
 
   /**
    * Busca un producto por ID y empresa (validación de pertenencia)

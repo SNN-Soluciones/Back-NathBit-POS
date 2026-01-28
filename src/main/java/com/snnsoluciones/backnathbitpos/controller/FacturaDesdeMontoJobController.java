@@ -46,7 +46,8 @@ public class FacturaDesdeMontoJobController {
      * @return Response con jobId y estado inicial
      */
     @PostMapping
-    public ResponseEntity<?> crearJob(@Valid @RequestBody FacturaDesdeMontoRequest request) {
+    public ResponseEntity<?> crearJob(@Valid @RequestBody FacturaDesdeMontoRequest request,
+        @RequestParam(required = false) Long sucursalId) {
         try {
             log.info("📝 Iniciando creación de job para monto: {} con cajero ID: {}",
                 request.getMontoTotal(), request.getCajeroId());
@@ -59,7 +60,6 @@ public class FacturaDesdeMontoJobController {
             log.info("✅ Cajero encontrado: {} {}", cajero.getNombre(), cajero.getApellidos());
 
             // 2. Obtener sucursal del contexto (del admin autenticado)
-            Long sucursalId = securityContextService.getCurrentSucursalId();
             if (sucursalId == null) {
                 throw new IllegalStateException("No se pudo determinar la sucursal actual");
             }

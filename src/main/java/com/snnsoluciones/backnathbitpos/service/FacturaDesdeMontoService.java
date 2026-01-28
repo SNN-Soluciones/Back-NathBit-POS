@@ -7,7 +7,6 @@ import com.snnsoluciones.backnathbitpos.dto.factura.MedioPagoRequest;
 import com.snnsoluciones.backnathbitpos.dto.factura.ResumenImpuestoRequest;
 import com.snnsoluciones.backnathbitpos.dto.pago.FacturaDesdeMontoRequest;
 import com.snnsoluciones.backnathbitpos.dto.pago.FacturaDesdeMontoResponse;
-import com.snnsoluciones.backnathbitpos.dto.pago.PagoRequest;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
 import com.snnsoluciones.backnathbitpos.entity.Producto;
 import com.snnsoluciones.backnathbitpos.enums.mh.CodigoTarifaIVA;
@@ -17,6 +16,7 @@ import com.snnsoluciones.backnathbitpos.enums.mh.TipoDocumento;
 import com.snnsoluciones.backnathbitpos.enums.mh.TipoImpuesto;
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FacturaDesdeMontoService {
@@ -34,22 +35,17 @@ public class FacturaDesdeMontoService {
     // ===== Config MVP =====
     private static final BigDecimal MIN_TICKET = new BigDecimal("1500");
     private static final BigDecimal MAX_TICKET = new BigDecimal("7500");
-    private static final BigDecimal MARGEN = new BigDecimal("1000"); // ±100 mil
+    private static final BigDecimal MARGEN = new BigDecimal("100000"); // ±100 mil
     private static final BigDecimal IVA_PORC = new BigDecimal("13");    // 13 (%)
     private static final BigDecimal IVA_FACTOR = new BigDecimal("0.13"); // 0.13
     private static final int SCALE_MONEDA = 2;
 
-    // ===== Cabecera por defecto (colocá tus valores reales) =====
+    // ===== Cabecera por defecto =====
     private static final TipoDocumento TIPO_DOC = TipoDocumento.TIQUETE_ELECTRONICO;
     private static final Moneda MONEDA = Moneda.CRC;
     private static final BigDecimal TIPO_CAMBIO = BigDecimal.ONE; // CRC
     private static final String CONDICION_VENTA = CondicionVenta.CONTADO.getCodigo();
     private static final String VERSION_CATALOGOS = "MH-4.4-2025-08-21";
-
-    // Si preferís inyectarlos, cambiá estos getters por servicio/config
-    private Long getTerminalIdDefault() { return 1L; }        // TODO: tu terminal
-    private Long getSesionCajaIdDefault() { return 738L; }      // TODO: tu sesión de caja vigente
-    private Long getUsuarioIdDefault() { return 8L; }         // TODO: usuario que ejecuta
 
     // ===== Callbacks para modo asíncrono =====
     @FunctionalInterface public interface OnEach { void tick(); }
@@ -57,15 +53,30 @@ public class FacturaDesdeMontoService {
     @FunctionalInterface public interface Sleeper { void sleep(Random rnd) throws InterruptedException; }
 
     /**
-     * NUEVO: Generación ticket-por-ticket, amigable para ejecución asíncrona.
+     * Generación ticket-por-ticket, amigable para ejecución asíncrona.
      * No anotar @Transactional aquí. Cada factura se persiste en su propia transacción dentro de facturaService.crear(...).
+     *
+     * @param request Request con monto total y pagos
+     * @param sesionCajaId ID de la sesión de caja activa del cajero
+     * @param terminalId ID del terminal de la sesión
+     * @param usuarioId ID del cajero (usuario que emite las facturas)
+     * @param onEach Callback ejecutado después de cada factura generada
+     * @param shouldStop Función que indica si se debe cancelar el proceso
+     * @param sleeper Función para dormir entre facturas
+     * @return Response con resumen de facturas generadas
      */
     public FacturaDesdeMontoResponse generarTicketPorTicket(
         FacturaDesdeMontoRequest request,
+        Long sesionCajaId,
+        Long terminalId,
+        Long usuarioId,
         OnEach onEach,
         ShouldStop shouldStop,
         Sleeper sleeper
     ) {
+        log.info("🎯 Iniciando generación ticket-por-ticket - Monto objetivo: {}, Cajero: {}, Sesión: {}",
+            request.getMontoTotal(), usuarioId, sesionCajaId);
+
         BigDecimal objetivo = request.getMontoTotal().setScale(SCALE_MONEDA, RoundingMode.HALF_UP);
         BigDecimal acumulado = BigDecimal.ZERO;
 
@@ -78,15 +89,26 @@ public class FacturaDesdeMontoService {
             throw new IllegalStateException("No hay productos disponibles para generar tiquetes.");
         }
 
+        log.info("✅ Productos cargados: {}", productos.size());
+
         // Cola de pagos a prorratear
         List<MedioPagoRequest> pagosPendientes = clonarPagos(request.getPagos());
 
+        int facturasGeneradas = 0;
+
         while (acumulado.compareTo(objetivo.add(MARGEN)) < 0) {
-            if (shouldStop != null && shouldStop.get()) break;
+            if (shouldStop != null && shouldStop.get()) {
+                log.warn("⚠️ Proceso cancelado por el usuario. Facturas generadas: {}", facturasGeneradas);
+                break;
+            }
 
             // ¿ya estamos dentro del margen? salir
             BigDecimal faltante = objetivo.subtract(acumulado);
-            if (faltante.abs().compareTo(MARGEN) <= 0) break;
+            if (faltante.abs().compareTo(MARGEN) <= 0) {
+                log.info("✅ Objetivo alcanzado dentro del margen. Facturas: {}, Acumulado: {}",
+                    facturasGeneradas, acumulado);
+                break;
+            }
 
             // monto aleatorio sugerido para este ticket
             BigDecimal ticketMonto = MIN_TICKET.add(
@@ -101,13 +123,23 @@ public class FacturaDesdeMontoService {
             Producto prod = productos.get(rnd.nextInt(productos.size()));
 
             // Armar request
-            CrearFacturaRequest cfReq = buildCrearFacturaRequest(prod, ticketMonto);
+            CrearFacturaRequest cfReq = buildCrearFacturaRequest(
+                prod,
+                ticketMonto,
+                sesionCajaId,
+                terminalId,
+                usuarioId
+            );
 
             // Prorratear pagos según total del comprobante
             distribuirPagosParaTicket(cfReq, pagosPendientes);
 
             // Crear la factura (IMPORTANTE: que este método sea @Transactional en su propio service)
             Factura factura = facturaService.crear(cfReq);
+            facturasGeneradas++;
+
+            log.debug("📄 Factura #{} generada - Clave: {}, Monto: {}",
+                facturasGeneradas, factura.getClave(), factura.getTotalComprobante());
 
             // Resumen
             FacturaDesdeMontoResponse.DocumentoGenerado doc = new FacturaDesdeMontoResponse.DocumentoGenerado();
@@ -116,17 +148,26 @@ public class FacturaDesdeMontoService {
             doc.setEstado(factura.getEstado().name());
             docs.add(doc);
 
-            // >>> SUMAR al acumulado <<<
+            // >>> SUMAR al acumulado <
             acumulado = acumulado.add(factura.getTotalComprobante()).setScale(SCALE_MONEDA, RoundingMode.HALF_UP);
 
             if (onEach != null) onEach.tick();
 
             // Dormir si aún falta
             if (acumulado.compareTo(objetivo.add(MARGEN)) < 0 && sleeper != null) {
-                try { sleeper.sleep(rnd); }
-                catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                try {
+                    sleeper.sleep(rnd);
+                }
+                catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("⚠️ Proceso interrumpido. Facturas generadas: {}", facturasGeneradas);
+                    break;
+                }
             }
         }
+
+        log.info("🎉 Generación finalizada - Facturas: {}, Acumulado: {}, Objetivo: {}",
+            facturasGeneradas, acumulado, objetivo);
 
         // Respuesta final
         FacturaDesdeMontoResponse resp = new FacturaDesdeMontoResponse();
@@ -147,23 +188,19 @@ public class FacturaDesdeMontoService {
     @Transactional(readOnly = true)
     public List<Producto> cargarProductosConRelaciones() {
         // Opción 1: Query personalizada con JPQL
-         return productoRepository.findAllWithRelaciones();
-
-//        // Opción 2: Cargar y forzar inicialización
-//        List<Producto> productos = productoRepository.findAll();
-//        // Forzar carga de relaciones necesarias
-//        for (Producto p : productos) {
-//            if (p.getEmpresaCabys() != null && p.getEmpresaCabys().getCodigoCabys() != null) {
-//                // Forzar carga del código CABYS
-//                p.getEmpresaCabys().getCodigoCabys().getCodigo();
-//            }
-//            // Cargar cualquier otra relación lazy que necesites
-//        }
-//        return productos;
+        return productoRepository.findAllWithRelaciones();
     }
 
+    /**
+     * Método síncrono original (mantener por compatibilidad)
+     */
     @Transactional
-    public FacturaDesdeMontoResponse generar(FacturaDesdeMontoRequest request) {
+    public FacturaDesdeMontoResponse generar(
+        FacturaDesdeMontoRequest request,
+        Long sesionCajaId,
+        Long terminalId,
+        Long usuarioId
+    ) {
         BigDecimal objetivo = request.getMontoTotal().setScale(SCALE_MONEDA, RoundingMode.HALF_UP);
         BigDecimal acumulado = BigDecimal.ZERO;
 
@@ -197,7 +234,13 @@ public class FacturaDesdeMontoService {
             Producto prod = productos.get(rnd.nextInt(productos.size()));
 
             // Armar el CrearFacturaRequest completo
-            CrearFacturaRequest cfReq = buildCrearFacturaRequest(prod, ticketMonto);
+            CrearFacturaRequest cfReq = buildCrearFacturaRequest(
+                prod,
+                ticketMonto,
+                sesionCajaId,
+                terminalId,
+                usuarioId
+            );
 
             // Prorratear medios de pago para este ticket por el totalComprobante calculado
             distribuirPagosParaTicket(cfReq, pagosPendientes);
@@ -229,14 +272,20 @@ public class FacturaDesdeMontoService {
 
     // ===================== Builders & Helpers =====================
 
-    private CrearFacturaRequest buildCrearFacturaRequest(Producto prod, BigDecimal montoSinIVA) {
+    private CrearFacturaRequest buildCrearFacturaRequest(
+        Producto prod,
+        BigDecimal montoSinIVA,
+        Long sesionCajaId,
+        Long terminalId,
+        Long usuarioId
+    ) {
         CrearFacturaRequest req = new CrearFacturaRequest();
 
         // Identificación
         req.setTipoDocumento(TIPO_DOC);
-        req.setTerminalId(getTerminalIdDefault());
-        req.setSesionCajaId(getSesionCajaIdDefault());
-        req.setUsuarioId(getUsuarioIdDefault());
+        req.setTerminalId(terminalId);
+        req.setSesionCajaId(sesionCajaId);
+        req.setUsuarioId(usuarioId);
 
         // Cliente (null para tiquete anónimo)
         req.setClienteId(null);

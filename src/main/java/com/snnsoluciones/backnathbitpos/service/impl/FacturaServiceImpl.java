@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +47,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Implementación del servicio de Factura con validación completa "¡Piensa McFly, piensa!" - Doc
@@ -68,6 +71,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final FacturaVentaExcelService facturaVentaExcelService;
   private final MetricaProductoVendidoService metricaProductoService;
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
+  private final StringRedisTemplate redisTemplate;
 
   @Override
   @Transactional
@@ -290,9 +294,32 @@ public class FacturaServiceImpl implements FacturaService {
         log.info("Bitácora creada para procesar factura electrónica: {} - ID Bitácora: {}",
             facturaGuardada.getClave(), bitacora.getId());
 
+        // ---------------------------------------------------------------
+        // 🚀 NUEVO: EL DISPARO A REDIS (Cero Lag)
+        // ---------------------------------------------------------------
+        // Usamos TransactionSynchronization para enviar el mensaje SOLO
+        // cuando la transacción de la DB haya hecho commit exitoso.
+        // Esto evita que el microservicio busque la factura antes de que exista.
+        final Long facturaIdFinal = facturaGuardada.getId();
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            try {
+              // Usamos la variable final 'facturaIdFinal'
+              String mensaje = String.valueOf(facturaIdFinal);
+              redisTemplate.convertAndSend("facturacion_queue", mensaje);
+              log.info("🚀 [REDIS] Evento enviado para Factura ID: {}", facturaIdFinal);
+            } catch (Exception e) {
+              log.error("⚠️ [REDIS] Falló el envío inmediato: {}", e.getMessage());
+            }
+          }
+        });
+
       } catch (Exception e) {
         // No fallar si hay error creando bitácora
-        log.error("Error creando bitácora para factura {}: {}",
+
+        log.error("Error gestionando bitácora/redis para factura {}: {}",
             facturaGuardada.getClave(), e.getMessage());
       }
     }

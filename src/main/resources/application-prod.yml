@@ -10,6 +10,12 @@ server:
     min-response-size: 1024
 
 spring:
+  data:
+    redis:
+      host: 104.131.20.164   # La IP de tu NUEVO Droplet
+      port: 6379
+      password: NathbitSecret2026! # El password que pusimos en el docker-compose
+      timeout: 2000ms
   application:
     name: nathbit-pos-backend
 

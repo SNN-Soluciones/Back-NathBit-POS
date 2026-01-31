@@ -157,6 +157,17 @@ public class OrdenService {
         ? request.precioUnitarioOverride()
         : (producto.getPrecioVenta() != null ? producto.getPrecioVenta() : BigDecimal.ZERO);
 
+    OrdenPersona persona = null;
+    if (request.ordenPersonaId() != null) {
+      persona = ordenPersonaRepository.findById(request.ordenPersonaId())
+          .orElseThrow(() -> new ResourceNotFoundException("Persona no encontrada"));
+
+      // Validar que la persona pertenece a esta orden
+      if (!persona.getOrden().getId().equals(ordenId)) {
+        throw new BusinessException("La persona no pertenece a esta orden");
+      }
+    }
+
     OrdenItem item = OrdenItem.builder()
         .orden(orden)
         .producto(producto)
@@ -164,6 +175,7 @@ public class OrdenService {
         .precioUnitario(precioUnitario)
         .tarifaImpuesto(obtenerTarifaImpuesto(producto))
         .notas(request.notas())
+        .ordenPersona(persona)
         .build();
 
     // Calcular totales del item

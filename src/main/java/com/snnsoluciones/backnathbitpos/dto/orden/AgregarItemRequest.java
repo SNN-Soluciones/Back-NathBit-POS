@@ -19,5 +19,7 @@ public record AgregarItemRequest(
     @Valid
     List<OpcionCompuestaRequest> opciones,
 
+    Long ordenPersonaId,
+
     BigDecimal precioUnitarioOverride  // 👈 AGREGAR ESTO
 ) {}

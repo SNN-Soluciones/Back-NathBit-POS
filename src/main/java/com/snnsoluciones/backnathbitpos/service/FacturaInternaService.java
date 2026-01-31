@@ -117,6 +117,7 @@ public class FacturaInternaService {
                     d.getCantidad(),
                     d.getNotas(),
                     d.getPrecioUnitario(),
+                    null,
                     null
                 ))
                 .toList();

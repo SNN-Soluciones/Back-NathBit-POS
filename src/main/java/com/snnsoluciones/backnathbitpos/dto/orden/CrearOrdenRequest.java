@@ -35,7 +35,8 @@ public record CrearOrdenRequest(
 
         BigDecimal precioUnitarioOverride,
 
-        List<OpcionRequest> opciones
+        List<OpcionRequest> opciones,
+        Long ordenPersonaId
     ) {}
 
     public record OpcionRequest(

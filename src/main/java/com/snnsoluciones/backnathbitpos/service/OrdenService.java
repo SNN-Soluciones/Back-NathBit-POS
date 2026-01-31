@@ -10,6 +10,8 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -102,6 +104,8 @@ public class OrdenService {
 
     orden = ordenRepository.save(orden);
 
+    Map<Long, OrdenPersona> personasCache = new HashMap<>();
+
     for (CrearOrdenRequest.ItemRequest itemReq : request.items()) {
       Producto producto = productoRepository.findById(itemReq.productoId())
           .orElseThrow(() -> new ResourceNotFoundException(
@@ -111,6 +115,26 @@ public class OrdenService {
           ? itemReq.precioUnitarioOverride()
           : (producto.getPrecioVenta() != null ? producto.getPrecioVenta() : BigDecimal.ZERO);
 
+      OrdenPersona persona = null;
+      if (itemReq.ordenPersonaId() != null) {
+        // Usar caché si ya buscamos esta persona
+        if (personasCache.containsKey(itemReq.ordenPersonaId())) {
+          persona = personasCache.get(itemReq.ordenPersonaId());
+        } else {
+          persona = ordenPersonaRepository.findById(itemReq.ordenPersonaId())
+              .orElseThrow(() -> new ResourceNotFoundException(
+                  "Persona no encontrada: " + itemReq.ordenPersonaId()));
+
+          // Validar que pertenece a esta orden
+          if (!persona.getOrden().getId().equals(orden.getId())) {
+            throw new BusinessException("La persona no pertenece a esta orden");
+          }
+
+          personasCache.put(itemReq.ordenPersonaId(), persona);
+        }
+      }
+
+
       OrdenItem item = OrdenItem.builder()
           .orden(orden)
           .producto(producto)
@@ -118,6 +142,7 @@ public class OrdenService {
           .precioUnitario(precioUnitario)
           .tarifaImpuesto(obtenerTarifaImpuesto(producto))
           .notas(itemReq.notas())
+          .ordenPersona(persona)
           .build();
 
       item.calcularTotales(); // Si existe este método
@@ -127,6 +152,7 @@ public class OrdenService {
     // Recalcular totales de la orden
     orden.calcularTotales();
     orden = ordenRepository.save(orden);
+
 
     // Actualizar estado de mesa
     if (mesa != null) {

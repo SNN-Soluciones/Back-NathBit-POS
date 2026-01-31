@@ -229,9 +229,14 @@ public class OrdenService {
     Orden orden = ordenRepository.findById(ordenId)
         .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada"));
 
+    // ⭐ NUEVO: Solo cerrar si TODOS los items están pagados
+    if (!orden.todosItemsPagados()) {
+      log.warn("⚠️ No se puede cerrar orden {} - quedan items pendientes", orden.getNumero());
+      return;
+    }
+
     orden.setEstado(EstadoOrden.PAGADA);
     orden.setFechaCierre(LocalDateTime.now());
-    // TODO: Guardar referencia a factura si es necesario
 
     ordenRepository.save(orden);
 
@@ -239,6 +244,8 @@ public class OrdenService {
     Mesa mesa = orden.getMesa();
     mesa.actualizarEstadoSegunOrden();
     mesaRepository.save(mesa);
+
+    log.info("✅ Orden {} cerrada completamente", orden.getNumero());
   }
 
   @Transactional

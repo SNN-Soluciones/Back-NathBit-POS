@@ -74,10 +74,8 @@ public class PagoParcialService {
             }
         }
 
-        // 4. Verificar si todos los items están pagados
-        boolean todosPageados = orden.getItems().stream()
-            .allMatch(item -> item.getEstadoPago() == EstadoPagoItem.PAGADO);
-
+        // 4. ⭐ NUEVO: Solo cerrar si TODOS los items están pagados
+        boolean todosPageados = orden.todosItemsPagados();
         boolean mesaLiberada = false;
 
         if (todosPageados) {
@@ -90,6 +88,8 @@ public class PagoParcialService {
                 mesaRepository.save(orden.getMesa());
                 mesaLiberada = true;
             }
+
+            log.info("✅ Orden {} cerrada - todos pagados", orden.getNumero());
         }
 
         // 5. Guardar

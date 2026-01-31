@@ -26,7 +26,8 @@ public record CrearOrdenRequest(
     String ordenNumero,
 
     @NotEmpty
-    List<ItemRequest> items
+    List<ItemRequest> items,
+    List<PersonaRequest> personas
 ) {
     public record ItemRequest(
         @NotNull Long productoId,
@@ -43,5 +44,11 @@ public record CrearOrdenRequest(
         @NotNull Long slotId,
         @NotNull Long productoOpcionId,
         @NotNull BigDecimal cantidad
+    ) {}
+
+    public record PersonaRequest(
+        Long idTemporal,  // ID negativo del frontend
+        String nombre,
+        String color
     ) {}
 }

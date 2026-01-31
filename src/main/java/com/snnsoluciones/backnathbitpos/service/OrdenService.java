@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -104,7 +105,27 @@ public class OrdenService {
 
     orden = ordenRepository.save(orden);
 
-    Map<Long, OrdenPersona> personasCache = new HashMap<>();
+    Map<Long, OrdenPersona> mapaPersonas = new HashMap<>();
+
+    if (request.personas() != null && !request.personas().isEmpty()) {
+      for (int i = 0; i < request.personas().size(); i++) {
+        CrearOrdenRequest.PersonaRequest personaReq = request.personas().get(i);
+
+        OrdenPersona nuevaPersona = OrdenPersona.builder()
+            .orden(orden)
+            .nombre(personaReq.nombre())
+            .color(personaReq.color() != null ? personaReq.color() : generarColorAleatorio())
+            .ordenVisualizacion(i)
+            .activo(true)
+            .build();
+
+        nuevaPersona = ordenPersonaRepository.save(nuevaPersona);
+
+        // Mapear ID temporal → persona real
+        mapaPersonas.put(personaReq.idTemporal(), nuevaPersona);
+      }
+    }
+
 
     for (CrearOrdenRequest.ItemRequest itemReq : request.items()) {
       Producto producto = productoRepository.findById(itemReq.productoId())
@@ -117,23 +138,9 @@ public class OrdenService {
 
       OrdenPersona persona = null;
       if (itemReq.ordenPersonaId() != null) {
-        // Usar caché si ya buscamos esta persona
-        if (personasCache.containsKey(itemReq.ordenPersonaId())) {
-          persona = personasCache.get(itemReq.ordenPersonaId());
-        } else {
-          persona = ordenPersonaRepository.findById(itemReq.ordenPersonaId())
-              .orElseThrow(() -> new ResourceNotFoundException(
-                  "Persona no encontrada: " + itemReq.ordenPersonaId()));
-
-          // Validar que pertenece a esta orden
-          if (!persona.getOrden().getId().equals(orden.getId())) {
-            throw new BusinessException("La persona no pertenece a esta orden");
-          }
-
-          personasCache.put(itemReq.ordenPersonaId(), persona);
-        }
+        persona = mapaPersonas.get(itemReq.ordenPersonaId());
+        // Si no está en el mapa, es porque no era temporal (no debería pasar)
       }
-
 
       OrdenItem item = OrdenItem.builder()
           .orden(orden)
@@ -712,5 +719,13 @@ public class OrdenService {
     } else {
       return "PENDIENTE";
     }
+  }
+
+  private String generarColorAleatorio() {
+    String[] colores = {
+        "#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6",
+        "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16"
+    };
+    return colores[new Random().nextInt(colores.length)];
   }
 }

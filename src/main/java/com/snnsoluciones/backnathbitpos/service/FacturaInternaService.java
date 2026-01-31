@@ -131,7 +131,8 @@ public class FacturaInternaService {
                 pctServicio,
                 "Orden generada desde TIQ " + numeroFactura,
                 numeroFactura,
-                itemsOrden
+                itemsOrden,
+                null
             );
 
             orden = ordenService.crearOrden(crearOrdenRequest);

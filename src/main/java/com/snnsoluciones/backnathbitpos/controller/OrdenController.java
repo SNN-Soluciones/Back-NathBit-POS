@@ -258,7 +258,8 @@ public class OrdenController {
                 BigDecimal.ZERO,  // Sin servicio para llevar
                 request.observaciones(),
                 request.ordenNumero(),
-                request.items()
+                request.items(),
+                null
             );
 
             OrdenResponse orden = ordenService.crearOrden(ordenRequest);

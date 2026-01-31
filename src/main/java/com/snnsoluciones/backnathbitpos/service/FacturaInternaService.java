@@ -260,6 +260,9 @@ public class FacturaInternaService {
                 .distinct()
                 .collect(Collectors.toList());
 
+            log.info("🔍 DEBUG - Detalles recibidos: {}", request.getDetalles().size());
+            log.info("🔍 DEBUG - ItemIds extraídos: {}", itemIds);
+
             if (!itemIds.isEmpty()) {
                 log.info("🔄 Marcando {} items como pagados de orden {}", itemIds.size(), request.getOrdenId());
                 ordenService.marcarItemsPagados(request.getOrdenId(), itemIds, factura.getId());

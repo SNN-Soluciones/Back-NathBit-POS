@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.facturainterna.*;
 import com.snnsoluciones.backnathbitpos.dto.orden.CrearOrdenRequest;
+import com.snnsoluciones.backnathbitpos.dto.orden.OrdenItemResponse;
 import com.snnsoluciones.backnathbitpos.dto.orden.OrdenResponse;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
@@ -10,6 +11,7 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import java.math.RoundingMode;
 import java.time.ZoneId;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -92,6 +94,7 @@ public class FacturaInternaService {
             }
             log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", cajero.getUsername());
         }
+
         // ===== 2) Generar el número de factura ANTES (para usarlo en la Orden) =====
         final String numeroFactura = generarNumeroFactura(empresa.getId(), sucursal.getId());
 
@@ -141,7 +144,7 @@ public class FacturaInternaService {
 
         // ===== 4) Construir y guardar la FACTURA usando el MISMO número =====
         FacturaInterna factura = FacturaInterna.builder()
-            .numero(numeroFactura)             // <<-- usar el ya generado
+            .numero(numeroFactura)
             .empresa(empresa)
             .sucursal(sucursal)
             .sesionCaja(sesionCaja)
@@ -164,7 +167,6 @@ public class FacturaInternaService {
         }
         factura.setNumeroViper(request.getNumeroViper());
 
-
         // ===== 5) Detalles de la factura =====
         BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -180,13 +182,13 @@ public class FacturaInternaService {
 
             detalle.setearDatosProducto(producto, detalleReq);
 
-                // ✅ HOTFIX: Si viene subtotal en el request, usarlo directamente
+            // ✅ HOTFIX: Si viene subtotal en el request, usarlo directamente
             if (detalleReq.getSubtotal() != null) {
                 detalle.setPrecioUnitario(detalleReq.getSubtotal().divide(detalleReq.getCantidad(), 2, RoundingMode.HALF_UP));
                 detalle.setSubtotal(detalleReq.getSubtotal());
                 detalle.setTotal(detalleReq.getSubtotal().subtract(detalle.getDescuento()));
             } else {
-                detalle.calcularTotales(); // Fallback para compatibilidad
+                detalle.calcularTotales();
             }
 
             factura.agregarDetalle(detalle);
@@ -194,7 +196,6 @@ public class FacturaInternaService {
         }
 
         // Totales
-// Totales
         factura.setSubtotal(subtotal);
         factura.setDescuento(request.getDescuento() != null ? request.getDescuento() : BigDecimal.ZERO);
         factura.setDescuentoPorcentaje(request.getDescuentoPorcentaje() != null ? request.getDescuentoPorcentaje() : BigDecimal.ZERO);
@@ -202,7 +203,6 @@ public class FacturaInternaService {
         BigDecimal impuestoServicio = BigDecimal.ZERO;
         for (FacturaInternaDetalle detalle : factura.getDetalles()) {
             if (detalle.getProducto() != null && Boolean.TRUE.equals(detalle.getProducto().getEsServicio())) {
-                // Base imponible para el servicio = total del detalle (ya con descuentos de línea)
                 BigDecimal baseImponible = detalle.getTotal();
                 BigDecimal servicioDetalle = baseImponible
                     .multiply(new BigDecimal("10"))
@@ -211,11 +211,9 @@ public class FacturaInternaService {
             }
         }
 
-
         factura.setPorcentajeServicio(BigDecimal.TEN);
         factura.setImpuestoServicio(impuestoServicio);
 
-// Total = subtotal - descuento global + impuesto de servicio
         BigDecimal totalSinDescuento = factura.getSubtotal().subtract(factura.getDescuento());
         factura.setTotal(totalSinDescuento.add(impuestoServicio));
 
@@ -254,8 +252,21 @@ public class FacturaInternaService {
         log.info("Factura interna creada: {}", factura.getNumero());
         metricaProductoService.actualizarDesdeFacturaInterna(factura);
 
+        // ✅ NUEVO - Marcar items pagados INTELIGENTEMENTE
         if (request.getOrdenId() != null) {
-            ordenService.marcarComoPagada(request.getOrdenId(), null);
+            List<Long> itemIds = request.getDetalles().stream()
+                .map(DetalleFacturaInternaRequest::getOrdenItemId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+            if (!itemIds.isEmpty()) {
+                log.info("🔄 Marcando {} items como pagados", itemIds.size());
+                ordenService.marcarItemsPagados(request.getOrdenId(), itemIds, factura.getId());
+            } else {
+                log.warn("⚠️ No se encontraron ordenItemIds - usando método legacy");
+                ordenService.marcarComoPagada(request.getOrdenId(), null);
+            }
         }
 
         return mapToResponse(factura);

@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.orden.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
 import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
+import com.snnsoluciones.backnathbitpos.enums.EstadoPagoItem;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -41,6 +42,7 @@ public class OrdenService {
   private final ProductoCompuestoSlotRepository slotRepository;
   private final SucursalRepository sucursalRepository;
   private final OrdenPersonaRepository ordenPersonaRepository;
+  private final FacturaInternaRepository facturaInternaRepository;
 
 
   @Transactional
@@ -726,6 +728,82 @@ public class OrdenService {
     } else {
       return "PENDIENTE";
     }
+  }
+
+  @Transactional
+  public Map<String, Object> marcarItemsPagados(Long ordenId, List<Long> itemIds, Long facturaInternaId) {
+    log.info("🔄 Marcando items {} de orden {} como pagados", itemIds, ordenId);
+
+    Orden orden = ordenRepository.findById(ordenId)
+        .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada"));
+
+    FacturaInterna facturaInterna = null;
+    if (facturaInternaId != null) {
+      facturaInterna = facturaInternaRepository.findById(facturaInternaId)
+          .orElseThrow(() -> new ResourceNotFoundException("Factura interna no encontrada"));
+    }
+
+    // 1. Marcar items específicos como PAGADOS
+    int itemsMarcados = 0;
+    for (Long itemId : itemIds) {
+      OrdenItem item = orden.getItems().stream()
+          .filter(i -> i.getId().equals(itemId))
+          .findFirst()
+          .orElseThrow(() -> new ResourceNotFoundException("Item " + itemId + " no encontrado en orden"));
+
+      item.setEstadoPago(EstadoPagoItem.PAGADO);
+      item.setFechaPago(LocalDateTime.now());
+
+      if (facturaInterna != null) {
+        item.setFacturaInterna(facturaInterna);
+      }
+
+      itemsMarcados++;
+    }
+
+    ordenRepository.save(orden);
+    log.info("✅ {} items marcados como PAGADOS", itemsMarcados);
+
+    // 2. Verificar cuántos items quedan pendientes
+    long itemsPendientes = orden.getItems().stream()
+        .filter(i -> i.getEstadoPago() != EstadoPagoItem.PAGADO)
+        .count();
+
+    log.info("📊 Items pendientes después del pago: {}", itemsPendientes);
+
+    // 3. Decidir si cerrar orden y mesa
+    boolean ordenCerrada = false;
+    boolean mesaLiberada = false;
+
+    if (itemsPendientes == 0) {
+      // ✅ TODO PAGADO - Cerrar orden y liberar mesa
+      log.info("🎉 Todos los items pagados - Cerrando orden {}", orden.getNumero());
+
+      orden.setEstado(EstadoOrden.PAGADA);
+      orden.setFechaCierre(LocalDateTime.now());
+      ordenRepository.save(orden);
+      ordenCerrada = true;
+
+      // Liberar mesa
+      Mesa mesa = orden.getMesa();
+      if (mesa != null) {
+        mesa.actualizarEstadoSegunOrden();
+        mesaRepository.save(mesa);
+        mesaLiberada = true;
+        log.info("🏁 Mesa {} liberada", mesa.getCodigo());
+      }
+    } else {
+      // ⚠️ PAGO PARCIAL - NO cerrar nada
+      log.info("💰 Pago parcial registrado - Quedan {} items pendientes", itemsPendientes);
+    }
+
+    // 4. Retornar resultado
+    Map<String, Object> resultado = new HashMap<>();
+    resultado.put("ordenCerrada", ordenCerrada);
+    resultado.put("itemsPendientes", itemsPendientes);
+    resultado.put("mesaLiberada", mesaLiberada);
+
+    return resultado;
   }
 
   private String generarColorAleatorio() {

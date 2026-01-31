@@ -25,4 +25,6 @@ public class DetalleFacturaInternaRequest {
     private String notas;
 
     private BigDecimal subtotal;
+
+    private Long ordenItemId; // ✅ AGREGAR esto
 }

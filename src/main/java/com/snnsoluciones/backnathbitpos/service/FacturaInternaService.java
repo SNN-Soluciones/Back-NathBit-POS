@@ -261,11 +261,10 @@ public class FacturaInternaService {
                 .collect(Collectors.toList());
 
             if (!itemIds.isEmpty()) {
-                log.info("🔄 Marcando {} items como pagados", itemIds.size());
+                log.info("🔄 Marcando {} items como pagados de orden {}", itemIds.size(), request.getOrdenId());
                 ordenService.marcarItemsPagados(request.getOrdenId(), itemIds, factura.getId());
             } else {
-                log.warn("⚠️ No se encontraron ordenItemIds - usando método legacy");
-                ordenService.marcarComoPagada(request.getOrdenId(), null);
+                log.error("❌ NO SE ENCONTRARON ordenItemId en los detalles - NO SE PUEDE MARCAR NADA");
             }
         }
 

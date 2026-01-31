@@ -95,24 +95,19 @@ public class FacturaInternaService {
             log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", cajero.getUsername());
         }
 
-        // ===== 2) Generar el número de factura ANTES (para usarlo en la Orden) =====
+        // ===== 2) Generar el número de factura =====
         final String numeroFactura = generarNumeroFactura(empresa.getId(), sucursal.getId());
 
         OrdenResponse orden;
         Long clienteId = request.getClienteId();
         String nombreCliente = request.getNombreCliente();
 
-        // 🔥 PARCHE: Si viene ordenId, usar orden existente (división de cuentas)
+        // ===== 3) Orden: Usar existente o crear nueva =====
         if (request.getOrdenId() != null) {
             log.info("🔗 Usando orden existente ID: {} para factura {}", request.getOrdenId(), numeroFactura);
             orden = ordenService.obtenerOrdenPorId(request.getOrdenId());
-
         } else {
-            // 🔥 Crear nueva orden SOLO si no viene ordenId
             log.info("📝 Creando nueva orden para factura {}", numeroFactura);
-
-            Long mesaId = null;
-            BigDecimal pctServicio = BigDecimal.ZERO;
 
             List<CrearOrdenRequest.ItemRequest> itemsOrden = request.getDetalles().stream()
                 .map(d -> new CrearOrdenRequest.ItemRequest(
@@ -126,12 +121,12 @@ public class FacturaInternaService {
                 .toList();
 
             CrearOrdenRequest crearOrdenRequest = new CrearOrdenRequest(
-                mesaId,
+                null,
                 sucursal.getId(),
                 clienteId,
                 nombreCliente,
                 1,
-                pctServicio,
+                BigDecimal.ZERO,
                 "Orden generada desde TIQ " + numeroFactura,
                 numeroFactura,
                 itemsOrden,
@@ -142,7 +137,7 @@ public class FacturaInternaService {
             log.info("✅ Orden {} creada para factura {}", orden.numero(), numeroFactura);
         }
 
-        // ===== 4) Construir y guardar la FACTURA usando el MISMO número =====
+        // ===== 4) Construir y guardar la FACTURA =====
         FacturaInterna factura = FacturaInterna.builder()
             .numero(numeroFactura)
             .empresa(empresa)
@@ -156,7 +151,6 @@ public class FacturaInternaService {
             .notas(request.getNotas())
             .build();
 
-        // Cliente opcional
         if (clienteId != null) {
             Cliente cliente = clienteRepository.findById(clienteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
@@ -182,7 +176,6 @@ public class FacturaInternaService {
 
             detalle.setearDatosProducto(producto, detalleReq);
 
-            // ✅ HOTFIX: Si viene subtotal en el request, usarlo directamente
             if (detalleReq.getSubtotal() != null) {
                 detalle.setPrecioUnitario(detalleReq.getSubtotal().divide(detalleReq.getCantidad(), 2, RoundingMode.HALF_UP));
                 detalle.setSubtotal(detalleReq.getSubtotal());
@@ -195,7 +188,7 @@ public class FacturaInternaService {
             subtotal = subtotal.add(detalle.getTotal());
         }
 
-        // Totales
+        // ===== 6) Totales =====
         factura.setSubtotal(subtotal);
         factura.setDescuento(request.getDescuento() != null ? request.getDescuento() : BigDecimal.ZERO);
         factura.setDescuentoPorcentaje(request.getDescuentoPorcentaje() != null ? request.getDescuentoPorcentaje() : BigDecimal.ZERO);
@@ -213,14 +206,12 @@ public class FacturaInternaService {
 
         factura.setPorcentajeServicio(BigDecimal.TEN);
         factura.setImpuestoServicio(impuestoServicio);
+        factura.setTotal(subtotal.subtract(factura.getDescuento()).add(impuestoServicio));
 
-        BigDecimal totalSinDescuento = factura.getSubtotal().subtract(factura.getDescuento());
-        factura.setTotal(totalSinDescuento.add(impuestoServicio));
-
-        log.info("💰 Totales factura: Subtotal={}, Descuento={}, Impuesto Servicio={}, Total={}",
+        log.info("💰 Totales: Subtotal={}, Descuento={}, Servicio={}, Total={}",
             factura.getSubtotal(), factura.getDescuento(), impuestoServicio, factura.getTotal());
 
-        // Medios de pago
+        // ===== 7) Medios de pago =====
         BigDecimal totalPagos = BigDecimal.ZERO;
         for (MedioPagoInternoRequest medioPagoReq : request.getMediosPago()) {
             FacturaInternaMedioPago medioPago = FacturaInternaMedioPago.builder()
@@ -236,7 +227,6 @@ public class FacturaInternaService {
                     .findById(medioPagoReq.getPlataformaDigitalId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                         "Plataforma digital no encontrada: " + medioPagoReq.getPlataformaDigitalId()));
-
                 medioPago.setPlataformaDigital(plataforma);
             }
 
@@ -247,27 +237,36 @@ public class FacturaInternaService {
         factura.setPagoRecibido(totalPagos);
         factura.calcularVuelto();
 
-        // Guardar
+        // ===== 8) Guardar =====
         factura = facturaInternaRepository.save(factura);
         log.info("Factura interna creada: {}", factura.getNumero());
         metricaProductoService.actualizarDesdeFacturaInterna(factura);
 
-        // ✅ NUEVO - Marcar items pagados INTELIGENTEMENTE
+        // ===== 9) Marcar items pagados si viene de una orden =====
         if (request.getOrdenId() != null) {
+            log.info("🔍 DEBUG - ordenId: {}, detalles: {}", request.getOrdenId(), request.getDetalles().size());
+
+            // Imprimir cada detalle
+            for (int i = 0; i < request.getDetalles().size(); i++) {
+                DetalleFacturaInternaRequest det = request.getDetalles().get(i);
+                log.info("🔍 Detalle[{}]: productoId={}, ordenItemId={}",
+                    i, det.getProductoId(), det.getOrdenItemId());
+            }
+
+            // Extraer ordenItemIds
             List<Long> itemIds = request.getDetalles().stream()
                 .map(DetalleFacturaInternaRequest::getOrdenItemId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
 
-            log.info("🔍 DEBUG - Detalles recibidos: {}", request.getDetalles().size());
-            log.info("🔍 DEBUG - ItemIds extraídos: {}", itemIds);
+            log.info("🔍 ItemIds extraídos: {}", itemIds);
 
             if (!itemIds.isEmpty()) {
-                log.info("🔄 Marcando {} items como pagados de orden {}", itemIds.size(), request.getOrdenId());
+                log.info("🔄 Marcando {} items como pagados", itemIds.size());
                 ordenService.marcarItemsPagados(request.getOrdenId(), itemIds, factura.getId());
             } else {
-                log.error("❌ NO SE ENCONTRARON ordenItemId en los detalles - NO SE PUEDE MARCAR NADA");
+                log.error("❌ NO SE ENCONTRARON ordenItemId - NO SE MARCARÁ NADA");
             }
         }
 

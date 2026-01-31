@@ -66,4 +66,7 @@ public class MesaLayoutDTO {
      * Estado visual 3D: "libre" o "ocupada"
      */
     private String estado3D;
+
+    private Boolean oculto;
+    private Boolean esBarra;
 }

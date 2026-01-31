@@ -96,6 +96,7 @@ public class ZonaLayoutService {
                 layout.setTipoFormaMesa(mesa.getTipoForma());
                 layout.setCapacidad(mesa.getCapacidad());
                 layout.setTipoElemento("MESA");
+                layout.setEsBarra(false);
 
                 log.debug("Mesa {} enriquecida: {} - {} personas",
                     mesa.getId(), mesa.getTipoForma(), mesa.getCapacidad());
@@ -108,6 +109,7 @@ public class ZonaLayoutService {
                 layout.setTipoFormaBarra(barra.getTipoForma());
                 layout.setCantidadSillas(barra.getCantidadSillas());
                 layout.setTipoElemento("BARRA");
+                layout.setEsBarra(true);
 
                 log.debug("Barra {} enriquecida: {} - {} sillas",
                     barra.getId(), barra.getTipoForma(), barra.getCantidadSillas());

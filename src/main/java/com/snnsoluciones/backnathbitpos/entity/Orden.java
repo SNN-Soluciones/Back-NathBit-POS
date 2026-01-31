@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
+import com.snnsoluciones.backnathbitpos.enums.EstadoPagoItem;
 import jakarta.persistence.*;
 import java.math.RoundingMode;
 import java.util.stream.Collectors;
@@ -289,7 +290,10 @@ public class Orden {
      * Verifica si todos los items están pagados
      */
     public boolean todosItemsPagados() {
-        return items.stream().allMatch(OrdenItem::estaPagado);
+        if (items == null || items.isEmpty()) {
+            return false;
+        }
+        return items.stream().allMatch(item -> item.getEstadoPago() == EstadoPagoItem.PAGADO);
     }
 
     /**

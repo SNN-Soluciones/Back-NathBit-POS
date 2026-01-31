@@ -254,6 +254,10 @@ public class FacturaInternaService {
         log.info("Factura interna creada: {}", factura.getNumero());
         metricaProductoService.actualizarDesdeFacturaInterna(factura);
 
+        if (request.getOrdenId() != null) {
+            ordenService.marcarComoPagada(request.getOrdenId(), null);
+        }
+
         return mapToResponse(factura);
     }
 

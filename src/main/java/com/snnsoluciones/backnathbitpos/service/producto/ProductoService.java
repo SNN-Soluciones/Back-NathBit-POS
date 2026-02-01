@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCreateDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoListDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoUpdateDto;
+import jakarta.validation.ValidationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
@@ -191,4 +192,27 @@ public interface ProductoService {
      * @return true si existe, false si está disponible
      */
     boolean existeCodigoBarras(String codigoBarras);
+
+    /**
+     * Buscar productos para asignar inventario inicial.
+     *
+     * VALIDACIONES:
+     * - Término debe tener al menos 3 caracteres
+     * - Solo productos con requiereInventario = true
+     * - Solo tipoInventario = SIMPLE
+     * - Solo tipos: VENTA, MIXTO, MATERIA_PRIMA
+     *
+     * @param empresaId ID de la empresa (required)
+     * @param sucursalId ID de la sucursal (optional)
+     * @param termino Texto a buscar (min 3 caracteres)
+     * @param pageable Paginación
+     * @return Página de productos que cumplen los filtros
+     * @throws ValidationException si termino < 3 caracteres
+     */
+    Page<ProductoListDto> buscarParaInventario(
+        Long empresaId,
+        Long sucursalId,
+        String termino,
+        Pageable pageable
+    );
 }

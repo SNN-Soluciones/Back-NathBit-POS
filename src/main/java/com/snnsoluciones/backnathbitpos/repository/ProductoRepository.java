@@ -565,4 +565,41 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
       @Param("termino") String termino,
       Pageable pageable
   );
+
+  /**
+   * Buscar productos para asignar inventario inicial.
+   *
+   * FILTROS OBLIGATORIOS:
+   * - requiereInventario = true
+   * - tipoInventario = SIMPLE
+   * - tipo IN (VENTA, MIXTO, MATERIA_PRIMA)
+   * - Búsqueda por nombre o código interno (LIKE)
+   * - Solo productos GLOBALES si sucursalId es null
+   * - GLOBALES + LOCALES si sucursalId tiene valor
+   *
+   * @param empresaId ID de la empresa (required)
+   * @param sucursalId ID de la sucursal (optional, null = solo globales)
+   * @param termino Texto a buscar en nombre o código (min 3 chars en service)
+   * @param pageable Paginación
+   * @return Página de productos que cumplen TODOS los filtros
+   */
+  @Query("""
+    SELECT p FROM Producto p 
+    WHERE p.empresa.id = :empresaId 
+    AND p.activo = true
+    AND p.requiereInventario = true
+    AND p.tipoInventario = 'SIMPLE'
+    AND p.tipo IN ('VENTA', 'MIXTO', 'MATERIA_PRIMA')
+    AND (p.sucursal.id IS NULL OR (:sucursalId IS NOT NULL AND p.sucursal.id = :sucursalId))
+    AND (
+        LOWER(p.nombre) LIKE LOWER(CONCAT('%', :termino, '%')) OR
+        LOWER(p.codigoInterno) LIKE LOWER(CONCAT('%', :termino, '%'))
+    )
+    """)
+  Page<Producto> buscarParaInventario(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("termino") String termino,
+      Pageable pageable
+  );
 }

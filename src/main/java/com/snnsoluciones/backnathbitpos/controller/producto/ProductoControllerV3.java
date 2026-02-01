@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -549,6 +550,111 @@ public class ProductoControllerV3 {
                 .body(ApiResponse.<Page<ProductoListDto>>builder()
                     .success(false)
                     .message("Error al listar productos: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * Buscar productos para asignar inventario inicial.
+     *
+     * FILTROS APLICADOS AUTOMÁTICAMENTE:
+     * - requiereInventario = true
+     * - tipoInventario = SIMPLE
+     * - tipo IN (VENTA, MIXTO, MATERIA_PRIMA)
+     * - activo = true
+     *
+     * VALIDACIÓN: El término debe tener al menos 3 caracteres.
+     */
+    @GetMapping("/para-inventario")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
+    @Operation(
+        summary = "Buscar productos para inventario",
+        description = """
+        Busca productos que requieren control de inventario para asignar stock inicial.
+        
+        FILTROS AUTOMÁTICOS (no configurables):
+        - Solo productos con requiereInventario = true
+        - Solo tipoInventario = SIMPLE (no lotes, ni series)
+        - Solo tipos VENTA, MIXTO o MATERIA_PRIMA (excluye COMBO y COMPUESTO)
+        - Solo productos activos
+        
+        VALIDACIÓN:
+        - El término de búsqueda debe tener mínimo 3 caracteres
+        
+        BÚSQUEDA:
+        - Busca en nombre y código interno (LIKE parcial)
+        - Case-insensitive
+        
+        Si sucursalId es null, busca solo productos GLOBALES.
+        Si sucursalId tiene valor, busca GLOBALES + LOCALES de esa sucursal.
+        """
+    )
+    public ResponseEntity<ApiResponse<Page<ProductoListDto>>> buscarParaInventario(
+        @Parameter(description = "ID de la empresa", required = true)
+        @RequestParam Long empresaId,
+
+        @Parameter(description = "ID de la sucursal (opcional)")
+        @RequestParam(required = false) Long sucursalId,
+
+        @Parameter(description = "Término de búsqueda (mínimo 3 caracteres)", required = true)
+        @RequestParam String termino,
+
+        @Parameter(description = "Número de página (0-based)")
+        @RequestParam(defaultValue = "0") int page,
+
+        @Parameter(description = "Tamaño de página")
+        @RequestParam(defaultValue = "50") int size,
+
+        @Parameter(description = "Campo para ordenar")
+        @RequestParam(defaultValue = "nombre") String sortBy,
+
+        @Parameter(description = "Dirección de ordenamiento (asc/desc)")
+        @RequestParam(defaultValue = "asc") String sortDir) {
+
+        log.debug("GET /api/v3/productos/para-inventario - empresa: {}, sucursal: {}, término: '{}'",
+            empresaId, sucursalId, termino);
+
+        try {
+            // Configurar ordenamiento
+            Sort.Direction direction = "desc".equalsIgnoreCase(sortDir)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+            Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+            // Buscar con validaciones
+            Page<ProductoListDto> productos = productoService.buscarParaInventario(
+                empresaId,
+                sucursalId,
+                termino,
+                pageable
+            );
+
+            String mensaje = productos.getTotalElements() == 0
+                ? "No se encontraron productos para inventario con el término: " + termino
+                : String.format("Se encontraron %d productos para inventario", productos.getTotalElements());
+
+            return ResponseEntity.ok(ApiResponse.<Page<ProductoListDto>>builder()
+                .success(true)
+                .message(mensaje)
+                .data(productos)
+                .build());
+
+        } catch (ValidationException e) {
+            // Validación de negocio (ej: término < 3 caracteres)
+            log.warn("Validación fallida: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.<Page<ProductoListDto>>builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build());
+
+        } catch (Exception e) {
+            // Error inesperado
+            log.error("Error buscando productos para inventario: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.<Page<ProductoListDto>>builder()
+                    .success(false)
+                    .message("Error al buscar productos: " + e.getMessage())
                     .build());
         }
     }

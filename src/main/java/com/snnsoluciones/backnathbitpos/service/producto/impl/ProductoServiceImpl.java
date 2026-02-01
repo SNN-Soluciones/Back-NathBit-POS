@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.producto.ProductoService;
 import com.snnsoluciones.backnathbitpos.service.producto.handler.*;
+import jakarta.validation.ValidationException;
 import java.math.RoundingMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -582,6 +583,41 @@ public class ProductoServiceImpl implements ProductoService {
         producto.setUpdatedAt(LocalDateTime.now());
 
         return producto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductoListDto> buscarParaInventario(
+        Long empresaId,
+        Long sucursalId,
+        String termino,
+        Pageable pageable) {
+
+        log.debug("Buscando productos para inventario - empresa: {}, sucursal: {}, término: '{}'",
+            empresaId, sucursalId, termino);
+
+        // ✅ VALIDACIÓN CRÍTICA: Mínimo 3 caracteres
+        if (termino == null || termino.trim().length() < 3) {
+            throw new ValidationException(
+                "El término de búsqueda debe tener al menos 3 caracteres"
+            );
+        }
+
+        // Limpiar y preparar término para LIKE
+        String terminoLimpio = termino.trim();
+
+        // Ejecutar búsqueda con TODOS los filtros obligatorios
+        Page<Producto> productos = productoRepository.buscarParaInventario(
+            empresaId,
+            sucursalId,
+            terminoLimpio,
+            pageable
+        );
+
+        log.debug("Encontrados {} productos para inventario", productos.getTotalElements());
+
+        // Mapear a DTO
+        return productos.map(this::convertirAListDto);
     }
 
     /**

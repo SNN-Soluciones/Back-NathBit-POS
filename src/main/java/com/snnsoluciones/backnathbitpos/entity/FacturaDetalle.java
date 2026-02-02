@@ -95,6 +95,9 @@ public class FacturaDetalle {
     @Builder.Default
     private List<FacturaDetalleImpuesto> impuestos = new ArrayList<>();
 
+    @Transient
+    private List<Long> opcionesSeleccionadas;
+
     // Métodos helper solo para agregar relaciones
 
     public void agregarDescuento(FacturaDescuento descuento) {

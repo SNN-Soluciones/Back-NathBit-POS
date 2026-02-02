@@ -14,6 +14,7 @@ import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.FacturaVentaExcelService;
 import com.snnsoluciones.backnathbitpos.service.MetricaProductoVendidoService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
+import com.snnsoluciones.backnathbitpos.service.VentaInventarioService;
 import io.hypersistence.utils.common.StringUtils;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.criteria.Predicate;
@@ -72,6 +73,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final MetricaProductoVendidoService metricaProductoService;
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
   private final StringRedisTemplate redisTemplate;
+  private final VentaInventarioService ventaInventarioService;
 
   @Override
   @Transactional
@@ -337,6 +339,15 @@ public class FacturaServiceImpl implements FacturaService {
       // Crear la cuenta por cobrar
       cuentaPorCobrarService.crearDesdeFactura(factura);
     }
+
+//    try {
+//      ventaInventarioService.descontarInventarioFactura(factura);
+//    } catch (Exception e) {
+//      log.error("Error descontando inventario de factura {}: {}",
+//          factura.getConsecutivo(), e.getMessage());
+//      // NO lanzamos el error, la factura ya se guardó
+//      // Se registró el warning en los logs
+//    }
 
     // PASO 24: Retornar la factura creada
     metricaProductoService.actualizarDesdeFactura(facturaGuardada);
@@ -716,6 +727,8 @@ public class FacturaServiceImpl implements FacturaService {
           detalle.agregarImpuesto(impuesto);
         }
       }
+
+      detalle.setOpcionesSeleccionadas(detalleReq.getOpcionesSeleccionadas());
 
       factura.agregarDetalle(detalle);
     }

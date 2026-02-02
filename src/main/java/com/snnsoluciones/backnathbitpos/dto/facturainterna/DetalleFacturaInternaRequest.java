@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.dto.facturainterna;
 
 import jakarta.validation.constraints.*;
+import java.util.List;
 import lombok.*;
 import java.math.BigDecimal;
 
@@ -27,4 +28,10 @@ public class DetalleFacturaInternaRequest {
     private BigDecimal subtotal;
 
     private Long ordenItemId; // ✅ AGREGAR esto
+
+    /**
+     * IDs de opciones seleccionadas (solo para productos COMPUESTO)
+     * Nullable para backward compatibility
+     */
+    private List<Long> opcionesSeleccionadas;
 }

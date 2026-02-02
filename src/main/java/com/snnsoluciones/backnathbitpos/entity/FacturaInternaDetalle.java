@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.entity;
 
 import com.snnsoluciones.backnathbitpos.dto.facturainterna.DetalleFacturaInternaRequest;
 import jakarta.persistence.*;
+import java.util.List;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -57,6 +58,9 @@ public class FacturaInternaDetalle {
     // ===== NOTAS =====
     @Column(name = "notas", length = 500)
     private String notas;
+
+    private List<Long> opcionesSeleccionadas;
+
 
     // ===== MÉTODOS HELPER =====
 

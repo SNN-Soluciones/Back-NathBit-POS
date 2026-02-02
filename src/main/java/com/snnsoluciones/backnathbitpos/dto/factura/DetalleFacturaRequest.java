@@ -76,4 +76,6 @@ public class DetalleFacturaRequest {
     
     @Valid
     private List<ImpuestoLineaRequest> impuestos;
+
+    private List<Long> opcionesSeleccionadas;
 }

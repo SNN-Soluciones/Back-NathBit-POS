@@ -139,9 +139,19 @@ public class OrdenService {
           : (producto.getPrecioVenta() != null ? producto.getPrecioVenta() : BigDecimal.ZERO);
 
       OrdenPersona persona = null;
+
+      // 🔥 CORRECCIÓN AQUÍ:
+      // Si el frontend envía un ID (aunque sea el temporal negativo),
+      // lo buscamos en el mapa de personas que acabamos de crear arriba.
       if (itemReq.ordenPersonaId() != null) {
         persona = mapaPersonas.get(itemReq.ordenPersonaId());
-        // Si no está en el mapa, es porque no era temporal (no debería pasar)
+
+        // Si por alguna razón no está en el mapa (ej. items agregados sin asignar persona)
+        // podrías buscarlo en el repositorio como fallback, pero para orden nueva
+        // la lógica del mapa es la correcta.
+        if (persona == null) {
+          log.warn("No se encontró la persona con ID temporal {} en el mapa de la nueva orden", itemReq.ordenPersonaId());
+        }
       }
 
       OrdenItem item = OrdenItem.builder()
@@ -151,10 +161,10 @@ public class OrdenService {
           .precioUnitario(precioUnitario)
           .tarifaImpuesto(obtenerTarifaImpuesto(producto))
           .notas(itemReq.notas())
-          .ordenPersona(persona)
+          .ordenPersona(persona) // Asignamos la entidad real recuperada del mapa
           .build();
 
-      item.calcularTotales(); // Si existe este método
+      item.calcularTotales();
       orden.getItems().add(item);
     }
 

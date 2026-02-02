@@ -73,7 +73,7 @@ public class FacturaServiceImpl implements FacturaService {
   private final MetricaProductoVendidoService metricaProductoService;
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
   private final StringRedisTemplate redisTemplate;
-  private final VentaInventarioService ventaInventarioService;
+//  private final VentaInventarioService ventaInventarioService;
 
   @Override
   @Transactional

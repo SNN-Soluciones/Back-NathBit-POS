@@ -44,7 +44,7 @@ public class FacturaInternaService {
     private final MetricaProductoVendidoService metricaProductoService;
     private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
     private final MesaRepository mesaRepository;
-    private final VentaInventarioService ventaInventarioService;
+//    private final VentaInventarioService ventaInventarioService;
 
     /**
      * Busca una factura interna por su número
@@ -244,13 +244,13 @@ public class FacturaInternaService {
         factura = facturaInternaRepository.save(factura);
         log.info("Factura interna creada: {}", factura.getNumero());
 
-        try {
-            ventaInventarioService.descontarInventarioFacturaInterna(factura);
-        } catch (Exception e) {
-            log.error("Error descontando inventario de factura interna {}: {}",
-                factura.getNumero(), e.getMessage());
-            // NO lanzamos el error, la factura ya se guardó
-        }
+//        try {
+//            ventaInventarioService.descontarInventarioFacturaInterna(factura);
+//        } catch (Exception e) {
+//            log.error("Error descontando inventario de factura interna {}: {}",
+//                factura.getNumero(), e.getMessage());
+//            // NO lanzamos el error, la factura ya se guardó
+//        }
         metricaProductoService.actualizarDesdeFacturaInterna(factura);
 
         // ===== 9) Marcar items pagados si viene de una orden =====

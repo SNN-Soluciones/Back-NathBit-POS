@@ -17,13 +17,13 @@ public class HaciendaProxyController {
 
     private static final String HACIENDA_API_BASE = "https://api.hacienda.go.cr";
     private static final String GOMETA_API_BASE = "https://apis.gometa.org";
+    private static final String GOMETA_API_KEY = "iyPaqeKXKCCgwKX"; // luego lo pasamos a properties
 
-    /**
-     * Proxy para consultar información de contribuyente en Hacienda
-     */
     @GetMapping("/contribuyente/{identificacion}")
     public ResponseEntity<?> getContribuyente(@PathVariable String identificacion) {
+
         try {
+            // ---------- INTENTO HACIENDA ----------
             String url = HACIENDA_API_BASE + "/fe/ae?identificacion=" + identificacion;
 
             HttpHeaders headers = new HttpHeaders();
@@ -39,39 +39,36 @@ public class HaciendaProxyController {
 
             return ResponseEntity.ok(response.getBody());
 
-        } catch (HttpClientErrorException e) {
-            // Manejar errores específicos como 429 (Too Many Requests)
-            if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(Map.of(
-                        "error", "Demasiadas solicitudes. Por favor intente más tarde.",
-                        "status", 429
-                    ));
-            }
-            return ResponseEntity.status(e.getStatusCode())
-                .body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Error al consultar Hacienda: " + e.getMessage()));
+        } catch (Exception ex) {
+            // ---------- FALLBACK A GOMETA ----------
+            return consultarGometa(identificacion, ex);
         }
     }
 
     /**
-     * Proxy para consultar información en Gometa (API alternativo)
+     * Fallback Gometa
      */
-    @GetMapping("/gometa/{identificacion}")
-    public ResponseEntity<?> getContribuyenteGometa(@PathVariable String identificacion) {
+    private ResponseEntity<?> consultarGometa(String identificacion, Exception causa) {
         try {
-            // Necesitas obtener la API key de Gometa
-            String apiKey = "iyPaqeKXKCCgwKX";
-            String url = GOMETA_API_BASE + "/cedulas/" + identificacion + "&key=" + apiKey;
+            String url = GOMETA_API_BASE + "/cedulas/" + identificacion + "?key=" + GOMETA_API_KEY;
 
-            ResponseEntity<Object> response = restTemplate.getForEntity(url, Object.class);
-            return ResponseEntity.ok(response.getBody());
+            ResponseEntity<Object> response =
+                restTemplate.getForEntity(url, Object.class);
+
+            return ResponseEntity.ok(
+                Map.of(
+                    "fuente", "gometa",
+                    "data", response.getBody()
+                )
+            );
 
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Error al consultar Gometa: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of(
+                    "error", "No fue posible consultar ni Hacienda ni Gometa",
+                    "detalleHacienda", causa.getMessage(),
+                    "detalleGometa", e.getMessage()
+                ));
         }
     }
 }

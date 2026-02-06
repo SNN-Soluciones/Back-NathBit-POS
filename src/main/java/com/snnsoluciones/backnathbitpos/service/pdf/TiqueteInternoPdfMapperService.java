@@ -351,7 +351,10 @@ public class TiqueteInternoPdfMapperService {
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < mediosPago.size(); i++) {
       FacturaInternaMedioPago medio = mediosPago.get(i);
-      sb.append(traducirMedioPago(MedioPago.valueOf(medio.getTipo())));
+
+      // ✅ CAMBIO: Usar normalizador en lugar de valueOf directo
+      MedioPago medioPagoEnum = normalizarTipoPago(medio.getTipo());
+      sb.append(traducirMedioPago(medioPagoEnum));
       sb.append(": ");
       sb.append(DECIMAL_FORMAT.format(medio.getMonto()));
 
@@ -374,6 +377,12 @@ public class TiqueteInternoPdfMapperService {
         return "Cheque";
       case SINPE_MOVIL:
         return "SINPE Móvil";
+      case RECAUDADO_TERCEROS:
+        return "Recaudado por terceros";
+      case PLATAFORMA_DIGITAL:
+        return "Plataforma Digital";
+      case OTROS:
+        return "Otros";
       default:
         return medioPago.name();
     }
@@ -546,6 +555,55 @@ public class TiqueteInternoPdfMapperService {
 
     public void setSubtotal(BigDecimal subtotal) {
       this.subtotal = subtotal;
+    }
+  }
+
+  /**
+   * Normaliza el valor String del tipo de pago al enum MedioPago
+   * Maneja compatibilidad con valores legacy: SINPE, DEPOSITO, etc.
+   */
+  private MedioPago normalizarTipoPago(String tipo) {
+    if (tipo == null || tipo.trim().isEmpty()) {
+      return MedioPago.EFECTIVO;
+    }
+
+    String tipoUpper = tipo.trim().toUpperCase();
+
+    // Mapeo de valores legacy a los del enum
+    switch (tipoUpper) {
+      case "SINPE":
+      case "SINPE_MOVIL":
+        return MedioPago.SINPE_MOVIL;
+
+      case "DEPOSITO":
+      case "TRANSFERENCIA_BANCARIA":
+      case "TRANSFERENCIA":
+        return MedioPago.TRANSFERENCIA;
+
+      case "EFECTIVO":
+        return MedioPago.EFECTIVO;
+
+      case "TARJETA":
+        return MedioPago.TARJETA;
+
+      case "CHEQUE":
+        return MedioPago.CHEQUE;
+
+      case "RECAUDADO_TERCEROS":
+        return MedioPago.RECAUDADO_TERCEROS;
+
+      case "PLATAFORMA_DIGITAL":
+        return MedioPago.PLATAFORMA_DIGITAL;
+
+      default:
+        // Si no coincide con nada conocido, intentar valueOf
+        // Si falla, retornar OTROS
+        try {
+          return MedioPago.valueOf(tipoUpper);
+        } catch (IllegalArgumentException e) {
+          log.warn("Tipo de pago desconocido '{}', usando OTROS", tipo);
+          return MedioPago.OTROS;
+        }
     }
   }
 }

@@ -100,7 +100,7 @@ public class ProductoCompuestoController {
     log.info("Actualizando producto compuesto: {}", productoId);
 
     try {
-      ProductoCompuestoDto resultado = compuestoService.actualizarCompleto(empresaId, productoId, request);
+      ProductoCompuestoDto resultado = compuestoService.actualizar(empresaId, productoId, request);
       return ResponseEntity.ok(ApiResponse.ok("Configuración actualizada", resultado));
     } catch (Exception e) {
       return ResponseEntity.badRequest()

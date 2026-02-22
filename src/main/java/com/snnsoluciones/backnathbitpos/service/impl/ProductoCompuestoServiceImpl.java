@@ -1474,17 +1474,16 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
         .orden(configuracion.getOrden())
         .activa(configuracion.getActiva())
         .opcionTriggerId(opcionTrigger != null ? opcionTrigger.getId() : null)
+        .opcionTriggerNombre(opcionTrigger != null ? opcionTrigger.getNombreEfectivo() : null)  // ⭐ AGREGADO
         .opcionTriggerProductoId(opcionTrigger != null && opcionTrigger.getProducto() != null ? opcionTrigger.getProducto().getId() : null)
         .opcionTriggerProductoNombre(opcionTrigger != null && opcionTrigger.getProducto() != null ? opcionTrigger.getProducto().getNombre() : null)
         .createdAt(configuracion.getCreatedAt())
         .updatedAt(configuracion.getUpdatedAt())
         .build();
 
-    // ⭐ Cargar slots - MANEJAR ERRORES para evitar rollback
     List<SlotConfiguracionDTO> slotsDto = new ArrayList<>();
 
     try {
-      // Obtener slots de la configuración
       List<ProductoCompuestoSlotConfiguracion> slots = configuracion.getSlots();
 
       if (slots != null && !slots.isEmpty()) {
@@ -1496,16 +1495,16 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
               } catch (Exception e) {
                 log.error("Error convirtiendo slot config {}: {}",
                     slotConfig.getId(), e.getMessage());
-                return null; // Retornar null si falla
+                return null;
               }
             })
-            .filter(Objects::nonNull) // Filtrar nulls
+            .filter(Objects::nonNull)
             .collect(Collectors.toList());
       }
     } catch (Exception e) {
       log.error("Error cargando slots de configuración {}: {}",
           configuracion.getId(), e.getMessage());
-      slotsDto = new ArrayList<>(); // Lista vacía si falla
+      slotsDto = new ArrayList<>();
     }
 
     dto.setSlots(slotsDto);

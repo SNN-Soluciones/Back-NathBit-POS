@@ -24,6 +24,8 @@ public class ProductoCompuestoConfiguracionDTO {
     // Relación con producto compuesto
     private Long compuestoId;
 
+    private String opcionTriggerNombre; // ⭐ agregar si no existe
+
     // Datos básicos
     private String nombre;
     private String descripcion;

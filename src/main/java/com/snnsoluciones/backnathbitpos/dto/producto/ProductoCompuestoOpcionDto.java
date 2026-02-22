@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 public class ProductoCompuestoOpcionDto {
     private Long id;
     private Long productoId;
+    private String nombre;         // ⭐ agregar si no existe
     private String productoNombre;
     private String productoCodigo;
     private BigDecimal precioAdicional; // Puede ser positivo o negativo

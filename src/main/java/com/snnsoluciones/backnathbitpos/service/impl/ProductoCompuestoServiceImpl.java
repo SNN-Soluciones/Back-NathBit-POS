@@ -942,18 +942,17 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
    * Convierte ProductoCompuestoOpcion a DTO
    */
   private ProductoCompuestoOpcionDto convertirOpcionADto(ProductoCompuestoOpcion opcion) {
-    ProductoCompuestoOpcionDto dto = ProductoCompuestoOpcionDto.builder()
+    return ProductoCompuestoOpcionDto.builder()
         .id(opcion.getId())
-        .productoId(opcion.getProducto().getId())
-        .productoNombre(opcion.getProducto().getNombre())
-        .productoCodigo(opcion.getProducto().getCodigoInterno())
+        .nombre(opcion.getNombre())                    // ⭐ AGREGAR - para opciones sin producto
+        .productoId(opcion.getProducto() != null ? opcion.getProducto().getId() : null)
+        .productoNombre(opcion.getNombreEfectivo())    // getNombreEfectivo maneja ambos casos
+        .productoCodigo(opcion.getProducto() != null ? opcion.getProducto().getCodigoInterno() : null)
         .precioAdicional(opcion.getPrecioAdicional() != null ? opcion.getPrecioAdicional() : BigDecimal.ZERO)
         .esDefault(opcion.getEsDefault())
         .disponible(opcion.getDisponible())
         .orden(opcion.getOrden())
         .build();
-
-    return dto;
   }
 
   /**

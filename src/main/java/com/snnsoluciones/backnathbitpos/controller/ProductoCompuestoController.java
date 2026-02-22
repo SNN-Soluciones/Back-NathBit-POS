@@ -92,8 +92,6 @@ public class ProductoCompuestoController {
 
   @PutMapping
   @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN')")
-  @Operation(summary = "Actualizar configuración",
-      description = "Actualiza slots y opciones del producto compuesto")
   public ResponseEntity<ApiResponse<ProductoCompuestoDto>> actualizar(
       @RequestParam Long empresaId,
       @PathVariable Long productoId,
@@ -102,10 +100,7 @@ public class ProductoCompuestoController {
     log.info("Actualizando producto compuesto: {}", productoId);
 
     try {
-      // Primero eliminar configuración existente
-      compuestoService.eliminar(empresaId, productoId);
-      // Recrear con nueva configuración
-      ProductoCompuestoDto resultado = compuestoService.crear(empresaId, productoId, request);
+      ProductoCompuestoDto resultado = compuestoService.actualizarCompleto(empresaId, productoId, request);
       return ResponseEntity.ok(ApiResponse.ok("Configuración actualizada", resultado));
     } catch (Exception e) {
       return ResponseEntity.badRequest()

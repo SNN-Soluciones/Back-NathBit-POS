@@ -18,6 +18,7 @@ public interface ProductoCompuestoService {
 
     // ========== OPERACIONES CRUD ==========
     ProductoCompuestoDto crear(Long empresaId, Long productoId, ProductoCompuestoRequest request);
+    ProductoCompuestoDto actualizarCompleto(Long empresaId, Long productoId, ProductoCompuestoRequest request);
 
     ProductoCompuestoDto actualizar(Long empresaId, Long productoId, ProductoCompuestoRequest request);
 

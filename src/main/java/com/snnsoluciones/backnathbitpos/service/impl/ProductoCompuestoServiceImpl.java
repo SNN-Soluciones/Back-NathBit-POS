@@ -25,6 +25,8 @@ import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.service.ProductoCompuestoService;
 import com.snnsoluciones.backnathbitpos.service.ProductoInventarioService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -57,6 +59,8 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
   private final ProductoCompuestoSlotConfiguracionRepository slotConfigRepository;
   private final ProductoCompuestoOpcionRepository productoCompuestoOpcionRepository;
   private final SlotSeleccionValidator slotSeleccionValidator;
+  @PersistenceContext
+  private EntityManager entityManager;
 
   @Override
   @Transactional
@@ -1359,6 +1363,15 @@ public class ProductoCompuestoServiceImpl implements ProductoCompuestoService {
           .slots(new ArrayList<>())
           .build();
     }
+  }
+
+  @Transactional
+  @Override
+  public ProductoCompuestoDto actualizarCompleto(Long empresaId, Long productoId, ProductoCompuestoRequest request) {
+    eliminar(empresaId, productoId);
+    entityManager.flush();   // ⭐ forzar commit del delete
+    entityManager.clear();   // ⭐ limpiar sesión de Hibernate
+    return crear(empresaId, productoId, request);
   }
 
   @Override

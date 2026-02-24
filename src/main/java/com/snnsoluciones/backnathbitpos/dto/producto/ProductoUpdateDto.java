@@ -59,6 +59,9 @@ public class ProductoUpdateDto {
     @Schema(description = "ID de la familia de productos", example = "3")
     private Long familiaId;
 
+    @Schema(description = "Si true, quita la familia del producto (familiaId se ignora)", example = "false")
+    private Boolean removerFamilia;
+
     // ==================== CABYS (HACIENDA CR) ====================
 
     @Schema(description = "ID del registro empresa-CABYS", example = "42")

@@ -663,6 +663,18 @@ public class ProductoServiceImpl implements ProductoService {
         if (dto.getActivo() != null) {
             producto.setActivo(dto.getActivo());
         }
+        if (dto.getFamiliaId() != null) {
+            FamiliaProducto familia = familiaRepository.findById(dto.getFamiliaId())
+                .orElseThrow(() -> new ResourceNotFoundException("Familia no encontrada"));
+            producto.setFamilia(familia);
+        }
+        if (dto.getFamiliaId() != null) {
+            FamiliaProducto familia = familiaRepository.findById(dto.getFamiliaId())
+                .orElseThrow(() -> new ResourceNotFoundException("Familia no encontrada"));
+            producto.setFamilia(familia);
+        } else if (Boolean.TRUE.equals(dto.getRemoverFamilia())) {
+            producto.setFamilia(null);
+        }
     }
 
     /**

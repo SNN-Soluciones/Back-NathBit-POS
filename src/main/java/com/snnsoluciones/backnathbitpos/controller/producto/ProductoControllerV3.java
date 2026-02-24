@@ -658,4 +658,56 @@ public class ProductoControllerV3 {
                     .build());
         }
     }
+
+    /**
+     * Buscar productos por familia
+     * Agregar después de listarPorCategoria en ProductoControllerV3.java
+     */
+    @GetMapping("/familia/{familiaId}")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO', 'MESERO')")
+    @Operation(
+        summary = "Listar productos por familia",
+        description = "Lista productos de una familia específica con filtros de empresa/sucursal"
+    )
+    public ResponseEntity<ApiResponse<Page<ProductoListDto>>> listarPorFamilia(
+        @PathVariable Long familiaId,
+        @RequestParam Long empresaId,
+        @RequestParam(required = false) Long sucursalId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "200") int size,
+        @RequestParam(defaultValue = "nombre") String sortBy,
+        @RequestParam(defaultValue = "asc") String sortDir) {
+
+        log.debug("GET /api/v3/productos/familia/{} - empresa: {}, sucursal: {}",
+            familiaId, empresaId, sucursalId);
+
+        try {
+            Sort.Direction direction = "desc".equalsIgnoreCase(sortDir)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+
+            Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+            Page<ProductoListDto> productos = productoService.buscarPorFamilia(
+                familiaId,
+                empresaId,
+                sucursalId,
+                pageable
+            );
+
+            return ResponseEntity.ok(ApiResponse.<Page<ProductoListDto>>builder()
+                .success(true)
+                .message(String.format("Se encontraron %d productos en la familia", productos.getTotalElements()))
+                .data(productos)
+                .build());
+
+        } catch (Exception e) {
+            log.error("Error listando productos por familia {}: {}", familiaId, e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.<Page<ProductoListDto>>builder()
+                    .success(false)
+                    .message("Error al listar productos: " + e.getMessage())
+                    .build());
+        }
+    }
 }

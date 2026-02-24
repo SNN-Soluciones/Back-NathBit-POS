@@ -71,7 +71,7 @@ public class SlotV2 {
     private Integer maxTiposDiferentes;
 
     @Convert(converter = MapJsonConverter.class)
-    @Column(columnDefinition = "jsonb")
+    @Column(columnDefinition = "text")  // ← text en vez de jsonb
     private Map<Long, BigDecimal> preciosOverride = new HashMap<>();
 
     @Column(nullable = false)

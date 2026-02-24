@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.dto.compuestoV2;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,4 +27,5 @@ public class SlotV2Dto {
     private String familiaNombre;
     private BigDecimal precioAdicionalPorOpcion;
     private List<OpcionV2Dto> opciones;
+    private Map<Long, BigDecimal> preciosOverride;
 }

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 
 @Data
@@ -30,6 +31,7 @@ public class ProductoCompuestoV2Request {
         private Long familiaId;
         private BigDecimal precioAdicionalPorOpcion;
         private List<OpcionV2Request> opciones;
+        private Map<Long, BigDecimal> preciosOverride;
     }
 
     @Data

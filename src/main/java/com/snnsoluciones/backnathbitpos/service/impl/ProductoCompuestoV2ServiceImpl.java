@@ -18,6 +18,7 @@ import com.snnsoluciones.backnathbitpos.repository.ProductoCompuestoV2Repository
 import com.snnsoluciones.backnathbitpos.repository.ProductoRepository;
 import com.snnsoluciones.backnathbitpos.repository.SlotV2Repository;
 import com.snnsoluciones.backnathbitpos.service.ProductoCompuestoV2Service;
+import java.util.HashMap;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -166,6 +167,7 @@ public class ProductoCompuestoV2ServiceImpl implements ProductoCompuestoV2Servic
             .familia(familia)
             .precioAdicionalPorOpcion(request.getPrecioAdicionalPorOpcion())
             .opciones(new ArrayList<>())
+            .preciosOverride(request.getPreciosOverride() != null ? request.getPreciosOverride() : new HashMap<>())
             .build();
 
         slot = slotRepository.save(slot);
@@ -259,6 +261,7 @@ public class ProductoCompuestoV2ServiceImpl implements ProductoCompuestoV2Servic
             .opciones(slot.getOpciones().stream()
                 .map(this::convertirOpcionADto)
                 .collect(Collectors.toList()))
+            .preciosOverride(slot.getPreciosOverride())
             .build();
     }
 

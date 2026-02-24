@@ -1,7 +1,9 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.mappers.MapJsonConverter;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -68,7 +70,7 @@ public class SlotV2 {
     @Column
     private Integer maxTiposDiferentes;
 
-    @Type(type = "jsonb")
+    @Convert(converter = MapJsonConverter.class)
     @Column(columnDefinition = "jsonb")
     private Map<Long, BigDecimal> preciosOverride = new HashMap<>();
 

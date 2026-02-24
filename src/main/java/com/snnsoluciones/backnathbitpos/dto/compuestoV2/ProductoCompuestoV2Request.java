@@ -23,6 +23,8 @@ public class ProductoCompuestoV2Request {
         private Boolean esRequerido = true;
         private Integer cantidadMinima = 1;
         private Integer cantidadMaxima = 1;
+        private Boolean permiteCantidadPorOpcion = false;
+        private Integer maxTiposDiferentes;
         private Integer orden;
         private Boolean usaFamilia = false;
         private Long familiaId;

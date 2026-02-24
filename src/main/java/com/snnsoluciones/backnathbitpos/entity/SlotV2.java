@@ -60,6 +60,12 @@ public class SlotV2 {
     private Integer cantidadMaxima;
 
     @Column(nullable = false)
+    private Boolean permiteCantidadPorOpcion = false;
+
+    @Column
+    private Integer maxTiposDiferentes;
+
+    @Column(nullable = false)
     private Integer orden;
 
     // Familia

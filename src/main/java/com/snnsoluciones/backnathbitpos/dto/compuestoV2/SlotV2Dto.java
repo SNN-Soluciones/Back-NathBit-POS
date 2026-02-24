@@ -18,6 +18,8 @@ public class SlotV2Dto {
     private Boolean esRequerido;
     private Integer cantidadMinima;
     private Integer cantidadMaxima;
+    private Boolean permiteCantidadPorOpcion;
+    private Integer maxTiposDiferentes;
     private Integer orden;
     private Boolean usaFamilia;
     private Long familiaId;

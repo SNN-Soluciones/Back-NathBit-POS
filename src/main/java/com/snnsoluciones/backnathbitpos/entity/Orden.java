@@ -209,6 +209,7 @@ public class Orden {
     }
 
     public boolean puedeModificarse() {
+        //cambio clave
     return estado != EstadoOrden.PAGADA && estado != EstadoOrden.ANULADA;
 }
 

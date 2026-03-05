@@ -33,7 +33,8 @@ public class PagoService {
     private final UsuarioRepository usuarioRepository;
     private final SesionCajaService sesionCajaService;
     private final ClienteService clienteService;
-    
+    private final NotaCreditoFinancieraService notaCreditoFinancieraService;
+
     /**
      * Registrar un pago a una cuenta por cobrar
      */
@@ -98,7 +99,13 @@ public class PagoService {
         actualizarSaldoCliente(cuenta.getCliente().getId());
         
         log.info("Pago registrado: {} por monto {}", pago.getNumeroRecibo(), pago.getMonto());
-        
+
+        try {
+            notaCreditoFinancieraService.emitirPorAbono(pago);
+        } catch (Exception e) {
+            log.error("Error emitiendo NC financiera para pago {}: {}", pago.getId(), e.getMessage());
+        }
+
         return pago;
     }
     

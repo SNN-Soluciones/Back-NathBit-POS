@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.cxc.CuentaPorCobrarDTO;
 import com.snnsoluciones.backnathbitpos.entity.Cliente;
 import com.snnsoluciones.backnathbitpos.entity.CuentaPorCobrar;
 import com.snnsoluciones.backnathbitpos.entity.Factura;
+import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
 import com.snnsoluciones.backnathbitpos.enums.EstadoCuenta;
 import com.snnsoluciones.backnathbitpos.enums.mh.CondicionVenta;
 import com.snnsoluciones.backnathbitpos.repository.CuentaPorCobrarRepository;
@@ -85,7 +86,7 @@ public class CuentaPorCobrarService {
 
         // Buscar solo cuentas que necesitan actualización
         List<CuentaPorCobrar> cuentasPorActualizar = cuentaPorCobrarRepository
-            .findVencidas(null, hoy); // Modificar query para aceptar null y buscar todas
+            .findVencidas(hoy); // Modificar query para aceptar null y buscar todas
 
         int actualizadas = 0;
         int clientesBloqueados = 0;
@@ -241,5 +242,53 @@ public class CuentaPorCobrarService {
         dto.setMontoAbonado(montoAbonado);
 
         return dto;
+    }
+
+    /**
+     * Crear cuenta por cobrar desde una factura INTERNA a crédito
+     */
+    public void crearDesdeFacturaInterna(FacturaInterna factura) {
+        if (!"CREDITO".equals(factura.getCondicionVenta())) {
+            log.info("Factura interna {} no es a crédito, no se crea cuenta por cobrar",
+                factura.getNumero());
+            return;
+        }
+
+        if (factura.getCliente() == null) {
+            log.warn("Factura interna {} es a crédito pero no tiene cliente asignado",
+                factura.getNumero());
+            return;
+        }
+
+        if (cuentaPorCobrarRepository.findByFacturaInternaId(factura.getId()).isPresent()) {
+            log.warn("Ya existe cuenta por cobrar para factura interna {}", factura.getId());
+            return;
+        }
+
+        Integer diasCredito = factura.getPlazoCredito() != null
+            ? factura.getPlazoCredito()
+            : factura.getCliente().getDiasCredito();
+
+        if (diasCredito == null || diasCredito <= 0) {
+            diasCredito = 30; // fallback razonable
+        }
+
+        CuentaPorCobrar cuenta = new CuentaPorCobrar();
+        cuenta.setFacturaInterna(factura);
+        cuenta.setCliente(factura.getCliente());
+        cuenta.setEmpresa(factura.getEmpresa());
+        cuenta.setFechaEmision(LocalDate.now());
+        cuenta.setFechaVencimiento(LocalDate.now().plusDays(diasCredito));
+        cuenta.setMontoOriginal(factura.getTotal());
+        cuenta.setSaldo(factura.getTotal());
+        cuenta.setEstado(EstadoCuenta.VIGENTE);
+        cuenta.setDiasMora(0);
+        cuenta.setTipoOrigen("INTERNA");
+
+        cuentaPorCobrarRepository.save(cuenta);
+        actualizarSaldoCliente(factura.getCliente().getId());
+
+        log.info("Cuenta por cobrar creada para factura interna {} por monto {}",
+            factura.getNumero(), cuenta.getMontoOriginal());
     }
 }

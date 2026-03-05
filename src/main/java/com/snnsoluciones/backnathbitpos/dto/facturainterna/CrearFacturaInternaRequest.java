@@ -63,4 +63,7 @@ public class CrearFacturaInternaRequest {
     @DecimalMin(value = "0.0", message = "El porcentaje no puede ser negativo")
     @DecimalMax(value = "100.0", message = "El porcentaje no puede ser mayor a 100")
     private BigDecimal porcentajeServicio;
+
+    private String condicionVenta; // "CONTADO" o "CREDITO"
+    private Integer plazoCredito;
 }

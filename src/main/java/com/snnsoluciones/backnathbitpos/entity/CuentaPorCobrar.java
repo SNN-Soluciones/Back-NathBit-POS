@@ -22,8 +22,15 @@ public class CuentaPorCobrar {
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "factura_id", nullable = false)
+    @JoinColumn(name = "factura_id")
     private Factura factura;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "factura_interna_id")
+    private FacturaInterna facturaInterna;
+
+    @Column(name = "tipo_origen", length = 20, nullable = false)
+    private String tipoOrigen = "ELECTRONICA";
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cliente_id", nullable = false)

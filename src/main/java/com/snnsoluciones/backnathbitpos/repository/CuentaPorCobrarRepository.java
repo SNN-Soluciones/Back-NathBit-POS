@@ -51,4 +51,6 @@ public interface CuentaPorCobrarRepository extends JpaRepository<CuentaPorCobrar
     @Query("SELECT c FROM CuentaPorCobrar c WHERE " +
         "c.fechaVencimiento < :fecha AND c.estado IN ('VIGENTE', 'PARCIAL')")
     List<CuentaPorCobrar> findVencidas(@Param("fecha") LocalDate fecha);
+
+    Optional<CuentaPorCobrar> findByFacturaInternaId(Long facturaInternaId);
 }

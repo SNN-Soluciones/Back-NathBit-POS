@@ -9,6 +9,8 @@ public enum CodigoReferencia {
     CORRIGE_MONTO("03", "Corrige monto"),
     REFERENCIA_OTRO("04", "Referencia a otro documento"),
     SUSTITUYE_PROVISIONAL("05", "Sustituye comprobante provisional"),
+    NOTA_CREDITO_FINANCIERA("09", "Nota de crédito financiera"),   // ← AGREGAR
+    NOTA_DEBITO_FINANCIERA("10", "Nota de débito financiera"),     // ← AGREGAR
     OTROS("99", "Otros");
     
     private final String codigo;

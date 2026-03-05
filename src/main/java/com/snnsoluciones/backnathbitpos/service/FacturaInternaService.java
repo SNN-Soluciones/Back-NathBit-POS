@@ -44,6 +44,7 @@ public class FacturaInternaService {
     private final MetricaProductoVendidoService metricaProductoService;
     private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
     private final MesaRepository mesaRepository;
+    private final CuentaPorCobrarService cuentaPorCobrarService;
 //    private final VentaInventarioService ventaInventarioService;
 
     /**
@@ -162,6 +163,16 @@ public class FacturaInternaService {
         }
         factura.setNumeroViper(request.getNumeroViper());
 
+        String condicion = request.getCondicionVenta() != null
+            ? request.getCondicionVenta().toUpperCase() : "CONTADO";
+        factura.setCondicionVenta(condicion);
+        factura.setPlazoCredito(request.getPlazoCredito());
+
+// Si es crédito, no marcar como PAGADA sino como CREDITO_PENDIENTE
+        if ("CREDITO".equals(condicion)) {
+            factura.setEstado("CREDITO_PENDIENTE");
+        }
+
         // ===== 5) Detalles de la factura =====
         BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -252,6 +263,13 @@ public class FacturaInternaService {
 //            // NO lanzamos el error, la factura ya se guardó
 //        }
         metricaProductoService.actualizarDesdeFacturaInterna(factura);
+
+        try {
+            cuentaPorCobrarService.crearDesdeFacturaInterna(factura);
+        } catch (Exception e) {
+            log.error("Error creando cuenta por cobrar para factura interna {}: {}",
+                factura.getNumero(), e.getMessage());
+        }
 
         // ===== 9) Marcar items pagados si viene de una orden =====
         if (request.getOrdenId() != null) {

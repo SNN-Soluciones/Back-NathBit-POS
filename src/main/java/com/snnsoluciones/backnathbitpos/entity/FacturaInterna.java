@@ -134,6 +134,13 @@ public class FacturaInterna {
     @JoinColumn(name = "sesion_caja_id", nullable = true)
     private SesionCaja sesionCaja;
 
+    @Column(name = "condicion_venta", length = 20)
+    @Builder.Default
+    private String condicionVenta = "CONTADO";
+
+    @Column(name = "plazo_credito")
+    private Integer plazoCredito;
+
     // ===== AUDITORÍA =====
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

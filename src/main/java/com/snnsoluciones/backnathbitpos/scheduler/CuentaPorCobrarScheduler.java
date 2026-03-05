@@ -1,4 +1,4 @@
-package com.snnsoluciones.backnathbitpos.dto.pago;
+package com.snnsoluciones.backnathbitpos.scheduler;
 
 import com.snnsoluciones.backnathbitpos.service.CuentaPorCobrarService;
 import lombok.RequiredArgsConstructor;

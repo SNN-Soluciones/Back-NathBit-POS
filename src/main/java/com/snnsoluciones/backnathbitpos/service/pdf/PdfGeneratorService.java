@@ -43,6 +43,9 @@ public class PdfGeneratorService {
         "tiquete_interno_80mm",
         "detalle_tiquete_interno_80mm",
 
+        //RECIBOS
+        "recibo_pago_80mm",
+
         //REPORTES
         "ventas_basico",
         "ventas_por_tipo_pago",

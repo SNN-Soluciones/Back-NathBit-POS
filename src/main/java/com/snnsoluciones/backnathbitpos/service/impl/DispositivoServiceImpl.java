@@ -2,19 +2,22 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.snnsoluciones.backnathbitpos.dto.dispositivo.*;
 import com.snnsoluciones.backnathbitpos.entity.*;
+import com.snnsoluciones.backnathbitpos.entity.global.Dispositivo;
+import com.snnsoluciones.backnathbitpos.entity.global.Tenant;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
-import com.snnsoluciones.backnathbitpos.repository.DispositivoPdvRepository;
 import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.TokenRegistroRepository;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioEmpresaRepository;
-import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
-import com.snnsoluciones.backnathbitpos.service.AsistenciaService;
+import com.snnsoluciones.backnathbitpos.repository.global.DispositivoRepository;
+import com.snnsoluciones.backnathbitpos.repository.global.TenantRepository;
 import com.snnsoluciones.backnathbitpos.service.DispositivoService;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,16 +35,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DispositivoServiceImpl implements DispositivoService {
 
-    private final DispositivoPdvRepository dispositivoRepository;
     private final TokenRegistroRepository tokenRegistroRepository;
+    private final DispositivoRepository dispositivoRepository;   // ← el de global
+    private final TenantRepository tenantRepository;             // ← NUEVO
     private final EmpresaRepository empresaRepository;
     private final SucursalRepository sucursalRepository;
-    private final UsuarioRepository usuarioRepository;
-    private final UsuarioEmpresaRepository usuarioEmpresaRepository;
-    private final AsistenciaService asistenciaService;
+    private final JdbcTemplate jdbcTemplate;                     // ← NUEVO (para query usuarios del tenant)
 
-    private static final String BASE_URL_FRONTEND = "https://pos.nathbit.com"; // TODO: Mover a properties
-    private static final String BASE_URL_API = "https://api.nathbit.com"; // TODO: Mover a properties
+    @Value("${app.base-url:http://localhost:8081}")
+    private String BASE_URL_API;
+
+    @Value("${app.frontend-url:http://localhost:4200}")
+    private String BASE_URL_FRONTEND;
 
     @Override
     @Transactional
@@ -112,62 +117,47 @@ public class DispositivoServiceImpl implements DispositivoService {
             .findByTokenAndValidoTrue(request.getToken(), LocalDateTime.now())
             .orElseThrow(() -> new BadRequestException("Token inválido, expirado o ya utilizado"));
 
-        // 2. Verificar si ya existe un dispositivo con ese UUID
-        if (request.getDeviceInfo() != null && request.getDeviceInfo().getUuid() != null) {
-            Optional<DispositivoPdv> dispositivoExistente = dispositivoRepository
-                .findByUuidHardware(request.getDeviceInfo().getUuid());
+        // 2. Buscar tenant por empresa legacy
+        Tenant tenant = tenantRepository.findByEmpresaLegacyId(tokenRegistro.getEmpresa().getId())
+            .orElseThrow(() -> new BadRequestException(
+                "La empresa aún no está migrada al sistema multi-tenant"));
 
-            if (dispositivoExistente.isPresent()) {
-                throw new BadRequestException("Este dispositivo ya está registrado");
-            }
-        }
-
-        // 3. Generar device token permanente
-        String deviceToken = generarDeviceToken();
-
-        // 4. Crear dispositivo
-        DispositivoPdv dispositivo = DispositivoPdv.builder()
-            .deviceToken(deviceToken)
+        // 3. Crear dispositivo
+        Dispositivo dispositivo = Dispositivo.builder()
+            .tenant(tenant)
             .nombre(tokenRegistro.getNombreDispositivo())
-            .empresa(tokenRegistro.getEmpresa())
-            .sucursal(tokenRegistro.getSucursal())
+            .token(Dispositivo.generarToken())
+            .sucursalId(tokenRegistro.getSucursal().getId())
             .sucursalNombre(tokenRegistro.getSucursal().getNombre())
             .activo(true)
-            .ultimoUso(LocalDateTime.now())
             .ipRegistro(ipCliente)
             .build();
 
-        // 5. Agregar info técnica del dispositivo si está disponible
         if (request.getDeviceInfo() != null) {
-            dispositivo.setUuidHardware(request.getDeviceInfo().getUuid());
-            dispositivo.setModelo(request.getDeviceInfo().getModelo());
-            dispositivo.setPlataforma(request.getDeviceInfo().getPlataforma());
+            dispositivo.setPlataforma(request.getDeviceInfo().getPlataforma() != null
+                ? Dispositivo.Plataforma.valueOf(request.getDeviceInfo().getPlataforma().toUpperCase())
+                : null);
             dispositivo.setUserAgent(request.getDeviceInfo().getUserAgent());
         }
 
         dispositivoRepository.save(dispositivo);
 
-        // 6. Marcar token como usado
+        // 4. Marcar token como usado
         tokenRegistro.marcarComoUsado();
         tokenRegistroRepository.save(tokenRegistro);
 
-        log.info("Dispositivo registrado exitosamente - ID: {}, Token: {}",
-            dispositivo.getId(), deviceToken);
-
-        // 7. Construir response
-        Empresa empresa = tokenRegistro.getEmpresa();
-        Sucursal sucursal = tokenRegistro.getSucursal();
+        log.info("Dispositivo registrado - ID: {}, Tenant: {}", dispositivo.getId(), tenant.getCodigo());
 
         return RegistrarDispositivoResponse.builder()
-            .deviceToken(deviceToken)
+            .deviceToken(dispositivo.getToken())
             .empresa(RegistrarDispositivoResponse.EmpresaInfo.builder()
-                .id(empresa.getId())
-                .nombre(empresa.getNombreRazonSocial())
-                .nombreComercial(empresa.getNombreComercial())
+                .id(tokenRegistro.getEmpresa().getId())
+                .nombre(tokenRegistro.getEmpresa().getNombreRazonSocial())
+                .nombreComercial(tokenRegistro.getEmpresa().getNombreComercial())
                 .build())
             .sucursal(RegistrarDispositivoResponse.SucursalInfo.builder()
-                .id(sucursal.getId())
-                .nombre(sucursal.getNombre())
+                .id(tokenRegistro.getSucursal().getId())
+                .nombre(tokenRegistro.getSucursal().getNombre())
                 .build())
             .build();
     }
@@ -178,152 +168,128 @@ public class DispositivoServiceImpl implements DispositivoService {
         log.info("Obteniendo usuarios para dispositivo - includeRoot: {}", includeRoot);
 
         // 1. Validar dispositivo
-        DispositivoPdv dispositivo = dispositivoRepository.findByDeviceTokenAndActivoTrue(deviceToken)
+        Dispositivo dispositivo = dispositivoRepository.findByTokenAndActivoTrue(deviceToken)
             .orElseThrow(() -> new UnauthorizedException("Dispositivo no autorizado o inactivo"));
 
-        // 2. Actualizar último uso (en transacción aparte para no afectar la consulta)
+        // 2. Registrar uso
         registrarUso(dispositivo);
 
-        // 3. Obtener usuarios de la empresa
-        List<Usuario> usuarios = usuarioRepository.findByEmpresaId(dispositivo.getEmpresa().getId())
-            .stream()
-            .filter(u -> {
-                // Usuario debe estar activo
-                if (!u.getActivo()) {
-                    return false;
-                }
+        // 3. Obtener usuarios del schema del tenant via JDBC
+        String schemaName = dispositivo.getTenant().getSchemaName();
+        String sql = String.format("""
+        SELECT id, nombre, apellidos, rol, pin_longitud, requiere_cambio_pin
+        FROM %s.usuarios
+        WHERE activo = true AND pin IS NOT NULL
+        """, schemaName);
 
-                // Usuario debe tener PIN configurado
-                if (u.getPin() == null) {
-                    return false;
-                }
+        List<DispositivoUsuariosResponse.UsuarioInfo> usuariosInfo = jdbcTemplate.query(sql, (rs, rowNum) -> {
+            String rol = rs.getString("rol");
 
-                // Si includeRoot es false, excluir ROOT y SOPORTE
-                if (!includeRoot && u.esRolSistema()) {
-                    return false;
-                }
+            if (!Boolean.TRUE.equals(includeRoot) && (rol.equals("ROOT") || rol.equals("SOPORTE"))) {
+                return null;
+            }
 
-                return true;
-            })
+            return DispositivoUsuariosResponse.UsuarioInfo.builder()
+                .id(rs.getLong("id"))
+                .nombre(rs.getString("nombre"))
+                .apellidos(rs.getString("apellidos"))
+                .nombreCompleto(rs.getString("nombre") + " " +
+                    (rs.getString("apellidos") != null ? rs.getString("apellidos") : ""))
+                .rol(rol)
+                .longitudPin(rs.getInt("pin_longitud"))
+                .requiereCambioPin(rs.getBoolean("requiere_cambio_pin"))
+                .tienePin(true)
+                .build();
+        });
+
+        List<DispositivoUsuariosResponse.UsuarioInfo> usuariosFiltrados = usuariosInfo.stream()
+            .filter(Objects::nonNull)
             .collect(Collectors.toList());
 
-        log.info("Usuarios encontrados: {} (includeRoot: {})", usuarios.size(), includeRoot);
+        log.info("Usuarios encontrados: {}", usuariosFiltrados.size());
 
-        // 4. Mapear a DTOs con campos adicionales
-        List<DispositivoUsuariosResponse.UsuarioInfo> usuariosInfo = usuarios.stream()
-            .map(u -> {
-                // Calcular longitud del PIN
-                Integer longitudPin = null;
-                if (u.getPin() != null) {
-                    longitudPin = u.getPinLongitud() != null
-                        ? u.getPinLongitud()
-                        : u.getPin().length(); // Fallback si no está en pinLongitud
-                }
-
-                // Verificar si tiene entrada activa hoy
-                boolean tieneEntradaActiva = asistenciaService.tieneEntradaActiva(u.getId());
-
-                // Generar color de avatar
-                String avatarColor = generarAvatarColor(u.getId());
-
-                return DispositivoUsuariosResponse.UsuarioInfo.builder()
-                    .id(u.getId())
-                    .nombre(u.getNombre())
-                    .apellidos(u.getApellidos())
-                    .nombreCompleto(u.getNombre() + " " + (u.getApellidos() != null ? u.getApellidos() : ""))
-                    .rol(u.getRol().name())
-                    .tienePin(u.getPin() != null)
-                    .longitudPin(longitudPin)
-                    .tieneEntradaActiva(tieneEntradaActiva)
-                    .avatarColor(avatarColor)
-                    .build();
-            })
-            .collect(Collectors.toList());
-
-        // 5. Construir response
         return DispositivoUsuariosResponse.builder()
             .empresa(DispositivoUsuariosResponse.EmpresaInfo.builder()
-                .id(dispositivo.getEmpresa().getId())
-                .nombreComercial(dispositivo.getEmpresa().getNombreComercial())
+                .id(dispositivo.getTenant().getId())
+                .nombreComercial(dispositivo.getTenant().getNombre())
                 .build())
             .sucursal(DispositivoUsuariosResponse.SucursalInfo.builder()
-                .id(dispositivo.getSucursal().getId())
-                .nombre(dispositivo.getSucursal().getNombre())
+                .id(dispositivo.getSucursalId())
+                .nombre(dispositivo.getSucursalNombre())
                 .build())
-            .usuarios(usuariosInfo)
+            .usuarios(usuariosFiltrados)
             .build();
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Optional<DispositivoPdv> buscarPorToken(String deviceToken) {
-        return dispositivoRepository.findByDeviceToken(deviceToken);
+    public Optional<Dispositivo> buscarPorToken(String deviceToken) {
+        return dispositivoRepository.findByToken(deviceToken);
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Optional<DispositivoPdv> buscarActivoPorToken(String deviceToken) {
-        return dispositivoRepository.findByDeviceTokenAndActivoTrue(deviceToken);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<DispositivoDTO> listarDispositivosPorEmpresa(Long empresaId) {
-        List<DispositivoPdv> dispositivos = dispositivoRepository.findByEmpresaIdWithRelations(empresaId);
-
-        return dispositivos.stream()
-            .map(this::mapToDTO)
-            .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<SucursalSimpleDTO> listarSucursalesPorEmpresa(Long empresaId) {
-        // Validar que empresa existe
-        Empresa empresa = empresaRepository.findById(empresaId)
-            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
-
-        // Obtener sucursales activas
-        List<Sucursal> sucursales = sucursalRepository.findAllByEmpresaIdAndActivaTrue(empresaId);
-
-        // Mapear a DTO simple
-        return sucursales.stream()
-            .map(s -> SucursalSimpleDTO.builder()
-                .id(s.getId())
-                .nombre(s.getNombre())
-                .build())
-            .collect(Collectors.toList());
+    public Optional<Dispositivo> buscarActivoPorToken(String deviceToken) {
+        return dispositivoRepository.findByTokenAndActivoTrue(deviceToken);
     }
 
     @Override
     @Transactional
     public void activarDispositivo(Long id) {
-        DispositivoPdv dispositivo = dispositivoRepository.findById(id)
+        Dispositivo dispositivo = dispositivoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Dispositivo no encontrado"));
-
         dispositivo.activar();
         dispositivoRepository.save(dispositivo);
-
         log.info("Dispositivo activado - ID: {}", id);
     }
 
     @Override
     @Transactional
     public void desactivarDispositivo(Long id) {
-        DispositivoPdv dispositivo = dispositivoRepository.findById(id)
+        Dispositivo dispositivo = dispositivoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Dispositivo no encontrado"));
-
         dispositivo.desactivar();
         dispositivoRepository.save(dispositivo);
-
         log.info("Dispositivo desactivado - ID: {}", id);
     }
 
     @Override
     @Transactional
-    public void registrarUso(DispositivoPdv dispositivo) {
+    public void registrarUso(Dispositivo dispositivo) {
         dispositivo.registrarUso();
         dispositivoRepository.save(dispositivo);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DispositivoDTO> listarDispositivosPorEmpresa(Long empresaId) {
+        Tenant tenant = tenantRepository.findByEmpresaLegacyId(empresaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Empresa no migrada a tenant"));
+
+        return dispositivoRepository.findByTenantId(tenant.getId()).stream()
+            .map(d -> DispositivoDTO.builder()
+                .id(d.getId())
+                .nombre(d.getNombre())
+                .deviceToken(d.getToken())
+                .sucursalId(d.getSucursalId())
+                .sucursalNombre(d.getSucursalNombre())
+                .activo(d.getActivo())
+                .ultimoUso(d.getUltimoUso())
+                .plataforma(d.getPlataforma() != null ? d.getPlataforma().name() : null)
+                .build())
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SucursalSimpleDTO> listarSucursalesPorEmpresa(Long empresaId) {
+        Empresa empresa = empresaRepository.findById(empresaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
+
+        return sucursalRepository.findAllByEmpresaIdAndActivaTrue(empresaId).stream()
+            .map(s -> SucursalSimpleDTO.builder()
+                .id(s.getId())
+                .nombre(s.getNombre())
+                .build())
+            .collect(Collectors.toList());
     }
 
     // ==================== MÉTODOS PRIVADOS ====================
@@ -334,52 +300,5 @@ public class DispositivoServiceImpl implements DispositivoService {
     private String generarTokenUnico() {
         String uuid = UUID.randomUUID().toString().substring(0, 13);
         return "REG-" + uuid;
-    }
-
-    /**
-     * Genera un device token permanente (formato: DEV-uuid)
-     */
-    private String generarDeviceToken() {
-        String uuid = UUID.randomUUID().toString();
-        return "DEV-" + uuid;
-    }
-
-    /**
-     * Mapea Dispositivo a DTO
-     */
-    private DispositivoDTO mapToDTO(DispositivoPdv dispositivo) {
-        return DispositivoDTO.builder()
-            .id(dispositivo.getId())
-            .deviceToken(dispositivo.getDeviceToken())
-            .nombre(dispositivo.getNombre())
-            .empresaId(dispositivo.getEmpresa().getId())
-            .empresaNombre(dispositivo.getEmpresa().getNombreComercial())
-            .sucursalId(dispositivo.getSucursal().getId())
-            .sucursalNombre(dispositivo.getSucursal().getNombre())
-            .modelo(dispositivo.getModelo())
-            .plataforma(dispositivo.getPlataforma())
-            .activo(dispositivo.getActivo())
-            .ultimoUso(dispositivo.getUltimoUso())
-            .createdAt(dispositivo.getCreatedAt())
-            .build();
-    }
-
-    /**
-     * Genera un color único para el avatar del usuario basado en su ID
-     */
-    private String generarAvatarColor(Long usuarioId) {
-        String[] colores = {
-            "#9333ea", // purple
-            "#3b82f6", // blue
-            "#10b981", // green
-            "#f59e0b", // amber
-            "#ef4444", // red
-            "#8b5cf6", // violet
-            "#06b6d4", // cyan
-            "#f97316"  // orange
-        };
-
-        int index = (int) (usuarioId % colores.length);
-        return colores[index];
     }
 }

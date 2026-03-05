@@ -3,19 +3,22 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 import com.snnsoluciones.backnathbitpos.dto.auth.CambiarPinRequest;
 import com.snnsoluciones.backnathbitpos.dto.auth.LoginPdvRequest;
 import com.snnsoluciones.backnathbitpos.dto.auth.LoginPdvResponse;
-import com.snnsoluciones.backnathbitpos.entity.DispositivoPdv;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
+import com.snnsoluciones.backnathbitpos.entity.global.Dispositivo;
 import com.snnsoluciones.backnathbitpos.enums.RolNombre;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
-import com.snnsoluciones.backnathbitpos.repository.DispositivoPdvRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
+import com.snnsoluciones.backnathbitpos.repository.global.DispositivoRepository;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.AsistenciaService;
 import com.snnsoluciones.backnathbitpos.service.AuthPdvService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,94 +33,93 @@ import java.security.SecureRandom;
 @RequiredArgsConstructor
 public class AuthPdvServiceImpl implements AuthPdvService {
 
-    private final DispositivoPdvRepository dispositivoPdvRepository;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final AsistenciaService asistenciaService; // ← AGREGADO
+    private final DispositivoRepository dispositivoRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
     @Override
     @Transactional
     public LoginPdvResponse loginConPin(String deviceToken, LoginPdvRequest request) {
-        log.info("Login PDV - Usuario: {}, Dispositivo: {}", request.getUsuarioId(), deviceToken);
+        log.info("Login PDV - Usuario: {}", request.getUsuarioId());
 
         // 1. Validar dispositivo
-        DispositivoPdv dispositivoPdv = dispositivoPdvRepository.findByDeviceTokenAndActivoTrue(deviceToken)
+        Dispositivo dispositivo = dispositivoRepository.findByTokenAndActivoTrueWithTenant(deviceToken)
             .orElseThrow(() -> new UnauthorizedException("Dispositivo no autorizado o inactivo"));
 
-        // 2. Buscar usuario
-        Usuario usuario = usuarioRepository.findById(request.getUsuarioId())
-            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        // 2. Obtener usuario del schema del tenant via JDBC
+        String schemaName = dispositivo.getTenant().getSchemaName();
+        String sql = String.format("""
+        SELECT id, nombre, apellidos, email, rol, pin, pin_longitud, 
+               requiere_cambio_pin, activo
+        FROM %s.usuarios WHERE id = ?
+        """, schemaName);
 
-        // 3. Validar que el usuario está activo
-        if (!usuario.getActivo()) {
+        Map<String, Object> row;
+        try {
+            row = jdbcTemplate.queryForMap(sql, request.getUsuarioId());
+        } catch (EmptyResultDataAccessException e) {
+            throw new ResourceNotFoundException("Usuario no encontrado");
+        }
+
+        // 3. Validar activo
+        if (!Boolean.TRUE.equals(row.get("activo"))) {
             throw new UnauthorizedException("Usuario inactivo");
         }
 
-        // 4. Validar que el usuario tiene PIN configurado
-        if (usuario.getPin() == null || usuario.getPin().isEmpty()) {
+        // 4. Validar PIN configurado
+        String pinHash = (String) row.get("pin");
+        if (pinHash == null || pinHash.isEmpty()) {
             throw new BadRequestException("El usuario no tiene PIN configurado");
         }
 
-        // 5. Validar que el usuario pertenece a la empresa del dispositivo
-        boolean perteneceAEmpresa = usuario.getUsuarioEmpresas().stream()
-            .anyMatch(ue -> ue.getEmpresa().getId().equals(dispositivoPdv.getEmpresa().getId()));
-
-        if (!perteneceAEmpresa && !usuario.esRolSistema()) {
-            throw new UnauthorizedException("El usuario no pertenece a esta empresa");
-        }
-
-        // 6. Validar PIN
-        if (!passwordEncoder.matches(request.getPin(), usuario.getPin())) {
-            log.warn("PIN incorrecto para usuario: {}", usuario.getId());
+        // 5. Validar PIN
+        if (!passwordEncoder.matches(request.getPin(), pinHash)) {
+            log.warn("PIN incorrecto para usuario: {}", request.getUsuarioId());
             throw new UnauthorizedException("PIN incorrecto");
         }
 
-        // 7. Actualizar último uso del dispositivo
-        dispositivoPdv.registrarUso();
-        dispositivoPdvRepository.save(dispositivoPdv);
+        // 6. Registrar uso del dispositivo
+        dispositivo.registrarUso();
+        dispositivoRepository.save(dispositivo);
 
-        // 8. Generar JWT con contexto de empresa y sucursal
+        // 7. Generar JWT
         String token = jwtTokenProvider.generateTokenWithContext(
-            usuario.getId(),
-            usuario.getEmail(),
-            usuario.getRol().name(),
-            dispositivoPdv.getEmpresa().getId(),
-            dispositivoPdv.getSucursal().getId()
+            (Long) row.get("id"),
+            (String) row.get("email"),
+            (String) row.get("rol"),
+            dispositivo.getTenant().getEmpresaLegacyId(),
+            dispositivo.getSucursalId()
         );
 
-        // 9. Determinar ruta de destino según rol
-        String rutaDestino = determinarRutaDestino(usuario, dispositivoPdv);
+        boolean requiereCambioPin = Boolean.TRUE.equals(row.get("requiere_cambio_pin"));
 
-        // 10. Verificar si tiene entrada activa ← AGREGADO
-        boolean tieneEntradaActiva = asistenciaService.tieneEntradaActiva(usuario.getId());
+        log.info("Login exitoso - Usuario: {}, Tenant: {}",
+            request.getUsuarioId(), dispositivo.getTenant().getCodigo());
 
-        log.info("Login exitoso - Usuario: {}, Rol: {}", usuario.getId(), usuario.getRol());
-
-        // 11. Construir response ← ACTUALIZADO
         return LoginPdvResponse.builder()
             .token(token)
             .usuario(LoginPdvResponse.UsuarioInfo.builder()
-                .id(usuario.getId())
-                .nombre(usuario.getNombre())
-                .apellidos(usuario.getApellidos())
-                .nombreCompleto(usuario.getNombre() + " " + (usuario.getApellidos() != null ? usuario.getApellidos() : ""))
-                .email(usuario.getEmail())
-                .rol(usuario.getRol().name())
+                .id((Long) row.get("id"))
+                .nombre((String) row.get("nombre"))
+                .apellidos((String) row.get("apellidos"))
+                .nombreCompleto(row.get("nombre") + " " +
+                    (row.get("apellidos") != null ? row.get("apellidos") : ""))
+                .email((String) row.get("email"))
+                .rol((String) row.get("rol"))
                 .build())
             .empresa(LoginPdvResponse.EmpresaInfo.builder()
-                .id(dispositivoPdv.getEmpresa().getId())
-                .nombreComercial(dispositivoPdv.getEmpresa().getNombreComercial())
+                .id(dispositivo.getTenant().getEmpresaLegacyId())
+                .nombreComercial(dispositivo.getTenant().getNombre())
                 .build())
             .sucursal(LoginPdvResponse.SucursalInfo.builder()
-                .id(dispositivoPdv.getSucursal().getId())
-                .nombre(dispositivoPdv.getSucursal().getNombre())
+                .id(dispositivo.getSucursalId())
+                .nombre(dispositivo.getSucursalNombre())
                 .build())
-            .requiereCambioPin(usuario.getRequiereCambioPin())
-            .tieneEntradaActiva(tieneEntradaActiva) // ← AGREGADO
-            .rutaDestino(rutaDestino)
+            .requiereCambioPin(requiereCambioPin)
             .build();
     }
 
@@ -192,27 +194,5 @@ public class AuthPdvServiceImpl implements AuthPdvService {
 
         // Resetear es lo mismo que generar uno nuevo
         return generarPinAleatorio(usuarioId);
-    }
-
-    // ==================== MÉTODOS PRIVADOS ====================
-
-    /**
-     * Determina la ruta de destino según el rol del usuario
-     */
-    private String determinarRutaDestino(Usuario usuario, DispositivoPdv dispositivoPdv) {
-        RolNombre rol = usuario.getRol();
-
-        // SUPER_ADMIN y ADMIN van al dashboard de su empresa
-        if (rol == RolNombre.SUPER_ADMIN || rol == RolNombre.ADMIN) {
-            return "/dashboard-admin-empresa/" + dispositivoPdv.getEmpresa().getId();
-        }
-
-        // ROOT y SOPORTE van al dashboard global
-        if (rol == RolNombre.ROOT || rol == RolNombre.SOPORTE) {
-            return "/dashboard-admin";
-        }
-
-        // Roles operativos (CAJERO, MESERO, etc.) van al POS
-        return "/pos";
     }
 }

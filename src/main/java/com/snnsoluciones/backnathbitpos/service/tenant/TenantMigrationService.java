@@ -37,22 +37,17 @@ public class TenantMigrationService {
      * Cada grupo se ejecuta secuencialmente
      */
     private static final List<TablaConfig> TABLAS_A_MIGRAR = List.of(
-        // ========== NIVEL 0: Sucursales (base) ==========
-        new TablaConfig("sucursales", "empresa_id = ?", true),
 
-        // ========== NIVEL 1: Entidades principales ==========
+        // ═══ NIVEL 0: Base directa de empresa ═══
+        new TablaConfig("sucursales", "empresa_id = ?", true),
         new TablaConfig("categorias_producto", "empresa_id = ?", false),
         new TablaConfig("familia_producto", "empresa_id = ?", false),
-        new TablaConfig("clientes_ubicaciones",
-            "id IN (SELECT ubicacion_id FROM public.clientes WHERE empresa_id = ? AND ubicacion_id IS NOT NULL)", false),
-        new TablaConfig("clientes", "empresa_id = ?", true),
-        new TablaConfig("proveedores", "empresa_id = ?", false),
         new TablaConfig("empresa_actividades", "empresa_id = ?", false),
         new TablaConfig("empresa_cabys", "empresa_id = ?", false),
         new TablaConfig("empresa_config_hacienda", "empresa_id = ?", false),
         new TablaConfig("plataforma_digital_config", "empresa_id = ?", false),
 
-        // ========== NIVEL 2: Dependientes de sucursal ==========
+        // ═══ NIVEL 1: Dependen de sucursal ═══
         new TablaConfig("terminales",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", true),
         new TablaConfig("sucursal_receptor_smtp",
@@ -61,20 +56,31 @@ public class TenantMigrationService {
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("consecutivos",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("codigos_verificacion",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("tokens_registro", "empresa_id = ?", false),
 
-        // ========== NIVEL 3: Mesas y zonas ==========
+        // ═══ NIVEL 2: Zona / Mesa / Barra ═══
         new TablaConfig("zona_mesa",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("zona_layout",
-            "zona_id IN (SELECT zm.id FROM public.zona_mesa zm " +
-                "JOIN public.sucursales s ON zm.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+            "zona_id IN (SELECT id FROM public.zona_mesa WHERE sucursal_id IN " +
+                "(SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
         new TablaConfig("mesa",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-        new TablaConfig("mesa_estado_hist",
-            "mesa_id IN (SELECT m.id FROM public.mesa m " +
-                "JOIN public.sucursales s ON m.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+            "zona_id IN (SELECT id FROM public.zona_mesa WHERE sucursal_id IN " +
+                "(SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+        new TablaConfig("barra",
+            "zona_id IN (SELECT id FROM public.zona_mesa WHERE sucursal_id IN " +
+                "(SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+        new TablaConfig("silla_barra",
+            "barra_id IN (SELECT b.id FROM public.barra b JOIN public.zona_mesa zm ON b.zona_id = zm.id " +
+                "JOIN public.sucursales s ON zm.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
 
-        // ========== NIVEL 4: Clientes relacionados ==========
+        // ═══ NIVEL 3: Clientes y Proveedores ═══
+        new TablaConfig("clientes_ubicaciones",
+            "id IN (SELECT ubicacion_id FROM public.clientes WHERE empresa_id = ? AND ubicacion_id IS NOT NULL)", false),
+        new TablaConfig("clientes", "empresa_id = ?", true),
+        new TablaConfig("proveedores", "empresa_id = ?", false),
         new TablaConfig("cliente_emails",
             "cliente_id IN (SELECT id FROM public.clientes WHERE empresa_id = ?)", false),
         new TablaConfig("cliente_actividades",
@@ -85,22 +91,22 @@ public class TenantMigrationService {
             "exoneracion_id IN (SELECT ce.id FROM public.clientes_exoneraciones ce " +
                 "JOIN public.clientes c ON ce.cliente_id = c.id WHERE c.empresa_id = ?)", false),
 
-        // ========== NIVEL 5: Productos ==========
+        // ═══ NIVEL 4: Productos ═══
         new TablaConfig("productos", "empresa_id = ?", true),
-        new TablaConfig("producto_sucursal",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("producto_categoria",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("producto_impuestos",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("producto_codigo_proveedor",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
-        new TablaConfig("productos_inventarios",
+        new TablaConfig("productos_recetas", "empresa_id = ?", false),
+        new TablaConfig("receta_ingredientes",
+            "receta_id IN (SELECT id FROM public.productos_recetas WHERE empresa_id = ?)", false),
+        new TablaConfig("producto_combo",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
-        new TablaConfig("producto_movimientos",
-            "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
-
-        // ========== NIVEL 6: Productos compuestos ==========
+        new TablaConfig("producto_combo_item",
+            "combo_id IN (SELECT pc.id FROM public.producto_combo pc " +
+                "JOIN public.productos p ON pc.producto_id = p.id WHERE p.empresa_id = ?)", false),
         new TablaConfig("producto_compuesto",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("producto_compuesto_slot",
@@ -117,69 +123,49 @@ public class TenantMigrationService {
             "configuracion_id IN (SELECT pcc.id FROM public.producto_compuesto_configuracion pcc " +
                 "JOIN public.producto_compuesto pc ON pcc.compuesto_id = pc.id " +
                 "JOIN public.productos p ON pc.producto_id = p.id WHERE p.empresa_id = ?)", false),
-
-        // ========== NIVEL 7: Combos ==========
-        new TablaConfig("producto_combo",
+        new TablaConfig("producto_compuesto_v2",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
-        new TablaConfig("producto_combo_item",
-            "combo_id IN (SELECT pc.id FROM public.producto_combo pc " +
+        new TablaConfig("slot_v2",
+            "compuesto_id IN (SELECT id FROM public.producto_compuesto_v2 WHERE " +
+                "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?))", false),
+        new TablaConfig("opcion_v2",
+            "slot_id IN (SELECT sv.id FROM public.slot_v2 sv " +
+                "JOIN public.producto_compuesto_v2 pc ON sv.compuesto_id = pc.id " +
                 "JOIN public.productos p ON pc.producto_id = p.id WHERE p.empresa_id = ?)", false),
 
-        // ========== NIVEL 8: Recetas ==========
-        new TablaConfig("productos_recetas",
-            "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
-        new TablaConfig("receta_ingredientes",
-            "receta_id IN (SELECT pr.id FROM public.productos_recetas pr " +
-                "JOIN public.productos p ON pr.producto_id = p.id WHERE p.empresa_id = ?)", false),
-
-        // ========== NIVEL 9: Usuarios ==========
+        // ═══ NIVEL 5: Usuarios del tenant ═══
         new TablaConfig("usuarios",
-            "id IN (SELECT usuario_id FROM public.usuarios_empresas WHERE empresa_id = ?)", true),
-        new TablaConfig("usuarios_empresas", "empresa_id = ?", false),
+            "empresa_id = ?", true),
         new TablaConfig("usuarios_sucursales",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("usuario_registro",
+            "usuario_id IN (SELECT id FROM public.usuarios WHERE empresa_id = ?)", false),
+        new TablaConfig("asistencias", "empresa_id = ?", false),
 
-        // ========== NIVEL 10: Sesiones de caja ==========
+        // ═══ NIVEL 6: Sesiones de caja ═══
         new TablaConfig("sesiones_caja",
-            "terminal_id IN (SELECT t.id FROM public.terminales t " +
-                "JOIN public.sucursales s ON t.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("sesion_caja_denominacion",
-            "sesion_caja_id IN (SELECT sc.id FROM public.sesiones_caja sc " +
-                "JOIN public.terminales t ON sc.terminal_id = t.id " +
-                "JOIN public.sucursales s ON t.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("movimientos_caja",
-            "sesion_caja_id IN (SELECT sc.id FROM public.sesiones_caja sc " +
-                "JOIN public.terminales t ON sc.terminal_id = t.id " +
-                "JOIN public.sucursales s ON t.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+            "sesion_caja_id IN (SELECT id FROM public.sesiones_caja WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
         new TablaConfig("cierre_datafono",
-            "sesion_caja_id IN (SELECT sc.id FROM public.sesiones_caja sc " +
-                "JOIN public.terminales t ON sc.terminal_id = t.id " +
-                "JOIN public.sucursales s ON t.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+            "sesion_caja_id IN (SELECT id FROM public.sesiones_caja WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+        new TablaConfig("movimientos_caja",
+            "sesion_caja_id IN (SELECT id FROM public.sesiones_caja WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
 
-        // ========== NIVEL 11: Órdenes ==========
-        new TablaConfig("ordenes",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-        new TablaConfig("orden_items",
-            "orden_id IN (SELECT o.id FROM public.ordenes o " +
-                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("orden_item_opciones",
-            "orden_item_id IN (SELECT oi.id FROM public.orden_items oi " +
-                "JOIN public.ordenes o ON oi.orden_id = o.id " +
-                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-
-        // ========== NIVEL 12: Facturas electrónicas ==========
+        // ═══ NIVEL 7: Facturas ═══
         new TablaConfig("facturas",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", true),
         new TablaConfig("factura_detalles",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_descuentos",
-            "factura_detalle_id IN (SELECT fd.id FROM public.factura_detalles fd " +
-                "JOIN public.facturas f ON fd.factura_id = f.id " +
+            "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_detalle_impuesto",
-            "detalle_id IN (SELECT fd.id FROM public.factura_detalles fd " +
-                "JOIN public.facturas f ON fd.factura_id = f.id " +
+            "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_medios_pago",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
@@ -193,68 +179,82 @@ public class TenantMigrationService {
         new TablaConfig("factura_bitacora",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("orden_facturas",
-            "factura_id IN (SELECT f.id FROM public.facturas f " +
-                "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-
-        // ========== NIVEL 13: Facturas internas ==========
-        new TablaConfig("factura_interna",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("factura_interna", "empresa_id = ?", false),
         new TablaConfig("factura_interna_detalle",
-            "factura_interna_id IN (SELECT fi.id FROM public.factura_interna fi " +
-                "JOIN public.sucursales s ON fi.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+            "factura_interna_id IN (SELECT id FROM public.factura_interna WHERE empresa_id = ?)", false),
         new TablaConfig("factura_interna_medios_pago",
-            "factura_interna_id IN (SELECT fi.id FROM public.factura_interna fi " +
-                "JOIN public.sucursales s ON fi.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("orden_facturas_internas",
-            "factura_interna_id IN (SELECT fi.id FROM public.factura_interna fi " +
-                "JOIN public.sucursales s ON fi.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-
-        // ========== NIVEL 14: Facturas de recepción (compras) ==========
+            "factura_interna_id IN (SELECT id FROM public.factura_interna WHERE empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion", "empresa_id = ?", false),
         new TablaConfig("facturas_recepcion_detalles",
             "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion_descuentos",
-            "factura_recepcion_detalle_id IN (SELECT frd.id FROM public.facturas_recepcion_detalles frd " +
-                "JOIN public.facturas_recepcion fr ON frd.factura_recepcion_id = fr.id WHERE fr.empresa_id = ?)", false),
+            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion_detalles_impuestos",
-            "factura_recepcion_detalle_id IN (SELECT frd.id FROM public.facturas_recepcion_detalles frd " +
-                "JOIN public.facturas_recepcion fr ON frd.factura_recepcion_id = fr.id WHERE fr.empresa_id = ?)", false),
+            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion_medios_pago",
             "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion_otros_cargos",
             "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion_referencias",
             "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
-
-        // ========== NIVEL 15: Compras ==========
-        new TablaConfig("compras", "empresa_id = ?", false),
-        new TablaConfig("compra_detalles",
-            "compra_id IN (SELECT id FROM public.compras WHERE empresa_id = ?)", false),
         new TablaConfig("mensaje_receptor_bitacora",
             "compra_id IN (SELECT id FROM public.compras WHERE empresa_id = ?)", false),
 
-        // ========== NIVEL 16: Pagos y cuentas ==========
+        // ═══ NIVEL 8: Órdenes ═══
+        new TablaConfig("ordenes",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("orden_personas",
+            "orden_id IN (SELECT o.id FROM public.ordenes o " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("orden_items",
+            "orden_id IN (SELECT o.id FROM public.ordenes o " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("orden_item_opciones",
+            "orden_item_id IN (SELECT oi.id FROM public.orden_items oi " +
+                "JOIN public.ordenes o ON oi.orden_id = o.id " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("orden_facturas",
+            "orden_id IN (SELECT o.id FROM public.ordenes o " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("orden_facturas_internas",
+            "orden_id IN (SELECT o.id FROM public.ordenes o " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+
+        // ═══ NIVEL 9: Inventario y movimientos ═══
+        new TablaConfig("productos_inventarios",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("producto_movimientos",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+
+        // ═══ NIVEL 10: Compras ═══
+        new TablaConfig("compras", "empresa_id = ?", false),
+        new TablaConfig("compra_detalles",
+            "compra_id IN (SELECT id FROM public.compras WHERE empresa_id = ?)", false),
+
+        // ═══ NIVEL 11: Cobros y pagos ═══
         new TablaConfig("cuentas_por_cobrar", "empresa_id = ?", false),
         new TablaConfig("pagos",
-                "cliente_id IN (SELECT id FROM public.clientes WHERE empresa_id = ?)", false),
+            "cliente_id IN (SELECT id FROM public.clientes WHERE empresa_id = ?)", false),
         new TablaConfig("historial_pagos", "empresa_id = ?", false),
         new TablaConfig("planes_pago", "empresa_id = ?", false),
 
-        // ========== NIVEL 17: Ventas pausadas ==========
-        new TablaConfig("ventas_pausadas",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        // ═══ NIVEL 12: Mesa historial ═══
+        new TablaConfig("mesa_estado_hist",
+            "mesa_id IN (SELECT m.id FROM public.mesa m " +
+                "JOIN public.zona_mesa zm ON m.zona_id = zm.id " +
+                "JOIN public.sucursales s ON zm.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
 
-        // ========== NIVEL 18: Métricas ==========
+        // ═══ NIVEL 13: Métricas ═══
         new TablaConfig("metricas_ventas_diarias",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("metricas_ventas_mensuales", "empresa_id = ?", false),
-
         new TablaConfig("metricas_productos_vendidos",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("metricas_compras_mensuales", "empresa_id = ?", false),
 
-        // ========== NIVEL 19: Auditoría ==========
+        // ═══ NIVEL 14: Cierre ═══
+        new TablaConfig("ventas_pausadas",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("email_audit_log",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false)
@@ -315,9 +315,11 @@ public class TenantMigrationService {
             // 7. Migrar datos tabla por tabla
             migrarDatos(empresaId, schemaName, result);
 
-            // 7.1 Asignar PIN por defecto a usuarios sin PIN
-            asignarPinPorDefecto(schemaName);
+            // 7.2 Resetear sequences  ← NUEVO
+            resetearSequences(schemaName);
 
+            // 7.3 Asignar PIN por defecto
+            asignarPinPorDefecto(schemaName);
 
             // 8. Migrar usuarios SUPER_ADMIN a usuarios_globales
             int usuariosMigrados = migrarUsuariosSuperAdmin(empresa, tenant);
@@ -359,7 +361,9 @@ public class TenantMigrationService {
      */
     private void copiarEstructuraTablas(String schemaName) {
         Set<String> tablasCreadas = new HashSet<>();
-        
+
+        jdbcTemplate.execute("SET search_path TO " + schemaName + ", public");
+
         for (TablaConfig config : TABLAS_A_MIGRAR) {
             String tabla = config.nombre;
             if (tablasCreadas.contains(tabla)) continue;
@@ -397,6 +401,42 @@ public class TenantMigrationService {
         for (TablaConfig config : TABLAS_A_MIGRAR) {
             migrarTabla(config, empresaId, schemaName, result);
         }
+    }
+
+    private void resetearSequences(String schemaName) {
+        log.info("─────────────────────────────────────────────────────────");
+        log.info("   Reseteando sequences...");
+
+        for (TablaConfig config : TABLAS_A_MIGRAR) {
+            try {
+                // Verificar si la tabla existe en el schema del tenant
+                String checkSql = "SELECT EXISTS (SELECT 1 FROM information_schema.tables " +
+                    "WHERE table_schema = ? AND table_name = ?)";
+                Boolean exists = jdbcTemplate.queryForObject(checkSql, Boolean.class, schemaName, config.nombre);
+                if (!Boolean.TRUE.equals(exists)) continue;
+
+                // Verificar si tiene columna id con sequence
+                String seqSql = """
+                SELECT pg_get_serial_sequence(?, 'id')
+                """;
+                String seqName = jdbcTemplate.queryForObject(
+                    seqSql, String.class, schemaName + "." + config.nombre
+                );
+                if (seqName == null) continue;
+
+                // Obtener MAX(id) actual
+                String maxSql = String.format("SELECT COALESCE(MAX(id), 0) FROM %s.%s", schemaName, config.nombre);
+                Long maxId = jdbcTemplate.queryForObject(maxSql, Long.class);
+
+                // Resetear al MAX + 1
+                jdbcTemplate.execute(String.format("SELECT setval('%s', %d)", seqName, Math.max(maxId, 1)));
+                log.debug("  ✓ sequence {} reseteada a {}", config.nombre, maxId);
+
+            } catch (Exception e) {
+                log.warn("  ⚠ No se pudo resetear sequence de {}: {}", config.nombre, e.getMessage());
+            }
+        }
+        log.info("  ✓ Sequences reseteadas");
     }
 
     /**

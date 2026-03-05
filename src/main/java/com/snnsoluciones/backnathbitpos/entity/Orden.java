@@ -209,8 +209,9 @@ public class Orden {
     }
 
     public boolean puedeModificarse() {
-        return estado == EstadoOrden.ABIERTA;
-    }
+    return estado != EstadoOrden.PAGADA && estado != EstadoOrden.ANULADA;
+}
+
 
     public boolean puedeFacturarse() {
         return estado == EstadoOrden.ABIERTA && !items.isEmpty();

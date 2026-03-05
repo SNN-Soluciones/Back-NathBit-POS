@@ -27,8 +27,9 @@ public enum EstadoOrden {
   }
 
   public boolean puedeModificarse() {
-    return this == ABIERTA;
-  }
+    return this != PAGADA && this != ANULADA;
+}
+
 
   public boolean puedeEnviarCocina() {
     return this == ABIERTA || this == EN_PREPARACION;

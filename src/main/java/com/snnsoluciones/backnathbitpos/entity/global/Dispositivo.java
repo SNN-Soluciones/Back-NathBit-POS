@@ -47,7 +47,7 @@ public class Dispositivo {
      * Token único y permanente del dispositivo (UUID)
      * Se genera al registrar el dispositivo y NO expira
      */
-    @Column(unique = true, nullable = false, length = 255)
+    @Column(name = "device_token", unique = true, nullable = false, length = 255)
     private String token;
 
     // ==================== Metadata ====================

@@ -399,8 +399,11 @@ public class TenantMigrationService {
         log.info("─────────────────────────────────────────────────────────");
         log.info("   Migrando datos...");
         log.info("─────────────────────────────────────────────────────────");
-        
+
         for (TablaConfig config : TABLAS_A_MIGRAR) {
+            if (!config.requerida) {
+                jdbcTemplate.execute("SAVEPOINT sp_tabla_opcional");
+            }
             migrarTabla(config, empresaId, schemaName, result);
         }
     }
@@ -446,52 +449,46 @@ public class TenantMigrationService {
      */
     private void migrarTabla(TablaConfig config, Long empresaId, String schemaName, MigrationResult result) {
         String tabla = config.nombre;
-
         try {
             // Verificar si la tabla existe
             String checkSql = "SELECT EXISTS (SELECT 1 FROM information_schema.tables " +
                 "WHERE table_schema = 'public' AND table_name = ?)";
             Boolean exists = jdbcTemplate.queryForObject(checkSql, Boolean.class, tabla);
-
             if (!Boolean.TRUE.equals(exists)) {
                 log.debug("  ⊘ {} (no existe)", tabla);
                 return;
             }
-
             // Contar registros a migrar
             String countSql = String.format("SELECT COUNT(*) FROM public.%s WHERE %s",
                 tabla, config.whereClause);
             Integer count = jdbcTemplate.queryForObject(countSql, Integer.class, empresaId);
-
             if (count == null || count == 0) {
                 log.debug("  ⊘ {} (0 registros)", tabla);
                 return;
             }
-
             // Obtener columnas NO generadas
             String columnsSql = """
-            SELECT column_name FROM information_schema.columns 
-            WHERE table_schema = 'public' AND table_name = ? 
-            AND is_generated = 'NEVER' AND generation_expression IS NULL
-            ORDER BY ordinal_position
-            """;
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = ? 
+        AND is_generated = 'NEVER' AND generation_expression IS NULL
+        ORDER BY ordinal_position
+        """;
             List<String> columns = jdbcTemplate.queryForList(columnsSql, String.class, tabla);
             String columnList = String.join(", ", columns);
-
             // Migrar datos (solo columnas no generadas)
             String insertSql = String.format(
                 "INSERT INTO %s.%s (%s) SELECT %s FROM public.%s WHERE %s",
                 schemaName, tabla, columnList, columnList, tabla, config.whereClause
             );
             jdbcTemplate.update(insertSql, empresaId);
-
             result.getTablasExitosas().add(tabla + " (" + count + ")");
             log.info("  ✓ {} → {} registros", tabla, count);
-
         } catch (Exception e) {
             if (config.requerida) {
                 throw new RuntimeException("Error migrando tabla requerida " + tabla + ": " + e.getMessage(), e);
             }
+            // ← SAVEPOINT: recuperar la transacción para que las tablas siguientes no fallen
+            jdbcTemplate.execute("ROLLBACK TO SAVEPOINT sp_tabla_opcional");
             result.getTablasConError().add(tabla + ": " + e.getMessage());
             log.warn("  ✗ {} → {}", tabla, e.getMessage());
         }

@@ -6,6 +6,7 @@ import com.snnsoluciones.backnathbitpos.enums.EstadoMesa;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
 import com.snnsoluciones.backnathbitpos.enums.EstadoPagoItem;
 import com.snnsoluciones.backnathbitpos.enums.TipoProducto;
+import com.snnsoluciones.backnathbitpos.enums.TrasladarOrdenRequest;
 import com.snnsoluciones.backnathbitpos.exception.BusinessException;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.*;
@@ -822,5 +823,95 @@ public class OrdenService {
         "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16"
     };
     return colores[new Random().nextInt(colores.length)];
+  }
+
+  @Transactional
+  public OrdenResponse trasladarOrden(Long ordenId, TrasladarOrdenRequest request) {
+    log.info("Trasladando orden {} a mesa destino {}", ordenId, request.mesaDestinoId());
+
+    // 1. Cargar y validar orden origen
+    Orden ordenOrigen = ordenRepository.findById(ordenId)
+        .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada"));
+
+    if (!ordenOrigen.puedeModificarse()) {
+      throw new BusinessException(
+          "La orden no puede trasladarse en estado: " + ordenOrigen.getEstado());
+    }
+
+    if (ordenOrigen.getMesa() == null) {
+      throw new BusinessException("Las órdenes de ventanilla no pueden trasladarse");
+    }
+
+    // 2. Cargar mesas
+    Mesa mesaOrigen = ordenOrigen.getMesa();
+    Mesa mesaDestino = mesaRepository.findById(request.mesaDestinoId())
+        .orElseThrow(() -> new ResourceNotFoundException("Mesa destino no encontrada"));
+
+    if (mesaOrigen.getId().equals(mesaDestino.getId())) {
+      throw new BusinessException("La mesa destino debe ser diferente a la mesa origen");
+    }
+
+    // 3. ¿Mesa destino tiene orden activa?
+    Optional<Orden> ordenDestinoOpt =
+        ordenRepository.findOrdenActivaPrincipalByMesaId(mesaDestino.getId());
+
+    if (ordenDestinoOpt.isPresent()) {
+      // ===== CASO B: FUSIÓN =====
+      Orden ordenDestino = ordenDestinoOpt.get();
+      log.info("Mesa {} tiene orden activa {}. Fusionando...",
+          mesaDestino.getCodigo(), ordenDestino.getNumero());
+
+      // Reasignar vía SQL directo — evita orphanRemoval de Hibernate
+      int itemsMovidos = ordenItemRepository
+          .reasignarItemsAOrden(ordenId, ordenDestino.getId());
+      int personasMovidas = ordenPersonaRepository
+          .reasignarPersonasAOrden(ordenId, ordenDestino.getId());
+
+      log.info("Movidos {} items y {} personas a orden {}",
+          itemsMovidos, personasMovidas, ordenDestino.getNumero());
+
+      // Recargar destino fresco (clearAutomatically limpió el caché L1)
+      ordenDestino = ordenRepository.findById(ordenDestino.getId())
+          .orElseThrow(() -> new ResourceNotFoundException("Orden destino no encontrada"));
+      ordenDestino.recalcularTotales();
+      ordenRepository.save(ordenDestino);
+
+      // Recargar origen fresco (items ya no le pertenecen en DB — lista vacía)
+      ordenOrigen = ordenRepository.findById(ordenId)
+          .orElseThrow(() -> new ResourceNotFoundException("Orden origen no encontrada"));
+      ordenOrigen.setEstado(EstadoOrden.TRANSFERIDA);
+      ordenOrigen.setFechaCierre(LocalDateTime.now());
+      ordenOrigen.setMesa(null);
+      ordenRepository.save(ordenOrigen);
+
+      // Liberar mesa origen
+      mesaOrigen.actualizarEstadoSegunOrden();
+      mesaRepository.save(mesaOrigen);
+
+      log.info("✅ Fusión completada. Orden {} → orden {} en mesa {}",
+          ordenOrigen.getNumero(), ordenDestino.getNumero(), mesaDestino.getCodigo());
+
+      return mapToResponse(ordenDestino);
+
+    } else {
+      // ===== CASO A: TRASLADO SIMPLE =====
+      log.info("Mesa {} libre. Traslado simple.", mesaDestino.getCodigo());
+
+      ordenOrigen.setMesa(mesaDestino);
+      ordenRepository.save(ordenOrigen);
+
+      // Mesa origen queda libre
+      mesaOrigen.actualizarEstadoSegunOrden();
+      mesaRepository.save(mesaOrigen);
+
+      // Mesa destino queda ocupada
+      mesaDestino.setEstado(EstadoMesa.OCUPADA);
+      mesaRepository.save(mesaDestino);
+
+      log.info("✅ Orden {} trasladada: mesa {} → mesa {}",
+          ordenOrigen.getNumero(), mesaOrigen.getCodigo(), mesaDestino.getCodigo());
+
+      return mapToResponse(ordenOrigen);
+    }
   }
 }

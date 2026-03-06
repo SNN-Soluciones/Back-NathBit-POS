@@ -6,6 +6,7 @@ public enum EstadoOrden {
   PREPARADA("Preparada", "Orden lista para servir"),
   SERVIDA("Servida", "Orden entregada al cliente"),
   POR_PAGAR("Por Pagar", "Cliente solicitó la cuenta"),
+  TRANSFERIDA("Transferida", "Orden movida a otra mesa"),
   PAGADA("Pagada", "Orden pagada y cerrada"),
   ANULADA("Anulada", "Orden cancelada"),
   SPLIT("Split", "Orden dividida en varias cuentas");
@@ -26,11 +27,6 @@ public enum EstadoOrden {
     return detalle;
   }
 
-  public boolean puedeModificarse() {
-    return this != PAGADA && this != ANULADA;
-}
-
-
   public boolean puedeEnviarCocina() {
     return this == ABIERTA || this == EN_PREPARACION;
   }
@@ -41,6 +37,10 @@ public enum EstadoOrden {
   }
 
   public boolean esFinal() {
-    return this == PAGADA || this == ANULADA;
+    return this == PAGADA || this == ANULADA || this == TRANSFERIDA;
+  }
+
+  public boolean puedeModificarse() {
+    return this != PAGADA && this != ANULADA && this != TRANSFERIDA;
   }
 }

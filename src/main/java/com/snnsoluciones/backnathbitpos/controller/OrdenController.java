@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.controller;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.dto.orden.*;
 import com.snnsoluciones.backnathbitpos.enums.EstadoOrden;
+import com.snnsoluciones.backnathbitpos.enums.TrasladarOrdenRequest;
 import com.snnsoluciones.backnathbitpos.service.OrdenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -266,6 +267,22 @@ public class OrdenController {
             return ResponseEntity.ok(ApiResponse.success("Orden de ventanilla creada", orden));
         } catch (Exception e) {
             log.error("Error al crear orden de ventanilla: ", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Trasladar orden a otra mesa")
+    @PutMapping("/{id}/trasladar")
+    @PreAuthorize("hasAnyRole('MESERO', 'CAJERO', 'ADMIN', 'ROOT', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<OrdenResponse>> trasladar(
+        @PathVariable Long id,
+        @Valid @RequestBody TrasladarOrdenRequest request) {
+        try {
+            OrdenResponse orden = ordenService.trasladarOrden(id, request);
+            return ResponseEntity.ok(ApiResponse.success("Orden trasladada exitosamente", orden));
+        } catch (Exception e) {
+            log.error("Error al trasladar orden: ", e);
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error(e.getMessage()));
         }

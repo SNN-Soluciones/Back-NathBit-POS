@@ -2,6 +2,7 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.OrdenPersona;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -36,4 +37,9 @@ public interface OrdenPersonaRepository extends JpaRepository<OrdenPersona, Long
      * Busca personas activas de una orden
      */
     List<OrdenPersona> findByOrdenIdAndActivoTrueOrderByOrdenVisualizacionAsc(Long ordenId);
+
+    @Modifying
+    @Query("UPDATE OrdenPersona p SET p.orden.id = :ordenDestinoId WHERE p.orden.id = :ordenOrigenId")
+    int reasignarPersonasAOrden(@Param("ordenOrigenId") Long ordenOrigenId,
+        @Param("ordenDestinoId") Long ordenDestinoId);
 }

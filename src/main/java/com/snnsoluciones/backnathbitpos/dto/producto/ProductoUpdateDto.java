@@ -52,6 +52,11 @@ public class ProductoUpdateDto {
             allowableValues = {"SIMPLE", "LOTES", "REFERENCIA", "NINGUNO"})
     private TipoInventario tipoInventario;
 
+    @Schema(description = "Tipo de producto",
+        example = "COMPUESTO",
+        allowableValues = {"VENTA", "MATERIA_PRIMA", "COMBO", "COMPUESTO", "MIXTO"})
+    private String tipo;
+
     @Schema(description = "IDs de categorías a las que pertenece el producto", 
             example = "[1, 5, 8]")
     private Set<Long> categoriaIds;

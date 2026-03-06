@@ -633,6 +633,21 @@ public class ProductoServiceImpl implements ProductoService {
         if (dto.getCodigoBarras() != null) {
             producto.setCodigoBarras(dto.getCodigoBarras());
         }
+
+        if (dto.getTipo() != null) {
+            TipoProducto nuevoTipo = TipoProducto.valueOf(dto.getTipo());
+            producto.setTipo(nuevoTipo);
+
+            // Si cambia a COMPUESTO, ajustar automáticamente
+            if (nuevoTipo == TipoProducto.COMPUESTO) {
+                producto.setTipoInventario(TipoInventario.NINGUNO);
+                producto.setRequierePersonalizacion(true);
+                if (producto.getPrecioBase() == null) {
+                    producto.setPrecioBase(producto.getPrecioVenta());
+                }
+            }
+        }
+
         if (dto.getTipoInventario() != null) {
             producto.setTipoInventario(dto.getTipoInventario());
         }

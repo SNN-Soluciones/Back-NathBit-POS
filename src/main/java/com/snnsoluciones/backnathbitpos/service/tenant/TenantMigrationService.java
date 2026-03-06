@@ -135,11 +135,13 @@ public class TenantMigrationService {
 
         // ═══ NIVEL 5: Usuarios del tenant ═══
         new TablaConfig("usuarios",
-            "empresa_id = ?", true),
+            "id IN (SELECT usuario_id FROM public.usuarios_sucursales WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", true),
         new TablaConfig("usuarios_sucursales",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("usuario_registro",
-            "usuario_id IN (SELECT id FROM public.usuarios WHERE empresa_id = ?)", false),
+            "usuario_id IN (SELECT usuario_id FROM public.usuarios_sucursales WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
         new TablaConfig("asistencias", "empresa_id = ?", false),
 
         // ═══ NIVEL 6: Sesiones de caja ═══

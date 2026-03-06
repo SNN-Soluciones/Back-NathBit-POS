@@ -413,31 +413,27 @@ public class TenantMigrationService {
         log.info("   Reseteando sequences...");
 
         for (TablaConfig config : TABLAS_A_MIGRAR) {
+            jdbcTemplate.execute("SAVEPOINT sp_seq");
             try {
-                // Verificar si la tabla existe en el schema del tenant
                 String checkSql = "SELECT EXISTS (SELECT 1 FROM information_schema.tables " +
                     "WHERE table_schema = ? AND table_name = ?)";
                 Boolean exists = jdbcTemplate.queryForObject(checkSql, Boolean.class, schemaName, config.nombre);
                 if (!Boolean.TRUE.equals(exists)) continue;
 
-                // Verificar si tiene columna id con sequence
-                String seqSql = """
-                SELECT pg_get_serial_sequence(?, 'id')
-                """;
+                String seqSql = "SELECT pg_get_serial_sequence(?, 'id')";
                 String seqName = jdbcTemplate.queryForObject(
                     seqSql, String.class, schemaName + "." + config.nombre
                 );
                 if (seqName == null) continue;
 
-                // Obtener MAX(id) actual
                 String maxSql = String.format("SELECT COALESCE(MAX(id), 0) FROM %s.%s", schemaName, config.nombre);
                 Long maxId = jdbcTemplate.queryForObject(maxSql, Long.class);
 
-                // Resetear al MAX + 1
                 jdbcTemplate.execute(String.format("SELECT setval('%s', %d)", seqName, Math.max(maxId, 1)));
                 log.debug("  ✓ sequence {} reseteada a {}", config.nombre, maxId);
 
             } catch (Exception e) {
+                jdbcTemplate.execute("ROLLBACK TO SAVEPOINT sp_seq");
                 log.warn("  ⚠ No se pudo resetear sequence de {}: {}", config.nombre, e.getMessage());
             }
         }

@@ -92,70 +92,50 @@ public interface PromocionRepository extends JpaRepository<Promocion, Long> {
         """)
     List<Promocion> findActivasWithItems();
 
-    /**
-     * Busca todas las promociones activas que aplican a un producto,
-     * considerando su categoría y familia.
-     *
-     * Una promo aplica al producto si cumple AL MENOS UNO de:
-     *   1. No tiene ningún alcance definido (aplica a todo)
-     *   2. El producto está en promocion_productos
-     *   3. La categoría del producto está en promocion_categorias
-     *   4. La familia del producto está en promocion_familias
-     *
-     * Además filtra por día comercial y hora si se pasan.
-     * Si hora es NULL, devuelve todas las del día sin importar horario.
-     */
     @Query("""
-        SELECT DISTINCT p FROM Promocion p
-        LEFT JOIN FETCH p.items
-        WHERE p.activo = true
-
-        AND (
-            (:dia = 'LUNES'     AND p.lunes     = true) OR
-            (:dia = 'MARTES'    AND p.martes    = true) OR
-            (:dia = 'MIERCOLES' AND p.miercoles = true) OR
-            (:dia = 'JUEVES'    AND p.jueves    = true) OR
-            (:dia = 'VIERNES'   AND p.viernes   = true) OR
-            (:dia = 'SABADO'    AND p.sabado    = true) OR
-            (:dia = 'DOMINGO'   AND p.domingo   = true)
+    SELECT DISTINCT p FROM Promocion p
+    LEFT JOIN FETCH p.items
+    WHERE p.activo = true
+    AND (
+        (:dia = 'LUNES'     AND p.lunes     = true) OR
+        (:dia = 'MARTES'    AND p.martes    = true) OR
+        (:dia = 'MIERCOLES' AND p.miercoles = true) OR
+        (:dia = 'JUEVES'    AND p.jueves    = true) OR
+        (:dia = 'VIERNES'   AND p.viernes   = true) OR
+        (:dia = 'SABADO'    AND p.sabado    = true) OR
+        (:dia = 'DOMINGO'   AND p.domingo   = true)
+    )
+    AND (
+        :hora IS NULL
+        OR p.horaInicio IS NULL
+        OR (:hora >= p.horaInicio AND :hora <= p.horaFin)
+    )
+    AND (
+        (
+            NOT EXISTS (SELECT 1 FROM PromocionProducto  pp WHERE pp.promocion = p)
+            AND NOT EXISTS (SELECT 1 FROM PromocionCategoria pc WHERE pc.promocion = p)
+            AND NOT EXISTS (SELECT 1 FROM PromocionFamilia  pf WHERE pf.promocion = p)
         )
-
-        AND (
-            :hora IS NULL
-            OR p.horaInicio IS NULL
-            OR (:hora >= p.horaInicio AND :hora <= p.horaFin)
+        OR EXISTS (
+            SELECT 1 FROM PromocionProducto pp
+            WHERE pp.promocion = p AND pp.productoId = :productoId
         )
-
-        AND (
-            -- Sin alcance definido = aplica a todo
-            (
-                NOT EXISTS (SELECT 1 FROM PromocionProducto  pp WHERE pp.promocion = p)
-                AND NOT EXISTS (SELECT 1 FROM PromocionCategoria pc WHERE pc.promocion = p)
-                AND NOT EXISTS (SELECT 1 FROM PromocionFamilia  pf WHERE pf.promocion = p)
-            )
-            -- O el producto está directamente en el alcance
-            OR EXISTS (
-                SELECT 1 FROM PromocionProducto pp
-                WHERE pp.promocion = p AND pp.productoId = :productoId
-            )
-            -- O la categoría del producto está en el alcance
-            OR EXISTS (
-                SELECT 1 FROM PromocionCategoria pc
-                WHERE pc.promocion = p AND pc.categoriaId = :categoriaId
-            )
-            -- O la familia del producto está en el alcance
-            OR EXISTS (
-                SELECT 1 FROM PromocionFamilia pf
-                WHERE pf.promocion = p AND pf.familiaId = :familiaId
-            )
+        OR EXISTS (
+            SELECT 1 FROM PromocionCategoria pc
+            WHERE pc.promocion = p AND pc.categoriaId = :categoriaId
         )
-        ORDER BY p.nombre ASC
-        """)
+        OR EXISTS (
+            SELECT 1 FROM PromocionFamilia pf
+            WHERE pf.promocion = p AND pf.familiaId = :familiaId
+        )
+    )
+    ORDER BY p.nombre ASC
+    """)
     List<Promocion> findPromocionesParaProducto(
-        @Param("productoId") Long      productoId,
-        @Param("categoriaId") Long     categoriaId,
-        @Param("familiaId")   Long     familiaId,
-        @Param("dia")         String   dia,
-        @Param("hora")        LocalTime hora   // NULL = sin filtro de hora
+        @Param("productoId")  Long      productoId,
+        @Param("categoriaId") Long      categoriaId,
+        @Param("familiaId")   Long      familiaId,
+        @Param("dia")         String    dia,
+        @Param("hora")        LocalTime hora
     );
 }

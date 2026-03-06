@@ -61,9 +61,9 @@ public class OrdenService {
       }
 
       // Validar estado solo si NO tiene orden activa
-      if (mesa.getEstado() != EstadoMesa.DISPONIBLE) {
-        throw new BusinessException("La mesa " + mesa.getCodigo() + " no está disponible");
-      }
+     // if (mesa.getEstado() != EstadoMesa.DISPONIBLE) {
+        //throw new BusinessException("La mesa " + mesa.getCodigo() + " no está disponible");
+      //}
     }
 
     Sucursal sucursal = sucursalRepository.findById(request.sucursalId())

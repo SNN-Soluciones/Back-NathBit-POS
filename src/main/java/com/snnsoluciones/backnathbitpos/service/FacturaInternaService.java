@@ -515,6 +515,7 @@ public class FacturaInternaService {
             .numero(factura.getNumero())
             .fecha(factura.getFecha())
             .empresaNombre(factura.getEmpresa().getNombreRazonSocial())
+            .empresaCedula(factura.getEmpresa().getIdentificacion())
             .sucursalNombre(factura.getSucursal().getNombre())
             .cajeroNombre(factura.getCajero().getNombre())
             // Mesero

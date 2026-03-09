@@ -17,6 +17,8 @@ public class FacturaInternaResponse {
     // Empresa y sucursal
     private String empresaNombre;
     private String sucursalNombre;
+    private String empresaCedula;   // ← agregar esta línea
+
     private String cajeroNombre;
 
     // Cliente

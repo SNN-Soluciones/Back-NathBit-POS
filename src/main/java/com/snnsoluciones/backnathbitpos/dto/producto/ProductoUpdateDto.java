@@ -74,7 +74,6 @@ public class ProductoUpdateDto {
 
     // ==================== PRECIOS ====================
 
-    @DecimalMin(value = "0.0", inclusive = false, message = "El precio debe ser mayor a 0")
     @Schema(description = "Precio de venta del producto", example = "4200.00")
     private BigDecimal precioVenta;
 

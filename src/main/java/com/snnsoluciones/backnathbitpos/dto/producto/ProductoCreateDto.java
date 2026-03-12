@@ -88,7 +88,6 @@ public class ProductoCreateDto {
     // ==================== PRECIOS ====================
 
     @NotNull(message = "El precio de venta es obligatorio")
-    @DecimalMin(value = "0.0", inclusive = false, message = "El precio debe ser mayor a 0")
     @Schema(description = "Precio de venta del producto", example = "3500.00", required = true)
     private BigDecimal precioVenta;
 

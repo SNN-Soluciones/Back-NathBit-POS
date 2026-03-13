@@ -10,6 +10,7 @@ import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
 import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
+import com.snnsoluciones.backnathbitpos.repository.SesionCajaUsuarioRepository;
 import com.snnsoluciones.backnathbitpos.service.MovimientoCajaService;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class MovimientoCajaServiceImpl implements MovimientoCajaService {
     private final MovimientoCajaRepository movimientoCajaRepository;
     private final SesionCajaRepository sesionCajaRepository;
     private final SecurityContextService securityContext;
+    private final SesionCajaUsuarioRepository sesionCajaUsuarioRepository;
 
     @Override
     public MovimientoCaja registrarVale(Long sesionId, BigDecimal monto, String concepto) {
@@ -51,6 +53,13 @@ public class MovimientoCajaServiceImpl implements MovimientoCajaService {
         movimiento.setConcepto(concepto);
         movimiento.setAutorizadoPorId(securityContext.getCurrentUserId());
         movimiento.setFechaHora(LocalDateTime.now());
+
+        // Linkear al turno activo del usuario si existe
+        sesionCajaUsuarioRepository
+            .findTurnoActivoUsuarioEnSesion(
+                securityContext.getCurrentUserId(),
+                sesionId)
+            .ifPresent(movimiento::setSesionCajaUsuario);
 
         return movimientoCajaRepository.save(movimiento);
     }
@@ -122,6 +131,13 @@ public class MovimientoCajaServiceImpl implements MovimientoCajaService {
         movimiento.setFechaHora(LocalDateTime.now());
         movimiento.setObservaciones(request.getObservaciones());
 
+        // Linkear al turno activo del usuario si existe
+        sesionCajaUsuarioRepository
+            .findTurnoActivoUsuarioEnSesion(
+                securityContext.getCurrentUserId(),
+                sesionId)
+            .ifPresent(movimiento::setSesionCajaUsuario);
+
         MovimientoCaja saved = movimientoCajaRepository.save(movimiento);
 
         log.info("Salida registrada exitosamente: ID {}", saved.getId());
@@ -148,6 +164,12 @@ public class MovimientoCajaServiceImpl implements MovimientoCajaService {
         movimiento.setAutorizadoPorId(securityContext.getCurrentUserId());
         movimiento.setFechaHora(LocalDateTime.now());
         movimiento.setObservaciones(request.getObservaciones());
+
+        sesionCajaUsuarioRepository
+            .findTurnoActivoUsuarioEnSesion(
+                securityContext.getCurrentUserId(),
+                sesionId)
+            .ifPresent(movimiento::setSesionCajaUsuario);
 
         MovimientoCaja saved = movimientoCajaRepository.save(movimiento);
 

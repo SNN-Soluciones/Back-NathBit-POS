@@ -1,6 +1,7 @@
 // SesionCajaDenominacion.java
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.TipoConteoCaja;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -26,4 +27,12 @@ public class SesionCajaDenominacion {
 
   @Column(nullable = false, precision = 18, scale = 2)
   private BigDecimal total; // valor * cantidad
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "sesion_caja_usuario_id")
+  private SesionCajaUsuario sesionCajaUsuario; // nullable → solo en conteos por turno
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "tipo_conteo", nullable = false, length = 20)
+  private TipoConteoCaja tipoConteo; // APERTURA | TURNO | CIERRE_FINAL
 }

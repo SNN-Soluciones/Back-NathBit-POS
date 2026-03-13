@@ -13,6 +13,7 @@ import com.snnsoluciones.backnathbitpos.service.CuentaPorCobrarService;
 import com.snnsoluciones.backnathbitpos.service.FacturaService;
 import com.snnsoluciones.backnathbitpos.service.FacturaVentaExcelService;
 import com.snnsoluciones.backnathbitpos.service.MetricaProductoVendidoService;
+import com.snnsoluciones.backnathbitpos.service.SesionCajaService;
 import com.snnsoluciones.backnathbitpos.service.TerminalService;
 import com.snnsoluciones.backnathbitpos.service.VentaInventarioService;
 import io.hypersistence.utils.common.StringUtils;
@@ -73,6 +74,8 @@ public class FacturaServiceImpl implements FacturaService {
   private final MetricaProductoVendidoService metricaProductoService;
   private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
   private final StringRedisTemplate redisTemplate;
+  private final SesionCajaUsuarioRepository sesionCajaUsuarioRepository;
+  private final SesionCajaService sesionCajaService;
 //  private final VentaInventarioService ventaInventarioService;
 
   @Override
@@ -193,6 +196,40 @@ public class FacturaServiceImpl implements FacturaService {
       }
       log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", usuario.getUsername());
     }
+
+    SesionCajaUsuario turnoActivo = null;
+    if (factura.getSesionCaja() != null) {
+      final SesionCaja sesionCajaFinal = factura.getSesionCaja();
+
+      // Buscar turno activo del usuario en ESTA sesión
+      turnoActivo = sesionCajaUsuarioRepository
+          .findTurnoActivoUsuarioEnSesion(usuario.getId(), sesionCajaFinal.getId())
+          .orElseGet(() -> {
+            if ("SHARED".equals(sesionCajaFinal.getModoCaja())) {
+              // Antes de auto-unir, verificar si tiene turno activo en otra sesión
+              // Si ya tiene uno activo en CUALQUIER sesión, usar ese
+              Optional<SesionCajaUsuario> turnoEnOtraSesion =
+                  sesionCajaUsuarioRepository.findTurnoActivoUsuario(usuario.getId());
+
+              if (turnoEnOtraSesion.isPresent()) {
+                // Tiene turno activo pero en sesión diferente — no auto-unir
+                throw new RuntimeException(
+                    "El usuario tiene un turno activo en: "
+                        + turnoEnOtraSesion.get().getSesionCaja().getTerminal().getNombre()
+                        + ". Verificá que estás facturando en la terminal correcta."
+                );
+              }
+
+              // No tiene turno en ninguna sesión → auto-join válido
+              log.info("Auto-join: creando turno para usuario {} en sesión {}",
+                  usuario.getId(), sesionCajaFinal.getId());
+              return sesionCajaService.unirseATurno(usuario.getId(), sesionCajaFinal.getId());
+            }
+            return null;
+          });
+      factura.setSesionCajaUsuario(turnoActivo);
+    }
+
 
 // Asignar el usuario (cajero)
     factura.setCajero(usuario);

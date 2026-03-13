@@ -2,9 +2,11 @@ package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,23 @@ import java.util.Optional;
 
 @Repository
 public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
+
+  @Query("""
+    SELECT sc
+    FROM SesionCaja sc
+    WHERE sc.terminal.id = :terminalId
+    AND sc.estado = 'ABIERTA'
+""")
+  Optional<SesionCaja> findSesionAbiertaTerminal(@Param("terminalId") Long terminalId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("""
+          SELECT sc
+          FROM SesionCaja sc
+          WHERE sc.terminal.id = :terminalId
+          AND sc.estado = 'ABIERTA'
+      """)
+  Optional<SesionCaja> findSesionAbiertaTerminalForUpdate(Long terminalId);
 
   // En SesionCajaRepository.java
   @Query("SELECT s FROM SesionCaja s WHERE s.usuario.id = :usuarioId AND s.estado = 'ABIERTA'")
@@ -39,6 +58,13 @@ public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
       AND sc.estado = 'ABIERTA'
       """)
   Optional<SesionCaja> findSesionAbiertaByTerminalId(@Param("terminalId") Long terminalId);
+
+  @Query("SELECT s FROM SesionCaja s " +
+      "WHERE s.terminal.sucursal.id = :sucursalId " +
+      "AND s.estado = 'ABIERTA' " +
+      "AND s.modoCaja = 'SHARED' " +
+      "ORDER BY s.fechaHoraApertura DESC")
+  List<SesionCaja> findSharedActivasBySucursal(@Param("sucursalId") Long sucursalId);
 
   // Buscar sesiones por fecha
   @Query("""

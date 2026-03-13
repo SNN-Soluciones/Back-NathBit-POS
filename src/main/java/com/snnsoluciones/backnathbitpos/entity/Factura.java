@@ -90,6 +90,10 @@ public class Factura {
   @JoinColumn(name = "cajero_id", nullable = false)
   private Usuario cajero;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "sesion_caja_usuario_id")
+  private SesionCajaUsuario sesionCajaUsuario;
+
   // Para NC/ND
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "factura_referencia_id")

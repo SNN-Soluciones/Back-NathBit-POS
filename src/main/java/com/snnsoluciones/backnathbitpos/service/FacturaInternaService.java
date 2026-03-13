@@ -45,6 +45,8 @@ public class FacturaInternaService {
     private final PlataformaDigitalConfigRepository plataformaDigitalConfigRepository;
     private final MesaRepository mesaRepository;
     private final CuentaPorCobrarService cuentaPorCobrarService;
+    private final SesionCajaUsuarioRepository sesionCajaUsuarioRepository;
+    private final SesionCajaService sesionCajaService;
 //    private final VentaInventarioService ventaInventarioService;
 
     /**
@@ -95,6 +97,21 @@ public class FacturaInternaService {
                 );
             }
             log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", cajero.getUsername());
+        }
+
+        SesionCajaUsuario turnoActivo = null;
+        if (sesionCaja != null) {
+            final SesionCaja sesionCajaFinal = sesionCaja; // ← esta línea
+            turnoActivo = sesionCajaUsuarioRepository
+                .findTurnoActivoUsuarioEnSesion(cajero.getId(), sesionCajaFinal.getId())
+                .orElseGet(() -> {
+                    if ("SHARED".equals(sesionCajaFinal.getModoCaja())) {
+                        log.info("Auto-join: creando turno para usuario {} en sesión {}",
+                            cajero.getId(), sesionCajaFinal.getId());
+                        return sesionCajaService.unirseATurno(cajero.getId(), sesionCajaFinal.getId());
+                    }
+                    return null;
+                });
         }
 
         // ===== 2) Generar el número de factura =====

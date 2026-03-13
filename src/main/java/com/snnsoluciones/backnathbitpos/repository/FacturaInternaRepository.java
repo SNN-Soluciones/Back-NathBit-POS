@@ -16,6 +16,19 @@ import java.util.Optional;
 @Repository
 public interface FacturaInternaRepository extends JpaRepository<FacturaInterna, Long> {
 
+    @Query("SELECT fi FROM FacturaInterna fi WHERE fi.sesionCajaUsuario.id = :turnoId AND fi.estado != 'ANULADA'")
+    List<FacturaInterna> findByTurnoId(@Param("turnoId") Long turnoId);
+
+    @Query("""
+      SELECT COALESCE(SUM(mp.monto), 0)
+      FROM FacturaInterna f
+      JOIN f.mediosPago mp
+      WHERE f.sesionCaja.id = :sesionId
+        AND f.estado != 'ANULADA'
+        AND mp.plataformaDigital IS NOT NULL
+      """)
+    BigDecimal sumPlataformasBySesionId(@Param("sesionId") Long sesionId);
+
     // Buscar por empresa
     Page<FacturaInterna> findByEmpresaId(Long empresaId, Pageable pageable);
     /**

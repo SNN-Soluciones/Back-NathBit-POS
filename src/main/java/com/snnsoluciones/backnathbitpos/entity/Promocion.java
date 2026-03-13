@@ -1,39 +1,20 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
-import com.snnsoluciones.nathbitbusinesscore.model.enums.TipoPromocion;
+import com.snnsoluciones.backnathbitpos.enums.CriterioDescuento;
+import com.snnsoluciones.backnathbitpos.enums.CriterioItemGratis;
+import com.snnsoluciones.backnathbitpos.enums.TipoPromocion;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Promoción configurada por el tenant.
- * Tabla: tenant_X.promociones
- *
- * ─────────────────────────────────────────────────────────────────────
- * LÓGICA DE DÍAS / HORARIO
- * ─────────────────────────────────────────────────────────────────────
- * El "día comercial" arranca a las 04:00am y cierra a las 03:59am
- * del día siguiente.  Ejemplo: una promo de VIERNES que empieza a las
- * 10pm aplica también a las 2am del sábado.
- * Esa lógica se resuelve en el FRONTEND; aquí solo se persisten los
- * flags de días y el rango hora_inicio / hora_fin.
- *
- * ─────────────────────────────────────────────────────────────────────
- * CAMPOS POR TIPO
- * ─────────────────────────────────────────────────────────────────────
- * NXM              → lleva_n, paga_m
- * BARRA_LIBRE      → precio_promo  (+ items en promocion_items)
- * ALL_YOU_CAN_EAT  → precio_promo  (+ items con reglas en promocion_items)
- * PORCENTAJE       → porcentaje_descuento
- * MONTO_FIJO       → monto_descuento
- * HAPPY_HOUR       → cualquier combinación de los anteriores + hora_inicio/hora_fin
- * ESPECIAL         → descripcion libre, lógica en frontend
- */
 @Entity
 @Table(name = "promociones")
 @Data
@@ -63,6 +44,16 @@ public class Promocion {
     @Column(name = "activo", nullable = false)
     @Builder.Default
     private Boolean activo = true;
+
+    // ── Vigencia por fecha (opcional) ─────────────────────────────────
+    // NULL en ambos = siempre activa (solo se rige por días y horario)
+    // Si vienen fechas, la promo solo aplica dentro de ese rango.
+
+    @Column(name = "fecha_inicio")
+    private LocalDate fechaInicio;
+
+    @Column(name = "fecha_fin")
+    private LocalDate fechaFin;
 
     // ── Días activos (día comercial: 04:00am → 03:59am siguiente) ────
 
@@ -95,8 +86,6 @@ public class Promocion {
     private Boolean domingo = false;
 
     // ── Rango horario dentro del día (opcional) ───────────────────────
-    // NULL = aplica todo el día comercial completo.
-    // Ejemplo happy hour: 17:00 → 19:00
 
     @Column(name = "hora_inicio")
     private LocalTime horaInicio;
@@ -104,15 +93,30 @@ public class Promocion {
     @Column(name = "hora_fin")
     private LocalTime horaFin;
 
+    // ── Stacking ──────────────────────────────────────────────────────
+    // Si es true, esta promo puede combinarse con otras en la misma orden.
+    // El admin de la sucursal lo configura.
+
+    @Column(name = "permitir_stack", nullable = false)
+    @Builder.Default
+    private Boolean permitirStack = false;
+
     // ── Campos para tipo NXM ──────────────────────────────────────────
-    // Ejemplo 2x1: lleva_n=2, paga_m=1
-    // Ejemplo 3x2: lleva_n=3, paga_m=2
 
     @Column(name = "lleva_n")
     private Integer llevaN;
 
     @Column(name = "paga_m")
     private Integer pagaM;
+
+    /**
+     * Cómo se elige el ítem gratis en NXM.
+     * MAS_BARATO          → el de menor precio entre los BENEFICIO de la orden.
+     * PRODUCTO_ESPECIFICO → definido en PromocionProducto con rol BENEFICIO.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "criterio_item_gratis", length = 30)
+    private CriterioItemGratis criterioItemGratis;
 
     // ── Campos para tipo PORCENTAJE ───────────────────────────────────
 
@@ -125,14 +129,46 @@ public class Promocion {
     private BigDecimal montoDescuento;
 
     // ── Campos para BARRA_LIBRE y ALL_YOU_CAN_EAT ────────────────────
-    // Precio fijo que paga el cliente por la promo completa
 
     @Column(name = "precio_promo", precision = 10, scale = 2)
     private BigDecimal precioPromo;
 
-    // ── Items incluidos en la promo ───────────────────────────────────
-    // Solo aplica para: BARRA_LIBRE, ALL_YOU_CAN_EAT, ESPECIAL
-    // Para NXM / PORCENTAJE / MONTO_FIJO esta lista estará vacía
+    // ── Campos para tipo GRUPO_CONDICIONAL ────────────────────────────
+    // Ejemplo: 2 adultos (trigger) → 1 niño gratis (beneficio)
+
+    /**
+     * Cuántos ítems del grupo TRIGGER se necesitan para activar la promo.
+     * Ejemplo: 2 (dos adultos deben ordenar algo del alcance TRIGGER).
+     */
+    @Column(name = "cantidad_trigger")
+    private Integer cantidadTrigger;
+
+    /**
+     * Cuántos ítems del grupo BENEFICIO reciben el descuento.
+     * Ejemplo: 1 (un niño se beneficia).
+     */
+    @Column(name = "cantidad_beneficio")
+    private Integer cantidadBeneficio;
+
+    /**
+     * Qué tipo de descuento recibe el grupo BENEFICIO.
+     * GRATIS     → precio = 0
+     * PORCENTAJE → descuento % definido en valorBeneficio
+     * MONTO_FIJO → descuento fijo definido en valorBeneficio
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "criterio_beneficio", length = 20)
+    private CriterioDescuento criterioBeneficio;
+
+    /**
+     * Valor del beneficio cuando criterioBeneficio es PORCENTAJE o MONTO_FIJO.
+     * Ejemplos: 50.00 (50%) | 2500.00 ($2500 de descuento)
+     * NULL cuando criterioBeneficio = GRATIS.
+     */
+    @Column(name = "valor_beneficio", precision = 10, scale = 2)
+    private BigDecimal valorBeneficio;
+
+    // ── Relaciones ────────────────────────────────────────────────────
 
     @OneToMany(
         mappedBy = "promocion",
@@ -149,28 +185,27 @@ public class Promocion {
         orphanRemoval = true,
         fetch = FetchType.LAZY
     )
+    @Fetch(FetchMode.SUBSELECT)
     @Builder.Default
     private List<PromocionFamilia> familias = new ArrayList<>();
 
-    // ── Alcance por categoría ─────────────────────────────────────────
-    // Vacío = sin restricción por categoría
     @OneToMany(
         mappedBy = "promocion",
         cascade = CascadeType.ALL,
         orphanRemoval = true,
         fetch = FetchType.LAZY
     )
+    @Fetch(FetchMode.SUBSELECT)
     @Builder.Default
     private List<PromocionCategoria> categorias = new ArrayList<>();
 
-    // ── Alcance por producto específico ──────────────────────────────
-    // Vacío = sin restricción por producto puntual
     @OneToMany(
         mappedBy = "promocion",
         cascade = CascadeType.ALL,
         orphanRemoval = true,
         fetch = FetchType.LAZY
     )
+    @Fetch(FetchMode.SUBSELECT)
     @Builder.Default
     private List<PromocionProducto> productos = new ArrayList<>();
 

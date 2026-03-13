@@ -52,7 +52,7 @@ public class FacturaController {
     @Operation(summary = "Obtener datos para reimpresión de factura electrónica",
         description = "Retorna todos los datos necesarios para generar el ticket ESC/POS de una factura")
     @GetMapping("/reimpresion/{clave}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<FacturaReimpresionDto>> obtenerDatosReimpresion(
         @PathVariable String clave) {
 
@@ -140,7 +140,7 @@ public class FacturaController {
     @Operation(summary = "Crear nueva factura",
         description = "Crea una factura con soporte para otros cargos, descuentos y múltiples monedas")
     @PostMapping
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'SUPER_ADMIN', 'ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<FacturaResponse>> crear(
         @RequestBody CrearFacturaRequest request) {
 
@@ -176,7 +176,7 @@ public class FacturaController {
 
     @Operation(summary = "Buscar factura por ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<FacturaResponse>> buscarPorId(@PathVariable Long id) {
         return facturaService.buscarPorId(id)
             .map(factura -> ResponseEntity.ok(
@@ -198,7 +198,7 @@ public class FacturaController {
 
     @Operation(summary = "Buscar factura por consecutivo")
     @GetMapping("/consecutivo/{consecutivo}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<FacturaResponse>> buscarPorConsecutivo(
         @PathVariable String consecutivo) {
         return facturaService.buscarPorConsecutivo(consecutivo)
@@ -210,7 +210,7 @@ public class FacturaController {
 
     @Operation(summary = "Listar facturas de sesión actual")
     @GetMapping("/sesion-actual")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ROOT')")
     public ResponseEntity<ApiResponse<List<FacturaListaResponse>>> listarSesionActual(
         @RequestParam Long sesionCajaId) {
 
@@ -227,7 +227,7 @@ public class FacturaController {
 
     @Operation(summary = "Listar facturas con error")
     @GetMapping("/errores/{sucursalId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'JEFE_CAJAS')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'JEFE_CAJAS', 'ROOT')")
     public ResponseEntity<ApiResponse<List<FacturaListaResponse>>> listarConError(
         @PathVariable Long sucursalId) {
 
@@ -245,7 +245,7 @@ public class FacturaController {
     @Operation(summary = "Anular factura",
         description = "Anula una factura. En el futuro generará nota de crédito si es necesario")
     @PostMapping("/{id}/anular")
-    @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<FacturaResponse>> anular(
         @PathVariable Long id,
         @RequestBody @Valid AnularFacturaRequest request) {
@@ -269,7 +269,7 @@ public class FacturaController {
     @Operation(summary = "Reenviar factura a Hacienda",
         description = "Reintenta el envío de una factura con error")
     @PostMapping("/{id}/reenviar")
-    @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<String>> reenviar(@PathVariable Long id) {
 
         try {
@@ -289,7 +289,7 @@ public class FacturaController {
     @Operation(summary = "Validar totales de factura",
         description = "Endpoint de utilidad para validar cálculos antes de crear la factura")
     @PostMapping("/validar-totales")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ROOT')")
     public ResponseEntity<ApiResponse<ValidacionTotalesResponse>> validarTotales(
         @Valid @RequestBody ValidacionTotalesRequest request) {
 
@@ -316,7 +316,7 @@ public class FacturaController {
     @Operation(summary = "Buscar facturas para referencias",
         description = "Busca facturas por clave, consecutivo, nombre de cliente o fechas para ser usadas como referencia")
     @PostMapping("/buscar-para-referencia/{empresaId}")
-    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
     public ResponseEntity<ApiResponse<Page<FacturaReferenciaDto>>> buscarParaReferencia(
         @Valid @RequestBody BuscarFacturaReferenciaRequest request, @PathVariable Long empresaId) {
 

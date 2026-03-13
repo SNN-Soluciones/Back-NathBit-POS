@@ -1,6 +1,7 @@
 package com.snnsoluciones.backnathbitpos.repository;
 
 import com.snnsoluciones.backnathbitpos.entity.Promocion;
+import com.snnsoluciones.backnathbitpos.enums.TipoPromocion;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,14 +13,24 @@ import java.util.List;
 @Repository
 public interface PromocionRepository extends JpaRepository<Promocion, Long> {
 
+    // En PromocionRepository.java — agregar este método:
+    @Query("""
+    SELECT DISTINCT p FROM Promocion p
+    LEFT JOIN FETCH p.productos
+    LEFT JOIN FETCH p.categorias
+    LEFT JOIN FETCH p.familias
+    WHERE p.activo = true
+""")
+    List<Promocion> findActivasConAlcance();
+
     // ── Consultas básicas ─────────────────────────────────────────────
 
     List<Promocion> findByActivoTrue();
 
-    List<Promocion> findByTipo(com.snnsoluciones.nathbitbusinesscore.model.enums.TipoPromocion tipo);
+    List<Promocion> findByTipo(TipoPromocion tipo);
 
     List<Promocion> findByActivoTrueAndTipo(
-        com.snnsoluciones.nathbitbusinesscore.model.enums.TipoPromocion tipo);
+        TipoPromocion tipo);
 
     // ── Consultas por día ─────────────────────────────────────────────
     // Útil para que el frontend pida "promos activas de hoy"

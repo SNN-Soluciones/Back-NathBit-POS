@@ -2,6 +2,8 @@ package com.snnsoluciones.backnathbitpos.service.impl;
 
 import com.lowagie.text.pdf.BaseFont;
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
+import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoRequest;
+import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoResponse;
 import com.snnsoluciones.backnathbitpos.dto.sesion.OpcionesImpresionCierreDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
@@ -13,10 +15,12 @@ import com.snnsoluciones.backnathbitpos.entity.FacturaMedioPago;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCajaDenominacion;
+import com.snnsoluciones.backnathbitpos.entity.SesionCajaUsuario;
 import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.entity.Terminal;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
+import com.snnsoluciones.backnathbitpos.enums.TipoConteoCaja;
 import com.snnsoluciones.backnathbitpos.enums.TipoMovimientoCaja;
 import com.snnsoluciones.backnathbitpos.enums.facturacion.EstadoFactura;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
@@ -27,6 +31,7 @@ import com.snnsoluciones.backnathbitpos.repository.MovimientoCajaRepository;
 import com.snnsoluciones.backnathbitpos.repository.PlataformaDigitalConfigRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaDenominacionRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaRepository;
+import com.snnsoluciones.backnathbitpos.repository.SesionCajaUsuarioRepository;
 import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
@@ -40,8 +45,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.NumberFormat;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -73,6 +80,7 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
   private final SesionCajaRepository sesionCajaRepository;
   private final UsuarioRepository usuarioRepository;
+  private final SesionCajaUsuarioRepository sesionCajaUsuarioRepository;
   private final TerminalRepository terminalRepository;
   private final MovimientoCajaRepository movimientoCajaRepository;
   private final SecurityContextService securityContext;
@@ -93,17 +101,12 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       throw new RuntimeException("No tiene permisos para abrir caja");
     }
 
-    // Validar que no tenga sesión abierta
-    if (usuarioTieneSesionAbierta(usuarioId)) {
-      throw new RuntimeException("El usuario ya tiene una sesión de caja abierta");
-    }
-
-    // Validar que la terminal no esté ocupada
+    // En modo SHARED el usuario no "posee" una SesionCaja, tiene un turno.
+    // Pero sí bloqueamos que la misma persona abra dos terminales distintas.
     if (terminalTieneSesionAbierta(terminalId)) {
-      throw new RuntimeException("La terminal ya tiene una sesión abierta");
+      throw new RuntimeException("La terminal ya tiene una sesión abierta. Usa 'unirte a turno'.");
     }
 
-    // Obtener entidades
     Usuario usuario = usuarioRepository.findById(usuarioId)
         .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
@@ -114,16 +117,17 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       throw new RuntimeException("La terminal no está activa");
     }
 
-    // Crear nueva sesión
-    SesionCaja sesion = new SesionCaja();
-    sesion.setUsuario(usuario);
-    sesion.setTerminal(terminal);
-    sesion.setFechaHoraApertura(LocalDateTime.now());
-    sesion.setMontoInicial(montoInicial != null ? montoInicial : BigDecimal.ZERO);
-    sesion.setEstado(EstadoSesion.ABIERTA);
-    sesion.setObservacionesApertura("");
+    BigDecimal monto = montoInicial != null ? montoInicial : BigDecimal.ZERO;
 
-    // Inicializar contadores
+    // Crear sesión maestra (pertenece a la terminal, no al cajero)
+    SesionCaja sesion = new SesionCaja();
+    sesion.setUsuario(usuario);          // usuario que abrió (auditoría)
+    sesion.setTerminal(terminal);
+    sesion.setFechaHoraApertura(LocalDateTime.now(ZoneId.of("America/Costa_Rica")));
+    sesion.setMontoInicial(monto);
+    sesion.setEstado(EstadoSesion.ABIERTA);
+    sesion.setModoCaja("SHARED");        // ← siempre SHARED desde ahora
+    sesion.setObservacionesApertura("");
     sesion.setTotalVentas(BigDecimal.ZERO);
     sesion.setTotalDevoluciones(BigDecimal.ZERO);
     sesion.setTotalEfectivo(BigDecimal.ZERO);
@@ -135,7 +139,327 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     sesion.setCantidadNotasCredito(0);
 
     sesion = sesionCajaRepository.save(sesion);
-    log.info("Sesión de caja abierta con ID: {}", sesion.getId());
+    log.info("Sesión maestra abierta con ID: {}", sesion.getId());
+
+    // Crear el turno del cajero que abre (Ana)
+    // fondoInicioTurno = montoInicial porque es la primera persona del día
+    SesionCajaUsuario turnoApertura = new SesionCajaUsuario();
+    turnoApertura.setSesionCaja(sesion);
+    turnoApertura.setUsuario(usuario);
+    turnoApertura.setFechaHoraInicio(sesion.getFechaHoraApertura());
+    turnoApertura.setFondoInicioTurno(monto);   // ← fondo completo al inicio del día
+    turnoApertura.setEstado("ACTIVA");
+    turnoApertura.setVentasEfectivo(BigDecimal.ZERO);
+    turnoApertura.setVentasTarjeta(BigDecimal.ZERO);
+    turnoApertura.setVentasTransferencia(BigDecimal.ZERO);
+    turnoApertura.setVentasOtros(BigDecimal.ZERO);
+    turnoApertura.setTotalRetiros(BigDecimal.ZERO);
+    turnoApertura.setTotalDevolucionesEfectivo(BigDecimal.ZERO);
+
+    sesionCajaUsuarioRepository.save(turnoApertura);
+    log.info("Turno de apertura creado para usuario {} (fondoInicioTurno={})", usuarioId, monto);
+
+    return sesion;
+  }
+
+  @Transactional
+  @Override
+  public SesionCajaUsuario unirseATurno(Long usuarioId, Long sesionCajaId) {
+    log.info("Usuario {} uniéndose a turno en sesión {}", usuarioId, sesionCajaId);
+
+    SesionCaja sesion = sesionCajaRepository.findById(sesionCajaId)
+        .orElseThrow(() -> new RuntimeException("Sesión de caja no encontrada"));
+
+    if (sesion.getEstado() != EstadoSesion.ABIERTA) {
+      throw new RuntimeException("La sesión de caja no está abierta");
+    }
+
+    if (!"SHARED".equals(sesion.getModoCaja())) {
+      throw new RuntimeException("Esta sesión no es de modo compartido");
+    }
+
+    // Bloquear doble-entrada: el mismo usuario no puede tener dos turnos ACTIVOS
+    // en la misma sesión al mismo tiempo (sí puede tener un turno CERRADO anterior)
+    sesionCajaUsuarioRepository
+        .findTurnoActivoUsuario(usuarioId)
+        .ifPresent(t -> {
+          throw new RuntimeException(
+              "El usuario ya tiene un turno activo en la terminal: "
+                  + t.getSesionCaja().getTerminal().getNombre()
+                  + ". Debe cerrar ese turno antes de unirse a otra sesión."
+          );
+        });
+
+    Usuario usuario = usuarioRepository.findById(usuarioId)
+        .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+    LocalDateTime ahora = LocalDateTime.now(ZoneId.of("America/Costa_Rica"));
+
+    // Calcular cuánto efectivo hay en caja en este momento exacto.
+    // = montoInicial + Σ ventas efectivo de todos los turnos - Σ retiros globales
+    // Este es el "fondo" que recibe este cajero al entrar.
+    BigDecimal fondoAlEntrar = calcularMontoEsperadoEfectivoHasta(sesion, ahora);
+
+    SesionCajaUsuario turno = new SesionCajaUsuario();
+    turno.setSesionCaja(sesion);
+    turno.setUsuario(usuario);
+    turno.setFechaHoraInicio(ahora);
+    turno.setFondoInicioTurno(fondoAlEntrar);   // ← lo que hay en caja cuando entra
+    turno.setEstado("ACTIVA");
+    turno.setVentasEfectivo(BigDecimal.ZERO);
+    turno.setVentasTarjeta(BigDecimal.ZERO);
+    turno.setVentasTransferencia(BigDecimal.ZERO);
+    turno.setVentasOtros(BigDecimal.ZERO);
+    turno.setTotalRetiros(BigDecimal.ZERO);
+    turno.setTotalDevolucionesEfectivo(BigDecimal.ZERO);
+
+    turno = sesionCajaUsuarioRepository.save(turno);
+    log.info("Turno {} creado para usuario {} — fondoInicioTurno={}",
+        turno.getId(), usuarioId, fondoAlEntrar);
+
+    return turno;
+  }
+
+  @Transactional
+  @Override
+  public CerrarTurnoResponse cerrarTurno(Long turnoId, CerrarTurnoRequest request) {
+    log.info("Cerrando turno {}", turnoId);
+
+    // 1. Cargar turno
+    SesionCajaUsuario turno = sesionCajaUsuarioRepository.findById(turnoId)
+        .orElseThrow(() -> new RuntimeException("Turno no encontrado"));
+
+    if ("CERRADA".equals(turno.getEstado())) {
+      throw new RuntimeException("El turno ya fue cerrado");
+    }
+
+    // 2. Validar fondoCaja = montoContado - montoRetirado
+    BigDecimal montoContado   = request.getMontoContado();
+    BigDecimal montoRetirado  = request.getMontoRetirado();
+    BigDecimal fondoCaja      = request.getFondoCaja();
+
+    if (montoRetirado.compareTo(montoContado) > 0) {
+      throw new RuntimeException(String.format(
+          "No podés retirar más de lo que hay en caja. Contado: ₡%.2f, Retiro: ₡%.2f",
+          montoContado, montoRetirado));
+    }
+
+    BigDecimal fondoCalculado = montoContado.subtract(montoRetirado);
+    if (fondoCaja.compareTo(fondoCalculado) != 0) {
+      throw new RuntimeException(String.format(
+          "Fondo de caja no coincide. Esperado: ₡%.2f (₡%.2f - ₡%.2f), Recibido: ₡%.2f",
+          fondoCalculado, montoContado, montoRetirado, fondoCaja));
+    }
+
+    // 3. Congelar timestamp del conteo
+    LocalDateTime ahora = LocalDateTime.now(ZoneId.of("America/Costa_Rica"));
+    turno.setFechaHoraInicioConteo(ahora);
+
+    // 4. Calcular esperados por medio de pago desde facturas del turno
+    List<Factura> facturas         = facturaRepository.findByTurnoId(turnoId);
+    List<FacturaInterna> internas  = facturaInternaRepository.findByTurnoId(turnoId);
+
+    BigDecimal esperadoEfectivo      = BigDecimal.ZERO;
+    BigDecimal esperadoTarjeta       = BigDecimal.ZERO;
+    BigDecimal esperadoTransferencia = BigDecimal.ZERO;
+    BigDecimal esperadoSinpe         = BigDecimal.ZERO;
+
+    for (Factura f : facturas) {
+      if (f.getMediosPago() != null) {
+        for (FacturaMedioPago mp : f.getMediosPago()) {
+          switch (obtenerMetodoPagoEstandar(mp.getMedioPago().name())) {
+            case "E"  -> esperadoEfectivo      = esperadoEfectivo.add(mp.getMonto());
+            case "TC" -> esperadoTarjeta        = esperadoTarjeta.add(mp.getMonto());
+            case "TB" -> esperadoTransferencia  = esperadoTransferencia.add(mp.getMonto());
+            case "S"  -> esperadoSinpe           = esperadoSinpe.add(mp.getMonto());
+          }
+        }
+      }
+    }
+
+    for (FacturaInterna fi : internas) {
+      if (fi.getMediosPago() != null) {
+        for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
+          switch (obtenerMetodoPagoEstandar(mp.getTipo())) {
+            case "E"  -> esperadoEfectivo      = esperadoEfectivo.add(mp.getMonto());
+            case "TC" -> esperadoTarjeta        = esperadoTarjeta.add(mp.getMonto());
+            case "TB" -> esperadoTransferencia  = esperadoTransferencia.add(mp.getMonto());
+            case "S"  -> esperadoSinpe           = esperadoSinpe.add(mp.getMonto());
+          }
+        }
+      }
+    }
+
+    // 5. Calcular diferencias (declarado - esperado)
+    // Efectivo: usa montoEsperado de caja (incluye fondo inicial + ventas - retiros)
+    BigDecimal montoEsperadoCaja = calcularMontoEsperadoEfectivoHasta(turno.getSesionCaja(), ahora);
+
+    BigDecimal difEfectivo      = montoContado.subtract(montoEsperadoCaja);
+    BigDecimal declaradoTarjeta = request.getTotalTarjeta()       != null ? request.getTotalTarjeta()       : BigDecimal.ZERO;
+    BigDecimal declaradoSinpe   = request.getTotalSinpe()         != null ? request.getTotalSinpe()         : BigDecimal.ZERO;
+    BigDecimal declaradoTransf  = request.getTotalTransferencia() != null ? request.getTotalTransferencia() : BigDecimal.ZERO;
+
+    BigDecimal difTarjeta       = declaradoTarjeta.subtract(esperadoTarjeta);
+    BigDecimal difSinpe         = declaradoSinpe.subtract(esperadoSinpe);
+    BigDecimal difTransferencia = declaradoTransf.subtract(esperadoTransferencia);
+
+    // 6. Persistir en el turno
+    turno.setMontoEsperado(montoEsperadoCaja);
+    turno.setMontoContado(montoContado);
+    turno.setDiferencia(difEfectivo);
+    turno.setDiferenciaEfectivo(difEfectivo);
+    turno.setDiferenciaTarjeta(difTarjeta);
+    turno.setDiferenciaSinpe(difSinpe);
+    turno.setDiferenciaTransferencia(difTransferencia);
+    turno.setVentasEfectivo(esperadoEfectivo);
+    turno.setVentasTarjeta(esperadoTarjeta);
+    turno.setVentasTransferencia(esperadoTransferencia);
+    turno.setVentasOtros(esperadoSinpe);
+    turno.setMontoRetirado(montoRetirado);
+    turno.setFondoCaja(fondoCaja);
+    turno.setObservacionesCierre(request.getObservaciones());
+
+    // 7. Guardar denominaciones ligadas al turno
+    if (request.getDenominaciones() != null && !request.getDenominaciones().isEmpty()) {
+      final SesionCajaUsuario turnoFinal = turno;
+      List<SesionCajaDenominacion> filas = request.getDenominaciones().stream()
+          .map(d -> SesionCajaDenominacion.builder()
+              .sesionCaja(turnoFinal.getSesionCaja())
+              .sesionCajaUsuario(turnoFinal)
+              .valor(d.getValor())
+              .cantidad(d.getCantidad())
+              .total(d.getValor().multiply(BigDecimal.valueOf(d.getCantidad())))
+              .tipoConteo(TipoConteoCaja.TURNO)
+              .build())
+          .toList();
+      sesionCajaDenominacionRepository.saveAll(filas);
+    }
+
+    // 8. Guardar datafonos ligados al turno
+    if (request.getDatafonos() != null && !request.getDatafonos().isEmpty()) {
+      final SesionCajaUsuario turnoFinal = turno;
+      List<CierreDatafono> datafonos = request.getDatafonos().stream()
+          .map(d -> CierreDatafono.builder()
+              .sesionCaja(turnoFinal.getSesionCaja())
+              .sesionCajaUsuario(turnoFinal)
+              .datafono(d.getDatafono())
+              .monto(d.getMonto())
+              .build())
+          .toList();
+      cierreDatafonoRepository.saveAll(datafonos);
+    }
+
+    // 9. Cerrar turno
+    turno.setFechaHoraFin(ahora);
+    turno.setEstado("CERRADA");
+    turno = sesionCajaUsuarioRepository.save(turno);
+
+    log.info("Turno {} cerrado. Dif.efectivo: {}, Dif.tarjeta: {}, Dif.sinpe: {}, Dif.transf: {}",
+        turno.getId(), difEfectivo, difTarjeta, difSinpe, difTransferencia);
+
+    // 10. Verificar si es el último turno activo
+    boolean todosHanCerrado = sesionCajaUsuarioRepository
+        .todosLosTurnosCerrados(turno.getSesionCaja().getId());
+
+    String mensaje = todosHanCerrado
+        ? "Sos el último cajero. Confirmá el cierre definitivo de la sesión."
+        : "Turno cerrado exitosamente. La sesión continúa abierta.";
+
+    // 11. Armar response
+    return CerrarTurnoResponse.builder()
+        .turnoId(turno.getId())
+        .sesionCajaId(turno.getSesionCaja().getId())
+        .estado(turno.getEstado())
+        .montoEsperadoEfectivo(montoEsperadoCaja)
+        .montoEsperadoTarjeta(esperadoTarjeta)
+        .montoEsperadoTransferencia(esperadoTransferencia)
+        .montoEsperadoSinpe(esperadoSinpe)
+        .montoContado(montoContado)
+        .totalEfectivoDeclarado(request.getTotalEfectivo())
+        .totalTarjetaDeclarado(declaradoTarjeta)
+        .totalTransferenciaDeclarado(declaradoTransf)
+        .totalSinpeDeclarado(declaradoSinpe)
+        .diferenciaEfectivo(difEfectivo)
+        .diferenciaTarjeta(difTarjeta)
+        .diferenciaTransferencia(difTransferencia)
+        .diferenciaSinpe(difSinpe)
+        .montoRetirado(montoRetirado)
+        .fondoCaja(fondoCaja)
+        .fechaHoraFin(turno.getFechaHoraFin())
+        .esSesionCerrada(todosHanCerrado)
+        .mensajeCierre(mensaje)
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<SesionCaja> obtenerSesionesSharedActivasPorSucursal(Long sucursalId) {
+    log.info("Buscando sesiones SHARED activas para sucursal {}", sucursalId);
+    return sesionCajaRepository.findSharedActivasBySucursal(sucursalId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public SesionCajaUsuario obtenerMiTurnoActivo(Long usuarioId) {
+    return sesionCajaUsuarioRepository.findTurnoActivoUsuario(usuarioId)
+        .orElse(null);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Optional<SesionCaja> obtenerSesionActivaPorTerminal(Long terminalId) {
+    return sesionCajaRepository.findSesionAbiertaByTerminalId(terminalId);
+  }
+
+  @Transactional
+  @Override
+  public SesionCaja confirmarCierreSesion(Long sesionCajaId, Long usuarioId) {
+    log.info("Confirmando cierre de sesión maestra {} por usuario {}", sesionCajaId, usuarioId);
+
+    SesionCaja sesion = sesionCajaRepository.findById(sesionCajaId)
+        .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+    if (sesion.getEstado() != EstadoSesion.ABIERTA) {
+      throw new RuntimeException("La sesión ya está cerrada");
+    }
+
+    // Validar que todos los turnos estén cerrados
+    boolean todosHanCerrado = sesionCajaUsuarioRepository
+        .todosLosTurnosCerrados(sesionCajaId);
+
+    if (!todosHanCerrado) {
+      throw new RuntimeException("Aún hay cajeros con turno activo. Todos deben cerrar su turno antes de cerrar la sesión.");
+    }
+
+    // Consolidar totales sumando todos los turnos
+    List<SesionCajaUsuario> turnos = sesionCajaUsuarioRepository
+        .findBySesionCajaId(sesionCajaId);
+
+    BigDecimal totalEfectivo      = turnos.stream().map(t -> t.getVentasEfectivo()      != null ? t.getVentasEfectivo()      : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalTarjeta       = turnos.stream().map(t -> t.getVentasTarjeta()       != null ? t.getVentasTarjeta()       : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalTransferencia = turnos.stream().map(t -> t.getVentasTransferencia() != null ? t.getVentasTransferencia() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalOtros         = turnos.stream().map(t -> t.getVentasOtros()         != null ? t.getVentasOtros()         : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    // El fondo y retiro viene del último turno (el que confirmó el cierre)
+    SesionCajaUsuario ultimoTurno = turnos.stream()
+        .max(Comparator.comparing(SesionCajaUsuario::getFechaHoraFin))
+        .orElseThrow(() -> new RuntimeException("No se encontraron turnos para la sesión"));
+
+    LocalDateTime ahora = LocalDateTime.now(ZoneId.of("America/Costa_Rica"));
+
+    sesion.setTotalEfectivo(totalEfectivo);
+    sesion.setTotalTarjeta(totalTarjeta);
+    sesion.setTotalTransferencia(totalTransferencia);
+    sesion.setTotalOtros(totalOtros);
+    sesion.setMontoCierre(ultimoTurno.getMontoContado());
+    sesion.setMontoRetirado(ultimoTurno.getMontoRetirado());
+    sesion.setFondoCaja(ultimoTurno.getFondoCaja());
+    sesion.setEstadoConteo("COMPLETADO");
+    sesion.setFechaHoraCierre(ahora);
+    sesion.setEstado(EstadoSesion.CERRADA);
+
+    sesion = sesionCajaRepository.save(sesion);
+    log.info("Sesión maestra {} cerrada por usuario {}", sesionCajaId, usuarioId);
 
     return sesion;
   }
@@ -309,30 +633,60 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   }
 
   private SesionCajaDTO convertirADTO(SesionCaja sesion) {
-    SesionCajaDTO dto = SesionCajaDTO.builder()
+    BigDecimal totalEfectivo      = nvl(sesion.getTotalEfectivo());
+    BigDecimal totalTarjeta       = nvl(sesion.getTotalTarjeta());
+    BigDecimal totalTransferencia = nvl(sesion.getTotalTransferencia());
+    BigDecimal totalOtros         = nvl(sesion.getTotalOtros());  // SINPE
+
+    // Plataformas: consultar facturas + internas de esta sesión
+    BigDecimal totalPlataformas = nvl(facturaRepository.sumPlataformasBySesionId(sesion.getId()))
+        .add(nvl(facturaInternaRepository.sumPlataformasBySesionId(sesion.getId())));
+
+    BigDecimal totalVentas = totalEfectivo
+        .add(totalTarjeta)
+        .add(totalTransferencia)
+        .add(totalOtros)
+        .add(totalPlataformas);
+
+    // Monto esperado y diferencia solo para sesiones cerradas
+    BigDecimal montoEsperado  = null;
+    BigDecimal diferenciaCierre = null;
+    if (sesion.getEstado() == EstadoSesion.CERRADA) {
+      montoEsperado = calcularMontoEsperado(sesion);
+      if (sesion.getMontoCierre() != null) {
+        diferenciaCierre = sesion.getMontoCierre().subtract(montoEsperado);
+      }
+    }
+
+    return SesionCajaDTO.builder()
         .id(sesion.getId())
         .usuarioId(sesion.getUsuario().getId())
-        .usuarioNombre(sesion.getUsuario().getNombre())
+        .usuarioNombre(sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos())
         .usuarioEmail(sesion.getUsuario().getEmail())
         .sucursalId(sesion.getTerminal().getSucursal().getId())
         .sucursalNombre(sesion.getTerminal().getSucursal().getNombre())
+        .terminalId(sesion.getTerminal().getId())
+        .terminalNombre(sesion.getTerminal().getNombre())
         .fechaHoraApertura(sesion.getFechaHoraApertura())
         .fechaHoraCierre(sesion.getFechaHoraCierre())
         .montoInicial(sesion.getMontoInicial())
         .montoFinal(sesion.getMontoCierre())
+        .montoEsperado(montoEsperado)
+        .totalVentas(totalVentas)
+        .totalEfectivo(totalEfectivo)
+        .totalTarjeta(totalTarjeta)
+        .totalTransferencia(totalTransferencia)
+        .totalOtros(totalOtros)
+        .totalPlataformas(totalPlataformas)
+        .diferenciaCierre(diferenciaCierre)
         .estado(sesion.getEstado())
         .observaciones(sesion.getObservacionesCierre())
         .build();
+  }
 
-    // Calcular total de ventas si la sesión está cerrada
-    if (sesion.getEstado() == EstadoSesion.CERRADA
-        && sesion.getMontoCierre() != null
-        && sesion.getMontoInicial() != null) {
-      BigDecimal totalVentas = sesion.getMontoCierre().subtract(sesion.getMontoInicial());
-      dto.setTotalVentas(totalVentas);
-    }
-
-    return dto;
+  /** null-safe BigDecimal */
+  private BigDecimal nvl(BigDecimal v) {
+    return v != null ? v : BigDecimal.ZERO;
   }
 
   private boolean puedeVerResumen(SesionCaja sesion) {
@@ -1179,20 +1533,19 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     // 5. Recolectar destinatarios (sin duplicados)
     Set<String> destinatarios = new HashSet<>();
 
-    // Email del usuario que cierra
-    if (sesion.getUsuario() != null && sesion.getUsuario().getEmail() != null) {
-      destinatarios.add(sesion.getUsuario().getEmail().toLowerCase().trim());
-    }
-
     // Email de la sucursal
     Sucursal sucursal = sesion.getTerminal().getSucursal();
-    if (sucursal != null && sucursal.getEmail() != null && !sucursal.getEmail().isBlank()) {
-      destinatarios.add(sucursal.getEmail().toLowerCase().trim());
-    }
 
     // Email de la empresa
-    if (sucursal != null && sucursal.getEmpresa() != null && sucursal.getEmpresa().getEmail() != null) {
-      destinatarios.add(sucursal.getEmpresa().getEmail().toLowerCase().trim());
+    if (sucursal != null && sucursal.getEmpresa() != null) {
+      // Priorizar emailNotificacion; fallback a email general si no tiene
+      String emailEmpresa = sucursal.getEmpresa().getEmailNotificacion();
+      if (emailEmpresa == null || emailEmpresa.isBlank()) {
+        emailEmpresa = sucursal.getEmpresa().getEmail();
+      }
+      if (emailEmpresa != null && !emailEmpresa.isBlank()) {
+        destinatarios.add(emailEmpresa.toLowerCase().trim());
+      }
     }
 
     // Email adicional (parámetro opcional)
@@ -1793,5 +2146,23 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     html.append("</html>");
 
     return html.toString();
+  }
+
+  @Override
+  public BigDecimal calcularMontoEsperadoEfectivoHasta(SesionCaja sesion, LocalDateTime hasta) {
+    // fondo inicial de Ana
+    BigDecimal esperado = sesion.getMontoInicial();
+
+    // + todas las ventas en efectivo de TODOS los turnos hasta ese momento
+    BigDecimal ventasEfectivo = sesionCajaUsuarioRepository
+        .sumVentasEfectivoSesionHasta(sesion.getId(), hasta);
+    esperado = esperado.add(ventasEfectivo != null ? ventasEfectivo : BigDecimal.ZERO);
+
+    // - todas las salidas globales de caja hasta ese momento
+    BigDecimal salidas = movimientoCajaRepository
+        .sumSalidasBySesionIdHasta(sesion.getId(), hasta);
+    esperado = esperado.subtract(salidas != null ? salidas : BigDecimal.ZERO);
+
+    return esperado;
   }
 }

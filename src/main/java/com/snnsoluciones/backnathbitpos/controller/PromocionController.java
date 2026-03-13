@@ -1,7 +1,11 @@
 package com.snnsoluciones.backnathbitpos.controller;
 
+import com.snnsoluciones.backnathbitpos.dto.promociones.AplicarPromocionesRequest;
 import com.snnsoluciones.backnathbitpos.dto.promociones.CreatePromocionRequest;
+import com.snnsoluciones.backnathbitpos.dto.promociones.NuevaRondaRequest;
+import com.snnsoluciones.backnathbitpos.dto.promociones.PromocionAplicableDTO;
 import com.snnsoluciones.backnathbitpos.dto.promociones.PromocionDTO;
+import com.snnsoluciones.backnathbitpos.service.promociones.PromocionMotorService;
 import com.snnsoluciones.backnathbitpos.service.promociones.PromocionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,7 @@ import java.util.List;
 public class PromocionController {
 
     private final PromocionService promocionService;
+    private final PromocionMotorService promocionMotorService;
 
     // =========================================================================
     // GET
@@ -205,6 +210,97 @@ public class PromocionController {
         } catch (IllegalArgumentException e) {
             log.warn("Error buscando promos para producto {}: {}", productoId, e.getMessage());
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // ── Agregar estos 3 endpoints al final de la clase ────────────────────
+
+    /**
+     * POST /api/business/promociones/evaluar/{ordenId}
+     *
+     * Evalúa qué promociones califican para la orden actual.
+     * Solo lectura — no persiste nada ni modifica la orden.
+     *
+     * El frontend lo llama cada vez que el mesero agrega o quita un ítem.
+     * La respuesta muestra exactamente qué descuento tendría cada ítem
+     * para que el mesero decida si aplicar o no.
+     *
+     * Respuesta vacía [] = ninguna promo activa califica para esta orden.
+     */
+    @PostMapping("/evaluar/{ordenId}")
+    public ResponseEntity<List<PromocionAplicableDTO>> evaluar(
+        @PathVariable Long ordenId) {
+        log.info("POST /promociones/evaluar/{} - Evaluando promos", ordenId);
+        try {
+            return ResponseEntity.ok(promocionMotorService.evaluar(ordenId));
+        } catch (IllegalArgumentException e) {
+            log.warn("Error evaluando promos para orden {}: {}", ordenId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * POST /api/business/promociones/aplicar/{ordenId}
+     *
+     * Aplica las promociones seleccionadas por el mesero a la orden.
+     * Persiste los descuentos en los OrdenItems y activa el estado
+     * de rondas para AYCE/BARRA_LIBRE.
+     *
+     * Body: { "promocionIds": [1, 3] }
+     *
+     * Valida stacking — si una promo no permite combinarse con otras
+     * y se envían múltiples IDs, retorna 409.
+     */
+    @PostMapping("/aplicar/{ordenId}")
+    public ResponseEntity<Void> aplicar(
+        @PathVariable Long ordenId,
+        @Valid @RequestBody AplicarPromocionesRequest request) {
+        log.info("POST /promociones/aplicar/{} - Aplicando promos: {}",
+            ordenId, request.getPromocionIds());
+        try {
+            promocionMotorService.aplicar(ordenId, request);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Error aplicando promos a orden {}: {}", ordenId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            log.warn("Conflicto aplicando promos a orden {}: {}", ordenId, e.getMessage());
+            return ResponseEntity.status(409).build();
+        }
+    }
+
+    /**
+     * POST /api/business/promociones/nueva-ronda/{ordenId}
+     *
+     * Solicita una nueva ronda para un producto AYCE o BARRA_LIBRE.
+     * Solo el mesero puede disparar esto explícitamente.
+     *
+     * Valida que:
+     *   - La promo AYCE esté activa en la orden
+     *   - El producto no haya llegado a su límite de rondas
+     *
+     * Si todo está bien, crea un nuevo OrdenItem a precio $0
+     * e incrementa el contador de rondas.
+     *
+     * Body: { "promocionId": 1, "productoId": 5 }
+     *
+     * Retorna 409 si ya se alcanzó el máximo de rondas.
+     */
+    @PostMapping("/nueva-ronda/{ordenId}")
+    public ResponseEntity<Void> nuevaRonda(
+        @PathVariable Long ordenId,
+        @Valid @RequestBody NuevaRondaRequest request) {
+        log.info("POST /promociones/nueva-ronda/{} - Producto: {}",
+            ordenId, request.getProductoId());
+        try {
+            promocionMotorService.nuevaRonda(ordenId, request);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Error en nueva ronda orden {}: {}", ordenId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            log.warn("Límite de rondas alcanzado en orden {}: {}", ordenId, e.getMessage());
+            return ResponseEntity.status(409).build();
         }
     }
 }

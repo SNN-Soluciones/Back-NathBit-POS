@@ -50,4 +50,12 @@ public class MovimientoCaja {
     
     @Column(name = "observaciones", length = 500)
     private String observaciones;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sesion_caja_usuario_id")
+    private SesionCajaUsuario sesionCajaUsuario;
 }

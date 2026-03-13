@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.RolPromocionAlcance;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,21 +8,23 @@ import java.time.LocalDateTime;
 
 /**
  * Familia incluida en el alcance de una promoción.
- * Tabla: tenant_X.promocion_familias
+ * Tabla: promocion_familias
  *
- * Si esta tabla tiene registros para una promo, la promo aplica
- * SOLO a productos que pertenezcan a esas familias.
+ * El campo ROL define el papel de esta familia dentro de la promo:
  *
- * familia_id se guarda como Long SIN FK explícita, siguiendo el
- * mismo patrón de Producto.familiaId en el sistema.
- * nombre_familia desnormalizado para evitar JOINs en lectura.
+ *   TRIGGER  → Productos de esta familia ACTIVAN la promo cuando
+ *              aparecen en la orden.
+ *
+ *   BENEFICIO → Productos de esta familia RECIBEN el descuento.
+ *
+ * Para promos simples (PORCENTAJE, MONTO_FIJO) usar rol = TRIGGER.
  */
 @Entity
 @Table(
     name = "promocion_familias",
     uniqueConstraints = @UniqueConstraint(
         name = "uq_promocion_familia",
-        columnNames = {"promocion_id", "familia_id"}
+        columnNames = {"promocion_id", "familia_id", "rol"}
     )
 )
 @Data
@@ -45,6 +48,11 @@ public class PromocionFamilia {
 
     @Column(name = "nombre_familia", nullable = false, length = 200)
     private String nombreFamilia;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rol", nullable = false, length = 20)
+    @Builder.Default
+    private RolPromocionAlcance rol = RolPromocionAlcance.TRIGGER;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

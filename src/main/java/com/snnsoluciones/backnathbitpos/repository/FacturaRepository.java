@@ -21,7 +21,24 @@ import org.springframework.stereotype.Repository;
 public interface FacturaRepository extends JpaRepository<Factura, Long>,
     JpaSpecificationExecutor<Factura> {
 
+  @Query("SELECT f FROM Factura f WHERE f.sesionCajaUsuario.id = :turnoId AND f.estado NOT IN ('ANULADA', 'RECHAZADA')")
+  List<Factura> findByTurnoId(@Param("turnoId") Long turnoId);
+
   Optional<Factura> findByClave(String clave);
+
+  /**
+   * Suma el total de ventas por plataformas digitales en una sesión.
+   * Busca en FacturaMedioPago donde plataformaDigital != null.
+   */
+  @Query("""
+      SELECT COALESCE(SUM(mp.monto), 0)
+      FROM Factura f
+      JOIN f.mediosPago mp
+      WHERE f.sesionCaja.id = :sesionId
+        AND f.estado != 'ANULADA'
+        AND mp.plataformaDigital IS NOT NULL
+      """)
+  BigDecimal sumPlataformasBySesionId(@Param("sesionId") Long sesionId);
 
   @Query("""
       select f

@@ -60,6 +60,10 @@ public class FacturaInterna {
     @Column(name = "nombre_cliente", length = 255)
     private String nombreCliente; // Si no hay cliente registrado
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sesion_caja_usuario_id")
+    private SesionCajaUsuario sesionCajaUsuario;
+
     // ===== FECHAS =====
     @Column(name = "fecha", nullable = false)
     private LocalDateTime fecha;

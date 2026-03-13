@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.entity;
 
+import com.snnsoluciones.backnathbitpos.enums.RolPromocionAlcance;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,21 +8,26 @@ import java.time.LocalDateTime;
 
 /**
  * Categoría incluida en el alcance de una promoción.
- * Tabla: tenant_X.promocion_categorias
+ * Tabla: promocion_categorias
  *
- * Si esta tabla tiene registros para una promo, la promo aplica
- * SOLO a productos que pertenezcan a esas categorías.
+ * El campo ROL define el papel de esta categoría dentro de la promo:
  *
- * categoria_id se guarda como Long SIN FK explícita para mantener
- * consistencia con el patrón del sistema (evitar problemas cross-schema).
- * nombre_categoria desnormalizado para evitar JOINs en lectura.
+ *   TRIGGER  → Productos de esta categoría ACTIVAN la promo cuando
+ *              aparecen en la orden.
+ *              Ejemplo: categoría "Platos Adulto" en GRUPO_CONDICIONAL.
+ *
+ *   BENEFICIO → Productos de esta categoría RECIBEN el descuento.
+ *               Ejemplo: categoría "Menú Infantil" en GRUPO_CONDICIONAL.
+ *
+ * Para promos simples (PORCENTAJE, MONTO_FIJO) donde el alcance es
+ * el mismo para trigger y beneficio, usar rol = TRIGGER.
  */
 @Entity
 @Table(
     name = "promocion_categorias",
     uniqueConstraints = @UniqueConstraint(
         name = "uq_promocion_categoria",
-        columnNames = {"promocion_id", "categoria_id"}
+        columnNames = {"promocion_id", "categoria_id", "rol"}
     )
 )
 @Data
@@ -45,6 +51,11 @@ public class PromocionCategoria {
 
     @Column(name = "nombre_categoria", nullable = false, length = 200)
     private String nombreCategoria;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rol", nullable = false, length = 20)
+    @Builder.Default
+    private RolPromocionAlcance rol = RolPromocionAlcance.TRIGGER;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

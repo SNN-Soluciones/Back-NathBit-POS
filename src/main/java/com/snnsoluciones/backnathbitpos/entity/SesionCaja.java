@@ -92,6 +92,12 @@ public class SesionCaja {
     
     @Column(name = "ip_cierre", length = 45)
     private String ipCierre;
+
+    @Column(name = "modo_caja", length = 20)
+    private String modoCaja; // SHARED | POR_USUARIO
+
+    @Column(name = "estado_conteo", length = 20)
+    private String estadoConteo; // PENDIENTE | COMPLETADO
     
     @PrePersist
     protected void onCreate() {

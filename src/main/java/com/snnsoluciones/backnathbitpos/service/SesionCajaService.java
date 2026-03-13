@@ -1,11 +1,14 @@
 package com.snnsoluciones.backnathbitpos.service;
 
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
+import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoRequest;
+import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoResponse;
 import com.snnsoluciones.backnathbitpos.dto.sesion.OpcionesImpresionCierreDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 
+import com.snnsoluciones.backnathbitpos.entity.SesionCajaUsuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,6 +22,19 @@ import org.springframework.data.domain.Pageable;
 public interface SesionCajaService {
 
     void enviarEmailCierre(Long sesionId, OpcionesImpresionCierreDTO opciones, String emailAdicional);
+    SesionCajaUsuario unirseATurno(Long usuarioId, Long sesionCajaId);
+
+    CerrarTurnoResponse cerrarTurno(Long turnoId, CerrarTurnoRequest request);
+
+    List<SesionCaja> obtenerSesionesSharedActivasPorSucursal(Long sucursalId);
+
+    Optional<SesionCaja> obtenerSesionActivaPorTerminal(Long terminalId);
+
+    SesionCajaUsuario obtenerMiTurnoActivo(Long usuarioId);
+
+    SesionCaja confirmarCierreSesion(Long sesionCajaId, Long usuarioId);
+
+    BigDecimal calcularMontoEsperadoEfectivoHasta(SesionCaja sesion, LocalDateTime hasta);
 
     // Gestión de sesiones
     SesionCaja abrirSesion(Long usuarioId, Long terminalId, BigDecimal montoInicial);

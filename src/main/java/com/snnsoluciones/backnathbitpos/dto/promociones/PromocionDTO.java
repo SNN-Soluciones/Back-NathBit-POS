@@ -1,5 +1,8 @@
 package com.snnsoluciones.backnathbitpos.dto.promociones;
 
+import com.snnsoluciones.backnathbitpos.enums.CriterioDescuento;
+import com.snnsoluciones.backnathbitpos.enums.CriterioItemGratis;
+import com.snnsoluciones.backnathbitpos.enums.TipoPromocion;
 import com.snnsoluciones.backnathbitpos.entity.Promocion;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,17 +10,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * DTO de respuesta completo para Promocion.
- * Incluye los items anidados cuando aplica
- * (BARRA_LIBRE, ALL_YOU_CAN_EAT, ESPECIAL).
- */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -30,8 +29,17 @@ public class PromocionDTO {
 
     private String nombre;
     private String descripcion;
-    private com.snnsoluciones.nathbitbusinesscore.model.enums.TipoPromocion tipo;
+    private TipoPromocion tipo;
     private Boolean activo;
+
+    // ── Vigencia por fecha ────────────────────────────────────────────
+
+    private LocalDate fechaInicio;
+    private LocalDate fechaFin;
+
+    // ── Stacking ──────────────────────────────────────────────────────
+
+    private Boolean permitirStack;
 
     // ── Días activos ──────────────────────────────────────────────────
 
@@ -43,29 +51,37 @@ public class PromocionDTO {
     private Boolean sabado;
     private Boolean domingo;
 
-    // ── Rango horario (NULL = todo el día comercial) ──────────────────
+    // ── Rango horario ─────────────────────────────────────────────────
 
     private LocalTime horaInicio;
     private LocalTime horaFin;
 
-    // ── Campos por tipo ───────────────────────────────────────────────
+    // ── NXM ───────────────────────────────────────────────────────────
 
-    /** NXM: cantidad que lleva el cliente */
     private Integer llevaN;
-
-    /** NXM: cantidad que paga el cliente */
     private Integer pagaM;
+    private CriterioItemGratis criterioItemGratis;
 
-    /** PORCENTAJE: % de descuento */
+    // ── PORCENTAJE ────────────────────────────────────────────────────
+
     private BigDecimal porcentajeDescuento;
 
-    /** MONTO_FIJO: monto a descontar */
+    // ── MONTO_FIJO ────────────────────────────────────────────────────
+
     private BigDecimal montoDescuento;
 
-    /** BARRA_LIBRE / ALL_YOU_CAN_EAT: precio fijo del combo */
+    // ── BARRA_LIBRE / ALL_YOU_CAN_EAT ────────────────────────────────
+
     private BigDecimal precioPromo;
 
-    // ── Items incluidos ───────────────────────────────────────────────
+    // ── GRUPO_CONDICIONAL ─────────────────────────────────────────────
+
+    private Integer cantidadTrigger;
+    private Integer cantidadBeneficio;
+    private CriterioDescuento criterioBeneficio;
+    private BigDecimal valorBeneficio;
+
+    // ── Colecciones ───────────────────────────────────────────────────
 
     private List<PromocionItemDTO> items;
 
@@ -80,34 +96,42 @@ public class PromocionDTO {
         if (entity == null) return null;
 
         List<PromocionItemDTO> itemsDTO = entity.getItems() != null
-                ? entity.getItems().stream()
-                        .map(PromocionItemDTO::fromEntity)
-                        .collect(Collectors.toList())
-                : Collections.emptyList();
+            ? entity.getItems().stream()
+            .map(PromocionItemDTO::fromEntity)
+            .collect(Collectors.toList())
+            : Collections.emptyList();
 
         return PromocionDTO.builder()
-                .id(entity.getId())
-                .nombre(entity.getNombre())
-                .descripcion(entity.getDescripcion())
-                .tipo(entity.getTipo())
-                .activo(entity.getActivo())
-                .lunes(entity.getLunes())
-                .martes(entity.getMartes())
-                .miercoles(entity.getMiercoles())
-                .jueves(entity.getJueves())
-                .viernes(entity.getViernes())
-                .sabado(entity.getSabado())
-                .domingo(entity.getDomingo())
-                .horaInicio(entity.getHoraInicio())
-                .horaFin(entity.getHoraFin())
-                .llevaN(entity.getLlevaN())
-                .pagaM(entity.getPagaM())
-                .porcentajeDescuento(entity.getPorcentajeDescuento())
-                .montoDescuento(entity.getMontoDescuento())
-                .precioPromo(entity.getPrecioPromo())
-                .items(itemsDTO)
-                .createdAt(entity.getCreatedAt())
-                .updatedAt(entity.getUpdatedAt())
-                .build();
+            .id(entity.getId())
+            .nombre(entity.getNombre())
+            .descripcion(entity.getDescripcion())
+            .tipo(entity.getTipo())
+            .activo(entity.getActivo())
+            .fechaInicio(entity.getFechaInicio())
+            .fechaFin(entity.getFechaFin())
+            .permitirStack(entity.getPermitirStack())
+            .lunes(entity.getLunes())
+            .martes(entity.getMartes())
+            .miercoles(entity.getMiercoles())
+            .jueves(entity.getJueves())
+            .viernes(entity.getViernes())
+            .sabado(entity.getSabado())
+            .domingo(entity.getDomingo())
+            .horaInicio(entity.getHoraInicio())
+            .horaFin(entity.getHoraFin())
+            .llevaN(entity.getLlevaN())
+            .pagaM(entity.getPagaM())
+            .criterioItemGratis(entity.getCriterioItemGratis())
+            .porcentajeDescuento(entity.getPorcentajeDescuento())
+            .montoDescuento(entity.getMontoDescuento())
+            .precioPromo(entity.getPrecioPromo())
+            .cantidadTrigger(entity.getCantidadTrigger())
+            .cantidadBeneficio(entity.getCantidadBeneficio())
+            .criterioBeneficio(entity.getCriterioBeneficio())
+            .valorBeneficio(entity.getValorBeneficio())
+            .items(itemsDTO)
+            .createdAt(entity.getCreatedAt())
+            .updatedAt(entity.getUpdatedAt())
+            .build();
     }
 }

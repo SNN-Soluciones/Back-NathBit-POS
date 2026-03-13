@@ -28,4 +28,14 @@ public class SesionCajaDTO {
     private BigDecimal totalVentas;
     private EstadoSesion estado;
     private String observaciones;
+
+    private BigDecimal totalEfectivo;
+    private BigDecimal totalTarjeta;
+    private BigDecimal totalTransferencia;
+    private BigDecimal totalOtros;
+    private BigDecimal totalPlataformas;   // ← agregar junto a los otros totales
+    private BigDecimal montoEsperado;        // efectivo esperado al cierre
+    private BigDecimal diferenciaCierre;     // montoCierre - montoEsperado
+    private Long terminalId;
+    private String terminalNombre;
 }

@@ -25,4 +25,7 @@ public class OpcionesImpresionCierreDTO {
 
     @Builder.Default
     private Boolean incluirPlataformas = false;
+
+    @Builder.Default
+    private Boolean incluirDetalle = false;
 }

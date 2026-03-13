@@ -34,6 +34,11 @@ public class CierreDatafono {
     @Column(name = "datafono", nullable = false, length = 100)
     private String datafono;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sesion_caja_usuario_id", nullable = true)
+    @JsonIgnore
+    private SesionCajaUsuario sesionCajaUsuario;
+
     @Column(name = "monto", precision = 18, scale = 2, nullable = false)
     @Builder.Default
     private BigDecimal monto = BigDecimal.ZERO;

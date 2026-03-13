@@ -21,7 +21,7 @@ import org.springframework.stereotype.Repository;
 public interface FacturaRepository extends JpaRepository<Factura, Long>,
     JpaSpecificationExecutor<Factura> {
 
-  @Query("SELECT f FROM Factura f WHERE f.sesionCajaUsuario.id = :turnoId AND f.estado NOT IN ('ANULADA', 'RECHAZADA')")
+  @Query("SELECT DISTINCT f FROM Factura f LEFT JOIN FETCH f.mediosPago WHERE f.sesionCajaUsuario.id = :turnoId AND f.estado NOT IN ('ANULADA', 'RECHAZADA')")
   List<Factura> findByTurnoId(@Param("turnoId") Long turnoId);
 
   Optional<Factura> findByClave(String clave);

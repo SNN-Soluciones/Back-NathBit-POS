@@ -8,6 +8,8 @@ import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.CierreDatafono;
 import com.snnsoluciones.backnathbitpos.entity.Empresa;
+import com.snnsoluciones.backnathbitpos.entity.Factura;
+import com.snnsoluciones.backnathbitpos.entity.FacturaInterna;
 import com.snnsoluciones.backnathbitpos.entity.MovimientoCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 import com.snnsoluciones.backnathbitpos.entity.SesionCajaDenominacion;
@@ -15,6 +17,8 @@ import com.snnsoluciones.backnathbitpos.entity.SesionCajaUsuario;
 import com.snnsoluciones.backnathbitpos.enums.EstadoSesion;
 import com.snnsoluciones.backnathbitpos.exception.ResourceNotFoundException;
 import com.snnsoluciones.backnathbitpos.repository.CierreDatafonoRepository;
+import com.snnsoluciones.backnathbitpos.repository.FacturaInternaRepository;
+import com.snnsoluciones.backnathbitpos.repository.FacturaRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaDenominacionRepository;
 import com.snnsoluciones.backnathbitpos.repository.SesionCajaUsuarioRepository;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
@@ -48,6 +52,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -67,6 +72,8 @@ public class SesionCajaController {
   private final PdfGeneratorService pdfGeneratorService;
   private final CierreDatafonoRepository cierreDatafonoRepository;
   private final SesionCajaUsuarioRepository sesionCajaUsuarioRepository;
+  private final FacturaRepository facturaRepository;
+  private final FacturaInternaRepository facturaInternaRepository;
 
   // =========================================================================
   // APERTURA
@@ -305,6 +312,7 @@ public class SesionCajaController {
   // RESUMEN DE TURNO
   // =========================================================================
 
+  @Transactional(readOnly = true)  // ← agregar esto
   @Operation(summary = "Resumen ligero para cierre de turno SHARED")
   @GetMapping("/turnos/{turnoId}/resumen")
   @PreAuthorize("hasAnyRole('ROOT','SUPER_ADMIN','ADMIN','JEFE_CAJAS','CAJERO')")
@@ -314,8 +322,45 @@ public class SesionCajaController {
     return sesionCajaUsuarioRepository.findById(turnoId)
         .map(turno -> {
           SesionCaja sesion = turno.getSesionCaja();
-          BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperadoEfectivoHasta(
-              sesion, LocalDateTime.now(ZoneId.of("America/Costa_Rica")));
+          LocalDateTime ahora = LocalDateTime.now(ZoneId.of("America/Costa_Rica"));
+
+          BigDecimal montoEsperado = sesionCajaService
+              .calcularMontoEsperadoEfectivoHasta(sesion, ahora);
+
+          // ← Calcular desde facturas reales del turno
+          List<Factura> facturas = facturaRepository.findByTurnoId(turnoId);
+          List<FacturaInterna> internas = facturaInternaRepository.findByTurnoId(turnoId);
+
+          BigDecimal ventasEfectivo      = BigDecimal.ZERO;
+          BigDecimal ventasTarjeta       = BigDecimal.ZERO;
+          BigDecimal ventasTransferencia = BigDecimal.ZERO;
+          BigDecimal ventasOtros         = BigDecimal.ZERO;
+
+          for (Factura f : facturas) {
+            if (f.getMediosPago() != null) {
+              for (var mp : f.getMediosPago()) {
+                switch (obtenerMetodoPagoEstandar(mp.getMedioPago().name())) {
+                  case "E"  -> ventasEfectivo      = ventasEfectivo.add(mp.getMonto());
+                  case "TC" -> ventasTarjeta        = ventasTarjeta.add(mp.getMonto());
+                  case "TB" -> ventasTransferencia  = ventasTransferencia.add(mp.getMonto());
+                  case "S"  -> ventasOtros           = ventasOtros.add(mp.getMonto());
+                }
+              }
+            }
+          }
+
+          for (FacturaInterna fi : internas) {
+            if (fi.getMediosPago() != null) {
+              for (var mp : fi.getMediosPago()) {
+                switch (obtenerMetodoPagoEstandar(mp.getTipo())) {
+                  case "E"  -> ventasEfectivo      = ventasEfectivo.add(mp.getMonto());
+                  case "TC" -> ventasTarjeta        = ventasTarjeta.add(mp.getMonto());
+                  case "TB" -> ventasTransferencia  = ventasTransferencia.add(mp.getMonto());
+                  case "S"  -> ventasOtros           = ventasOtros.add(mp.getMonto());
+                }
+              }
+            }
+          }
 
           Map<String, Object> data = new java.util.LinkedHashMap<>();
           data.put("turnoId",              turno.getId());
@@ -326,10 +371,10 @@ public class SesionCajaController {
           data.put("fechaInicio",          turno.getFechaHoraInicio());
           data.put("montoInicial",         sesion.getMontoInicial());
           data.put("fondoInicioTurno",     turno.getFondoInicioTurno());
-          data.put("ventasEfectivo",       turno.getVentasEfectivo());
-          data.put("ventasTarjeta",        turno.getVentasTarjeta());
-          data.put("ventasTransferencia",  turno.getVentasTransferencia());
-          data.put("ventasOtros",          turno.getVentasOtros());
+          data.put("ventasEfectivo",       ventasEfectivo);
+          data.put("ventasTarjeta",        ventasTarjeta);
+          data.put("ventasTransferencia",  ventasTransferencia);
+          data.put("ventasOtros",          ventasOtros);
           data.put("montoEsperado",        montoEsperado);
           data.put("estado",               turno.getEstado());
 
@@ -1086,5 +1131,18 @@ public class SesionCajaController {
         .terminalId(turno.getSesionCaja().getTerminal().getId())
         .terminalNombre(turno.getSesionCaja().getTerminal().getNombre())
         .build();
+  }
+
+  private String obtenerMetodoPagoEstandar(String tipo) {
+    if (tipo == null) return "S";
+    return switch (tipo.toUpperCase()) {
+      case "EFECTIVO", "E"                              -> "E";
+      case "TARJETA", "TARJETA_CREDITO",
+           "TARJETA_DEBITO", "TC", "TD"                -> "TC";
+      case "TRANSFERENCIA", "TB"                        -> "TB";
+      case "SINPE_MOVIL", "SINPE", "S"                 -> "S";
+      case "PLATAFORMA_DIGITAL"                         -> "S";
+      default                                           -> "S";
+    };
   }
 }

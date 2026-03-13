@@ -170,6 +170,10 @@ public class FacturaInternaService {
             .notas(request.getNotas())
             .build();
 
+        sesionCajaUsuarioRepository
+            .findTurnoActivoUsuario(request.getUsuarioId())
+            .ifPresent(factura::setSesionCajaUsuario);
+
         if (clienteId != null) {
             Cliente cliente = clienteRepository.findById(clienteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));

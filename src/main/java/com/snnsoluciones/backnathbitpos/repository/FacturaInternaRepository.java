@@ -16,7 +16,7 @@ import java.util.Optional;
 @Repository
 public interface FacturaInternaRepository extends JpaRepository<FacturaInterna, Long> {
 
-    @Query("SELECT fi FROM FacturaInterna fi WHERE fi.sesionCajaUsuario.id = :turnoId AND fi.estado != 'ANULADA'")
+    @Query("SELECT DISTINCT fi FROM FacturaInterna fi LEFT JOIN FETCH fi.mediosPago WHERE fi.sesionCajaUsuario.id = :turnoId AND fi.estado != 'ANULADA'")
     List<FacturaInterna> findByTurnoId(@Param("turnoId") Long turnoId);
 
     @Query("""

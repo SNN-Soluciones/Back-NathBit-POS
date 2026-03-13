@@ -186,6 +186,10 @@ public class FacturaServiceImpl implements FacturaService {
       // Si viene sesión, la asignamos normalmente
       sesionCajaRepository.findById(request.getSesionCajaId())
           .ifPresent(factura::setSesionCaja);
+
+      sesionCajaUsuarioRepository
+          .findTurnoActivoUsuario(request.getUsuarioId())
+          .ifPresent(factura::setSesionCajaUsuario);
     } else {
       // Si NO viene sesión, solo permitimos si es SUPER_ADMIN
       if (!usuario.getRol().equals(RolNombre.SUPER_ADMIN)) {

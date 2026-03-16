@@ -50,6 +50,7 @@ public class PdfGeneratorService {
         "ventas_basico",
         "ventas_por_tipo_pago",
         "cierre_caja_ticket",
+        "reporte_sesion",
 
         //COMANDAS
         "comanda_cocina",

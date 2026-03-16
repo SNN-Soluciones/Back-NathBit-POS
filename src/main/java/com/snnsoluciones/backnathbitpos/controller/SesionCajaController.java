@@ -89,7 +89,6 @@ public class SesionCajaController {
     try {
       Long usuarioId = jwtTokenProvider.getUserIdFromToken(getToken(httpRequest));
 
-      // ✅ Fix: verificar turno activo (no dueño de sesión — eso no aplica en SHARED)
       Optional<SesionCajaUsuario> turnoActivo = sesionCajaUsuarioRepository
           .findTurnoActivoUsuario(usuarioId);
 
@@ -101,7 +100,6 @@ public class SesionCajaController {
                     + ". Cerrá ese turno antes de abrir otra sesión."));
       }
 
-      // ✅ Fix: si la terminal ya tiene sesión SHARED activa → redirigir a unirse
       if (sesionCajaService.terminalTieneSesionAbierta(request.getTerminalId())) {
         return ResponseEntity.badRequest()
             .body(ApiResponse.error(
@@ -114,9 +112,18 @@ public class SesionCajaController {
           request.getMontoInicial()
       );
 
+      // Obtener el turnoId del turno recién creado (atómico — se creó en abrirSesion)
+      Long turnoId = sesionCajaUsuarioRepository
+          .findTurnoActivoUsuario(usuarioId)
+          .map(SesionCajaUsuario::getId)
+          .orElse(null);
+
+      SesionCajaResponse respuesta = construirResponse(sesion);
+      respuesta.setTurnoId(turnoId);
+
       return ResponseEntity.ok(ApiResponse.ok(
           "Sesión de caja abierta exitosamente",
-          construirResponse(sesion)
+          respuesta
       ));
 
     } catch (Exception e) {
@@ -148,9 +155,7 @@ public class SesionCajaController {
     }
   }
 
-  @Operation(summary = "Unirse a turno en sesión compartida",
-      description = "El cajero se une con su propio JWT. "
-          + "ADMIN/JEFE_CAJAS puede pasar usuarioId en el body para unir a otro cajero.")
+  @Operation(summary = "Unirse a turno en sesión compartida")
   @PostMapping("/{sesionCajaId}/turnos/unirse")
   @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
   public ResponseEntity<ApiResponse<SesionCajaUsuarioDTO>> unirseATurno(
@@ -160,7 +165,6 @@ public class SesionCajaController {
     try {
       Long usuarioIdJwt = jwtTokenProvider.getUserIdFromToken(getToken(httpRequest));
 
-      // Si viene usuarioId en el body Y el caller es supervisor → unir a ese usuario
       Long usuarioIdFinal = usuarioIdJwt;
       if (body != null && body.containsKey("usuarioId") && securityContextService.isSupervisor()) {
         usuarioIdFinal = body.get("usuarioId");
@@ -191,7 +195,6 @@ public class SesionCajaController {
       SesionCajaUsuario turno = sesionCajaUsuarioRepository.findById(turnoId)
           .orElseThrow(() -> new RuntimeException("Turno no encontrado"));
 
-      // Solo el dueño del turno, JEFE_CAJAS o ADMIN pueden cerrar
       boolean esDueno = turno.getUsuario().getId().equals(usuarioId);
       boolean esSupervisor = securityContextService.isSupervisor();
 
@@ -211,9 +214,7 @@ public class SesionCajaController {
     }
   }
 
-  @Operation(summary = "Confirmar cierre definitivo de sesión SHARED",
-      description = "Se llama después de cerrarTurno cuando esSesionCerrada=true. "
-          + "Cierra la sesión maestra solo si todos los turnos están cerrados.")
+  @Operation(summary = "Confirmar cierre definitivo de sesión SHARED")
   @PostMapping("/{sesionCajaId}/confirmar-cierre")
   @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")
   public ResponseEntity<ApiResponse<SesionCajaResponse>> confirmarCierreSesion(
@@ -279,7 +280,6 @@ public class SesionCajaController {
       List<SesionCaja> sesiones = sesionCajaService
           .obtenerSesionesSharedActivasPorSucursal(sucursalId);
 
-      // Usar findSharedActivasBySucursal directamente devuelve lista — delegamos al service
       List<SesionCajaResponse> response = sesiones.stream()
           .map(this::construirResponse)
           .collect(Collectors.toList());
@@ -312,10 +312,10 @@ public class SesionCajaController {
   // RESUMEN DE TURNO
   // =========================================================================
 
-  @Transactional(readOnly = true)  // ← agregar esto
+  @Transactional(readOnly = true)
   @Operation(summary = "Resumen ligero para cierre de turno SHARED")
   @GetMapping("/turnos/{turnoId}/resumen")
-  @PreAuthorize("hasAnyRole('ROOT','SUPER_ADMIN','ADMIN','JEFE_CAJAS','CAJERO')")
+  @PreAuthorize("hasAnyRole('ROOT','SUPER_ADMIN','ADMIN','JEFE_CAJAS','CAJERO','SOPORTE')")
   public ResponseEntity<ApiResponse<Map<String, Object>>> obtenerResumenTurno(
       @PathVariable Long turnoId) {
 
@@ -327,7 +327,6 @@ public class SesionCajaController {
           BigDecimal montoEsperado = sesionCajaService
               .calcularMontoEsperadoEfectivoHasta(sesion, ahora);
 
-          // ← Calcular desde facturas reales del turno
           List<Factura> facturas = facturaRepository.findByTurnoId(turnoId);
           List<FacturaInterna> internas = facturaInternaRepository.findByTurnoId(turnoId);
 
@@ -520,68 +519,8 @@ public class SesionCajaController {
       List<CierreDatafono> datafonos = cierreDatafonoRepository.findBySesionCajaId(id);
       Map<String, Integer> conteoDocumentos = sesionCajaService.contarDocumentosPorTipo(id);
 
-      BigDecimal totalEntradas = BigDecimal.ZERO;
-      BigDecimal totalSalidas = BigDecimal.ZERO;
-      BigDecimal totalVales = BigDecimal.ZERO;
-      BigDecimal totalArqueos = BigDecimal.ZERO;
-      BigDecimal totalPagosProveedor = BigDecimal.ZERO;
-
-      for (MovimientoCaja mov : movimientos) {
-        if (mov.getTipoMovimiento().name().startsWith("ENTRADA")) {
-          totalEntradas = totalEntradas.add(mov.getMonto());
-        } else if (mov.getTipoMovimiento().name().equals("SALIDA_VALE")) {
-          totalVales = totalVales.add(mov.getMonto());
-        } else if (mov.getTipoMovimiento().name().equals("SALIDA_ARQUEO")) {
-          totalArqueos = totalArqueos.add(mov.getMonto());
-        } else if (mov.getTipoMovimiento().name().equals("SALIDA_PAGO_PROVEEDOR")) {
-          totalPagosProveedor = totalPagosProveedor.add(mov.getMonto());
-        }
-        if (mov.getTipoMovimiento().name().startsWith("SALIDA")) {
-          totalSalidas = totalSalidas.add(mov.getMonto());
-        }
-      }
-
-      Map<String, Object> params = new HashMap<>();
-      params.put("EMPRESA_NOMBRE", empresa.getNombreComercial() != null ?
-          empresa.getNombreComercial() : empresa.getNombreRazonSocial());
-      params.put("EMPRESA_CEDULA", empresa.getIdentificacion());
-      params.put("SESION_ID", sesion.getId());
-      params.put("USUARIO", sesion.getUsuario() != null ?
-          sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos() : "");
-      params.put("TERMINAL", sesion.getTerminal().getNombre());
-      params.put("SUCURSAL", sesion.getTerminal().getSucursal().getNombre());
-      params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
-      params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
-
-      BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
-      params.put("MONTO_INICIAL", sesion.getMontoInicial());
-      params.put("MONTO_ESPERADO", montoEsperado);
-      params.put("MONTO_CIERRE", sesion.getMontoCierre());
-      params.put("DIFERENCIA", sesion.getMontoCierre().subtract(montoEsperado));
-      params.put("TOTAL_VENTAS", sesion.getTotalVentas());
-      params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
-      params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
-      params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
-      params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
-      params.put("TOTAL_SINPE", sesion.getTotalOtros());
-      params.put("TOTAL_ENTRADAS", totalEntradas);
-      params.put("TOTAL_SALIDAS", totalSalidas);
-      params.put("TOTAL_VALES", totalVales);
-      params.put("TOTAL_ARQUEOS", totalArqueos);
-      params.put("TOTAL_PAGOS_PROVEEDOR", totalPagosProveedor);
-      params.put("CANT_FACTURAS_ELECTRONICAS", conteoDocumentos.getOrDefault("FACTURA_ELECTRONICA", 0));
-      params.put("CANT_TIQUETES_ELECTRONICOS", conteoDocumentos.getOrDefault("TIQUETE_ELECTRONICO", 0));
-      params.put("CANT_FACTURAS_INTERNAS", conteoDocumentos.getOrDefault("FACTURA_INTERNA", 0));
-      params.put("CANT_TIQUETES_INTERNOS", conteoDocumentos.getOrDefault("TIQUETE_INTERNO", 0));
-      params.put("CANT_NOTAS_CREDITO", conteoDocumentos.getOrDefault("NOTA_CREDITO", 0));
-      params.put("TOTAL_DOCUMENTOS", conteoDocumentos.values().stream().mapToInt(Integer::intValue).sum());
-      params.put("MONTO_RETIRADO", sesion.getMontoRetirado() != null ? sesion.getMontoRetirado() : BigDecimal.ZERO);
-      params.put("FONDO_CAJA", sesion.getFondoCaja() != null ? sesion.getFondoCaja() : BigDecimal.ZERO);
-      params.put("OBSERVACIONES", sesion.getObservacionesCierre() != null ?
-          sesion.getObservacionesCierre() : "Sin observaciones");
-      params.put("MOVIMIENTOS_DS", new JRBeanCollectionDataSource(movimientos));
-      params.put("DATAFONOS_DS", new JRBeanCollectionDataSource(datafonos));
-      params.put("DENOMINACIONES_DS", new JRBeanCollectionDataSource(denominaciones));
+      Map<String, Object> params = buildReporteParams(sesion, empresa, movimientos, datafonos,
+          denominaciones, conteoDocumentos);
 
       byte[] pdf = pdfGeneratorService.generarPdf("cierre_caja_ticket", params, new ArrayList<>());
 
@@ -603,7 +542,7 @@ public class SesionCajaController {
   public ResponseEntity<byte[]> imprimirCierreTicket(@PathVariable Long id,
       HttpServletRequest request) {
 
-    log.info("📄 Generando cierre de caja mejorado para sesión: {}", id);
+    log.info("📄 Generando cierre de caja para sesión: {}", id);
 
     try {
       String token = request.getHeader("Authorization").substring(7);
@@ -616,8 +555,14 @@ public class SesionCajaController {
         throw new RuntimeException("La sesión debe estar cerrada para generar el reporte");
       }
 
-      if (!securityContextService.isSupervisor() &&
-          !sesion.getUsuario().getId().equals(usuarioId)) {
+      // Puede ver el reporte si: es supervisor, es el dueño, o tuvo un turno en la sesión
+      boolean esDueno = sesion.getUsuario().getId().equals(usuarioId);
+      boolean tieneTurnoEnSesion = sesionCajaUsuarioRepository
+          .findBySesionCajaId(sesion.getId())
+          .stream()
+          .anyMatch(t -> t.getUsuario().getId().equals(usuarioId));
+
+      if (!securityContextService.isSupervisor() && !esDueno && !tieneTurnoEnSesion) {
         throw new RuntimeException("No tiene permisos para ver este reporte");
       }
 
@@ -627,68 +572,8 @@ public class SesionCajaController {
       List<CierreDatafono> datafonos = cierreDatafonoRepository.findBySesionCajaId(id);
       Map<String, Integer> conteoDocumentos = sesionCajaService.contarDocumentosPorTipo(id);
 
-      BigDecimal totalEntradas = BigDecimal.ZERO;
-      BigDecimal totalSalidas = BigDecimal.ZERO;
-      BigDecimal totalVales = BigDecimal.ZERO;
-      BigDecimal totalArqueos = BigDecimal.ZERO;
-      BigDecimal totalPagosProveedor = BigDecimal.ZERO;
-
-      for (MovimientoCaja mov : movimientos) {
-        if (mov.getTipoMovimiento().name().startsWith("ENTRADA")) {
-          totalEntradas = totalEntradas.add(mov.getMonto());
-        } else if (mov.getTipoMovimiento().name().equals("SALIDA_VALE")) {
-          totalVales = totalVales.add(mov.getMonto());
-        } else if (mov.getTipoMovimiento().name().equals("SALIDA_ARQUEO")) {
-          totalArqueos = totalArqueos.add(mov.getMonto());
-        } else if (mov.getTipoMovimiento().name().equals("SALIDA_PAGO_PROVEEDOR")) {
-          totalPagosProveedor = totalPagosProveedor.add(mov.getMonto());
-        }
-        if (mov.getTipoMovimiento().name().startsWith("SALIDA")) {
-          totalSalidas = totalSalidas.add(mov.getMonto());
-        }
-      }
-
-      Map<String, Object> params = new HashMap<>();
-      params.put("EMPRESA_NOMBRE", empresa.getNombreComercial() != null ?
-          empresa.getNombreComercial() : empresa.getNombreRazonSocial());
-      params.put("EMPRESA_CEDULA", empresa.getIdentificacion());
-      params.put("SESION_ID", sesion.getId());
-      params.put("USUARIO", sesion.getUsuario() != null ?
-          sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos() : "");
-      params.put("TERMINAL", sesion.getTerminal().getNombre());
-      params.put("SUCURSAL", sesion.getTerminal().getSucursal().getNombre());
-      params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
-      params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
-
-      BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
-      params.put("MONTO_INICIAL", sesion.getMontoInicial());
-      params.put("MONTO_ESPERADO", montoEsperado);
-      params.put("MONTO_CIERRE", sesion.getMontoCierre());
-      params.put("DIFERENCIA", sesion.getMontoCierre().subtract(montoEsperado));
-      params.put("TOTAL_VENTAS", sesion.getTotalVentas());
-      params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
-      params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
-      params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
-      params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
-      params.put("TOTAL_SINPE", sesion.getTotalOtros());
-      params.put("TOTAL_ENTRADAS", totalEntradas);
-      params.put("TOTAL_SALIDAS", totalSalidas);
-      params.put("TOTAL_VALES", totalVales);
-      params.put("TOTAL_ARQUEOS", totalArqueos);
-      params.put("TOTAL_PAGOS_PROVEEDOR", totalPagosProveedor);
-      params.put("CANT_FACTURAS_ELECTRONICAS", conteoDocumentos.getOrDefault("FACTURA_ELECTRONICA", 0));
-      params.put("CANT_TIQUETES_ELECTRONICOS", conteoDocumentos.getOrDefault("TIQUETE_ELECTRONICO", 0));
-      params.put("CANT_FACTURAS_INTERNAS", conteoDocumentos.getOrDefault("FACTURA_INTERNA", 0));
-      params.put("CANT_TIQUETES_INTERNOS", conteoDocumentos.getOrDefault("TIQUETE_INTERNO", 0));
-      params.put("CANT_NOTAS_CREDITO", conteoDocumentos.getOrDefault("NOTA_CREDITO", 0));
-      params.put("TOTAL_DOCUMENTOS", conteoDocumentos.values().stream().mapToInt(Integer::intValue).sum());
-      params.put("MONTO_RETIRADO", sesion.getMontoRetirado() != null ? sesion.getMontoRetirado() : BigDecimal.ZERO);
-      params.put("FONDO_CAJA", sesion.getFondoCaja() != null ? sesion.getFondoCaja() : BigDecimal.ZERO);
-      params.put("OBSERVACIONES", sesion.getObservacionesCierre() != null ?
-          sesion.getObservacionesCierre() : "Sin observaciones");
-      params.put("MOVIMIENTOS_DS", new JRBeanCollectionDataSource(movimientos));
-      params.put("DATAFONOS_DS", new JRBeanCollectionDataSource(datafonos));
-      params.put("DENOMINACIONES_DS", new JRBeanCollectionDataSource(denominaciones));
+      Map<String, Object> params = buildReporteParams(sesion, empresa, movimientos, datafonos,
+          denominaciones, conteoDocumentos);
 
       byte[] pdf = pdfGeneratorService.generarPdf("cierre_caja_ticket", params, new ArrayList<>());
 
@@ -738,8 +623,14 @@ public class SesionCajaController {
       SesionCaja sesion = sesionCajaService.buscarPorId(id)
           .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
 
-      if (!securityContextService.isSupervisor() &&
-          !sesion.getUsuario().getId().equals(usuarioId)) {
+      // Puede ver el reporte si: es supervisor, es el dueño, o tuvo un turno en la sesión
+      boolean esDueno = sesion.getUsuario().getId().equals(usuarioId);
+      boolean tieneTurnoEnSesion = sesionCajaUsuarioRepository
+          .findBySesionCajaId(sesion.getId())
+          .stream()
+          .anyMatch(t -> t.getUsuario().getId().equals(usuarioId));
+
+      if (!securityContextService.isSupervisor() && !esDueno && !tieneTurnoEnSesion) {
         return ResponseEntity.status(403)
             .body("<html><body><h1>No tiene permisos para ver este reporte</h1></body></html>");
       }
@@ -1039,9 +930,200 @@ public class SesionCajaController {
     }
   }
 
+
+  @Operation(summary = "Reporte completo de sesión con todos los turnos (HTML)")
+  @GetMapping("/{id}/reporte-sesion")
+  @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+  public ResponseEntity<String> obtenerReporteSesion(
+      @PathVariable Long id,
+      HttpServletRequest request) {
+
+    try {
+      String token = request.getHeader("Authorization").substring(7);
+      Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
+
+      SesionCaja sesion = sesionCajaService.buscarPorId(id)
+          .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+      // Puede ver si: es supervisor, es dueño, o tuvo un turno en la sesión
+      boolean esDueno = sesion.getUsuario().getId().equals(usuarioId);
+      boolean tieneTurno = sesionCajaUsuarioRepository
+          .findBySesionCajaId(sesion.getId()).stream()
+          .anyMatch(t -> t.getUsuario().getId().equals(usuarioId));
+
+      if (!securityContextService.isSupervisor() && !esDueno && !tieneTurno) {
+        return ResponseEntity.status(403)
+            .body("<html><body><h1>Sin permisos para ver este reporte</h1></body></html>");
+      }
+
+      String html = sesionCajaService.generarHtmlReporteSesion(id);
+
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+          .body(html);
+
+    } catch (Exception e) {
+      log.error("Error generando reporte sesión {}: {}", id, e.getMessage());
+      return ResponseEntity.status(500)
+          .body("<html><body><h1>Error: " + e.getMessage() + "</h1></body></html>");
+    }
+  }
+
+  @Operation(summary = "Reporte completo de sesión con todos los turnos (PDF Jasper)")
+  @GetMapping("/{id}/reporte-sesion/pdf")
+  @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+  public ResponseEntity<byte[]> obtenerReporteSesionPdf(
+      @PathVariable Long id,
+      HttpServletRequest request) {
+
+    try {
+      String token = request.getHeader("Authorization").substring(7);
+      Long usuarioId = jwtTokenProvider.getUserIdFromToken(token);
+
+      SesionCaja sesion = sesionCajaService.buscarPorId(id)
+          .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+      boolean esDueno = sesion.getUsuario().getId().equals(usuarioId);
+      boolean tieneTurno = sesionCajaUsuarioRepository
+          .findBySesionCajaId(sesion.getId()).stream()
+          .anyMatch(t -> t.getUsuario().getId().equals(usuarioId));
+
+      if (!securityContextService.isSupervisor() && !esDueno && !tieneTurno) {
+        return ResponseEntity.status(403).body("Sin permisos".getBytes());
+      }
+
+      Empresa empresa = sesion.getTerminal().getSucursal().getEmpresa();
+      List<com.snnsoluciones.backnathbitpos.dto.sesiones.TurnoReporteDTO> turnos =
+          sesionCajaService.obtenerTurnosParaReporte(id);
+
+      // Calcular totales
+      java.math.BigDecimal totEf  = turnos.stream().map(t -> t.getVentasEfectivo()     != null ? t.getVentasEfectivo()     : java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+      java.math.BigDecimal totTc  = turnos.stream().map(t -> t.getVentasTarjeta()      != null ? t.getVentasTarjeta()      : java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+      java.math.BigDecimal totTb  = turnos.stream().map(t -> t.getVentasTransferencia()!= null ? t.getVentasTransferencia(): java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+      java.math.BigDecimal totSin = turnos.stream().map(t -> t.getVentasSinpe()        != null ? t.getVentasSinpe()        : java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+      java.math.BigDecimal totDifEf  = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(t -> t.getDiferenciaEfectivo()     != null ? t.getDiferenciaEfectivo()     : java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+      java.math.BigDecimal totDifTc  = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(t -> t.getDiferenciaTarjeta()      != null ? t.getDiferenciaTarjeta()      : java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+      java.math.BigDecimal totDifTb  = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(t -> t.getDiferenciaTransferencia()!= null ? t.getDiferenciaTransferencia(): java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+      java.math.BigDecimal totDifSin = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(t -> t.getDiferenciaSinpe()        != null ? t.getDiferenciaSinpe()        : java.math.BigDecimal.ZERO).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+      Map<String, Object> params = new HashMap<>();
+      params.put("EMPRESA_NOMBRE", empresa.getNombreComercial() != null
+          ? empresa.getNombreComercial() : empresa.getNombreRazonSocial());
+      params.put("EMPRESA_CEDULA",  empresa.getIdentificacion());
+      params.put("SUCURSAL",        sesion.getTerminal().getSucursal().getNombre());
+      params.put("TERMINAL",        sesion.getTerminal().getNombre());
+      params.put("SESION_ID",       sesion.getId());
+      params.put("ESTADO_SESION",   sesion.getEstado().name());
+      params.put("FECHA_APERTURA",  sesion.getFechaHoraApertura());
+      params.put("FECHA_CIERRE",    sesion.getFechaHoraCierre());
+      params.put("MONTO_INICIAL",   sesion.getMontoInicial());
+      params.put("TOTAL_TURNOS",    turnos.size());
+      params.put("TOT_EFECTIVO",    totEf);
+      params.put("TOT_TARJETA",     totTc);
+      params.put("TOT_TRANSFERENCIA", totTb);
+      params.put("TOT_SINPE",       totSin);
+      params.put("TOT_VENTAS",      totEf.add(totTc).add(totTb).add(totSin));
+      params.put("TOT_DIF_EFECTIVO",     totDifEf);
+      params.put("TOT_DIF_TARJETA",      totDifTc);
+      params.put("TOT_DIF_TRANSFERENCIA",totDifTb);
+      params.put("TOT_DIF_SINPE",        totDifSin);
+      params.put("TURNOS_DS", new JRBeanCollectionDataSource(turnos));
+
+      byte[] pdf = pdfGeneratorService.generarPdf("reporte_sesion", params, new ArrayList<>());
+
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_PDF);
+      headers.setContentDispositionFormData("inline", "reporte_sesion_" + id + ".pdf");
+
+      return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+
+    } catch (Exception e) {
+      log.error("Error generando PDF reporte sesión {}: {}", id, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(("Error: " + e.getMessage()).getBytes());
+    }
+  }
+
   // =========================================================================
   // MÉTODOS PRIVADOS
   // =========================================================================
+
+  /**
+   * Helper reutilizable para armar los params del reporte PDF/JasperReports.
+   */
+  private Map<String, Object> buildReporteParams(
+      SesionCaja sesion,
+      Empresa empresa,
+      List<MovimientoCaja> movimientos,
+      List<CierreDatafono> datafonos,
+      List<SesionCajaDenominacion> denominaciones,
+      Map<String, Integer> conteoDocumentos) {
+
+    BigDecimal totalEntradas = BigDecimal.ZERO;
+    BigDecimal totalSalidas = BigDecimal.ZERO;
+    BigDecimal totalVales = BigDecimal.ZERO;
+    BigDecimal totalArqueos = BigDecimal.ZERO;
+    BigDecimal totalPagosProveedor = BigDecimal.ZERO;
+
+    for (MovimientoCaja mov : movimientos) {
+      if (mov.getTipoMovimiento().name().startsWith("ENTRADA")) {
+        totalEntradas = totalEntradas.add(mov.getMonto());
+      } else if (mov.getTipoMovimiento().name().equals("SALIDA_VALE")) {
+        totalVales = totalVales.add(mov.getMonto());
+      } else if (mov.getTipoMovimiento().name().equals("SALIDA_ARQUEO")) {
+        totalArqueos = totalArqueos.add(mov.getMonto());
+      } else if (mov.getTipoMovimiento().name().equals("SALIDA_PAGO_PROVEEDOR")) {
+        totalPagosProveedor = totalPagosProveedor.add(mov.getMonto());
+      }
+      if (mov.getTipoMovimiento().name().startsWith("SALIDA")) {
+        totalSalidas = totalSalidas.add(mov.getMonto());
+      }
+    }
+
+    BigDecimal montoEsperado = sesionCajaService.calcularMontoEsperado(sesion);
+
+    Map<String, Object> params = new HashMap<>();
+    params.put("EMPRESA_NOMBRE", empresa.getNombreComercial() != null ?
+        empresa.getNombreComercial() : empresa.getNombreRazonSocial());
+    params.put("EMPRESA_CEDULA", empresa.getIdentificacion());
+    params.put("SESION_ID", sesion.getId());
+    params.put("USUARIO", sesion.getUsuario() != null ?
+        sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos() : "");
+    params.put("TERMINAL", sesion.getTerminal().getNombre());
+    params.put("SUCURSAL", sesion.getTerminal().getSucursal().getNombre());
+    params.put("FECHA_APERTURA", sesion.getFechaHoraApertura());
+    params.put("FECHA_CIERRE", sesion.getFechaHoraCierre());
+    params.put("MONTO_INICIAL", sesion.getMontoInicial());
+    params.put("MONTO_ESPERADO", montoEsperado);
+    params.put("MONTO_CIERRE", sesion.getMontoCierre());
+    params.put("DIFERENCIA", sesion.getMontoCierre() != null
+        ? sesion.getMontoCierre().subtract(montoEsperado) : BigDecimal.ZERO);
+    params.put("TOTAL_VENTAS", sesion.getTotalVentas());
+    params.put("TOTAL_DEVOLUCIONES", sesion.getTotalDevoluciones());
+    params.put("TOTAL_EFECTIVO", sesion.getTotalEfectivo());
+    params.put("TOTAL_TARJETA", sesion.getTotalTarjeta());
+    params.put("TOTAL_TRANSFERENCIA", sesion.getTotalTransferencia());
+    params.put("TOTAL_SINPE", sesion.getTotalOtros());
+    params.put("TOTAL_ENTRADAS", totalEntradas);
+    params.put("TOTAL_SALIDAS", totalSalidas);
+    params.put("TOTAL_VALES", totalVales);
+    params.put("TOTAL_ARQUEOS", totalArqueos);
+    params.put("TOTAL_PAGOS_PROVEEDOR", totalPagosProveedor);
+    params.put("CANT_FACTURAS_ELECTRONICAS", conteoDocumentos.getOrDefault("FACTURA_ELECTRONICA", 0));
+    params.put("CANT_TIQUETES_ELECTRONICOS", conteoDocumentos.getOrDefault("TIQUETE_ELECTRONICO", 0));
+    params.put("CANT_FACTURAS_INTERNAS",     conteoDocumentos.getOrDefault("FACTURA_INTERNA", 0));
+    params.put("CANT_TIQUETES_INTERNOS",     conteoDocumentos.getOrDefault("TIQUETE_INTERNO", 0));
+    params.put("CANT_NOTAS_CREDITO",         conteoDocumentos.getOrDefault("NOTA_CREDITO", 0));
+    params.put("TOTAL_DOCUMENTOS", conteoDocumentos.values().stream().mapToInt(Integer::intValue).sum());
+    params.put("MONTO_RETIRADO", sesion.getMontoRetirado() != null ? sesion.getMontoRetirado() : BigDecimal.ZERO);
+    params.put("FONDO_CAJA",     sesion.getFondoCaja()     != null ? sesion.getFondoCaja()     : BigDecimal.ZERO);
+    params.put("OBSERVACIONES",  sesion.getObservacionesCierre() != null ?
+        sesion.getObservacionesCierre() : "Sin observaciones");
+    params.put("MOVIMIENTOS_DS",    new JRBeanCollectionDataSource(movimientos));
+    params.put("DATAFONOS_DS",      new JRBeanCollectionDataSource(datafonos));
+    params.put("DENOMINACIONES_DS", new JRBeanCollectionDataSource(denominaciones));
+    return params;
+  }
 
   private CierreCajaResponse construirCierreCajaResponse(
       SesionCaja sesionCerrada,

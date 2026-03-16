@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoResponse;
 import com.snnsoluciones.backnathbitpos.dto.sesion.OpcionesImpresionCierreDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.TurnoReporteDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.SesionCaja;
 
@@ -67,4 +68,6 @@ public interface SesionCajaService {
     Optional<SesionCaja> buscarUltimaSesionCerrada(Long terminalId);
     String generarHtmlCierre(Long sesionId, OpcionesImpresionCierreDTO opciones);
     Map<String, Integer> contarDocumentosPorTipo(Long sesionId);
+    List<TurnoReporteDTO> obtenerTurnosParaReporte(Long sesionId);
+    String generarHtmlReporteSesion(Long sesionId);
 }

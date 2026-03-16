@@ -275,9 +275,6 @@ public class OrdenService {
         .findFirst()
         .orElseThrow(() -> new ResourceNotFoundException("Item no encontrado en la orden"));
 
-    if (item.getEnviadoCocina()) {
-      throw new BusinessException("El item ya fue enviado a cocina y no puede modificarse");
-    }
 
     item.setCantidad(request.cantidad());
     item.setNotas(request.notas());
@@ -557,6 +554,7 @@ public class OrdenService {
         item.getTotalImpuesto(),
         item.getTotal(),
         item.getProducto().getZonaPreparacion(),
+        item.getFechaCreacion(),
         item.getNotas(),
         item.getEnviadoCocina(),
         item.getFechaEnvioCocina(),
@@ -573,6 +571,7 @@ public class OrdenService {
         item.getOrdenPersona() != null ? item.getOrdenPersona().getId() : null,
         item.getOrdenPersona() != null ? item.getOrdenPersona().getNombre() : null,
         item.getOrdenPersona() != null ? item.getOrdenPersona().getColor() : null
+
     );
   }
 

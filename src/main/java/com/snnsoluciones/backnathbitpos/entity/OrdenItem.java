@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
 @Table(name = "orden_items")
@@ -92,6 +93,10 @@ public class OrdenItem {
 
     @Column(name = "fecha_envio_cocina")
     private LocalDateTime fechaEnvioCocina;
+
+    @CreationTimestamp
+    @Column(name = "fecha_creacion", updatable = false)
+    private LocalDateTime fechaCreacion;
 
     @Column(name = "preparado")
     @Builder.Default

@@ -10,6 +10,7 @@ import lombok.Data;
 public class SesionCajaResponse {
     private Long id;
     private Long terminalId;
+    private Long turnoId;
     private String terminalNombre;
     private String sucursalNombre;
     private String usuarioNombre;

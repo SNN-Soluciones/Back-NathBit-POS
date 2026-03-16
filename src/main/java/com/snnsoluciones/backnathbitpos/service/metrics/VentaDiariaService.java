@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.service.metrics;
 import com.snnsoluciones.backnathbitpos.dto.metrics.VentaDiariaDTO;
 import com.snnsoluciones.backnathbitpos.entity.MetricasVentasDiarias;
 import com.snnsoluciones.backnathbitpos.repository.MetricasVentasDiariasRepository;
+import com.snnsoluciones.backnathbitpos.util.DiaComercialUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,8 +24,8 @@ public class VentaDiariaService {
      * Obtener ventas del día para empresa (consolidado)
      */
     public VentaDiariaDTO obtenerVentasHoyEmpresa(Long empresaId) {
-        LocalDate hoy = LocalDate.now();
-        
+        LocalDate hoy = DiaComercialUtil.hoy();
+
         return MetricasVentasDiariasRepository.findVentasHoyEmpresa(empresaId, hoy)
                 .map(this::toDTO)
                 .orElse(crearDTOVacio(hoy));
@@ -34,7 +35,7 @@ public class VentaDiariaService {
      * Obtener ventas del día para sucursal
      */
     public VentaDiariaDTO obtenerVentasHoySucursal(Long sucursalId) {
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = DiaComercialUtil.hoy();
         
         return MetricasVentasDiariasRepository.findVentasHoySucursal(sucursalId, hoy)
                 .map(this::toDTO)

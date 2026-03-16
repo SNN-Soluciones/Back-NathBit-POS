@@ -5,6 +5,8 @@ import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarSesionRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoRequest;
 import com.snnsoluciones.backnathbitpos.dto.sesion.CerrarTurnoResponse;
 import com.snnsoluciones.backnathbitpos.dto.sesion.OpcionesImpresionCierreDTO;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.MovimientoCajaDTO;
+import com.snnsoluciones.backnathbitpos.dto.sesiones.TurnoReporteDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.ResumenCajaDetalladoDTO;
 import com.snnsoluciones.backnathbitpos.dto.sesiones.SesionCajaDTO;
 import com.snnsoluciones.backnathbitpos.entity.CierreDatafono;
@@ -361,9 +363,16 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     boolean todosHanCerrado = sesionCajaUsuarioRepository
         .todosLosTurnosCerrados(turno.getSesionCaja().getId());
 
+    // 10a. Si es el último cajero → cerrar la sesión maestra automáticamente
+    if (todosHanCerrado) {
+      cerrarSesionMaestraInternal(turno.getSesionCaja(), turno);
+      log.info("Sesión {} cerrada automáticamente — último turno cerrado por usuario {}",
+          turno.getSesionCaja().getId(), turno.getUsuario().getId());
+    }
+
     String mensaje = todosHanCerrado
-        ? "Sos el último cajero. Confirmá el cierre definitivo de la sesión."
-        : "Turno cerrado exitosamente. La sesión continúa abierta.";
+        ? "Eras el último cajero. La sesión fue cerrada automáticamente."
+        : "Turno cerrado exitosamente. La sesión continúa abierta para los demás cajeros.";
 
     // 11. Armar response
     return CerrarTurnoResponse.builder()
@@ -409,6 +418,36 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   @Transactional(readOnly = true)
   public Optional<SesionCaja> obtenerSesionActivaPorTerminal(Long terminalId) {
     return sesionCajaRepository.findSesionAbiertaByTerminalId(terminalId);
+  }
+
+  /**
+   * Cierra la sesión maestra consolidando los totales de todos sus turnos.
+   * Se invoca automáticamente desde cerrarTurno() cuando el último cajero cierra.
+   */
+  private void cerrarSesionMaestraInternal(SesionCaja sesion, SesionCajaUsuario ultimoTurno) {
+    List<SesionCajaUsuario> turnos = sesionCajaUsuarioRepository
+        .findBySesionCajaId(sesion.getId());
+
+    BigDecimal totalEfectivo      = turnos.stream().map(t -> t.getVentasEfectivo()      != null ? t.getVentasEfectivo()      : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalTarjeta       = turnos.stream().map(t -> t.getVentasTarjeta()       != null ? t.getVentasTarjeta()       : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalTransferencia = turnos.stream().map(t -> t.getVentasTransferencia() != null ? t.getVentasTransferencia() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalOtros         = turnos.stream().map(t -> t.getVentasOtros()         != null ? t.getVentasOtros()         : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    LocalDateTime ahora = LocalDateTime.now(ZoneId.of("America/Costa_Rica"));
+
+    sesion.setTotalEfectivo(totalEfectivo);
+    sesion.setTotalTarjeta(totalTarjeta);
+    sesion.setTotalTransferencia(totalTransferencia);
+    sesion.setTotalOtros(totalOtros);
+    sesion.setMontoCierre(ultimoTurno.getMontoContado() != null ? ultimoTurno.getMontoContado() : BigDecimal.ZERO);
+    sesion.setMontoRetirado(ultimoTurno.getMontoRetirado() != null ? ultimoTurno.getMontoRetirado() : BigDecimal.ZERO);
+    sesion.setFondoCaja(ultimoTurno.getFondoCaja() != null ? ultimoTurno.getFondoCaja() : BigDecimal.ZERO);
+    sesion.setEstadoConteo("COMPLETADO");
+    sesion.setFechaHoraCierre(ahora);
+    sesion.setEstado(EstadoSesion.CERRADA);
+
+    sesionCajaRepository.save(sesion);
+    log.info("Sesión maestra {} consolidada y cerrada automáticamente", sesion.getId());
   }
 
   @Transactional
@@ -694,12 +733,20 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     if (securityContext.isSupervisor()) {
       return true;
     }
-    // Cajero solo puede ver su propia sesión
-    return sesion.getUsuario().getId().equals(securityContext.getCurrentUserId());
+    Long currentUserId = securityContext.getCurrentUserId();
+    // El usuario que abrió la sesión puede verla
+    if (sesion.getUsuario().getId().equals(currentUserId)) {
+      return true;
+    }
+    // En modo SHARED: cualquier cajero que tenga o haya tenido un turno en esta sesión puede verla
+    return sesionCajaUsuarioRepository
+        .findBySesionCajaId(sesion.getId())
+        .stream()
+        .anyMatch(t -> t.getUsuario().getId().equals(currentUserId));
   }
 
   private boolean puedeAbrirCaja() {
-    return securityContext.hasAnyRole("CAJERO", "JEFE_CAJAS", "ADMIN", "SUPER_ADMIN", "ROOT");
+    return securityContext.hasAnyRole("CAJERO", "JEFE_CAJAS", "ADMIN", "SUPER_ADMIN", "ROOT", "SOPORTE");
   }
 
   private boolean puedeCerrarCaja(Long sesionId) {
@@ -1081,10 +1128,21 @@ public class SesionCajaServiceImpl implements SesionCajaService {
 
     resumen.setValesDetalle(valesDetalle);
 
-    // Lista de todos los movimientos
-    resumen.setMovimientos(
-        movimientoCajaRepository.findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
-    );
+    // Lista de todos los movimientos — mapeados a DTO para evitar serialización de proxies Hibernate
+    List<MovimientoCajaDTO> movimientosDTO = movimientoCajaRepository
+        .findBySesionCajaIdOrderByFechaHoraDesc(sesionId)
+        .stream()
+        .map(m -> MovimientoCajaDTO.builder()
+            .id(m.getId())
+            .tipoMovimiento(m.getTipoMovimiento() != null ? m.getTipoMovimiento().name() : null)
+            .monto(m.getMonto())
+            .concepto(m.getConcepto())
+            .fechaHora(m.getFechaHora())
+            .observaciones(m.getObservaciones())
+            .autorizadoPor(m.getAutorizadoPorId())
+            .build())
+        .collect(Collectors.toList());
+    resumen.setMovimientos(movimientosDTO);
 
     sesion.setTotalEfectivo(totalEfectivo);
 
@@ -1335,10 +1393,30 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     html.append("<body>");
 
     // HEADER
+    String fechaAperturaStr = sesion.getFechaHoraApertura() != null
+        ? sesion.getFechaHoraApertura().format(dateFormatter) : "-";
+    String fechaCierreStr = sesion.getFechaHoraCierre() != null
+        ? sesion.getFechaHoraCierre().format(dateFormatter) : "En curso";
+    String cajeroNombre = sesion.getUsuario() != null
+        ? sesion.getUsuario().getNombre() + " " + sesion.getUsuario().getApellidos() : "-";
+    String terminalNombre = sesion.getTerminal() != null ? sesion.getTerminal().getNombre() : "-";
+
     html.append("<div class='header'>");
     html.append("<div class='title'>═══════════════════════════</div>");
     html.append("<div class='title'>CIERRE DE CAJA</div>");
     html.append("<div class='title'>═══════════════════════════</div>");
+    html.append("<div class='row' style='margin-top:6px'>");
+    html.append("<span>Cajero:</span><span>").append(cajeroNombre).append("</span>");
+    html.append("</div>");
+    html.append("<div class='row'>");
+    html.append("<span>Terminal:</span><span>").append(terminalNombre).append("</span>");
+    html.append("</div>");
+    html.append("<div class='row'>");
+    html.append("<span>Apertura:</span><span>").append(fechaAperturaStr).append("</span>");
+    html.append("</div>");
+    html.append("<div class='row'>");
+    html.append("<span>Cierre:</span><span>").append(fechaCierreStr).append("</span>");
+    html.append("</div>");
     html.append("</div>");
 
     // CÁLCULO EFECTIVO EN CAJA
@@ -1385,6 +1463,31 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     html.append("<span>= Total Esperado:</span>");
     html.append("<span>").append(currencyFormat.format(montoEsperado)).append("</span>");
     html.append("</div>");
+
+    // Mostrar monto contado y diferencia solo si la sesión está cerrada y tiene montoCierre
+    if (sesion.getMontoCierre() != null) {
+      BigDecimal diferencia = sesion.getMontoCierre().subtract(montoEsperado);
+
+      html.append("<div class='row'>");
+      html.append("<span>Efectivo Declarado:</span>");
+      html.append("<span>").append(currencyFormat.format(sesion.getMontoCierre())).append("</span>");
+      html.append("</div>");
+
+      if (diferencia.compareTo(BigDecimal.ZERO) != 0) {
+        String colorDif = diferencia.compareTo(BigDecimal.ZERO) > 0 ? "color:#16a34a;" : "color:#dc2626;";
+        String signoDif = diferencia.compareTo(BigDecimal.ZERO) > 0 ? "+" : "";
+        html.append("<div class='row total-row' style='").append(colorDif).append("'>");
+        html.append("<span>Diferencia:</span>");
+        html.append("<span>").append(signoDif).append(currencyFormat.format(diferencia)).append("</span>");
+        html.append("</div>");
+      } else {
+        html.append("<div class='row' style='color:#16a34a;'>");
+        html.append("<span>Diferencia:</span>");
+        html.append("<span>✓ Cuadra</span>");
+        html.append("</div>");
+      }
+    }
+
     html.append("</div>");
 
     // RESUMEN VENTAS
@@ -2164,5 +2267,346 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     esperado = esperado.subtract(salidas != null ? salidas : BigDecimal.ZERO);
 
     return esperado;
+  }
+  // =========================================================================
+  // REPORTE DE SESIÓN (todos los turnos)
+  // =========================================================================
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<TurnoReporteDTO> obtenerTurnosParaReporte(Long sesionId) {
+    List<SesionCajaUsuario> turnos = sesionCajaUsuarioRepository
+        .findBySesionCajaId(sesionId);
+
+    return turnos.stream().map(t -> {
+      BigDecimal ef  = nvl(t.getVentasEfectivo());
+      BigDecimal tc  = nvl(t.getVentasTarjeta());
+      BigDecimal tb  = nvl(t.getVentasTransferencia());
+      BigDecimal sin = nvl(t.getVentasOtros());
+
+      // Siempre recalcular montoEsperado desde la lógica del negocio
+      // (incluye movimientos de caja: entradas y salidas)
+      // Para turno único legacy: usa calcularMontoEsperado(sesion)
+      // Para turnos SHARED reales: usa calcularMontoEsperadoEfectivoHasta al momento del cierre
+      SesionCaja sesion = t.getSesionCaja();
+      BigDecimal montoEsperadoReal;
+      List<SesionCajaUsuario> todosLosTurnos = sesionCajaUsuarioRepository.findBySesionCajaId(sesion.getId());
+
+      if (todosLosTurnos.size() == 1) {
+        // Turno único (legacy o SHARED con un solo cajero): calcular desde sesión completa
+        montoEsperadoReal = calcularMontoEsperado(sesion);
+      } else {
+        // Múltiples turnos: usar el valor guardado en el turno (calculado al momento del cierre)
+        montoEsperadoReal = nvl(t.getMontoEsperado());
+      }
+
+      BigDecimal montoContado = nvl(t.getMontoContado());
+      BigDecimal difEfectivo  = "CERRADA".equals(t.getEstado())
+          ? montoContado.subtract(montoEsperadoReal)
+          : BigDecimal.ZERO;
+
+      return TurnoReporteDTO.builder()
+          .turnoId(t.getId())
+          .usuarioNombre(t.getUsuario().getNombre() + " " + t.getUsuario().getApellidos())
+          .estado(t.getEstado())
+          .fechaInicio(t.getFechaHoraInicio())
+          .fechaFin(t.getFechaHoraFin())
+          .fondoInicioTurno(nvl(t.getFondoInicioTurno()))
+          .ventasEfectivo(ef)
+          .ventasTarjeta(tc)
+          .ventasTransferencia(tb)
+          .ventasSinpe(sin)
+          .totalVentas(ef.add(tc).add(tb).add(sin))
+          .montoEsperado(montoEsperadoReal)
+          .montoContado(montoContado)
+          .diferenciaEfectivo(difEfectivo)
+          .diferenciaTarjeta(nvl(t.getDiferenciaTarjeta()))
+          .diferenciaTransferencia(nvl(t.getDiferenciaTransferencia()))
+          .diferenciaSinpe(nvl(t.getDiferenciaSinpe()))
+          .montoRetirado(nvl(t.getMontoRetirado()))
+          .fondoCaja(nvl(t.getFondoCaja()))
+          .observacionesCierre(t.getObservacionesCierre())
+          .build();
+    }).collect(Collectors.toList());
+  }
+
+  @Override
+  public String generarHtmlReporteSesion(Long sesionId) {
+    SesionCaja sesion = sesionCajaRepository.findById(sesionId)
+        .orElseThrow(() -> new ResourceNotFoundException("Sesión no encontrada"));
+
+    List<TurnoReporteDTO> turnos = obtenerTurnosParaReporte(sesionId);
+
+    NumberFormat fmt = NumberFormat.getCurrencyInstance(new Locale("es", "CR"));
+    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    boolean sesionAbierta = sesion.getEstado() == EstadoSesion.ABIERTA;
+    String estadoLabel = sesionAbierta
+        ? "<span style='color:#f59e0b;font-weight:bold'>● EN CURSO</span>"
+        : "<span style='color:#16a34a;font-weight:bold'>✓ CERRADA</span>";
+
+    // ── Calcular totales generales ────────────────────────────────────────
+    // Si no hay turnos (sesión legacy pre-SHARED), leer totales directamente de SesionCaja
+    BigDecimal totEf, totTc, totTb, totSin, totVentas;
+    boolean esSesionLegacy = turnos.isEmpty();
+
+    if (esSesionLegacy) {
+      totEf  = nvl(sesion.getTotalEfectivo());
+      totTc  = nvl(sesion.getTotalTarjeta());
+      totTb  = nvl(sesion.getTotalTransferencia());
+      totSin = nvl(sesion.getTotalOtros());
+    } else {
+      totEf  = turnos.stream().map(TurnoReporteDTO::getVentasEfectivo).reduce(BigDecimal.ZERO, BigDecimal::add);
+      totTc  = turnos.stream().map(TurnoReporteDTO::getVentasTarjeta).reduce(BigDecimal.ZERO, BigDecimal::add);
+      totTb  = turnos.stream().map(TurnoReporteDTO::getVentasTransferencia).reduce(BigDecimal.ZERO, BigDecimal::add);
+      totSin = turnos.stream().map(TurnoReporteDTO::getVentasSinpe).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+    totVentas = totEf.add(totTc).add(totTb).add(totSin);
+
+    BigDecimal totEsperado  = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getMontoEsperado).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totContado   = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getMontoContado).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totDifEf     = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getDiferenciaEfectivo).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totDifTc     = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getDiferenciaTarjeta).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totDifTb     = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getDiferenciaTransferencia).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totDifSin    = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getDiferenciaSinpe).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totRetirado  = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getMontoRetirado).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totFondo     = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).map(TurnoReporteDTO::getFondoCaja).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'>");
+    sb.append("<meta name='viewport' content='width=device-width,initial-scale=1.0'>");
+    sb.append("<title>Reporte de Sesión #").append(sesionId).append("</title>");
+    sb.append("<style>");
+    sb.append("*{margin:0;padding:0;box-sizing:border-box}");
+    sb.append("body{font-family:'Courier New',monospace;font-size:11px;padding:10px;background:#fff}");
+    sb.append(".center{text-align:center}");
+    sb.append(".title{font-size:14px;font-weight:bold;text-align:center;margin:4px 0}");
+    sb.append(".section-title{font-weight:bold;font-size:12px;margin:10px 0 4px;border-bottom:1px solid #000;padding-bottom:2px}");
+    sb.append(".dash{border-top:1px dashed #000;margin:6px 0}");
+    sb.append(".solid{border-top:1px solid #000;margin:6px 0}");
+    sb.append(".double{border-top:2px solid #000;margin:6px 0}");
+    sb.append(".row{display:flex;justify-content:space-between;margin:2px 0}");
+    sb.append(".row-bold{display:flex;justify-content:space-between;margin:2px 0;font-weight:bold}");
+    sb.append(".indent{padding-left:12px}");
+    sb.append(".badge-activa{color:#f59e0b;font-weight:bold}");
+    sb.append(".badge-cerrada{color:#16a34a;font-weight:bold}");
+    sb.append(".dif-neg{color:#dc2626;font-weight:bold}");
+    sb.append(".dif-pos{color:#16a34a;font-weight:bold}");
+    sb.append(".dif-ok{color:#16a34a}");
+    sb.append(".turno-block{border:1px solid #ccc;border-radius:4px;padding:8px;margin:8px 0}");
+    sb.append(".turno-activa{border-color:#f59e0b;background:#fffbeb}");
+    sb.append("table{width:100%;border-collapse:collapse;font-size:10px;margin:4px 0}");
+    sb.append("th{background:#f3f4f6;text-align:left;padding:3px 5px;border:1px solid #ddd;font-weight:bold}");
+    sb.append("th.right,td.right{text-align:right}");
+    sb.append("td{padding:3px 5px;border:1px solid #ddd}");
+    sb.append("tr.total-row{font-weight:bold;background:#f9fafb}");
+    sb.append("tr.dif-row td.dif-neg{color:#dc2626;font-weight:bold}");
+    sb.append("tr.dif-row td.dif-pos{color:#16a34a;font-weight:bold}");
+    sb.append("tr.dif-row td.dif-ok{color:#16a34a}");
+    sb.append("</style></head><body>");
+
+    // ── HEADER ───────────────────────────────────────────────────────────
+    sb.append("<div class='title'>═══════════════════════════</div>");
+    sb.append("<div class='title'>REPORTE DE SESIÓN</div>");
+    sb.append("<div class='title'>═══════════════════════════</div>");
+    sb.append("<div class='dash'></div>");
+
+    String empresa = sesion.getTerminal().getSucursal().getEmpresa().getNombreComercial() != null
+        ? sesion.getTerminal().getSucursal().getEmpresa().getNombreComercial()
+        : sesion.getTerminal().getSucursal().getEmpresa().getNombreRazonSocial();
+
+    sb.append("<div class='row'><span>Empresa:</span><span>").append(empresa).append("</span></div>");
+    sb.append("<div class='row'><span>Sucursal:</span><span>").append(sesion.getTerminal().getSucursal().getNombre()).append("</span></div>");
+    sb.append("<div class='row'><span>Terminal:</span><span>").append(sesion.getTerminal().getNombre()).append("</span></div>");
+    sb.append("<div class='row'><span>Sesión #:</span><span>").append(sesionId).append("</span></div>");
+    sb.append("<div class='row'><span>Estado:</span>").append(estadoLabel).append("</div>");
+    sb.append("<div class='row'><span>Apertura:</span><span>")
+        .append(sesion.getFechaHoraApertura() != null ? sesion.getFechaHoraApertura().format(dtf) : "-")
+        .append("</span></div>");
+    sb.append("<div class='row'><span>Cierre:</span><span>")
+        .append(sesion.getFechaHoraCierre() != null ? sesion.getFechaHoraCierre().format(dtf) : "En curso")
+        .append("</span></div>");
+    sb.append("<div class='row'><span>Fondo Inicial:</span><span>").append(fmt.format(sesion.getMontoInicial())).append("</span></div>");
+    sb.append("<div class='double'></div>");
+
+    // ── TURNOS ───────────────────────────────────────────────────────────
+    sb.append("<div class='section-title'>TURNOS (").append(turnos.size()).append(")</div>");
+
+    // ── Sesión legacy: sin registros de turno ─────────────────────────────
+    if (esSesionLegacy) {
+      sb.append("<div style='padding:10px;background:#f3f4f6;border-radius:4px;");
+      sb.append("border-left:3px solid #9ca3af;font-size:11px;color:#6b7280;margin:6px 0'>");
+      sb.append("<strong>Sesión sin desglose por cajero</strong><br>");
+      sb.append("Esta sesión fue registrada antes del sistema de turnos compartidos. ");
+      sb.append("Los totales se obtienen directamente del registro de la sesión.");
+      sb.append("</div>");
+    }
+
+    for (int i = 0; i < turnos.size(); i++) {
+      TurnoReporteDTO t = turnos.get(i);
+      boolean activa = "ACTIVA".equals(t.getEstado());
+
+      sb.append("<div class='turno-block").append(activa ? " turno-activa" : "").append("'>");
+
+      // Sub-header turno
+      sb.append("<div class='row-bold'>");
+      sb.append("<span>").append(i + 1).append(". ").append(t.getUsuarioNombre()).append("</span>");
+      sb.append("<span class='").append(activa ? "badge-activa" : "badge-cerrada").append("'>")
+          .append(activa ? "● EN CURSO" : "✓ CERRADO").append("</span>");
+      sb.append("</div>");
+
+      sb.append("<div class='row indent'><span>Inicio:</span><span>")
+          .append(t.getFechaInicio() != null ? t.getFechaInicio().format(dtf) : "-").append("</span></div>");
+      sb.append("<div class='row indent'><span>Fin:</span><span>")
+          .append(t.getFechaFin() != null ? t.getFechaFin().format(dtf) : "En curso").append("</span></div>");
+      sb.append("<div class='row indent'><span>Fondo al entrar:</span><span>")
+          .append(fmt.format(t.getFondoInicioTurno())).append("</span></div>");
+
+      sb.append("<div class='dash'></div>");
+
+      // Ventas
+      sb.append("<div style='font-weight:bold;font-size:10px;margin:3px 0'>Ventas por medio de pago:</div>");
+      sb.append("<div class='row indent'><span>Efectivo:</span><span>").append(fmt.format(t.getVentasEfectivo())).append("</span></div>");
+      sb.append("<div class='row indent'><span>Tarjeta:</span><span>").append(fmt.format(t.getVentasTarjeta())).append("</span></div>");
+      sb.append("<div class='row indent'><span>SINPE:</span><span>").append(fmt.format(t.getVentasSinpe())).append("</span></div>");
+      sb.append("<div class='row indent'><span>Transferencia:</span><span>").append(fmt.format(t.getVentasTransferencia())).append("</span></div>");
+      sb.append("<div class='row-bold indent'><span>Total Ventas:</span><span>").append(fmt.format(t.getTotalVentas())).append("</span></div>");
+
+      if (!activa) {
+        sb.append("<div class='dash'></div>");
+
+        // Arqueo efectivo
+        sb.append("<div style='font-weight:bold;font-size:10px;margin:3px 0'>Arqueo de efectivo:</div>");
+        sb.append("<div class='row indent'><span>Esperado:</span><span>").append(fmt.format(t.getMontoEsperado())).append("</span></div>");
+        sb.append("<div class='row indent'><span>Contado:</span><span>").append(fmt.format(t.getMontoContado())).append("</span></div>");
+
+        sb.append("<div class='dash'></div>");
+
+        // Diferencias
+        sb.append("<div style='font-weight:bold;font-size:10px;margin:3px 0'>Diferencias:</div>");
+        appendDifRow(sb, fmt, "Efectivo:", t.getDiferenciaEfectivo());
+        appendDifRow(sb, fmt, "Tarjeta:", t.getDiferenciaTarjeta());
+        appendDifRow(sb, fmt, "SINPE:", t.getDiferenciaSinpe());
+        appendDifRow(sb, fmt, "Transferencia:", t.getDiferenciaTransferencia());
+
+        sb.append("<div class='dash'></div>");
+
+        // Distribución
+        sb.append("<div style='font-weight:bold;font-size:10px;margin:3px 0'>Distribución:</div>");
+        sb.append("<div class='row indent'><span>Retiro:</span><span>").append(fmt.format(t.getMontoRetirado())).append("</span></div>");
+        sb.append("<div class='row indent'><span>Fondo que dejó:</span><span>").append(fmt.format(t.getFondoCaja())).append("</span></div>");
+
+        if (t.getObservacionesCierre() != null && !t.getObservacionesCierre().isBlank()) {
+          sb.append("<div class='dash'></div>");
+          sb.append("<div class='row indent'><span>Obs:</span><span>").append(t.getObservacionesCierre()).append("</span></div>");
+        }
+      }
+
+      sb.append("</div>"); // turno-block
+    }
+
+    sb.append("<div class='double'></div>");
+
+    // ── TOTALES GENERALES ─────────────────────────────────────────────────
+    sb.append("<div class='section-title'>TOTALES GENERALES</div>");
+    sb.append("<div class='row'><span>Ventas Efectivo:</span><span>").append(fmt.format(totEf)).append("</span></div>");
+    sb.append("<div class='row'><span>Ventas Tarjeta:</span><span>").append(fmt.format(totTc)).append("</span></div>");
+    sb.append("<div class='row'><span>Ventas SINPE:</span><span>").append(fmt.format(totSin)).append("</span></div>");
+    sb.append("<div class='row'><span>Ventas Transferencia:</span><span>").append(fmt.format(totTb)).append("</span></div>");
+    sb.append("<div class='solid'></div>");
+    sb.append("<div class='row-bold'><span>TOTAL VENTAS:</span><span>").append(fmt.format(totVentas)).append("</span></div>");
+
+    long turnosCerrados = turnos.stream().filter(t -> "CERRADA".equals(t.getEstado())).count();
+    // Para sesión legacy: mostrar monto esperado vs contado si está disponible
+    if (esSesionLegacy && sesion.getMontoCierre() != null) {
+      BigDecimal montoEsperado = calcularMontoEsperado(sesion);
+      BigDecimal diferencia = sesion.getMontoCierre().subtract(montoEsperado);
+      sb.append("<div class='dash'></div>");
+      sb.append("<div class='row'><span>Monto Esperado:</span><span>").append(fmt.format(montoEsperado)).append("</span></div>");
+      sb.append("<div class='row'><span>Monto Contado:</span><span>").append(fmt.format(sesion.getMontoCierre())).append("</span></div>");
+      sb.append("<div class='row'><span>Retiro:</span><span>").append(fmt.format(nvl(sesion.getMontoRetirado()))).append("</span></div>");
+      sb.append("<div class='row'><span>Fondo dejado:</span><span>").append(fmt.format(nvl(sesion.getFondoCaja()))).append("</span></div>");
+    }
+    if (turnosCerrados > 0) {
+      sb.append("<div class='dash'></div>");
+      sb.append("<div class='row'><span>Total Esperado (turnos cerrados):</span><span>").append(fmt.format(totEsperado)).append("</span></div>");
+      sb.append("<div class='row'><span>Total Contado (turnos cerrados):</span><span>").append(fmt.format(totContado)).append("</span></div>");
+      sb.append("<div class='row'><span>Total Retirado:</span><span>").append(fmt.format(totRetirado)).append("</span></div>");
+      sb.append("<div class='row'><span>Total Fondo Dejado:</span><span>").append(fmt.format(totFondo)).append("</span></div>");
+    }
+
+    sb.append("<div class='double'></div>");
+
+    // ── RESUMEN DIFERENCIAS ───────────────────────────────────────────────
+    sb.append("<div class='section-title'>RESUMEN DE DIFERENCIAS</div>");
+
+    // Tabla de diferencias
+    sb.append("<table>");
+    sb.append("<tr>");
+    sb.append("<th>Cajero</th>");
+    sb.append("<th class='right'>Dif. Efectivo</th>");
+    sb.append("<th class='right'>Dif. Tarjeta</th>");
+    sb.append("<th class='right'>Dif. SINPE</th>");
+    sb.append("<th class='right'>Dif. Transfer.</th>");
+    sb.append("</tr>");
+
+    for (TurnoReporteDTO t : turnos) {
+      boolean activa = "ACTIVA".equals(t.getEstado());
+      sb.append("<tr").append(activa ? " style='background:#fffbeb'" : "").append(">");
+      sb.append("<td>").append(t.getUsuarioNombre())
+          .append(activa ? " <span class='badge-activa'>●</span>" : "").append("</td>");
+
+      if (activa) {
+        sb.append("<td class='right' colspan='4' style='color:#9ca3af;font-style:italic'>En curso</td>");
+      } else {
+        appendDifCell(sb, t.getDiferenciaEfectivo(), fmt);
+        appendDifCell(sb, t.getDiferenciaTarjeta(), fmt);
+        appendDifCell(sb, t.getDiferenciaSinpe(), fmt);
+        appendDifCell(sb, t.getDiferenciaTransferencia(), fmt);
+      }
+      sb.append("</tr>");
+    }
+
+    // Fila de totales
+    sb.append("<tr class='total-row'>");
+    sb.append("<td>TOTALES</td>");
+    appendDifCell(sb, totDifEf, fmt);
+    appendDifCell(sb, totDifTc, fmt);
+    appendDifCell(sb, totDifSin, fmt);
+    appendDifCell(sb, totDifTb, fmt);
+    sb.append("</tr>");
+    sb.append("</table>");
+
+    sb.append("</body></html>");
+    return sb.toString();
+  }
+
+  /** Fila de diferencia con color */
+  private void appendDifRow(StringBuilder sb, NumberFormat fmt, String label, BigDecimal valor) {
+    String cls, text;
+    if (valor == null || valor.compareTo(BigDecimal.ZERO) == 0) {
+      cls = "dif-ok"; text = "✓ Cuadra";
+    } else if (valor.compareTo(BigDecimal.ZERO) > 0) {
+      cls = "dif-pos"; text = "+" + fmt.format(valor);
+    } else {
+      cls = "dif-neg"; text = fmt.format(valor);
+    }
+    sb.append("<div class='row indent ").append(cls).append("'>")
+        .append("<span>").append(label).append("</span>")
+        .append("<span>").append(text).append("</span>")
+        .append("</div>");
+  }
+
+  /** Celda TD de diferencia con color */
+  private void appendDifCell(StringBuilder sb, BigDecimal valor, NumberFormat fmt) {
+    String cls, text;
+    if (valor == null || valor.compareTo(BigDecimal.ZERO) == 0) {
+      cls = "dif-ok"; text = "✓";
+    } else if (valor.compareTo(BigDecimal.ZERO) > 0) {
+      cls = "dif-pos"; text = "+" + fmt.format(valor);
+    } else {
+      cls = "dif-neg"; text = fmt.format(valor);
+    }
+    sb.append("<td class='right ").append(cls).append("'>").append(text).append("</td>");
   }
 }

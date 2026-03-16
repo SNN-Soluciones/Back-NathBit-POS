@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Created with Jaspersoft Studio version 6.21.3.final using JasperReports Library version 6.21.3-4a3078d20785ebe464f18037d738d12fc98c13cf  -->
 <jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="cierre_caja_ticket" pageWidth="226" pageHeight="2000" whenNoDataType="AllSectionsNoDetail" columnWidth="216" leftMargin="5" rightMargin="5" topMargin="5" bottomMargin="5" isIgnorePagination="true" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c01">
 	<style name="base" fontName="SansSerif" fontSize="8"/>
 	<style name="title" style="base" fontSize="10" isBold="true"/>
@@ -142,9 +141,9 @@
 				<reportElement style="base" x="0" y="17" width="60" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96752"/>
 				<text><![CDATA[Cierre:]]></text>
 			</staticText>
-			<textField>
+			<textField isBlankWhenNull="true">
 				<reportElement style="base" x="60" y="17" width="156" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96753"/>
-				<textFieldExpression><![CDATA[$P{FECHA_CIERRE}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))]]></textFieldExpression>
+				<textFieldExpression><![CDATA[$P{FECHA_CIERRE} != null ? $P{FECHA_CIERRE}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "En curso"]]></textFieldExpression>
 			</textField>
 			<line>
 				<reportElement x="0" y="32" width="216" height="1" uuid="68593d29-b2a4-43d1-953d-a38c68c96754"/>
@@ -163,7 +162,7 @@
 				<reportElement style="base" x="0" y="54" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96756"/>
 				<text><![CDATA[Monto Inicial (Fondo):]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="54" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96757"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{MONTO_INICIAL}]]></textFieldExpression>
@@ -173,7 +172,7 @@
 				<reportElement style="base" x="0" y="66" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96758"/>
 				<text><![CDATA[+ Ventas del día:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="66" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96759"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_VENTAS}]]></textFieldExpression>
@@ -183,7 +182,7 @@
 				<reportElement style="base" x="0" y="78" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96760"/>
 				<text><![CDATA[+ Entradas de efectivo:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="78" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96761"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_ENTRADAS}]]></textFieldExpression>
@@ -193,7 +192,7 @@
 				<reportElement style="base" x="0" y="90" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96762"/>
 				<text><![CDATA[- Salidas (Arqueos):]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="90" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96763"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_ARQUEOS}]]></textFieldExpression>
@@ -203,7 +202,7 @@
 				<reportElement style="base" x="0" y="102" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96764"/>
 				<text><![CDATA[- Salidas (Proveedores):]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="102" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96765"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_PAGOS_PROVEEDOR}]]></textFieldExpression>
@@ -213,7 +212,7 @@
 				<reportElement style="base" x="0" y="114" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96766"/>
 				<text><![CDATA[- Vales:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="114" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96767"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_VALES}]]></textFieldExpression>
@@ -223,7 +222,7 @@
 				<reportElement style="base" x="0" y="126" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96768"/>
 				<text><![CDATA[- Devoluciones/NC:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="126" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96769"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_DEVOLUCIONES}]]></textFieldExpression>
@@ -240,7 +239,7 @@
 				<reportElement style="bold" x="0" y="145" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96771"/>
 				<text><![CDATA[= EFECTIVO ESPERADO:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="bold" x="120" y="145" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96772"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{MONTO_ESPERADO}]]></textFieldExpression>
@@ -255,7 +254,7 @@
 				<reportElement style="bold" x="0" y="165" width="120" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96774"/>
 				<text><![CDATA[EFECTIVO DECLARADO:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="bold" x="120" y="165" width="96" height="10" uuid="68593d29-b2a4-43d1-953d-a38c68c96775"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{MONTO_CIERRE}]]></textFieldExpression>
@@ -268,15 +267,50 @@
 				</graphicElement>
 			</line>
 
+			<!-- DIFERENCIA < 0: faltante en rojo -->
 			<staticText>
-				<reportElement style="bold" x="0" y="184" width="120" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c96777"/>
-				<text><![CDATA[DIFERENCIA:]]></text>
+				<reportElement style="bold" x="0" y="184" width="120" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c96777" forecolor="#dc2626">
+					<printWhenExpression><![CDATA[$P{DIFERENCIA} != null && $P{DIFERENCIA}.compareTo(java.math.BigDecimal.ZERO) < 0]]></printWhenExpression>
+				</reportElement>
+				<text><![CDATA[DIFERENCIA (FALTANTE):]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
-				<reportElement style="bold" x="120" y="184" width="96" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c96778"/>
+			<textField pattern="&#x20A1; #,##0.00">
+				<reportElement style="bold" x="120" y="184" width="96" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c96778" forecolor="#dc2626">
+					<printWhenExpression><![CDATA[$P{DIFERENCIA} != null && $P{DIFERENCIA}.compareTo(java.math.BigDecimal.ZERO) < 0]]></printWhenExpression>
+				</reportElement>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{DIFERENCIA}]]></textFieldExpression>
 			</textField>
+
+			<!-- DIFERENCIA > 0: sobrante en verde -->
+			<staticText>
+				<reportElement style="bold" x="0" y="184" width="120" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c9677b" forecolor="#16a34a">
+					<printWhenExpression><![CDATA[$P{DIFERENCIA} != null && $P{DIFERENCIA}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+				</reportElement>
+				<text><![CDATA[DIFERENCIA (SOBRANTE):]]></text>
+			</staticText>
+			<textField pattern="&#x20A1; #,##0.00">
+				<reportElement style="bold" x="120" y="184" width="96" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c96779" forecolor="#16a34a">
+					<printWhenExpression><![CDATA[$P{DIFERENCIA} != null && $P{DIFERENCIA}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right"/>
+				<textFieldExpression><![CDATA[$P{DIFERENCIA}]]></textFieldExpression>
+			</textField>
+
+			<!-- DIFERENCIA == 0: cuadra perfecto en verde -->
+			<staticText>
+				<reportElement style="bold" x="0" y="184" width="120" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c9677c" forecolor="#16a34a">
+					<printWhenExpression><![CDATA[$P{DIFERENCIA} != null && $P{DIFERENCIA}.compareTo(java.math.BigDecimal.ZERO) == 0]]></printWhenExpression>
+				</reportElement>
+				<text><![CDATA[DIFERENCIA:]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="bold" x="120" y="184" width="96" height="12" uuid="68593d29-b2a4-43d1-953d-a38c68c9678c" forecolor="#16a34a">
+					<printWhenExpression><![CDATA[$P{DIFERENCIA} != null && $P{DIFERENCIA}.compareTo(java.math.BigDecimal.ZERO) == 0]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right"/>
+				<text><![CDATA[OK Cuadra]]></text>
+			</staticText>
 
 			<line>
 				<reportElement x="0" y="202" width="216" height="1" uuid="68593d29-b2a4-43d1-953d-a38c68c96779"/>
@@ -375,7 +409,7 @@
 				<reportElement style="base" x="0" y="328" width="80" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c12"/>
 				<text><![CDATA[EFECTIVO:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="328" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c13"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_EFECTIVO}]]></textFieldExpression>
@@ -385,7 +419,7 @@
 				<reportElement style="base" x="0" y="340" width="80" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c14"/>
 				<text><![CDATA[TARJETA:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="340" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c15"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_TARJETA}]]></textFieldExpression>
@@ -395,7 +429,7 @@
 				<reportElement style="base" x="0" y="352" width="80" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c16"/>
 				<text><![CDATA[TRANSFERENCIA:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="352" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c17"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_TRANSFERENCIA}]]></textFieldExpression>
@@ -405,7 +439,7 @@
 				<reportElement style="base" x="0" y="364" width="80" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c18"/>
 				<text><![CDATA[SINPE / OTROS:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="364" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c19"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_SINPE}]]></textFieldExpression>
@@ -422,7 +456,7 @@
 				<reportElement style="bold" x="0" y="383" width="80" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c21"/>
 				<text><![CDATA[TOTAL:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="bold" x="120" y="383" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c22"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_VENTAS}]]></textFieldExpression>
@@ -454,7 +488,7 @@
 							<reportElement style="base" x="5" y="2" width="120" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c27"/>
 							<textFieldExpression><![CDATA[$F{datafono}]]></textFieldExpression>
 						</textField>
-						<textField pattern="₡ #,##0.00">
+						<textField pattern="&#x20A1; #,##0.00">
 							<reportElement style="base" x="125" y="2" width="86" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c28"/>
 							<textElement textAlignment="Right"/>
 							<textFieldExpression><![CDATA[$F{monto}]]></textFieldExpression>
@@ -501,7 +535,6 @@
 				</reportElement>
 				<jr:list xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" printOrder="Vertical">
 					<datasetRun subDataset="movimientos" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c35">
-						<!-- PARAMS ANTES del dataSourceExpression -->
 						<datasetParameter name="MOV_TIPO_PREFIX">
 							<datasetParameterExpression><![CDATA["ENTRADA"]]></datasetParameterExpression>
 						</datasetParameter>
@@ -517,7 +550,7 @@
 							</reportElement>
 							<textFieldExpression><![CDATA["[" + $F{fechaHora}.format($P{TIME_FORMATTER}) + "] " + $F{tipoMovimiento}.getDescripcion() + " - " + $F{concepto}]]></textFieldExpression>
 						</textField>
-						<textField pattern="₡ #,##0.00">
+						<textField pattern="&#x20A1; #,##0.00">
 							<reportElement style="small" x="155" y="2" width="56" height="8" uuid="b2c3d4e5-f6a7-4082-9304-b5c6d7e8f9a0">
 								<printWhenExpression><![CDATA[$F{tipoMovimiento}.toString().startsWith("ENTRADA")]]></printWhenExpression>
 							</reportElement>
@@ -538,7 +571,7 @@
 				<reportElement style="bold" x="0" y="578" width="120" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c39"/>
 				<text><![CDATA[SUBTOTAL ENTRADAS:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="bold" x="120" y="578" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c40"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_ENTRADAS}]]></textFieldExpression>
@@ -560,7 +593,6 @@
 				</reportElement>
 				<jr:list xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" printOrder="Vertical">
 					<datasetRun subDataset="movimientos" uuid="b2c3d4e5-f6a7-4082-9304-b5c6d7e8f9a1">
-						<!-- PARAMS ANTES del dataSourceExpression -->
 						<datasetParameter name="MOV_TIPO_PREFIX">
 							<datasetParameterExpression><![CDATA["SALIDA"]]></datasetParameterExpression>
 						</datasetParameter>
@@ -576,7 +608,7 @@
 							</reportElement>
 							<textFieldExpression><![CDATA["[" + $F{fechaHora}.format($P{TIME_FORMATTER}) + "] " + $F{tipoMovimiento}.getDescripcion() + " - " + $F{concepto}]]></textFieldExpression>
 						</textField>
-						<textField pattern="₡ #,##0.00">
+						<textField pattern="&#x20A1; #,##0.00">
 							<reportElement style="small" x="155" y="2" width="56" height="8" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c45">
 								<printWhenExpression><![CDATA[$F{tipoMovimiento}.toString().startsWith("SALIDA")]]></printWhenExpression>
 							</reportElement>
@@ -597,7 +629,7 @@
 				<reportElement style="bold" x="0" y="704" width="120" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c47"/>
 				<text><![CDATA[SUBTOTAL SALIDAS:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="bold" x="120" y="704" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c48"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{TOTAL_SALIDAS}]]></textFieldExpression>
@@ -655,7 +687,7 @@
 						<dataSourceExpression><![CDATA[$P{DENOMINACIONES_DS}]]></dataSourceExpression>
 					</datasetRun>
 					<jr:listContents height="15" width="216">
-						<textField pattern="₡ #,##0.00">
+						<textField pattern="&#x20A1; #,##0.00">
 							<reportElement style="base" x="0" y="2" width="60" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c57"/>
 							<textFieldExpression><![CDATA[$F{valor}]]></textFieldExpression>
 						</textField>
@@ -664,7 +696,7 @@
 							<textElement textAlignment="Center"/>
 							<textFieldExpression><![CDATA[$F{cantidad}]]></textFieldExpression>
 						</textField>
-						<textField pattern="₡ #,##0.00">
+						<textField pattern="&#x20A1; #,##0.00">
 							<reportElement style="base" x="120" y="2" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c59"/>
 							<textElement textAlignment="Right"/>
 							<textFieldExpression><![CDATA[$F{total}]]></textFieldExpression>
@@ -691,7 +723,7 @@
 				<reportElement style="bold" x="0" y="868" width="120" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c81"/>
 				<text><![CDATA[TOTAL CONTADO:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="bold" x="120" y="868" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c82"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{MONTO_CIERRE}]]></textFieldExpression>
@@ -714,7 +746,7 @@
 				<reportElement style="base" x="0" y="905" width="120" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c86"/>
 				<text><![CDATA[Total en Caja (Conteo):]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="905" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c67"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{MONTO_CIERRE}]]></textFieldExpression>
@@ -724,7 +756,7 @@
 				<reportElement style="base" x="0" y="917" width="120" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c68"/>
 				<text><![CDATA[- Monto Retirado:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="base" x="120" y="917" width="96" height="10" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c69"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{MONTO_RETIRADO}]]></textFieldExpression>
@@ -741,7 +773,7 @@
 				<reportElement style="bold" x="0" y="936" width="120" height="12" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c80"/>
 				<text><![CDATA[= FONDO PRÓXIMA JORNADA:]]></text>
 			</staticText>
-			<textField pattern="₡ #,##0.00">
+			<textField pattern="&#x20A1; #,##0.00">
 				<reportElement style="bold" x="120" y="936" width="96" height="12" uuid="b3d2f57b-2f31-4a26-bd1b-0f6b2e6f8c62"/>
 				<textElement textAlignment="Right"/>
 				<textFieldExpression><![CDATA[$P{FONDO_CAJA}]]></textFieldExpression>

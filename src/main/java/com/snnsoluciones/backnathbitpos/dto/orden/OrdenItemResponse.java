@@ -19,6 +19,7 @@ public record OrdenItemResponse(
     BigDecimal totalImpuesto,
     BigDecimal total,
     ZonaPreparacion productoZonaPreparacion,
+    LocalDateTime fechaCreacion,
     String notas,
     Boolean enviadoCocina,
     LocalDateTime fechaEnvioCocina,

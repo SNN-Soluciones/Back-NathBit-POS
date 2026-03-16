@@ -73,7 +73,7 @@ public class ResumenCajaDetalladoDTO {
     private List<ValeResumenDTO> valesDetalle = new ArrayList<>();
 
     // Lista de movimientos
-    private List<MovimientoCaja> movimientos;
+    private List<MovimientoCajaDTO> movimientos;
 
     // NUEVO: DTO interno para documentos
     @Data

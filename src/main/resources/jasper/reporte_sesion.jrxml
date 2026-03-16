@@ -1,0 +1,666 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="reporte_sesion" pageWidth="226" pageHeight="3000"
+              whenNoDataType="AllSectionsNoDetail"
+              columnWidth="216" leftMargin="5" rightMargin="5" topMargin="5" bottomMargin="5"
+              isIgnorePagination="true"
+              uuid="a9974d66-43fa-4fe3-a2cf-ae7d5111161b">
+
+  <!-- ── ESTILOS ─────────────────────────────────────────────────── -->
+  <style name="base"    fontName="SansSerif" fontSize="8"/>
+  <style name="title"   style="base" fontSize="11" isBold="true"/>
+  <style name="section" style="base" fontSize="9"  isBold="true"/>
+  <style name="bold"    style="base" isBold="true"/>
+  <style name="small"   style="base" fontSize="7"/>
+
+  <!-- ── SUBDATASET: TURNOS ──────────────────────────────────────── -->
+  <subDataset name="turnos" uuid="40f9aa17-1255-4f9d-975f-cdbb47d1827c">
+    <field name="turnoId"              class="java.lang.Long"/>
+    <field name="usuarioNombre"        class="java.lang.String"/>
+    <field name="estado"               class="java.lang.String"/>
+    <field name="fechaInicio"          class="java.time.LocalDateTime"/>
+    <field name="fechaFin"             class="java.time.LocalDateTime"/>
+    <field name="fondoInicioTurno"     class="java.math.BigDecimal"/>
+    <field name="ventasEfectivo"       class="java.math.BigDecimal"/>
+    <field name="ventasTarjeta"        class="java.math.BigDecimal"/>
+    <field name="ventasTransferencia"  class="java.math.BigDecimal"/>
+    <field name="ventasSinpe"          class="java.math.BigDecimal"/>
+    <field name="totalVentas"          class="java.math.BigDecimal"/>
+    <field name="montoEsperado"        class="java.math.BigDecimal"/>
+    <field name="montoContado"         class="java.math.BigDecimal"/>
+    <field name="diferenciaEfectivo"   class="java.math.BigDecimal"/>
+    <field name="diferenciaTarjeta"    class="java.math.BigDecimal"/>
+    <field name="diferenciaTransferencia" class="java.math.BigDecimal"/>
+    <field name="diferenciaSinpe"      class="java.math.BigDecimal"/>
+    <field name="montoRetirado"        class="java.math.BigDecimal"/>
+    <field name="fondoCaja"            class="java.math.BigDecimal"/>
+    <field name="observacionesCierre"  class="java.lang.String"/>
+  </subDataset>
+
+  <!-- ── PARÁMETROS ──────────────────────────────────────────────── -->
+  <parameter name="EMPRESA_NOMBRE"       class="java.lang.String"/>
+  <parameter name="EMPRESA_CEDULA"       class="java.lang.String"/>
+  <parameter name="SUCURSAL"             class="java.lang.String"/>
+  <parameter name="TERMINAL"             class="java.lang.String"/>
+  <parameter name="SESION_ID"            class="java.lang.Long"/>
+  <parameter name="ESTADO_SESION"        class="java.lang.String"/>
+  <parameter name="FECHA_APERTURA"       class="java.time.LocalDateTime"/>
+  <parameter name="FECHA_CIERRE"         class="java.time.LocalDateTime"/>
+  <parameter name="MONTO_INICIAL"        class="java.math.BigDecimal"/>
+  <parameter name="TOTAL_TURNOS"         class="java.lang.Integer"/>
+  <parameter name="TOT_EFECTIVO"         class="java.math.BigDecimal"/>
+  <parameter name="TOT_TARJETA"          class="java.math.BigDecimal"/>
+  <parameter name="TOT_TRANSFERENCIA"    class="java.math.BigDecimal"/>
+  <parameter name="TOT_SINPE"            class="java.math.BigDecimal"/>
+  <parameter name="TOT_VENTAS"           class="java.math.BigDecimal"/>
+  <parameter name="TOT_DIF_EFECTIVO"     class="java.math.BigDecimal"/>
+  <parameter name="TOT_DIF_TARJETA"      class="java.math.BigDecimal"/>
+  <parameter name="TOT_DIF_TRANSFERENCIA" class="java.math.BigDecimal"/>
+  <parameter name="TOT_DIF_SINPE"        class="java.math.BigDecimal"/>
+  <parameter name="TURNOS_DS"            class="net.sf.jasperreports.engine.data.JRBeanCollectionDataSource"/>
+
+  <!-- ── TITLE: ENCABEZADO ───────────────────────────────────────── -->
+  <title>
+    <band height="130">
+      <!-- Empresa -->
+      <textField>
+        <reportElement style="title" x="0" y="0" width="216" height="14" uuid="66ff1a6f-0cef-45e4-8f78-fae56095a47c"/>
+        <textElement textAlignment="Center"/>
+        <textFieldExpression><![CDATA[$P{EMPRESA_NOMBRE}]]></textFieldExpression>
+      </textField>
+      <textField isBlankWhenNull="true">
+        <reportElement style="small" x="0" y="16" width="216" height="8" uuid="8d5431c5-526e-464c-b77a-9ff1f29957ab"/>
+        <textElement textAlignment="Center"/>
+        <textFieldExpression><![CDATA["Cédula: " + $P{EMPRESA_CEDULA}]]></textFieldExpression>
+      </textField>
+
+      <line>
+        <reportElement x="0" y="28" width="216" height="1" uuid="a424b757-f801-4b6f-a425-eccdc065415c"/>
+        <graphicElement><pen lineWidth="0.5" lineStyle="Dashed"/></graphicElement>
+      </line>
+
+      <staticText>
+        <reportElement style="title" x="0" y="32" width="216" height="14" uuid="ff6d7bb5-320e-4d95-b4e0-85a47a54f57d"/>
+        <textElement textAlignment="Center"/>
+        <text><![CDATA[REPORTE DE SESIÓN]]></text>
+      </staticText>
+
+      <line>
+        <reportElement x="0" y="50" width="216" height="1" uuid="6cd7d0ae-d0ea-493e-9b14-3fbbd94ce3e1"/>
+        <graphicElement><pen lineWidth="0.5" lineStyle="Dashed"/></graphicElement>
+      </line>
+
+      <!-- Info sesión -->
+      <staticText>
+        <reportElement style="base" x="0" y="55" width="70" height="10" uuid="5b4cdee0-0b66-4851-9680-010c07640e6f"/>
+        <text><![CDATA[Sesión #:]]></text>
+      </staticText>
+      <textField>
+        <reportElement style="bold" x="70" y="55" width="146" height="10" uuid="4b3c7f46-d392-4cc2-8d45-65d131c0b41b"/>
+        <textFieldExpression><![CDATA[$P{SESION_ID}.toString()]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="67" width="70" height="10" uuid="402e0ae5-7f56-4d04-8977-318981a15891"/>
+        <text><![CDATA[Terminal:]]></text>
+      </staticText>
+      <textField>
+        <reportElement style="base" x="70" y="67" width="146" height="10" uuid="b4919a32-2b3e-43ce-9a7f-4f7b6798eb2c"/>
+        <textFieldExpression><![CDATA[$P{TERMINAL} + " — " + $P{SUCURSAL}]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="79" width="70" height="10" uuid="80ab582f-6162-4cd8-b861-6b7897e258ea"/>
+        <text><![CDATA[Estado:]]></text>
+      </staticText>
+      <textField>
+        <reportElement style="bold" x="70" y="79" width="146" height="10" uuid="6d0230c4-14eb-4877-90c5-9d8104082c4c"/>
+        <textFieldExpression><![CDATA["ABIERTA".equals($P{ESTADO_SESION}) ? "● EN CURSO" : "✓ CERRADA"]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="91" width="70" height="10" uuid="dba54e71-03f8-4d08-b74f-57ee705ea841"/>
+        <text><![CDATA[Apertura:]]></text>
+      </staticText>
+      <textField>
+        <reportElement style="base" x="70" y="91" width="146" height="10" uuid="e1aa0c78-b3af-4fef-967d-0f1de232e7e6"/>
+        <textFieldExpression><![CDATA[$P{FECHA_APERTURA} != null ? $P{FECHA_APERTURA}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "-"]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="103" width="70" height="10" uuid="0b35ae88-09c4-4071-ad06-5062dbebeaf2"/>
+        <text><![CDATA[Cierre:]]></text>
+      </staticText>
+      <textField>
+        <reportElement style="base" x="70" y="103" width="146" height="10" uuid="7faf4ba0-f70e-4ce4-b9c2-a02df4a85408"/>
+        <textFieldExpression><![CDATA[$P{FECHA_CIERRE} != null ? $P{FECHA_CIERRE}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "En curso"]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="115" width="70" height="10" uuid="b89fbe3a-4057-4ce1-8716-873c0d4c8a89"/>
+        <text><![CDATA[Fondo inicial:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="bold" x="70" y="115" width="146" height="10" uuid="2037fadf-13d3-49cd-a313-6d0d03585921"/>
+        <textFieldExpression><![CDATA[$P{MONTO_INICIAL}]]></textFieldExpression>
+      </textField>
+    </band>
+  </title>
+
+  <!-- ── DETAIL: TURNOS + TOTALES ────────────────────────────────── -->
+  <detail>
+    <band height="1800">
+
+      <!-- ── SECCIÓN TURNOS ──────────────────────────────────────── -->
+      <line>
+        <reportElement x="0" y="5" width="216" height="1" uuid="4bf45bdf-5ce5-45ca-b156-143404ac93b2"/>
+        <graphicElement><pen lineWidth="1.0" lineStyle="Solid"/></graphicElement>
+      </line>
+      <staticText>
+        <reportElement style="section" x="0" y="10" width="216" height="12" uuid="87d4f9e1-bb0d-4dad-b637-df5ae961ef86"/>
+        <textElement textAlignment="Center"/>
+        <text><![CDATA[═══ DETALLE POR TURNO ═══]]></text>
+      </staticText>
+
+      <!-- Lista de turnos -->
+      <componentElement>
+        <reportElement x="0" y="26" width="216" height="900" uuid="3b3ab5a9-6b8b-4c2c-a5f6-b31acf39664f"/>
+        <jr:list xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components"
+                 xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd"
+                 printOrder="Vertical">
+          <datasetRun subDataset="turnos" uuid="c3efd3d1-bfe8-48d3-8bb8-7e3bd792880c">
+            <dataSourceExpression><![CDATA[$P{TURNOS_DS}]]></dataSourceExpression>
+          </datasetRun>
+          <jr:listContents height="210" width="216">
+
+            <!-- Nombre + estado -->
+            <textField>
+              <reportElement style="bold" x="0" y="2" width="150" height="12" uuid="0285d9ec-4815-44fd-bb2e-a5aa6372b914"/>
+              <textFieldExpression><![CDATA[$F{usuarioNombre}]]></textFieldExpression>
+            </textField>
+            <textField>
+              <reportElement style="bold" x="150" y="2" width="66" height="12" uuid="303b271f-c89c-4ad8-871c-c754a1219c78"/>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA["ACTIVA".equals($F{estado}) ? "● EN CURSO" : "✓ CERRADO"]]></textFieldExpression>
+            </textField>
+
+            <!-- Horas -->
+            <staticText>
+              <reportElement style="small" x="5" y="16" width="55" height="8" uuid="e8202a82-3270-4ea2-a5e9-46bb2366ed76"/>
+              <text><![CDATA[Inicio:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+              <reportElement style="small" x="60" y="16" width="156" height="8" uuid="1ea3e340-e2d8-4a03-8fd5-4de3be4393a4"/>
+              <textFieldExpression><![CDATA[$F{fechaInicio} != null ? $F{fechaInicio}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "-"]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+              <reportElement style="small" x="5" y="26" width="55" height="8" uuid="b460aacc-3081-4846-8015-b3f243d1f09e"/>
+              <text><![CDATA[Fin:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+              <reportElement style="small" x="60" y="26" width="156" height="8" uuid="eab7ab54-249c-44cb-94b7-ea2b2e9ddb48"/>
+              <textFieldExpression><![CDATA[$F{fechaFin} != null ? $F{fechaFin}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "En curso"]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+              <reportElement style="small" x="5" y="36" width="100" height="8" uuid="1c22e09c-379e-4413-8e33-fcd9d655355e"/>
+              <text><![CDATA[Fondo al entrar:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="120" y="36" width="96" height="8" uuid="f7036b5a-f707-4b47-bf65-ab0b7a39432b"/>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{fondoInicioTurno}]]></textFieldExpression>
+            </textField>
+
+            <!-- Separador -->
+            <line>
+              <reportElement x="5" y="47" width="206" height="1" uuid="ca3fb9a1-0bda-42e0-a2f9-97c086ddc481"/>
+              <graphicElement><pen lineWidth="0.25" lineStyle="Dashed"/></graphicElement>
+            </line>
+
+            <!-- Ventas por medio de pago -->
+            <staticText>
+              <reportElement style="small" x="5" y="50" width="80" height="8" uuid="30d60bd3-9b09-4b77-a364-43fc05ad48b0"/>
+              <textElement><font isBold="true"/></textElement>
+              <text><![CDATA[Ventas:]]></text>
+            </staticText>
+
+            <staticText>
+              <reportElement style="small" x="10" y="60" width="80" height="8" uuid="cbc0e4f8-8fb4-4c5b-9a8e-3c6079bf269b"/>
+              <text><![CDATA[Efectivo:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="60" width="116" height="8" uuid="339af9ba-5e7a-4683-a204-067140ba72b1"/>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{ventasEfectivo}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+              <reportElement style="small" x="10" y="70" width="80" height="8" uuid="2e61a7f4-0e3e-40d4-b800-caef0d07f4f0"/>
+              <text><![CDATA[Tarjeta:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="70" width="116" height="8" uuid="1f17a64c-c227-4d62-9072-58d4a1a35d7b"/>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{ventasTarjeta}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+              <reportElement style="small" x="10" y="80" width="80" height="8" uuid="5276fcdd-29dc-40e6-8726-c07441bf521b"/>
+              <text><![CDATA[SINPE:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="80" width="116" height="8" uuid="4acb8f66-5375-48b8-8231-942004669aac"/>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{ventasSinpe}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+              <reportElement style="small" x="10" y="90" width="80" height="8" uuid="fab63163-871d-4de6-a9c8-7d07aa42c1c9"/>
+              <text><![CDATA[Transferencia:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="90" width="116" height="8" uuid="657f3577-9d5b-453f-9a01-105fde4f7708"/>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{ventasTransferencia}]]></textFieldExpression>
+            </textField>
+
+            <line>
+              <reportElement x="100" y="100" width="116" height="1" uuid="7109005d-cea7-41b4-b068-3dfff724dac2"/>
+              <graphicElement><pen lineWidth="0.5" lineStyle="Solid"/></graphicElement>
+            </line>
+            <staticText>
+              <reportElement style="small" x="10" y="103" width="80" height="8" uuid="fd4832ad-8104-4e53-9a56-1c036d58de7f"/>
+              <textElement><font isBold="true"/></textElement>
+              <text><![CDATA[Total Ventas:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="103" width="116" height="8" uuid="ebdd7193-302d-4e4f-aea5-963a0c2e82d5"/>
+              <textElement textAlignment="Right"><font isBold="true"/></textElement>
+              <textFieldExpression><![CDATA[$F{totalVentas}]]></textFieldExpression>
+            </textField>
+
+            <!-- Arqueo (solo si CERRADA) -->
+            <line>
+              <reportElement x="5" y="114" width="206" height="1" uuid="eedd7355-ffad-48ae-b66e-430c831853b0">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <graphicElement><pen lineWidth="0.25" lineStyle="Dashed"/></graphicElement>
+            </line>
+
+            <staticText>
+              <reportElement style="small" x="5" y="117" width="80" height="8" uuid="fefef050-7550-49e7-bc73-237dcf5448a7">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <textElement><font isBold="true"/></textElement>
+              <text><![CDATA[Arqueo efectivo:]]></text>
+            </staticText>
+
+            <staticText>
+              <reportElement style="small" x="10" y="127" width="80" height="8" uuid="7266dfe1-1dfc-4f54-bdcc-0f2ef52ee584">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[Esperado:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="127" width="116" height="8" uuid="7ec90331-bf77-4a5d-904b-94f0ab1cd8da">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{montoEsperado}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+              <reportElement style="small" x="10" y="137" width="80" height="8" uuid="d045fee0-2f6b-4015-8b53-5ad3290b05df">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[Contado:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="137" width="116" height="8" uuid="2e675f18-7ab6-4426-8320-66cf17ffaf5e">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{montoContado}]]></textFieldExpression>
+            </textField>
+
+            <!-- Diferencias (solo CERRADA) -->
+            <line>
+              <reportElement x="5" y="148" width="206" height="1" uuid="973da38e-bfe7-42a3-907d-6a1327396da8">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <graphicElement><pen lineWidth="0.25" lineStyle="Dashed"/></graphicElement>
+            </line>
+
+            <staticText>
+              <reportElement style="small" x="5" y="151" width="80" height="8" uuid="1647ad88-6e36-4f4b-9117-bfc483d5b256">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <textElement><font isBold="true"/></textElement>
+              <text><![CDATA[Diferencias:]]></text>
+            </staticText>
+
+            <!-- Dif efectivo — rojo si negativo, verde si >=0 -->
+            <staticText>
+              <reportElement style="small" x="10" y="161" width="80" height="8" uuid="9da81c43-0f23-46d7-8900-38244eff8fb4" forecolor="#dc2626">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && $F{diferenciaEfectivo} != null && $F{diferenciaEfectivo}.compareTo(java.math.BigDecimal.ZERO) < 0]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[Efectivo (FALTANTE):]]></text>
+            </staticText>
+            <staticText>
+              <reportElement style="small" x="10" y="161" width="80" height="8" uuid="36bc0d5e-905c-466b-b26a-650a05ccbc63" forecolor="#16a34a">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && ($F{diferenciaEfectivo} == null || $F{diferenciaEfectivo}.compareTo(java.math.BigDecimal.ZERO) >= 0)]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[Efectivo:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="161" width="116" height="8" uuid="5e541eee-4d7e-4f68-8488-9f04a20d1d55" forecolor="#dc2626">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && $F{diferenciaEfectivo} != null && $F{diferenciaEfectivo}.compareTo(java.math.BigDecimal.ZERO) < 0]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{diferenciaEfectivo}]]></textFieldExpression>
+            </textField>
+            <staticText>
+              <reportElement style="small" x="100" y="161" width="116" height="8" uuid="2ca405e4-b9c0-431b-814c-86c2fe7cfc2e" forecolor="#16a34a">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && ($F{diferenciaEfectivo} == null || $F{diferenciaEfectivo}.compareTo(java.math.BigDecimal.ZERO) == 0)]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <text><![CDATA[✓ Cuadra]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="161" width="116" height="8" uuid="da2de1b3-728f-41be-9cf5-1cfd1b1eb6a2" forecolor="#16a34a">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && $F{diferenciaEfectivo} != null && $F{diferenciaEfectivo}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{diferenciaEfectivo}]]></textFieldExpression>
+            </textField>
+
+            <!-- Dif tarjeta -->
+            <staticText>
+              <reportElement style="small" x="10" y="171" width="80" height="8" uuid="2096cc76-f80b-4785-b67c-4147915dc230">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[Tarjeta:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="171" width="116" height="8" uuid="8b4d5ab9-ed75-4fbb-9cf7-3016be72901f" forecolor="#dc2626">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && $F{diferenciaTarjeta} != null && $F{diferenciaTarjeta}.compareTo(java.math.BigDecimal.ZERO) != 0]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{diferenciaTarjeta}]]></textFieldExpression>
+            </textField>
+            <staticText>
+              <reportElement style="small" x="100" y="171" width="116" height="8" uuid="747181eb-8ebc-4a4c-8294-510fd7762d36" forecolor="#16a34a">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && ($F{diferenciaTarjeta} == null || $F{diferenciaTarjeta}.compareTo(java.math.BigDecimal.ZERO) == 0)]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <text><![CDATA[✓ Cuadra]]></text>
+            </staticText>
+
+            <!-- Dif SINPE -->
+            <staticText>
+              <reportElement style="small" x="10" y="181" width="80" height="8" uuid="2f8e8f72-8de0-4efa-ba28-ac3a6d2f8129">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[SINPE:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="181" width="116" height="8" uuid="971bd4f5-24b1-4edf-80cd-2da12683bd4e" forecolor="#dc2626">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && $F{diferenciaSinpe} != null && $F{diferenciaSinpe}.compareTo(java.math.BigDecimal.ZERO) != 0]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{diferenciaSinpe}]]></textFieldExpression>
+            </textField>
+            <staticText>
+              <reportElement style="small" x="100" y="181" width="116" height="8" uuid="723e7453-bf8d-43e5-a36b-9db0e528cabb" forecolor="#16a34a">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado}) && ($F{diferenciaSinpe} == null || $F{diferenciaSinpe}.compareTo(java.math.BigDecimal.ZERO) == 0)]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <text><![CDATA[✓ Cuadra]]></text>
+            </staticText>
+
+            <!-- Distribución (solo CERRADA) -->
+            <line>
+              <reportElement x="5" y="192" width="206" height="1" uuid="25df345f-ab99-4bde-b2de-a3fd9c470073">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <graphicElement><pen lineWidth="0.25" lineStyle="Dashed"/></graphicElement>
+            </line>
+
+            <staticText>
+              <reportElement style="small" x="10" y="195" width="80" height="8" uuid="46e3b67b-d9cd-4361-a70c-e060564a4de6">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[Retiro:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="195" width="116" height="8" uuid="5e03042d-2d4d-43be-a7b3-f78f7e7e1af2">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{montoRetirado}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+              <reportElement style="small" x="10" y="185" width="80" height="8" uuid="e89e2155-bf90-42a0-9558-63a2aca65cf5">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <text><![CDATA[Fondo dejado:]]></text>
+            </staticText>
+            <textField pattern="&#x20A1; #,##0.00">
+              <reportElement style="small" x="100" y="185" width="116" height="8" uuid="4aa7b661-1d86-4d52-b704-75ebcf3761b6">
+                <printWhenExpression><![CDATA["CERRADA".equals($F{estado})]]></printWhenExpression>
+              </reportElement>
+              <textElement textAlignment="Right"/>
+              <textFieldExpression><![CDATA[$F{fondoCaja}]]></textFieldExpression>
+            </textField>
+
+            <!-- Separador entre turnos -->
+            <line>
+              <reportElement x="0" y="198" width="216" height="1" uuid="ad8dc8ec-f0a1-40ff-b3fc-4deff13ac1c5"/>
+              <graphicElement><pen lineWidth="1.0" lineStyle="Solid"/></graphicElement>
+            </line>
+
+          </jr:listContents>
+        </jr:list>
+      </componentElement>
+
+      <!-- ── TOTALES GENERALES ─────────────────────────────────── -->
+      <line>
+        <reportElement x="0" y="930" width="216" height="1" uuid="f40415ad-644f-4570-9521-064959bcf379"/>
+        <graphicElement><pen lineWidth="1.0" lineStyle="Solid"/></graphicElement>
+      </line>
+      <staticText>
+        <reportElement style="section" x="0" y="935" width="216" height="12" uuid="e2cd7fd7-adfb-4fa2-a362-04438e97111f"/>
+        <textElement textAlignment="Center"/>
+        <text><![CDATA[═══ TOTALES GENERALES ═══]]></text>
+      </staticText>
+
+      <staticText>
+        <reportElement style="base" x="0" y="951" width="120" height="10" uuid="4e7ce710-b80d-4909-90de-a95c57084594"/>
+        <text><![CDATA[Ventas Efectivo:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="base" x="120" y="951" width="96" height="10" uuid="f90b0640-8f5f-42e0-a9f9-89f5d8f44a7c"/>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_EFECTIVO}]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="963" width="120" height="10" uuid="f1847422-06fe-449d-ab0b-a4a5022fe86e"/>
+        <text><![CDATA[Ventas Tarjeta:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="base" x="120" y="963" width="96" height="10" uuid="b68842e0-3581-4516-8730-9177b502623a"/>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_TARJETA}]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="975" width="120" height="10" uuid="163e391b-60c7-4f85-bf19-995acadc9c71"/>
+        <text><![CDATA[Ventas SINPE:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="base" x="120" y="975" width="96" height="10" uuid="6753aa13-e929-497e-98bd-b06c575506e5"/>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_SINPE}]]></textFieldExpression>
+      </textField>
+
+      <staticText>
+        <reportElement style="base" x="0" y="987" width="120" height="10" uuid="887974ba-8583-4593-8757-e5786f0dda74"/>
+        <text><![CDATA[Ventas Transferencia:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="base" x="120" y="987" width="96" height="10" uuid="be7f4cdc-fd22-4d41-99ee-9ad8206f11f0"/>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_TRANSFERENCIA}]]></textFieldExpression>
+      </textField>
+
+      <line>
+        <reportElement x="0" y="1001" width="216" height="1" uuid="34943775-5351-46dc-8d0d-b6d149853c52"/>
+        <graphicElement><pen lineWidth="1.0" lineStyle="Solid"/></graphicElement>
+      </line>
+
+      <staticText>
+        <reportElement style="bold" x="0" y="1006" width="120" height="10" uuid="f9985429-0858-485a-9bee-6ba1d94aad3a"/>
+        <text><![CDATA[TOTAL VENTAS:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="bold" x="120" y="1006" width="96" height="10" uuid="f96996ac-7b01-4ab7-8200-ee930d3921ac"/>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_VENTAS}]]></textFieldExpression>
+      </textField>
+
+      <!-- ── RESUMEN DIFERENCIAS ────────────────────────────────── -->
+      <line>
+        <reportElement x="0" y="1022" width="216" height="1" uuid="1397eaad-dd74-4839-8a53-e60c4fb80d75"/>
+        <graphicElement><pen lineWidth="0.5" lineStyle="Dashed"/></graphicElement>
+      </line>
+      <staticText>
+        <reportElement style="section" x="0" y="1027" width="216" height="12" uuid="c17c5278-0585-4fd0-9e22-7848dd740752"/>
+        <textElement textAlignment="Center"/>
+        <text><![CDATA[═══ RESUMEN DIFERENCIAS ═══]]></text>
+      </staticText>
+
+      <!-- Dif Efectivo total -->
+      <staticText>
+        <reportElement style="base" x="0" y="1043" width="120" height="10" uuid="871274c0-fdae-43d2-97f9-fdc8ad90bfc8" forecolor="#dc2626">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_EFECTIVO} != null && $P{TOT_DIF_EFECTIVO}.compareTo(java.math.BigDecimal.ZERO) < 0]]></printWhenExpression>
+        </reportElement>
+        <text><![CDATA[Efectivo (FALTANTE):]]></text>
+      </staticText>
+      <staticText>
+        <reportElement style="base" x="0" y="1043" width="120" height="10" uuid="3ad2d999-9a79-48d0-8122-b4799bbdf75d" forecolor="#16a34a">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_EFECTIVO} == null || $P{TOT_DIF_EFECTIVO}.compareTo(java.math.BigDecimal.ZERO) >= 0]]></printWhenExpression>
+        </reportElement>
+        <text><![CDATA[Efectivo:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="bold" x="120" y="1043" width="96" height="10" uuid="991424d4-3eab-48f4-b7cf-659c4bd220e2" forecolor="#dc2626">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_EFECTIVO} != null && $P{TOT_DIF_EFECTIVO}.compareTo(java.math.BigDecimal.ZERO) < 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_DIF_EFECTIVO}]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement style="bold" x="120" y="1043" width="96" height="10" uuid="db155377-5bb7-4d44-b8cd-fb69c6001426" forecolor="#16a34a">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_EFECTIVO} == null || $P{TOT_DIF_EFECTIVO}.compareTo(java.math.BigDecimal.ZERO) == 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <text><![CDATA[✓ Cuadra]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="bold" x="120" y="1043" width="96" height="10" uuid="c93db06c-77e4-4f1f-bdf8-f9e0cb1760f3" forecolor="#16a34a">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_EFECTIVO} != null && $P{TOT_DIF_EFECTIVO}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_DIF_EFECTIVO}]]></textFieldExpression>
+      </textField>
+
+      <!-- Dif Tarjeta total -->
+      <staticText>
+        <reportElement style="base" x="0" y="1055" width="120" height="10" uuid="d89d1b9e-9b72-4f10-8bf7-d9e4dbe52203"/>
+        <text><![CDATA[Tarjeta:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="bold" x="120" y="1055" width="96" height="10" uuid="a6f0b093-b24b-4995-b4fb-cc3ba550c744" forecolor="#dc2626">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_TARJETA} != null && $P{TOT_DIF_TARJETA}.compareTo(java.math.BigDecimal.ZERO) != 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_DIF_TARJETA}]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement style="bold" x="120" y="1055" width="96" height="10" uuid="b020de6b-d332-4484-84c9-07fb6f2b92f9" forecolor="#16a34a">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_TARJETA} == null || $P{TOT_DIF_TARJETA}.compareTo(java.math.BigDecimal.ZERO) == 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <text><![CDATA[✓ Cuadra]]></text>
+      </staticText>
+
+      <!-- Dif SINPE total -->
+      <staticText>
+        <reportElement style="base" x="0" y="1067" width="120" height="10" uuid="12326650-164b-491a-b388-7b96718027f0"/>
+        <text><![CDATA[SINPE:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="bold" x="120" y="1067" width="96" height="10" uuid="e28ce90f-453f-4df7-bdba-2c0c1fc2e254" forecolor="#dc2626">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_SINPE} != null && $P{TOT_DIF_SINPE}.compareTo(java.math.BigDecimal.ZERO) != 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_DIF_SINPE}]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement style="bold" x="120" y="1067" width="96" height="10" uuid="2accdfef-0c5f-4d4b-913a-1aaba3ba2dcd" forecolor="#16a34a">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_SINPE} == null || $P{TOT_DIF_SINPE}.compareTo(java.math.BigDecimal.ZERO) == 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <text><![CDATA[✓ Cuadra]]></text>
+      </staticText>
+
+      <!-- Dif Transferencia total -->
+      <staticText>
+        <reportElement style="base" x="0" y="1079" width="120" height="10" uuid="0929d703-2d10-4169-9986-e9b6811c978f"/>
+        <text><![CDATA[Transferencia:]]></text>
+      </staticText>
+      <textField pattern="&#x20A1; #,##0.00">
+        <reportElement style="bold" x="120" y="1079" width="96" height="10" uuid="8c2045d5-79e0-4d13-b7e3-009d1baed2e3" forecolor="#dc2626">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_TRANSFERENCIA} != null && $P{TOT_DIF_TRANSFERENCIA}.compareTo(java.math.BigDecimal.ZERO) != 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <textFieldExpression><![CDATA[$P{TOT_DIF_TRANSFERENCIA}]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement style="bold" x="120" y="1079" width="96" height="10" uuid="b340d69e-0cd4-437d-87f0-3aaa3dc4a187" forecolor="#16a34a">
+          <printWhenExpression><![CDATA[$P{TOT_DIF_TRANSFERENCIA} == null || $P{TOT_DIF_TRANSFERENCIA}.compareTo(java.math.BigDecimal.ZERO) == 0]]></printWhenExpression>
+        </reportElement>
+        <textElement textAlignment="Right"/>
+        <text><![CDATA[✓ Cuadra]]></text>
+      </staticText>
+
+    </band>
+  </detail>
+
+  <!-- ── PAGE FOOTER ─────────────────────────────────────────────── -->
+  <pageFooter>
+    <band height="25">
+      <line>
+        <reportElement x="0" y="2" width="216" height="1" uuid="adaaf301-5291-4896-9113-8c453734a519"/>
+        <graphicElement><pen lineWidth="0.5" lineStyle="Dashed"/></graphicElement>
+      </line>
+      <textField pattern="dd/MM/yyyy HH:mm:ss">
+        <reportElement style="small" x="0" y="8" width="216" height="8" uuid="4802ca60-ead0-4e80-ad80-82075a77d252"/>
+        <textElement textAlignment="Center"/>
+        <textFieldExpression><![CDATA["Generado: " + new java.util.Date()]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement style="small" x="0" y="16" width="216" height="8" uuid="8492c479-57a1-4990-8461-eb84dd644044"/>
+        <textElement textAlignment="Center"/>
+        <text><![CDATA[NathBit POS — Reporte confidencial]]></text>
+      </staticText>
+    </band>
+  </pageFooter>
+
+</jasperReport>

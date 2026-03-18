@@ -6,43 +6,21 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 /**
- * Rastrea el estado de consumo de una promoción por rondas dentro
- * de una orden activa.
+ * Rastrea el estado de una promoción AYCE o BARRA_LIBRE activa en una orden.
  *
- * Tabla: orden_promocion_estados
+ * Se crea UNA fila por cada (orden + promo + producto) cuando se activa un AYCE.
+ * Ejemplo: promo "Pizza AYCE" con 2 productos → 2 filas en esta tabla.
  *
- * ─────────────────────────────────────────────────────────────────────
- * ¿CUÁNDO SE USA?
- * ─────────────────────────────────────────────────────────────────────
- * Solo aplica para:
- *   - ALL_YOU_CAN_EAT → rastrear cuántas rondas de alitas/birras ya
- *                       se sirvieron en esta orden.
- *   - BARRA_LIBRE     → igual, si tiene límite de rondas por producto.
- *
- * ─────────────────────────────────────────────────────────────────────
- * CICLO DE VIDA
- * ─────────────────────────────────────────────────────────────────────
- * 1. Mesero agrega ítem trigger (ej: "Promo Alitas AYCE") a la orden.
- * 2. Sistema crea los OrdenItem iniciales (alitas x4, birra x2) en $0.
- * 3. Sistema crea un OrdenPromocionEstado por cada producto en
- *    PromocionItem, con rondasConsumidas = 1.
- * 4. Mesero solicita nueva ronda de alitas.
- * 5. Sistema busca este registro, valida que maxRondas sea null
- *    o rondasConsumidas < maxRondas, crea nuevo OrdenItem en $0
- *    e incrementa rondasConsumidas.
- *
- * ─────────────────────────────────────────────────────────────────────
- * UNIQUE CONSTRAINT
- * ─────────────────────────────────────────────────────────────────────
- * Una orden + promo + producto = un solo registro de estado.
- * Si el mismo producto aparece en dos promos distintas en la misma
- * orden (stack), habrá dos registros separados.
+ * Permite:
+ *   - Saber cuántas rondas lleva consumidas cada producto
+ *   - Validar si puede pedir más (maxRondas null = ilimitado)
+ *   - Registrar cuándo fue la última ronda
  */
 @Entity
 @Table(
-    name = "orden_promocion_estados",
+    name = "orden_promocion_estado",
     uniqueConstraints = @UniqueConstraint(
-        name = "uq_orden_promocion_producto",
+        name = "uq_orden_promo_producto",
         columnNames = {"orden_id", "promocion_id", "producto_id"}
     )
 )
@@ -64,12 +42,12 @@ public class OrdenPromocionEstado {
     @EqualsAndHashCode.Exclude
     private Orden orden;
 
-    // ── Referencia a la promo (sin FK para mantener patrón del sistema)
+    // ── Referencia a la promo y producto (sin FK cross-schema) ────────
+    // Se guardan como Long para no crear dependencias duras.
+    // La integridad se valida en el servicio.
 
     @Column(name = "promocion_id", nullable = false)
     private Long promocionId;
-
-    // ── Producto rastreado ────────────────────────────────────────────
 
     @Column(name = "producto_id", nullable = false)
     private Long productoId;
@@ -77,27 +55,26 @@ public class OrdenPromocionEstado {
     @Column(name = "nombre_producto", nullable = false, length = 200)
     private String nombreProducto;
 
-    // ── Estado de rondas ──────────────────────────────────────────────
+    // ── Control de rondas ─────────────────────────────────────────────
 
     /**
-     * Cuántas rondas de este producto ya se han servido en esta orden.
-     * Empieza en 1 cuando se activa la promo (la ronda inicial cuenta).
+     * Cuántas rondas se han consumido hasta ahora.
+     * Arranca en 1 cuando se activa la promo (la primera ronda ya fue servida).
      */
     @Column(name = "rondas_consumidas", nullable = false)
     @Builder.Default
     private Integer rondasConsumidas = 1;
 
     /**
-     * Copia del max_rondas del PromocionItem al momento de activar la promo.
-     * NULL = sin límite (AYCE puro).
-     * Se desnormaliza aquí para no necesitar JOIN al validar cada ronda.
+     * Límite de rondas para este producto en esta promo.
+     * NULL = sin límite (el cliente puede pedir cuantas quiera).
      */
     @Column(name = "max_rondas")
     private Integer maxRondas;
 
     /**
-     * Unidades por ronda. Copia de PromocionItem.cantidadPorRonda.
-     * Desnormalizado por la misma razón.
+     * Cuántas unidades se sirven por ronda.
+     * Se copia de PromocionItem al activar para no depender del registro original.
      */
     @Column(name = "cantidad_por_ronda", nullable = false)
     private Integer cantidadPorRonda;
@@ -113,21 +90,25 @@ public class OrdenPromocionEstado {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        fechaUltimaRonda = LocalDateTime.now();
+        if (fechaUltimaRonda == null) {
+            fechaUltimaRonda = LocalDateTime.now();
+        }
     }
 
-    // ── Métodos de utilidad ───────────────────────────────────────────
+    // ── Lógica de negocio ─────────────────────────────────────────────
 
     /**
-     * Verifica si aún se pueden pedir más rondas de este producto.
-     * Si maxRondas es null, siempre puede (AYCE ilimitado).
+     * true  → puede pedir más rondas.
+     * false → ya llegó al máximo.
+     *
+     * maxRondas null = ilimitado → siempre true.
      */
     public boolean puedeServirRonda() {
         return maxRondas == null || rondasConsumidas < maxRondas;
     }
 
     /**
-     * Registra una nueva ronda consumida.
+     * Registra una ronda consumida.
      * Llamar solo después de validar puedeServirRonda().
      */
     public void consumirRonda() {

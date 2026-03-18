@@ -4,18 +4,22 @@ import com.snnsoluciones.backnathbitpos.dto.promociones.CreatePromocionAlcanceRe
 import com.snnsoluciones.backnathbitpos.dto.promociones.CreatePromocionItemRequest;
 import com.snnsoluciones.backnathbitpos.dto.promociones.CreatePromocionRequest;
 import com.snnsoluciones.backnathbitpos.dto.promociones.PromocionDTO;
+import com.snnsoluciones.backnathbitpos.entity.Empresa;
 import com.snnsoluciones.backnathbitpos.entity.Promocion;
 import com.snnsoluciones.backnathbitpos.entity.PromocionCategoria;
 import com.snnsoluciones.backnathbitpos.entity.PromocionFamilia;
 import com.snnsoluciones.backnathbitpos.entity.PromocionItem;
 import com.snnsoluciones.backnathbitpos.entity.PromocionProducto;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.CriterioDescuento;
+import com.snnsoluciones.backnathbitpos.enums.RolPromocionAlcance;
+import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.repository.PromocionCategoriaRepository;
 import com.snnsoluciones.backnathbitpos.repository.PromocionFamiliaRepository;
 import com.snnsoluciones.backnathbitpos.repository.PromocionItemRepository;
 import com.snnsoluciones.backnathbitpos.repository.PromocionProductoRepository;
 import com.snnsoluciones.backnathbitpos.repository.PromocionRepository;
-import com.snnsoluciones.backnathbitpos.enums.RolPromocionAlcance;
+import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,42 +34,45 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PromocionService {
 
-    private final PromocionRepository promocionRepository;
-    private final PromocionItemRepository promocionItemRepository;
-    private final PromocionFamiliaRepository promocionFamiliaRepository;
+    private final PromocionRepository          promocionRepository;
+    private final PromocionItemRepository      promocionItemRepository;
+    private final PromocionFamiliaRepository   promocionFamiliaRepository;
     private final PromocionCategoriaRepository promocionCategoriaRepository;
-    private final PromocionProductoRepository promocionProductoRepository;
+    private final PromocionProductoRepository  promocionProductoRepository;
+    private final EmpresaRepository            empresaRepository;
+    private final SucursalRepository           sucursalRepository;
 
     // =========================================================================
-    // LECTURA — sin cambios
+    // LECTURA
     // =========================================================================
 
     @Transactional(readOnly = true)
-    public List<PromocionDTO> listarTodas() {
-        return promocionRepository.findActivasWithItems()
+    public List<PromocionDTO> listarTodas(Long empresaId, Long sucursalId) {
+        return promocionRepository.findActivasWithItems(empresaId, sucursalId)
             .stream()
             .map(PromocionDTO::fromEntity)
             .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public PromocionDTO obtenerPorId(Long id) {
-        Promocion promo = promocionRepository.findByIdWithItems(id)
+    public PromocionDTO obtenerPorId(Long id, Long empresaId) {
+        Promocion promo = promocionRepository.findByIdWithItems(id, empresaId)
             .orElseThrow(() -> new IllegalArgumentException("Promoción no encontrada: " + id));
         return PromocionDTO.fromEntity(promo);
     }
 
     @Transactional(readOnly = true)
-    public List<PromocionDTO> listarActivasPorDia(String dia) {
-        return promocionRepository.findActivasByDia(dia.toUpperCase())
+    public List<PromocionDTO> listarActivasPorDia(Long empresaId, Long sucursalId, String dia) {
+        return promocionRepository.findActivasByDia(empresaId, sucursalId, dia.toUpperCase())
             .stream()
             .map(PromocionDTO::fromEntity)
             .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public List<PromocionDTO> listarActivasPorDiaYHora(String dia, LocalTime hora) {
-        return promocionRepository.findActivasByDiaYHora(dia.toUpperCase(), hora)
+    public List<PromocionDTO> listarActivasPorDiaYHora(
+            Long empresaId, Long sucursalId, String dia, LocalTime hora) {
+        return promocionRepository.findActivasByDiaYHora(empresaId, sucursalId, dia.toUpperCase(), hora)
             .stream()
             .map(PromocionDTO::fromEntity)
             .collect(Collectors.toList());
@@ -73,14 +80,16 @@ public class PromocionService {
 
     @Transactional(readOnly = true)
     public List<PromocionDTO> buscarParaProducto(
-        Long productoId, Long categoriaId, Long familiaId,
-        String dia, LocalTime hora) {
+            Long empresaId, Long sucursalId,
+            Long productoId, Long categoriaId, Long familiaId,
+            String dia, LocalTime hora) {
 
+        // -1L como centinela para IDs opcionales nulos — la query los ignora
         Long catId = categoriaId != null ? categoriaId : -1L;
         Long famId = familiaId   != null ? familiaId   : -1L;
 
         return promocionRepository.findPromocionesParaProducto(
-                productoId, catId, famId, dia.toUpperCase(), hora)
+                empresaId, sucursalId, productoId, catId, famId, dia.toUpperCase(), hora)
             .stream()
             .map(PromocionDTO::fromEntity)
             .collect(Collectors.toList());
@@ -91,12 +100,26 @@ public class PromocionService {
     // =========================================================================
 
     @Transactional
-    public PromocionDTO crear(CreatePromocionRequest request) {
-        log.info("Creando promoción: {}", request.getNombre());
+    public PromocionDTO crear(Long empresaId, Long sucursalId, CreatePromocionRequest request) {
+        log.info("Creando promoción '{}' para empresa={} sucursal={}", request.getNombre(), empresaId, sucursalId);
 
         validarRequest(request);
 
+        Empresa empresa = empresaRepository.findById(empresaId)
+            .orElseThrow(() -> new IllegalArgumentException("Empresa no encontrada: " + empresaId));
+
+        // sucursalId null = promo global de empresa
+        Sucursal sucursal = null;
+        if (sucursalId != null) {
+            sucursal = sucursalRepository.findById(sucursalId)
+                .orElseThrow(() -> new IllegalArgumentException("Sucursal no encontrada: " + sucursalId));
+        }
+
         Promocion promo = Promocion.builder()
+            // Tenant
+            .empresa(empresa)
+            .sucursal(sucursal)
+            // Identificación
             .nombre(request.getNombre())
             .descripcion(request.getDescripcion())
             .tipo(request.getTipo())
@@ -136,19 +159,17 @@ public class PromocionService {
         Promocion saved = promocionRepository.save(promo);
         log.info("Promoción creada con ID: {}", saved.getId());
 
-        if (request.getItems() != null && !request.getItems().isEmpty())
+        if (request.getItems()      != null && !request.getItems().isEmpty())
             guardarItems(saved, request.getItems());
-
-        if (request.getFamilias() != null && !request.getFamilias().isEmpty())
+        if (request.getFamilias()   != null && !request.getFamilias().isEmpty())
             guardarFamilias(saved, request.getFamilias());
-
         if (request.getCategorias() != null && !request.getCategorias().isEmpty())
             guardarCategorias(saved, request.getCategorias());
-
-        if (request.getProductos() != null && !request.getProductos().isEmpty())
+        if (request.getProductos()  != null && !request.getProductos().isEmpty())
             guardarProductos(saved, request.getProductos());
 
-        return PromocionDTO.fromEntity(promocionRepository.findByIdWithItems(saved.getId()).orElseThrow());
+        return PromocionDTO.fromEntity(
+            promocionRepository.findByIdWithItems(saved.getId(), empresaId).orElseThrow());
     }
 
     // =========================================================================
@@ -156,10 +177,11 @@ public class PromocionService {
     // =========================================================================
 
     @Transactional
-    public PromocionDTO actualizar(Long id, CreatePromocionRequest request) {
-        log.info("Actualizando promoción ID: {}", id);
+    public PromocionDTO actualizar(Long id, Long empresaId, CreatePromocionRequest request) {
+        log.info("Actualizando promoción ID: {} empresa: {}", id, empresaId);
 
-        Promocion promo = promocionRepository.findById(id)
+        // Verificamos que la promo pertenezca a esta empresa
+        Promocion promo = promocionRepository.findByIdWithItems(id, empresaId)
             .orElseThrow(() -> new IllegalArgumentException("Promoción no encontrada: " + id));
 
         validarRequest(request);
@@ -168,12 +190,9 @@ public class PromocionService {
         promo.setDescripcion(request.getDescripcion());
         promo.setTipo(request.getTipo());
         promo.setActivo(bool(request.getActivo()));
-        // Vigencia
         promo.setFechaInicio(request.getFechaInicio());
         promo.setFechaFin(request.getFechaFin());
-        // Stacking
         promo.setPermitirStack(bool(request.getPermitirStack()));
-        // Días
         promo.setLunes(bool(request.getLunes()));
         promo.setMartes(bool(request.getMartes()));
         promo.setMiercoles(bool(request.getMiercoles()));
@@ -181,19 +200,14 @@ public class PromocionService {
         promo.setViernes(bool(request.getViernes()));
         promo.setSabado(bool(request.getSabado()));
         promo.setDomingo(bool(request.getDomingo()));
-        // Horario
         promo.setHoraInicio(request.getHoraInicio());
         promo.setHoraFin(request.getHoraFin());
-        // NXM
         promo.setLlevaN(request.getLlevaN());
         promo.setPagaM(request.getPagaM());
         promo.setCriterioItemGratis(request.getCriterioItemGratis());
-        // Descuentos simples
         promo.setPorcentajeDescuento(request.getPorcentajeDescuento());
         promo.setMontoDescuento(request.getMontoDescuento());
-        // AYCE / Barra libre
         promo.setPrecioPromo(request.getPrecioPromo());
-        // Grupo condicional
         promo.setCantidadTrigger(request.getCantidadTrigger());
         promo.setCantidadBeneficio(request.getCantidadBeneficio());
         promo.setCriterioBeneficio(request.getCriterioBeneficio());
@@ -203,11 +217,11 @@ public class PromocionService {
 
         // Reemplazar colecciones completas
         promocionItemRepository.deleteByPromocionId(id);
-        if (request.getItems() != null && !request.getItems().isEmpty())
+        if (request.getItems()      != null && !request.getItems().isEmpty())
             guardarItems(promo, request.getItems());
 
         promocionFamiliaRepository.deleteByPromocionId(id);
-        if (request.getFamilias() != null && !request.getFamilias().isEmpty())
+        if (request.getFamilias()   != null && !request.getFamilias().isEmpty())
             guardarFamilias(promo, request.getFamilias());
 
         promocionCategoriaRepository.deleteByPromocionId(id);
@@ -215,20 +229,21 @@ public class PromocionService {
             guardarCategorias(promo, request.getCategorias());
 
         promocionProductoRepository.deleteByPromocionId(id);
-        if (request.getProductos() != null && !request.getProductos().isEmpty())
+        if (request.getProductos()  != null && !request.getProductos().isEmpty())
             guardarProductos(promo, request.getProductos());
 
         log.info("Promoción ID {} actualizada", id);
-        return PromocionDTO.fromEntity(promocionRepository.findByIdWithItems(id).orElseThrow());
+        return PromocionDTO.fromEntity(
+            promocionRepository.findByIdWithItems(id, empresaId).orElseThrow());
     }
 
     // =========================================================================
-    // ACTIVAR / DESACTIVAR — sin cambios
+    // ACTIVAR / DESACTIVAR
     // =========================================================================
 
     @Transactional
-    public PromocionDTO cambiarEstado(Long id, Boolean activo) {
-        Promocion promo = promocionRepository.findById(id)
+    public PromocionDTO cambiarEstado(Long id, Long empresaId, Boolean activo) {
+        Promocion promo = promocionRepository.findByIdWithItems(id, empresaId)
             .orElseThrow(() -> new IllegalArgumentException("Promoción no encontrada: " + id));
         promo.setActivo(activo);
         promocionRepository.save(promo);
@@ -237,7 +252,7 @@ public class PromocionService {
     }
 
     // =========================================================================
-    // PRIVADOS — guardar colecciones (ahora mapean el campo rol)
+    // PRIVADOS — guardar colecciones
     // =========================================================================
 
     private void guardarItems(Promocion promo, List<CreatePromocionItemRequest> requests) {
@@ -290,29 +305,25 @@ public class PromocionService {
     }
 
     // =========================================================================
-    // PRIVADOS — validación (actualizada con nuevos tipos)
+    // PRIVADOS — validación
     // =========================================================================
 
     private void validarRequest(CreatePromocionRequest r) {
-        // Al menos un día activo
         boolean tieneDia = bool(r.getLunes()) || bool(r.getMartes()) || bool(r.getMiercoles())
             || bool(r.getJueves()) || bool(r.getViernes()) || bool(r.getSabado()) || bool(r.getDomingo());
         if (!tieneDia)
             throw new IllegalArgumentException("La promoción debe tener al menos un día activo.");
 
-        // Vigencia: si viene una fecha la otra es obligatoria
         if ((r.getFechaInicio() == null) != (r.getFechaFin() == null))
             throw new IllegalArgumentException("fecha_inicio y fecha_fin deben venir juntos o ambos vacíos.");
         if (r.getFechaInicio() != null && r.getFechaFin().isBefore(r.getFechaInicio()))
             throw new IllegalArgumentException("fecha_fin debe ser igual o posterior a fecha_inicio.");
 
-        // Horario: si uno viene el otro es obligatorio
         if ((r.getHoraInicio() == null) != (r.getHoraFin() == null))
             throw new IllegalArgumentException("hora_inicio y hora_fin deben venir juntos o ambos vacíos.");
         if (r.getHoraInicio() != null && !r.getHoraFin().isAfter(r.getHoraInicio()))
             throw new IllegalArgumentException("hora_fin debe ser posterior a hora_inicio.");
 
-        // Validación cruzada por tipo
         switch (r.getTipo()) {
             case NXM -> {
                 if (r.getLlevaN() == null || r.getPagaM() == null)
@@ -335,7 +346,6 @@ public class PromocionService {
                     throw new IllegalArgumentException(r.getTipo() + " requiere precio_promo.");
                 if (r.getItems() == null || r.getItems().isEmpty())
                     throw new IllegalArgumentException(r.getTipo() + " requiere al menos un ítem.");
-                // Debe haber al menos un producto con rol TRIGGER
                 boolean tieneTrigger = r.getProductos() != null && r.getProductos().stream()
                     .anyMatch(p -> p.getRol() == RolPromocionAlcance.TRIGGER);
                 if (!tieneTrigger)
@@ -348,15 +358,11 @@ public class PromocionService {
                     throw new IllegalArgumentException("GRUPO_CONDICIONAL requiere cantidad_beneficio.");
                 if (r.getCriterioBeneficio() == null)
                     throw new IllegalArgumentException("GRUPO_CONDICIONAL requiere criterio_beneficio.");
-                if (r.getCriterioBeneficio() != CriterioDescuento.GRATIS
-                    && r.getValorBeneficio() == null)
+                if (r.getCriterioBeneficio() != CriterioDescuento.GRATIS && r.getValorBeneficio() == null)
                     throw new IllegalArgumentException("criterio_beneficio " + r.getCriterioBeneficio() + " requiere valor_beneficio.");
-                // Debe haber alcance TRIGGER y BENEFICIO definidos
-                boolean tieneTrigger = tieneRol(r, RolPromocionAlcance.TRIGGER);
-                boolean tieneBeneficio = tieneRol(r, RolPromocionAlcance.BENEFICIO);
-                if (!tieneTrigger)
+                if (!tieneRol(r, RolPromocionAlcance.TRIGGER))
                     throw new IllegalArgumentException("GRUPO_CONDICIONAL requiere al menos un alcance con rol TRIGGER.");
-                if (!tieneBeneficio)
+                if (!tieneRol(r, RolPromocionAlcance.BENEFICIO))
                     throw new IllegalArgumentException("GRUPO_CONDICIONAL requiere al menos un alcance con rol BENEFICIO.");
             }
             case HAPPY_HOUR -> {
@@ -367,10 +373,6 @@ public class PromocionService {
         }
     }
 
-    /**
-     * Verifica si alguna lista de alcance (familias, categorías o productos)
-     * tiene al menos un elemento con el rol indicado.
-     */
     private boolean tieneRol(CreatePromocionRequest r, RolPromocionAlcance rol) {
         return (r.getFamilias()   != null && r.getFamilias().stream().anyMatch(x -> x.getRol() == rol))
             || (r.getCategorias() != null && r.getCategorias().stream().anyMatch(x -> x.getRol() == rol))

@@ -27,6 +27,22 @@ public class Promocion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // ── Tenant ────────────────────────────────────────────────────────
+    // empresa: obligatorio siempre.
+    // sucursal: opcional. NULL = aplica a todas las sucursales de la empresa.
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Empresa empresa;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id", nullable = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Sucursal sucursal;
+
     // ── Identificación ────────────────────────────────────────────────
 
     @Column(name = "nombre", nullable = false, length = 100)

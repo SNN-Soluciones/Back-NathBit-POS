@@ -21,84 +21,107 @@ import java.util.List;
 /**
  * Controller para Promociones.
  *
- * Base URL: /api/business/promociones
+ * Base URL: /api/business/empresas/{empresaId}/sucursales/{sucursalId}/promociones
+ *
+ * sucursalId = 0 → promos globales de la empresa (sin sucursal específica).
+ * Los endpoints del motor (evaluar/aplicar/nueva-ronda) reciben ordenId
+ * porque la orden ya pertenece a empresa+sucursal.
  */
 @RestController
-@RequestMapping("/promociones")
+@RequestMapping("/empresas/{empresaId}/sucursales/{sucursalId}/promociones")
 @RequiredArgsConstructor
 @Slf4j
 public class PromocionController {
 
-    private final PromocionService promocionService;
+    private final PromocionService      promocionService;
     private final PromocionMotorService promocionMotorService;
 
     // =========================================================================
     // GET
     // =========================================================================
 
-    /**
-     * GET /api/business/promociones
-     * Lista todas las promociones activas con sus items y alcance.
-     */
     @GetMapping
-    public ResponseEntity<List<PromocionDTO>> listarTodas() {
-        log.info("GET /promociones - Listando todas las promociones activas");
-        return ResponseEntity.ok(promocionService.listarTodas());
+    public ResponseEntity<List<PromocionDTO>> listarTodas(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId) {
+        log.info("GET /empresas/{}/sucursales/{}/promociones", empresaId, sucursalId);
+        return ResponseEntity.ok(promocionService.listarTodas(empresaId, sucursalId));
     }
 
-    /**
-     * GET /api/business/promociones/{id}
-     * Obtener una promoción por ID con items y alcance completo.
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<PromocionDTO> obtenerPorId(@PathVariable Long id) {
-        log.info("GET /promociones/{} - Obteniendo promoción", id);
+    public ResponseEntity<PromocionDTO> obtenerPorId(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
+            @PathVariable Long id) {
+        log.info("GET /empresas/{}/sucursales/{}/promociones/{}", empresaId, sucursalId, id);
         try {
-            return ResponseEntity.ok(promocionService.obtenerPorId(id));
+            return ResponseEntity.ok(promocionService.obtenerPorId(id, empresaId));
         } catch (IllegalArgumentException e) {
-            log.warn("Promoción ID {} no encontrada", id);
             return ResponseEntity.notFound().build();
         }
     }
 
     /**
-     * GET /api/business/promociones/dia/{dia}
+     * GET .../promociones/dia/{dia}
      * Promos activas para un día comercial específico.
-     *
-     * @param dia  Día en mayúsculas: LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO
-     *
-     * Ejemplo: GET /promociones/dia/VIERNES
+     * Día en mayúsculas: LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO
      */
     @GetMapping("/dia/{dia}")
-    public ResponseEntity<List<PromocionDTO>> listarPorDia(@PathVariable String dia) {
-        log.info("GET /promociones/dia/{} - Listando promos activas", dia);
+    public ResponseEntity<List<PromocionDTO>> listarPorDia(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
+            @PathVariable String dia) {
+        log.info("GET .../promociones/dia/{}", dia);
         try {
-            return ResponseEntity.ok(promocionService.listarActivasPorDia(dia));
+            return ResponseEntity.ok(
+                promocionService.listarActivasPorDia(empresaId, sucursalId, dia));
         } catch (IllegalArgumentException e) {
-            log.warn("Error al listar por día: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
 
     /**
-     * GET /api/business/promociones/dia/{dia}/hora
+     * GET .../promociones/dia/{dia}/hora?hora=22:00
      * Promos activas para un día y hora específicos.
      * Cubre el caso donde hora_inicio/hora_fin son NULL (aplica todo el día).
-     *
-     * @param dia   Día en mayúsculas: LUNES... DOMINGO
-     * @param hora  Hora en formato HH:mm (ej: 22:00)
-     *
-     * Ejemplo: GET /promociones/dia/VIERNES/hora?hora=22:00
      */
     @GetMapping("/dia/{dia}/hora")
     public ResponseEntity<List<PromocionDTO>> listarPorDiaYHora(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
             @PathVariable String dia,
             @RequestParam @DateTimeFormat(pattern = "HH:mm") LocalTime hora) {
-        log.info("GET /promociones/dia/{}/hora?hora={} - Listando promos activas", dia, hora);
+        log.info("GET .../promociones/dia/{}/hora?hora={}", dia, hora);
         try {
-            return ResponseEntity.ok(promocionService.listarActivasPorDiaYHora(dia, hora));
+            return ResponseEntity.ok(
+                promocionService.listarActivasPorDiaYHora(empresaId, sucursalId, dia, hora));
         } catch (IllegalArgumentException e) {
-            log.warn("Error al listar por día y hora: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * GET .../promociones/producto/{productoId}?categoriaId=7&familiaId=3&dia=VIERNES&hora=22:00
+     *
+     * Promos activas que aplican a un producto específico.
+     * El frontend usa esto para mostrar al mesero qué promos aplican
+     * cuando agrega un producto a la orden.
+     */
+    @GetMapping("/producto/{productoId}")
+    public ResponseEntity<List<PromocionDTO>> buscarParaProducto(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
+            @PathVariable Long productoId,
+            @RequestParam(required = false) Long categoriaId,
+            @RequestParam(required = false) Long familiaId,
+            @RequestParam String dia,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "HH:mm") LocalTime hora) {
+        log.info("GET .../promociones/producto/{} dia={} hora={}", productoId, dia, hora);
+        try {
+            return ResponseEntity.ok(
+                promocionService.buscarParaProducto(
+                    empresaId, sucursalId, productoId, categoriaId, familiaId, dia, hora));
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -107,18 +130,19 @@ public class PromocionController {
     // POST
     // =========================================================================
 
-    /**
-     * POST /api/business/promociones
-     * Crear una nueva promoción con items y alcance.
-     */
     @PostMapping
-    public ResponseEntity<PromocionDTO> crear(@Valid @RequestBody CreatePromocionRequest request) {
-        log.info("POST /promociones - Creando promoción: {}", request.getNombre());
+    public ResponseEntity<PromocionDTO> crear(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
+            @Valid @RequestBody CreatePromocionRequest request) {
+        log.info("POST .../promociones - Creando: {}", request.getNombre());
         try {
-            PromocionDTO creada = promocionService.crear(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(creada);
+            // sucursalId = 0 se interpreta como promo global de empresa (sin sucursal)
+            Long sucId = sucursalId == 0 ? null : sucursalId;
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(promocionService.crear(empresaId, sucId, request));
         } catch (IllegalArgumentException e) {
-            log.error("Error al crear promoción: {}", e.getMessage());
+            log.error("Error creando promoción: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -127,21 +151,17 @@ public class PromocionController {
     // PUT
     // =========================================================================
 
-    /**
-     * PUT /api/business/promociones/{id}
-     * Actualizar una promoción completa.
-     * Reemplaza items y alcance (familias, categorías, productos) por completo.
-     */
     @PutMapping("/{id}")
     public ResponseEntity<PromocionDTO> actualizar(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
             @PathVariable Long id,
             @Valid @RequestBody CreatePromocionRequest request) {
-        log.info("PUT /promociones/{} - Actualizando promoción", id);
+        log.info("PUT .../promociones/{}", id);
         try {
-            PromocionDTO actualizada = promocionService.actualizar(id, request);
-            return ResponseEntity.ok(actualizada);
+            return ResponseEntity.ok(promocionService.actualizar(id, empresaId, request));
         } catch (IllegalArgumentException e) {
-            log.error("Error al actualizar promoción {}: {}", id, e.getMessage());
+            log.error("Error actualizando promoción {}: {}", id, e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -151,155 +171,107 @@ public class PromocionController {
     // =========================================================================
 
     /**
-     * PATCH /api/business/promociones/{id}/estado
-     * Activar o desactivar una promoción sin modificar nada más.
-     *
-     * Ejemplo: PATCH /promociones/5/estado?activo=false
+     * PATCH .../promociones/{id}/estado?activo=false
+     * Activar o desactivar una promoción.
      */
     @PatchMapping("/{id}/estado")
     public ResponseEntity<PromocionDTO> cambiarEstado(
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
             @PathVariable Long id,
             @RequestParam boolean activo) {
-        log.info("PATCH /promociones/{}/estado?activo={} - Cambiando estado", id, activo);
+        log.info("PATCH .../promociones/{}/estado?activo={}", id, activo);
         try {
-            return ResponseEntity.ok(promocionService.cambiarEstado(id, activo));
+            return ResponseEntity.ok(promocionService.cambiarEstado(id, empresaId, activo));
         } catch (IllegalArgumentException e) {
-            log.error("Error al cambiar estado de promoción {}: {}", id, e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }
 
-    /**
-     * GET /api/business/promociones/producto/{productoId}
-     *
-     * Devuelve las promociones activas que aplican a un producto,
-     * considerando su categoría, familia, día comercial y hora.
-     *
-     * El frontend usa esta respuesta para validar el carrito y
-     * aplicar la promo correspondiente.
-     *
-     * Query params:
-     * @param categoriaId  ID de la categoría del producto (opcional)
-     * @param familiaId    ID de la familia del producto (opcional)
-     * @param dia          Día comercial: LUNES...DOMINGO (obligatorio)
-     * @param hora         Hora actual HH:mm (opcional, si no viene no filtra por horario)
-     *
-     * Ejemplo:
-     * GET /promociones/producto/42?categoriaId=7&familiaId=3&dia=VIERNES&hora=22:00
-     *
-     * Respuesta vacía [] = no hay promos activas para este producto ahora.
-     */
-    @GetMapping("/producto/{productoId}")
-    public ResponseEntity<List<PromocionDTO>> buscarParaProducto(
-        @PathVariable Long productoId,
-        @RequestParam(required = false) Long categoriaId,
-        @RequestParam(required = false) Long familiaId,
-        @RequestParam String dia,
-        @RequestParam(required = false)
-        @DateTimeFormat(pattern = "HH:mm") LocalTime hora) {
-
-        log.info("GET /promociones/producto/{} - dia={} hora={} cat={} fam={}",
-            productoId, dia, hora, categoriaId, familiaId);
-
-        try {
-            List<PromocionDTO> promos = promocionService.buscarParaProducto(
-                productoId, categoriaId, familiaId, dia, hora);
-
-            return ResponseEntity.ok(promos);
-
-        } catch (IllegalArgumentException e) {
-            log.warn("Error buscando promos para producto {}: {}", productoId, e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    // ── Agregar estos 3 endpoints al final de la clase ────────────────────
+    // =========================================================================
+    // MOTOR — evaluar / aplicar / nueva-ronda
+    // Estos 3 trabajan sobre una orden existente.
+    // La URL incluye empresaId+sucursalId para que el motor filtre promos correctas.
+    // =========================================================================
 
     /**
-     * POST /api/business/promociones/evaluar/{ordenId}
+     * POST .../promociones/evaluar/{ordenId}
      *
-     * Evalúa qué promociones califican para la orden actual.
      * Solo lectura — no persiste nada ni modifica la orden.
+     * Devuelve qué promociones califican para la orden con:
+     *   - itemsAfectados y totalDescuento para NXM/PORCENTAJE/etc.
+     *   - productosBeneficioDisponibles para GRUPO_CONDICIONAL (lista al mesero)
+     *   - itemsInicialesAYCE para AYCE/BARRA_LIBRE
      *
-     * El frontend lo llama cada vez que el mesero agrega o quita un ítem.
-     * La respuesta muestra exactamente qué descuento tendría cada ítem
-     * para que el mesero decida si aplicar o no.
-     *
-     * Respuesta vacía [] = ninguna promo activa califica para esta orden.
+     * Llamar cada vez que el mesero agrega o quita un ítem.
+     * Respuesta vacía [] = ninguna promo activa califica.
      */
     @PostMapping("/evaluar/{ordenId}")
     public ResponseEntity<List<PromocionAplicableDTO>> evaluar(
-        @PathVariable Long ordenId) {
-        log.info("POST /promociones/evaluar/{} - Evaluando promos", ordenId);
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
+            @PathVariable Long ordenId) {
+        log.info("POST .../promociones/evaluar/{}", ordenId);
         try {
-            return ResponseEntity.ok(promocionMotorService.evaluar(ordenId));
+            return ResponseEntity.ok(
+                promocionMotorService.evaluar(ordenId, empresaId, sucursalId));
         } catch (IllegalArgumentException e) {
-            log.warn("Error evaluando promos para orden {}: {}", ordenId, e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }
 
     /**
-     * POST /api/business/promociones/aplicar/{ordenId}
+     * POST .../promociones/aplicar/{ordenId}
      *
-     * Aplica las promociones seleccionadas por el mesero a la orden.
-     * Persiste los descuentos en los OrdenItems y activa el estado
-     * de rondas para AYCE/BARRA_LIBRE.
+     * Aplica las promociones seleccionadas por el mesero.
+     * Persiste los descuentos en los OrdenItems.
+     * Activa el estado de rondas para AYCE/BARRA_LIBRE.
      *
      * Body: { "promocionIds": [1, 3] }
      *
-     * Valida stacking — si una promo no permite combinarse con otras
-     * y se envían múltiples IDs, retorna 409.
+     * 409 → promo no permite stack con otras seleccionadas,
+     *        o la promo ya no califica al momento de aplicar.
      */
     @PostMapping("/aplicar/{ordenId}")
     public ResponseEntity<Void> aplicar(
-        @PathVariable Long ordenId,
-        @Valid @RequestBody AplicarPromocionesRequest request) {
-        log.info("POST /promociones/aplicar/{} - Aplicando promos: {}",
-            ordenId, request.getPromocionIds());
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
+            @PathVariable Long ordenId,
+            @Valid @RequestBody AplicarPromocionesRequest request) {
+        log.info("POST .../promociones/aplicar/{} promos={}", ordenId, request.getPromocionIds());
         try {
-            promocionMotorService.aplicar(ordenId, request);
+            promocionMotorService.aplicar(ordenId, empresaId, sucursalId, request);
             return ResponseEntity.ok().build();
         } catch (IllegalArgumentException e) {
-            log.warn("Error aplicando promos a orden {}: {}", ordenId, e.getMessage());
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
-            log.warn("Conflicto aplicando promos a orden {}: {}", ordenId, e.getMessage());
             return ResponseEntity.status(409).build();
         }
     }
 
     /**
-     * POST /api/business/promociones/nueva-ronda/{ordenId}
+     * POST .../promociones/nueva-ronda/{ordenId}
      *
-     * Solicita una nueva ronda para un producto AYCE o BARRA_LIBRE.
-     * Solo el mesero puede disparar esto explícitamente.
-     *
-     * Valida que:
-     *   - La promo AYCE esté activa en la orden
-     *   - El producto no haya llegado a su límite de rondas
-     *
-     * Si todo está bien, crea un nuevo OrdenItem a precio $0
-     * e incrementa el contador de rondas.
+     * Solicita una ronda adicional en un AYCE o BARRA_LIBRE activo.
+     * Crea un OrdenItem a precio $0 e incrementa el contador de rondas.
      *
      * Body: { "promocionId": 1, "productoId": 5 }
      *
-     * Retorna 409 si ya se alcanzó el máximo de rondas.
+     * 409 → el producto ya alcanzó su máximo de rondas.
      */
     @PostMapping("/nueva-ronda/{ordenId}")
     public ResponseEntity<Void> nuevaRonda(
-        @PathVariable Long ordenId,
-        @Valid @RequestBody NuevaRondaRequest request) {
-        log.info("POST /promociones/nueva-ronda/{} - Producto: {}",
-            ordenId, request.getProductoId());
+            @PathVariable Long empresaId,
+            @PathVariable Long sucursalId,
+            @PathVariable Long ordenId,
+            @Valid @RequestBody NuevaRondaRequest request) {
+        log.info("POST .../promociones/nueva-ronda/{} producto={}", ordenId, request.getProductoId());
         try {
             promocionMotorService.nuevaRonda(ordenId, request);
             return ResponseEntity.ok().build();
         } catch (IllegalArgumentException e) {
-            log.warn("Error en nueva ronda orden {}: {}", ordenId, e.getMessage());
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
-            log.warn("Límite de rondas alcanzado en orden {}: {}", ordenId, e.getMessage());
             return ResponseEntity.status(409).build();
         }
     }

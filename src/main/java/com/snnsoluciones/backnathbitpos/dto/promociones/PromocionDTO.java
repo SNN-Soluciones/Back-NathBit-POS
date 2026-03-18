@@ -90,6 +90,11 @@ public class PromocionDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // ── Alcances ──────────────────────────────────────────────────────────
+    private List<PromocionAlcanceDTO> productos;
+    private List<PromocionAlcanceDTO> familias;
+    private List<PromocionAlcanceDTO> categorias;
+
     // ── Mapping ───────────────────────────────────────────────────────
 
     public static PromocionDTO fromEntity(Promocion entity) {
@@ -98,6 +103,36 @@ public class PromocionDTO {
         List<PromocionItemDTO> itemsDTO = entity.getItems() != null
             ? entity.getItems().stream()
             .map(PromocionItemDTO::fromEntity)
+            .collect(Collectors.toList())
+            : Collections.emptyList();
+
+        List<PromocionAlcanceDTO> productosDTO = entity.getProductos() != null
+            ? entity.getProductos().stream()
+            .map(p -> PromocionAlcanceDTO.builder()
+                .id(p.getProductoId())
+                .nombre(p.getNombreProducto())
+                .rol(p.getRol())
+                .build())
+            .collect(Collectors.toList())
+            : Collections.emptyList();
+
+        List<PromocionAlcanceDTO> familiasDTO = entity.getFamilias() != null
+            ? entity.getFamilias().stream()
+            .map(f -> PromocionAlcanceDTO.builder()
+                .id(f.getFamiliaId())
+                .nombre(f.getNombreFamilia())
+                .rol(f.getRol())
+                .build())
+            .collect(Collectors.toList())
+            : Collections.emptyList();
+
+        List<PromocionAlcanceDTO> categoriasDTO = entity.getCategorias() != null
+            ? entity.getCategorias().stream()
+            .map(c -> PromocionAlcanceDTO.builder()
+                .id(c.getCategoriaId())
+                .nombre(c.getNombreCategoria())
+                .rol(c.getRol())
+                .build())
             .collect(Collectors.toList())
             : Collections.emptyList();
 
@@ -118,6 +153,9 @@ public class PromocionDTO {
             .sabado(entity.getSabado())
             .domingo(entity.getDomingo())
             .horaInicio(entity.getHoraInicio())
+            .productos(productosDTO)
+            .familias(familiasDTO)
+            .categorias(categoriasDTO)
             .horaFin(entity.getHoraFin())
             .llevaN(entity.getLlevaN())
             .pagaM(entity.getPagaM())

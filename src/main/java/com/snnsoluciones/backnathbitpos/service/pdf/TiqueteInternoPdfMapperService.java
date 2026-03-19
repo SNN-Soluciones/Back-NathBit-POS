@@ -150,9 +150,17 @@ public class TiqueteInternoPdfMapperService {
     parametros.put("cliente_email", clienteEmail);
 
     // Totales (formateados como string para el reporte)
-    parametros.put("subtotal", DECIMAL_FORMAT.format(facturaInterna.getSubtotal()));
-    parametros.put("descuentos", DECIMAL_FORMAT.format(
-        facturaInterna.getDescuento() != null ? facturaInterna.getDescuento() : BigDecimal.ZERO));
+    BigDecimal subtotalBruto = facturaInterna.getDetalles().stream()
+        .map(d -> d.getPrecioUnitario().multiply(d.getCantidad()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    BigDecimal totalDescuentos = facturaInterna.getDetalles().stream()
+        .map(d -> d.getDescuento() != null ? d.getDescuento() : BigDecimal.ZERO)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    parametros.put("subtotal", DECIMAL_FORMAT.format(subtotalBruto));
+    parametros.put("descuentos", DECIMAL_FORMAT.format(totalDescuentos));
+
     parametros.put("descuento_porcentaje",
         facturaInterna.getDescuentoPorcentaje() != null
             ? facturaInterna.getDescuentoPorcentaje().toString()
@@ -311,15 +319,30 @@ public class TiqueteInternoPdfMapperService {
         DetalleDTO dto = new DetalleDTO();
         dto.setCantidad(detalle.getCantidad());
 
-        // Construir descripción completa (nombreProducto + notas si existen)
         String descripcionCompleta = nombreProducto;
         if (notas != null && !notas.trim().isEmpty()) {
           descripcionCompleta = nombreProducto + " - " + notas;
         }
-        dto.setDescripcion(descripcionCompleta);
 
+// Si hay descuento, agregarlo a la descripción
+        BigDecimal montoDescuento = detalle.getDescuento() != null
+            ? detalle.getDescuento()
+            : BigDecimal.ZERO;
+
+        BigDecimal precioOriginal = montoDescuento.compareTo(BigDecimal.ZERO) > 0
+            ? precioUnitario.add(montoDescuento.divide(detalle.getCantidad(), 2, RoundingMode.HALF_UP))
+            : precioUnitario;
+
+        if (montoDescuento.compareTo(BigDecimal.ZERO) > 0) {
+          descripcionCompleta += "\n  >> Descuento promo: -" + DECIMAL_FORMAT.format(montoDescuento);
+        }
+
+        dto.setDescripcion(descripcionCompleta);
         dto.setPrecioUnitario(precioUnitario);
-        dto.setSubtotal(detalle.getSubtotal());
+        dto.setSubtotal(detalle.getTotal());              // ✅ total ya descontado
+        dto.setDescuento(detalle.getDescuento() != null   // ✅ monto del descuento
+            ? detalle.getDescuento() : BigDecimal.ZERO);
+        dto.setDescripcion(descripcionCompleta);           // sin el texto de promo ya
 
         detallesAgrupados.put(clave, dto);
       }
@@ -523,6 +546,10 @@ public class TiqueteInternoPdfMapperService {
     private String descripcion;
     private BigDecimal precioUnitario;
     private BigDecimal subtotal;
+    private BigDecimal descuento;  // ✅ NUEVO
+
+    public BigDecimal getDescuento() { return descuento; }
+    public void setDescuento(BigDecimal descuento) { this.descuento = descuento; }
 
     // Getters y setters
     public BigDecimal getCantidad() {

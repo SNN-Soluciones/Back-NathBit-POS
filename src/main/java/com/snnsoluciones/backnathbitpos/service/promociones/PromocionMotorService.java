@@ -44,7 +44,11 @@ public class PromocionMotorService {
 
         // Solo cargamos promos de la empresa/sucursal correcta
         List<Promocion> candidatas = promocionRepository
-            .findActivasConAlcance(empresaId, sucursalId);
+            .findActivasConProductos(empresaId, sucursalId);
+
+// Forzar carga de categorías y familias en memoria (evita N+1 en el loop)
+        promocionRepository.findActivasConCategorias(empresaId, sucursalId);
+        promocionRepository.findActivasConFamilias(empresaId, sucursalId);
 
         List<PromocionAplicableDTO> resultado = new ArrayList<>();
 

@@ -27,15 +27,39 @@ public interface PromocionRepository extends JpaRepository<Promocion, Long> {
      *   sucursal.id = X   → solo aplica a esa sucursal
      */
     @Query("""
-        SELECT DISTINCT p FROM Promocion p
-        LEFT JOIN FETCH p.productos
-        LEFT JOIN FETCH p.categorias
-        LEFT JOIN FETCH p.familias
-        WHERE p.activo = true
-        AND p.empresa.id = :empresaId
-        AND (p.sucursal IS NULL OR p.sucursal.id = :sucursalId)
-    """)
-    List<Promocion> findActivasConAlcance(
+    SELECT DISTINCT p FROM Promocion p
+    LEFT JOIN FETCH p.productos
+    WHERE p.activo = true
+    AND p.empresa.id = :empresaId
+    AND (p.sucursal IS NULL OR p.sucursal.id = :sucursalId)
+""")
+    List<Promocion> findActivasConProductos(
+        @Param("empresaId")  Long empresaId,
+        @Param("sucursalId") Long sucursalId
+    );
+
+    // ✅ Query 2: promos + categorias
+    @Query("""
+    SELECT DISTINCT p FROM Promocion p
+    LEFT JOIN FETCH p.categorias
+    WHERE p.activo = true
+    AND p.empresa.id = :empresaId
+    AND (p.sucursal IS NULL OR p.sucursal.id = :sucursalId)
+""")
+    List<Promocion> findActivasConCategorias(
+        @Param("empresaId")  Long empresaId,
+        @Param("sucursalId") Long sucursalId
+    );
+
+    // ✅ Query 3: promos + familias
+    @Query("""
+    SELECT DISTINCT p FROM Promocion p
+    LEFT JOIN FETCH p.familias
+    WHERE p.activo = true
+    AND p.empresa.id = :empresaId
+    AND (p.sucursal IS NULL OR p.sucursal.id = :sucursalId)
+""")
+    List<Promocion> findActivasConFamilias(
         @Param("empresaId")  Long empresaId,
         @Param("sucursalId") Long sucursalId
     );

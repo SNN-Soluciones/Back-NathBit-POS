@@ -691,7 +691,16 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     BigDecimal montoEsperado  = null;
     BigDecimal diferenciaCierre = null;
     if (sesion.getEstado() == EstadoSesion.CERRADA) {
-      montoEsperado = calcularMontoEsperado(sesion);
+      // Recalcular efectivo directo de facturas (evita datos históricos incorrectos)
+      BigDecimal efectivoReal = calcularEfectivoRealDesdeFacturas(sesion.getId());
+      BigDecimal entradas = nvl(movimientoCajaRepository.sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.ENTRADA_ADICIONAL))
+          .add(nvl(movimientoCajaRepository.sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.ENTRADA_EFECTIVO)));
+      BigDecimal salidas = nvl(movimientoCajaRepository.sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_VALE))
+          .add(nvl(movimientoCajaRepository.sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_DEPOSITO)))
+          .add(nvl(movimientoCajaRepository.sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_ARQUEO)))
+          .add(nvl(movimientoCajaRepository.sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_PAGO_PROVEEDOR)))
+          .add(nvl(movimientoCajaRepository.sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_OTROS)));
+      montoEsperado = nvl(sesion.getMontoInicial()).add(efectivoReal).add(entradas).subtract(salidas);
       if (sesion.getMontoCierre() != null) {
         diferenciaCierre = sesion.getMontoCierre().subtract(montoEsperado);
       }
@@ -2275,28 +2284,51 @@ public class SesionCajaServiceImpl implements SesionCajaService {
   @Override
   @Transactional(readOnly = true)
   public List<TurnoReporteDTO> obtenerTurnosParaReporte(Long sesionId) {
-    List<SesionCajaUsuario> turnos = sesionCajaUsuarioRepository
-        .findBySesionCajaId(sesionId);
+    List<SesionCajaUsuario> turnos = sesionCajaUsuarioRepository.findBySesionCajaId(sesionId);
 
     return turnos.stream().map(t -> {
-      BigDecimal ef  = nvl(t.getVentasEfectivo());
-      BigDecimal tc  = nvl(t.getVentasTarjeta());
-      BigDecimal tb  = nvl(t.getVentasTransferencia());
-      BigDecimal sin = nvl(t.getVentasOtros());
+      BigDecimal ef, tc, tb, sin;
 
-      // Siempre recalcular montoEsperado desde la lógica del negocio
-      // (incluye movimientos de caja: entradas y salidas)
-      // Para turno único legacy: usa calcularMontoEsperado(sesion)
-      // Para turnos SHARED reales: usa calcularMontoEsperadoEfectivoHasta al momento del cierre
+      if ("ACTIVA".equals(t.getEstado())) {
+        ef = BigDecimal.ZERO; tc = BigDecimal.ZERO;
+        tb = BigDecimal.ZERO; sin = BigDecimal.ZERO;
+
+        for (Factura f : facturaRepository.findByTurnoId(t.getId())) {
+          if (f.getMediosPago() == null) continue;
+          for (FacturaMedioPago mp : f.getMediosPago()) {
+            switch (obtenerMetodoPagoEstandar(mp.getMedioPago().name())) {
+              case "E"  -> ef  = ef.add(mp.getMonto());
+              case "TC" -> tc  = tc.add(mp.getMonto());
+              case "TB" -> tb  = tb.add(mp.getMonto());
+              case "S"  -> sin = sin.add(mp.getMonto());
+            }
+          }
+        }
+        for (FacturaInterna fi : facturaInternaRepository.findByTurnoId(t.getId())) {
+          if ("ANULADA".equals(fi.getEstado()) || fi.getMediosPago() == null) continue;
+          for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
+            switch (obtenerMetodoPagoEstandar(mp.getTipo())) {
+              case "E"  -> ef  = ef.add(mp.getMonto());
+              case "TC" -> tc  = tc.add(mp.getMonto());
+              case "TB" -> tb  = tb.add(mp.getMonto());
+              case "S"  -> sin = sin.add(mp.getMonto());
+            }
+          }
+        }
+      } else {
+        ef  = nvl(t.getVentasEfectivo());
+        tc  = nvl(t.getVentasTarjeta());
+        tb  = nvl(t.getVentasTransferencia());
+        sin = nvl(t.getVentasOtros());
+      }
+
       SesionCaja sesion = t.getSesionCaja();
       BigDecimal montoEsperadoReal;
       List<SesionCajaUsuario> todosLosTurnos = sesionCajaUsuarioRepository.findBySesionCajaId(sesion.getId());
 
       if (todosLosTurnos.size() == 1) {
-        // Turno único (legacy o SHARED con un solo cajero): calcular desde sesión completa
         montoEsperadoReal = calcularMontoEsperado(sesion);
       } else {
-        // Múltiples turnos: usar el valor guardado en el turno (calculado al momento del cierre)
         montoEsperadoReal = nvl(t.getMontoEsperado());
       }
 
@@ -2608,5 +2640,32 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       cls = "dif-neg"; text = fmt.format(valor);
     }
     sb.append("<td class='right ").append(cls).append("'>").append(text).append("</td>");
+  }
+
+  private BigDecimal calcularEfectivoRealDesdeFacturas(Long sesionId) {
+    BigDecimal total = BigDecimal.ZERO;
+
+    List<Factura> facturas = facturaRepository.findBySesionCajaId(sesionId);
+    for (Factura f : facturas) {
+      if (f.getEstado() == EstadoFactura.ANULADA || f.getEstado() == EstadoFactura.RECHAZADA) continue;
+      if (f.getMediosPago() == null) continue;
+      for (FacturaMedioPago mp : f.getMediosPago()) {
+        if ("E".equals(obtenerMetodoPagoEstandar(mp.getMedioPago().name()))) {
+          total = total.add(mp.getMonto());
+        }
+      }
+    }
+
+    List<FacturaInterna> internas = facturaInternaRepository.findBySesionCajaId(sesionId);
+    for (FacturaInterna fi : internas) {
+      if ("ANULADA".equals(fi.getEstado()) || fi.getMediosPago() == null) continue;
+      for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
+        if ("E".equals(obtenerMetodoPagoEstandar(mp.getTipo()))) {
+          total = total.add(mp.getMonto());
+        }
+      }
+    }
+
+    return total;
   }
 }

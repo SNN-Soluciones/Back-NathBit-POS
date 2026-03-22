@@ -351,6 +351,20 @@ public class SesionCajaServiceImpl implements SesionCajaService {
       cierreDatafonoRepository.saveAll(datafonos);
     }
 
+    // 8b. Registrar el retiro como movimiento SALIDA_ARQUEO
+    if (montoRetirado.compareTo(BigDecimal.ZERO) > 0) {
+      MovimientoCaja retiro = new MovimientoCaja();
+      retiro.setSesionCaja(turno.getSesionCaja());
+      retiro.setSesionCajaUsuario(turno);
+      retiro.setTipoMovimiento(TipoMovimientoCaja.SALIDA_ARQUEO);
+      retiro.setMonto(montoRetirado);
+      retiro.setConcepto("Retiro en arqueo — " + turno.getUsuario().getNombre());
+      retiro.setAutorizadoPorId(turno.getUsuario().getId());
+      retiro.setFechaHora(ahora);
+      movimientoCajaRepository.save(retiro);
+      log.info("Retiro de arqueo registrado: ₡{} por usuario {}", montoRetirado, turno.getUsuario().getId());
+    }
+
     // 9. Cerrar turno
     turno.setFechaHoraFin(ahora);
     turno.setEstado("CERRADA");

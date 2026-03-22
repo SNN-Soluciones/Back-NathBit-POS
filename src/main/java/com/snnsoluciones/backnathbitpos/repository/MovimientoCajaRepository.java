@@ -17,7 +17,7 @@ public interface MovimientoCajaRepository extends JpaRepository<MovimientoCaja, 
     SELECT COALESCE(SUM(m.monto), 0)
     FROM MovimientoCaja m
     WHERE m.sesionCaja.id = :sesionId
-    AND m.tipoMovimiento IN ('SALIDA_VALE', 'SALIDA_DEPOSITO')
+      AND m.tipoMovimiento IN ('SALIDA_VALE', 'SALIDA_DEPOSITO', 'SALIDA_ARQUEO')
     AND m.fechaHora <= :hasta
     """)
   BigDecimal sumSalidasBySesionIdHasta(

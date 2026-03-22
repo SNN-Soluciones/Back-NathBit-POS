@@ -21,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface SesionCajaService {
+    String generarHtmlReporteTurno(Long turnoId);
 
     void enviarEmailCierre(Long sesionId, OpcionesImpresionCierreDTO opciones, String emailAdicional);
     SesionCajaUsuario unirseATurno(Long usuarioId, Long sesionCajaId);

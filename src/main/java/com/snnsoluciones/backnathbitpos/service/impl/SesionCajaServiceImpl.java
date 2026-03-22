@@ -200,7 +200,12 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     // Calcular cuánto efectivo hay en caja en este momento exacto.
     // = montoInicial + Σ ventas efectivo de todos los turnos - Σ retiros globales
     // Este es el "fondo" que recibe este cajero al entrar.
-    BigDecimal fondoAlEntrar = calcularMontoEsperadoEfectivoHasta(sesion, ahora);
+    BigDecimal fondoAlEntrar = sesionCajaUsuarioRepository
+        .findBySesionCajaIdAndEstadoOrderByFechaHoraFinDesc(sesion.getId(), "CERRADA")
+        .stream()
+        .findFirst()
+        .map(t -> t.getFondoCaja() != null ? t.getFondoCaja() : BigDecimal.ZERO)
+        .orElse(sesion.getMontoInicial());
 
     SesionCajaUsuario turno = new SesionCajaUsuario();
     turno.setSesionCaja(sesion);
@@ -832,18 +837,18 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     log.debug("  - Arqueos: {} = {}", arqueos, montoEsperado);
 
     // 8. 🆕 - Pagos a proveedores
-    BigDecimal pagosProveedores = movimientoCajaRepository
+    BigDecimal pagosProveedor = movimientoCajaRepository
         .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_PAGO_PROVEEDOR);
-    if (pagosProveedores == null) pagosProveedores = BigDecimal.ZERO;
-    montoEsperado = montoEsperado.subtract(pagosProveedores);
-    log.debug("  - Pagos proveedores: {} = {}", pagosProveedores, montoEsperado);
+    if (pagosProveedor == null) pagosProveedor = BigDecimal.ZERO;
+    montoEsperado = montoEsperado.subtract(pagosProveedor);
+    log.debug("  - Pagos proveedor: {} = {}", pagosProveedor, montoEsperado);
 
-    // 9. 🆕 - Otros gastos
+// 9. - Otros gastos
     BigDecimal otros = movimientoCajaRepository
         .sumBySesionIdAndTipo(sesion.getId(), TipoMovimientoCaja.SALIDA_OTROS);
     if (otros == null) otros = BigDecimal.ZERO;
     montoEsperado = montoEsperado.subtract(otros);
-    log.debug("  - Otros gastos: {} = {}", otros, montoEsperado);
+    log.debug("  - Otros: {} = {}", otros, montoEsperado);
 
     log.info("Monto esperado final para sesión {}: {}", sesion.getId(), montoEsperado);
 
@@ -2681,5 +2686,126 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     }
 
     return total;
+  }
+
+  @Override
+  public String generarHtmlReporteTurno(Long turnoId) {
+    SesionCajaUsuario turno = sesionCajaUsuarioRepository.findById(turnoId)
+        .orElseThrow(() -> new RuntimeException("Turno no encontrado"));
+
+    SesionCaja sesion = turno.getSesionCaja();
+    NumberFormat fmt = NumberFormat.getCurrencyInstance(new Locale("es", "CR"));
+    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    // Ventas del turno desde facturas
+    List<Factura> facturas = facturaRepository.findByTurnoId(turnoId);
+    List<FacturaInterna> internas = facturaInternaRepository.findByTurnoId(turnoId);
+
+    BigDecimal ef = BigDecimal.ZERO, tc = BigDecimal.ZERO,
+        tb = BigDecimal.ZERO, sin = BigDecimal.ZERO;
+
+    for (Factura f : facturas) {
+      if (f.getMediosPago() != null) {
+        for (FacturaMedioPago mp : f.getMediosPago()) {
+          switch (obtenerMetodoPagoEstandar(mp.getMedioPago().name())) {
+            case "E"  -> ef  = ef.add(mp.getMonto());
+            case "TC" -> tc  = tc.add(mp.getMonto());
+            case "TB" -> tb  = tb.add(mp.getMonto());
+            case "S"  -> sin = sin.add(mp.getMonto());
+          }
+        }
+      }
+    }
+    for (FacturaInterna fi : internas) {
+      if (fi.getMediosPago() != null) {
+        for (FacturaInternaMedioPago mp : fi.getMediosPago()) {
+          switch (obtenerMetodoPagoEstandar(mp.getTipo())) {
+            case "E"  -> ef  = ef.add(mp.getMonto());
+            case "TC" -> tc  = tc.add(mp.getMonto());
+            case "TB" -> tb  = tb.add(mp.getMonto());
+            case "S"  -> sin = sin.add(mp.getMonto());
+          }
+        }
+      }
+    }
+
+    BigDecimal fondoInicio   = nvl(turno.getFondoInicioTurno());
+    BigDecimal montoEsperado = fondoInicio.add(ef);
+    BigDecimal montoContado  = nvl(turno.getMontoContado());
+    BigDecimal montoRetirado = nvl(turno.getMontoRetirado());
+    BigDecimal fondoCaja     = nvl(turno.getFondoCaja());
+    BigDecimal difEfectivo   = "CERRADA".equals(turno.getEstado())
+        ? montoContado.subtract(montoEsperado) : BigDecimal.ZERO;
+
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'>")
+        .append("<style>")
+        .append("* { margin:0; padding:0; box-sizing:border-box; }")
+        .append("body { font-family:'Courier New',monospace; font-size:12px; padding:10px; }")
+        .append(".header { text-align:center; margin-bottom:15px; }")
+        .append(".title { font-size:16px; font-weight:bold; margin:5px 0; }")
+        .append(".divider { border-top:1px dashed #000; margin:8px 0; }")
+        .append(".double-divider { border-top:2px solid #000; margin:10px 0; }")
+        .append(".section { margin:10px 0; }")
+        .append(".section-title { font-weight:bold; margin:8px 0 5px 0; }")
+        .append(".row { display:flex; justify-content:space-between; margin:3px 0; }")
+        .append(".total-row { font-weight:bold; }")
+        .append(".positive { color:#16a34a; } .negative { color:#dc2626; }")
+        .append("</style></head><body>");
+
+    // Header
+    sb.append("<div class='header'>")
+        .append("<div class='title'>═══════════════════════════</div>")
+        .append("<div class='title'>ARQUEO DE CAJA</div>")
+        .append("<div class='title'>═══════════════════════════</div>")
+        .append("<div class='row' style='margin-top:6px'><span>Cajero:</span><span>")
+        .append(turno.getUsuario().getNombre()).append(" ").append(turno.getUsuario().getApellidos())
+        .append("</span></div>")
+        .append("<div class='row'><span>Terminal:</span><span>")
+        .append(sesion.getTerminal().getNombre()).append("</span></div>")
+        .append("<div class='row'><span>Inicio turno:</span><span>")
+        .append(turno.getFechaHoraInicio().format(dtf)).append("</span></div>")
+        .append("<div class='row'><span>Fin turno:</span><span>")
+        .append(turno.getFechaHoraFin() != null ? turno.getFechaHoraFin().format(dtf) : "En curso")
+        .append("</span></div>")
+        .append("</div>");
+
+    // Efectivo
+    sb.append("<div class='section'>")
+        .append("<div class='section-title'>💵 EFECTIVO EN CAJA</div>")
+        .append("<div class='divider'></div>")
+        .append("<div class='row'><span>Fondo al entrar:</span><span>").append(fmt.format(fondoInicio)).append("</span></div>")
+        .append("<div class='row'><span>+ Ventas Efectivo:</span><span>").append(fmt.format(ef)).append("</span></div>")
+        .append("<div class='double-divider'></div>")
+        .append("<div class='row total-row'><span>= Total Esperado:</span><span>").append(fmt.format(montoEsperado)).append("</span></div>");
+
+    if ("CERRADA".equals(turno.getEstado())) {
+      sb.append("<div class='divider'></div>")
+          .append("<div class='row'><span>Contado:</span><span>").append(fmt.format(montoContado)).append("</span></div>")
+          .append("<div class='row total-row'><span>Diferencia:</span><span class='")
+          .append(difEfectivo.compareTo(BigDecimal.ZERO) >= 0 ? "positive" : "negative").append("'>")
+          .append(difEfectivo.compareTo(BigDecimal.ZERO) >= 0 ? "+" : "")
+          .append(fmt.format(difEfectivo)).append("</span></div>")
+          .append("<div class='divider'></div>")
+          .append("<div class='row'><span>Retiro:</span><span>").append(fmt.format(montoRetirado)).append("</span></div>")
+          .append("<div class='row'><span>Fondo dejado en caja:</span><span>").append(fmt.format(fondoCaja)).append("</span></div>");
+    }
+    sb.append("</div>");
+
+    // Ventas
+    sb.append("<div class='section'>")
+        .append("<div class='section-title'>📈 VENTAS DEL TURNO</div>")
+        .append("<div class='divider'></div>")
+        .append("<div class='row'><span>Efectivo:</span><span>").append(fmt.format(ef)).append("</span></div>")
+        .append("<div class='row'><span>Tarjeta:</span><span>").append(fmt.format(tc)).append("</span></div>")
+        .append("<div class='row'><span>SINPE:</span><span>").append(fmt.format(sin)).append("</span></div>")
+        .append("<div class='row'><span>Transferencia:</span><span>").append(fmt.format(tb)).append("</span></div>")
+        .append("<div class='double-divider'></div>")
+        .append("<div class='row total-row'><span>TOTAL VENTAS:</span><span>")
+        .append(fmt.format(ef.add(tc).add(sin).add(tb))).append("</span></div>")
+        .append("</div>");
+
+    sb.append("</body></html>");
+    return sb.toString();
   }
 }

@@ -79,6 +79,30 @@ public class SesionCajaController {
   // APERTURA
   // =========================================================================
 
+  @Operation(summary = "Reporte HTML de un turno individual")
+  @GetMapping("/turnos/{turnoId}/reporte-html")
+  @PreAuthorize("hasAnyRole('CAJERO','JEFE_CAJAS','ADMIN','SUPER_ADMIN','ROOT','SOPORTE')")
+  public ResponseEntity<String> obtenerReporteTurnoHtml(
+      @PathVariable Long turnoId,
+      HttpServletRequest request) {
+
+    try {
+      SesionCajaUsuario turno = sesionCajaUsuarioRepository.findById(turnoId)
+          .orElseThrow(() -> new RuntimeException("Turno no encontrado"));
+
+      String html = sesionCajaService.generarHtmlReporteTurno(turnoId);
+
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+          .body(html);
+
+    } catch (Exception e) {
+      log.error("Error generando reporte turno {}: {}", turnoId, e.getMessage());
+      return ResponseEntity.status(500)
+          .body("<html><body><h1>Error: " + e.getMessage() + "</h1></body></html>");
+    }
+  }
+
   @Operation(summary = "Abrir sesión de caja")
   @PostMapping("/abrir")
   @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE')")

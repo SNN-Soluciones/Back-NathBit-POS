@@ -14,6 +14,9 @@ import org.springframework.stereotype.Repository;
 public interface SesionCajaUsuarioRepository
     extends JpaRepository<SesionCajaUsuario, Long> {
 
+  List<SesionCajaUsuario> findBySesionCajaIdAndEstadoOrderByFechaHoraFinDesc(
+      Long sesionCajaId, String estado);
+
   @Query("""
     SELECT CASE WHEN COUNT(s) = 0 THEN true ELSE false END
     FROM SesionCajaUsuario s

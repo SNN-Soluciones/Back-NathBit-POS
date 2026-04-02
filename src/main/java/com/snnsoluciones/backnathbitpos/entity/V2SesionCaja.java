@@ -50,6 +50,9 @@ public class V2SesionCaja {
     @Column(name = "fecha_cierre")
     private LocalDateTime fechaCierre;
 
+    @Column(name = "fondo_caja")
+    private BigDecimal fondoCaja;
+
     // Totales consolidados — se llenan al cerrar
     @Column(name = "total_efectivo", precision = 18, scale = 2)
     private BigDecimal totalEfectivo;

@@ -256,6 +256,7 @@ public class V2SesionCajaServiceImpl implements V2SesionCajaService {
         // 9. Verificar si era el último turno activo
         boolean sesionCerrada = turnoRepo.todosLosTurnosCerrados(sesionId);
         if (sesionCerrada) {
+            turno.getSesion().setFondoCaja(fondoCaja);
             cerrarSesionInterna(turno.getSesion());
         }
 
@@ -552,19 +553,10 @@ public class V2SesionCajaServiceImpl implements V2SesionCajaService {
     @Transactional(readOnly = true)
     public Map<String, Object> obtenerUltimoFondoTerminal(Long terminalId) {
         return sesionRepo.findUltimaCerradaByTerminalId(terminalId)
-            .map(sesion -> {
-                BigDecimal fondo = turnoRepo.findBySesionId(sesion.getId())
-                    .stream()
-                    .filter(t -> t.isCerrado() && t.getFondoCaja() != null)
-                    .max(java.util.Comparator.comparing(V2TurnoCajero::getFechaFin))
-                    .map(V2TurnoCajero::getFondoCaja)
-                    .orElse(BigDecimal.ZERO);
-
-                return (Map<String, Object>) new java.util.LinkedHashMap<String, Object>() {{
-                    put("fondoCaja", fondo);
-                    put("sesionId", sesion.getId());
-                }};
-            })
+            .map(sesion -> (Map<String, Object>) new java.util.LinkedHashMap<String, Object>() {{
+                put("fondoCaja", nvl(sesion.getFondoCaja()));
+                put("sesionId", sesion.getId());
+            }})
             .orElse(Map.of("fondoCaja", BigDecimal.ZERO));
     }
 

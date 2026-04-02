@@ -145,6 +145,13 @@ public class FacturaInterna {
     @Column(name = "plazo_credito")
     private Integer plazoCredito;
 
+    // v2 sesiones de caja
+    @Column(name = "v2_sesion_id")
+    private Long v2SesionId;
+
+    @Column(name = "v2_turno_id")
+    private Long v2TurnoId;
+
     // ===== AUDITORÍA =====
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

@@ -29,6 +29,21 @@ public interface FacturaInternaRepository extends JpaRepository<FacturaInterna, 
       """)
     BigDecimal sumPlataformasBySesionId(@Param("sesionId") Long sesionId);
 
+    @Query("""
+    SELECT COALESCE(SUM(mp.monto), 0)
+    FROM FacturaInterna fi JOIN fi.mediosPago mp
+    WHERE fi.v2SesionId = :sesionId
+      AND fi.estado != 'ANULADA'
+      AND mp.tipo = 'EFECTIVO'
+    """)
+    BigDecimal sumEfectivoByV2SesionId(@Param("sesionId") Long sesionId);
+
+    @Query("SELECT fi FROM FacturaInterna fi WHERE fi.v2SesionId = :sesionId AND fi.estado != 'ANULADA' ORDER BY fi.fecha ASC")
+    List<FacturaInterna> findByV2SesionId(@Param("sesionId") Long sesionId);
+
+    @Query("SELECT fi FROM FacturaInterna fi WHERE fi.v2TurnoId = :turnoId AND fi.estado != 'ANULADA'")
+    List<FacturaInterna> findByV2TurnoId(@Param("turnoId") Long turnoId);
+
     // Buscar por empresa
     Page<FacturaInterna> findByEmpresaId(Long empresaId, Pageable pageable);
     /**

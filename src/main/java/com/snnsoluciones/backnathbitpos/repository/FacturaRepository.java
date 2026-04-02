@@ -26,6 +26,21 @@ public interface FacturaRepository extends JpaRepository<Factura, Long>,
 
   Optional<Factura> findByClave(String clave);
 
+  @Query("""
+    SELECT COALESCE(SUM(mp.monto), 0)
+    FROM Factura f JOIN f.mediosPago mp
+    WHERE f.v2SesionId = :sesionId
+      AND f.estado NOT IN ('ANULADA','RECHAZADA')
+      AND mp.medioPago = 'EFECTIVO'
+    """)
+  BigDecimal sumEfectivoByV2SesionId(@Param("sesionId") Long sesionId);
+
+  @Query("SELECT f FROM Factura f WHERE f.v2SesionId = :sesionId AND f.estado NOT IN ('ANULADA', 'RECHAZADA') ORDER BY f.fechaEmision ASC")
+  List<Factura> findByV2SesionId(@Param("sesionId") Long sesionId);
+
+  @Query("SELECT f FROM Factura f WHERE f.v2TurnoId = :turnoId AND f.estado NOT IN ('ANULADA', 'RECHAZADA')")
+  List<Factura> findByV2TurnoId(@Param("turnoId") Long turnoId);
+
   /**
    * Suma el total de ventas por plataformas digitales en una sesión.
    * Busca en FacturaMedioPago donde plataformaDigital != null.

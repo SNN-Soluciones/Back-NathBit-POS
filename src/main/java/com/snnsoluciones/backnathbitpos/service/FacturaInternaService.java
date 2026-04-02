@@ -91,12 +91,19 @@ public class FacturaInternaService {
             sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Sesión de caja no encontrada"));
         } else {
-            if (!cajero.getRol().equals(RolNombre.SUPER_ADMIN)) {
+            // ← Si tiene sesión v2 activa, permitir sin sesión v1
+            boolean tieneV2 = request.getV2SesionId() != null && request.getV2TurnoId() != null;
+
+            if (!tieneV2 && !cajero.getRol().equals(RolNombre.SUPER_ADMIN)) {
                 throw new BadRequestException(
                     "Se requiere una sesión de caja abierta para crear facturas"
                 );
             }
-            log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", cajero.getUsername());
+
+            if (tieneV2) {
+                log.info("Factura interna v2 — sesionId: {} turnoId: {}",
+                    request.getV2SesionId(), request.getV2TurnoId());
+            }
         }
 
         SesionCajaUsuario turnoActivo = null;
@@ -167,12 +174,16 @@ public class FacturaInternaService {
             .mesa(mesa)
             .fecha(LocalDateTime.now(ZoneId.of("America/Costa_Rica")))
             .estado("PAGADA")
+            .v2SesionId(request.getV2SesionId())
+            .v2TurnoId(request.getV2TurnoId())
             .notas(request.getNotas())
             .build();
 
-        sesionCajaUsuarioRepository
-            .findTurnoActivoUsuario(request.getUsuarioId())
-            .ifPresent(factura::setSesionCajaUsuario);
+        if (request.getV2SesionId() == null) {
+            sesionCajaUsuarioRepository
+                .findTurnoActivoUsuario(request.getUsuarioId())
+                .ifPresent(factura::setSesionCajaUsuario);
+        }
 
         if (clienteId != null) {
             Cliente cliente = clienteRepository.findById(clienteId)

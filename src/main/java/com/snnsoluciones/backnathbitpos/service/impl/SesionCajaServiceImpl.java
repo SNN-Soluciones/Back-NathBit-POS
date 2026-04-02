@@ -205,7 +205,14 @@ public class SesionCajaServiceImpl implements SesionCajaService {
         .stream()
         .findFirst()
         .map(t -> t.getFondoCaja() != null ? t.getFondoCaja() : BigDecimal.ZERO)
-        .orElse(sesion.getMontoInicial());
+        .orElseGet(() -> {
+          BigDecimal ef1 = sesionCajaUsuarioRepository.sumEfectivoInternasBySesionId(sesion.getId());
+          BigDecimal ef2 = sesionCajaUsuarioRepository.sumEfectivoFacturasBySesionId(sesion.getId());
+          BigDecimal salidas = movimientoCajaRepository.sumSalidasBySesionIdHasta(sesion.getId(), ahora);
+          return sesion.getMontoInicial()
+              .add(nvl(ef1)).add(nvl(ef2))
+              .subtract(nvl(salidas));
+        });
 
     SesionCajaUsuario turno = new SesionCajaUsuario();
     turno.setSesionCaja(sesion);
@@ -1115,7 +1122,9 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     resumen.setVentasEfectivo(totalEfectivo);
     resumen.setVentasTarjeta(totalTarjeta);
     resumen.setVentasTransferencia(totalTransferencia);
-    resumen.setVentasOtros(totalSinpe); // SINPE va en VentasOtros
+    resumen.setVentasSinpe(totalSinpe);    // ← campo propio
+    resumen.setVentasOtros(BigDecimal.ZERO); // ← ya no mezcla
+
     ventasPlataformas.sort((a, b) -> b.getTotalVentas().compareTo(a.getTotalVentas()));
     resumen.setVentasPlataformas(ventasPlataformas);
 
@@ -1200,6 +1209,59 @@ public class SesionCajaServiceImpl implements SesionCajaService {
     }
 
     log.info("🎯 FINALIZANDO - Resumen detallado generado para sesión: {}", sesionId);
+
+    List<SesionCajaUsuario> turnos = sesionCajaUsuarioRepository.findBySesionCajaId(sesionId);
+    List<ResumenCajaDetalladoDTO.TurnoResumenDTO> turnosDTO = turnos.stream().map(t -> {
+      BigDecimal tEf = BigDecimal.ZERO, tTc = BigDecimal.ZERO,
+          tTb = BigDecimal.ZERO, tSin = BigDecimal.ZERO;
+
+      if ("ACTIVA".equals(t.getEstado())) {
+        // Turno activo: calcular desde facturas
+        for (Factura f : facturaRepository.findByTurnoId(t.getId())) {
+          if (f.getMediosPago() == null) continue;
+          for (var mp : f.getMediosPago()) {
+            switch (obtenerMetodoPagoEstandar(mp.getMedioPago().name())) {
+              case "E"  -> tEf  = tEf.add(mp.getMonto());
+              case "TC" -> tTc  = tTc.add(mp.getMonto());
+              case "TB" -> tTb  = tTb.add(mp.getMonto());
+              case "S"  -> tSin = tSin.add(mp.getMonto());
+            }
+          }
+        }
+        for (FacturaInterna fi : facturaInternaRepository.findByTurnoId(t.getId())) {
+          if ("ANULADA".equals(fi.getEstado()) || fi.getMediosPago() == null) continue;
+          for (var mp : fi.getMediosPago()) {
+            switch (obtenerMetodoPagoEstandar(mp.getTipo())) {
+              case "E"  -> tEf  = tEf.add(mp.getMonto());
+              case "TC" -> tTc  = tTc.add(mp.getMonto());
+              case "TB" -> tTb  = tTb.add(mp.getMonto());
+              case "S"  -> tSin = tSin.add(mp.getMonto());
+            }
+          }
+        }
+      } else {
+        // Turno cerrado: usar campos persistidos
+        tEf  = nvl(t.getVentasEfectivo());
+        tTc  = nvl(t.getVentasTarjeta());
+        tTb  = nvl(t.getVentasTransferencia());
+        tSin = nvl(t.getVentasOtros());
+      }
+
+      return ResumenCajaDetalladoDTO.TurnoResumenDTO.builder()
+          .turnoId(t.getId())
+          .cajeroNombre(t.getUsuario().getNombre() + " " + t.getUsuario().getApellidos())
+          .estado(t.getEstado())
+          .fechaInicio(t.getFechaHoraInicio())
+          .fechaFin(t.getFechaHoraFin())
+          .fondoInicioTurno(nvl(t.getFondoInicioTurno()))
+          .ventasEfectivo(tEf)
+          .ventasTarjeta(tTc)
+          .ventasTransferencia(tTb)
+          .ventasSinpe(tSin)
+          .totalVentas(tEf.add(tTc).add(tTb).add(tSin))
+          .build();
+    }).collect(Collectors.toList());
+    resumen.setTurnos(turnosDTO);
 
     return resumen;
   }

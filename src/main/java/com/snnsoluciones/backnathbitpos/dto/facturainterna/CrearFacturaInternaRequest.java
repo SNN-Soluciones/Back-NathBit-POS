@@ -45,6 +45,8 @@ public class CrearFacturaInternaRequest {
 
     private String numeroViper;
 
+    private Long v2SesionId;
+    private Long v2TurnoId;
 
     // Medios de pago
     @NotEmpty(message = "Debe incluir al menos un medio de pago")

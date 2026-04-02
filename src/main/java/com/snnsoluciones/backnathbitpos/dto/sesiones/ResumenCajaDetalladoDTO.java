@@ -40,6 +40,9 @@ public class ResumenCajaDetalladoDTO {
     private BigDecimal ventasTransferencia;
     private BigDecimal ventasOtros;
 
+    private BigDecimal ventasSinpe;           // SINPE separado
+    private List<TurnoResumenDTO> turnos;
+
     @Builder.Default
     private List<VentaPlataformaDTO> ventasPlataformas = new ArrayList<>();
 
@@ -125,5 +128,23 @@ public class ResumenCajaDetalladoDTO {
     public static class DatafonoResumenDTO {
         private String datafono;
         private BigDecimal monto;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TurnoResumenDTO {
+        private Long turnoId;
+        private String cajeroNombre;
+        private String estado;
+        private LocalDateTime fechaInicio;
+        private LocalDateTime fechaFin;
+        private BigDecimal fondoInicioTurno;
+        private BigDecimal ventasEfectivo;
+        private BigDecimal ventasTarjeta;
+        private BigDecimal ventasTransferencia;
+        private BigDecimal ventasSinpe;
+        private BigDecimal totalVentas;
     }
 }

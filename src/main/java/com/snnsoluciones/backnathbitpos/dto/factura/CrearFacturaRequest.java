@@ -73,6 +73,9 @@ public class CrearFacturaRequest {
     private String situacionComprobante;
     
     private String observaciones;
+
+    private Long v2SesionId;
+    private Long v2TurnoId;
     
     // Descuento global
     private BigDecimal descuentoGlobalPorcentaje;

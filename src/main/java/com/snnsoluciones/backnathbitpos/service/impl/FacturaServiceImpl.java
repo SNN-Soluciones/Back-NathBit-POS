@@ -113,6 +113,9 @@ public class FacturaServiceImpl implements FacturaService {
     factura.setMoneda(request.getMoneda());
     factura.setObservaciones(request.getObservaciones());
 
+    if (request.getV2SesionId() != null) factura.setV2SesionId(request.getV2SesionId());
+    if (request.getV2TurnoId()  != null) factura.setV2TurnoId(request.getV2TurnoId());
+
     // Actividad del receptor (solo para FE con cliente persona jurídica)
     if (request.getActividadReceptor() != null) {
       factura.setActividadReceptor(request.getActividadReceptor());

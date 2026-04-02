@@ -14,6 +14,26 @@ import org.springframework.stereotype.Repository;
 public interface SesionCajaUsuarioRepository
     extends JpaRepository<SesionCajaUsuario, Long> {
 
+  @Query("""
+    SELECT COALESCE(SUM(mp.monto), 0)
+    FROM FacturaInterna fi
+    JOIN fi.mediosPago mp
+    WHERE fi.sesionCaja.id = :sesionId
+      AND fi.estado != 'ANULADA'
+      AND mp.tipo = 'EFECTIVO'
+    """)
+  BigDecimal sumEfectivoInternasBySesionId(@Param("sesionId") Long sesionId);
+
+  @Query("""
+    SELECT COALESCE(SUM(mp.monto), 0)
+    FROM Factura f
+    JOIN f.mediosPago mp
+    WHERE f.sesionCaja.id = :sesionId
+      AND f.estado NOT IN ('ANULADA', 'RECHAZADA')
+      AND mp.medioPago = 'EFECTIVO'
+    """)
+  BigDecimal sumEfectivoFacturasBySesionId(@Param("sesionId") Long sesionId);
+
   List<SesionCajaUsuario> findBySesionCajaIdAndEstadoOrderByFechaHoraFinDesc(
       Long sesionCajaId, String estado);
 

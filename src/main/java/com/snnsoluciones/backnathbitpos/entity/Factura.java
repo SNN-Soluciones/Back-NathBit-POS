@@ -94,6 +94,12 @@ public class Factura {
   @JoinColumn(name = "sesion_caja_usuario_id")
   private SesionCajaUsuario sesionCajaUsuario;
 
+  @Column(name = "v2_sesion_id")
+  private Long v2SesionId;
+
+  @Column(name = "v2_turno_id")
+  private Long v2TurnoId;
+
   // Para NC/ND
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "factura_referencia_id")

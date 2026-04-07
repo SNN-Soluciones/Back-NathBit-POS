@@ -185,16 +185,55 @@ public class FacturaServiceImpl implements FacturaService {
     factura.setSucursal(terminal.getSucursal());
 
 
-    if (request.getSesionCajaId() != null) {
-      // Si viene sesión, la asignamos normalmente
-      sesionCajaRepository.findById(request.getSesionCajaId())
-          .ifPresent(factura::setSesionCaja);
+    // ── Resolver sesión y turno ──────────────────────────────────────────────────
+    SesionCaja sesionCaja = null;
+    SesionCajaUsuario turnoActivo = null;
 
-      sesionCajaUsuarioRepository
-          .findTurnoActivoUsuario(request.getUsuarioId())
-          .ifPresent(factura::setSesionCajaUsuario);
+    if (request.getV2SesionId() != null) {
+      // V2: sesión y turno explícitos, no buscar ni hacer auto-join
+      sesionCaja = sesionCajaRepository.findById(request.getV2SesionId())
+          .orElseThrow(() -> new BusinessException(
+              "Sesión v2 no encontrada con ID: " + request.getV2SesionId()
+          ));
+      if (request.getV2TurnoId() != null) {
+        turnoActivo = sesionCajaUsuarioRepository.findById(request.getV2TurnoId())
+            .orElseThrow(() -> new BusinessException(
+                "Turno v2 no encontrado con ID: " + request.getV2TurnoId()
+            ));
+      }
+      log.info("Sesión resuelta por v2 — sesión: {}, turno: {}",
+          sesionCaja.getId(), turnoActivo != null ? turnoActivo.getId() : "ninguno");
+
+    } else if (request.getSesionCajaId() != null) {
+      // V1: sesionCajaId explícito con auto-join
+      sesionCaja = sesionCajaRepository.findById(request.getSesionCajaId())
+          .orElseThrow(() -> new BusinessException(
+              "Sesión de caja no encontrada con ID: " + request.getSesionCajaId()
+          ));
+      final SesionCaja sesionCajaFinal = sesionCaja;
+      turnoActivo = sesionCajaUsuarioRepository
+          .findTurnoActivoUsuarioEnSesion(usuario.getId(), sesionCajaFinal.getId())
+          .orElseGet(() -> {
+            if ("SHARED".equals(sesionCajaFinal.getModoCaja())) {
+              Optional<SesionCajaUsuario> turnoEnOtraSesion =
+                  sesionCajaUsuarioRepository.findTurnoActivoUsuario(usuario.getId());
+              if (turnoEnOtraSesion.isPresent()) {
+                throw new RuntimeException(
+                    "El usuario tiene un turno activo en: "
+                        + turnoEnOtraSesion.get().getSesionCaja().getTerminal().getNombre()
+                        + ". Verificá que estás facturando en la terminal correcta."
+                );
+              }
+              log.info("Auto-join: creando turno para usuario {} en sesión {}",
+                  usuario.getId(), sesionCajaFinal.getId());
+              return sesionCajaService.unirseATurno(usuario.getId(), sesionCajaFinal.getId());
+            }
+            return null;
+          });
+      log.info("Sesión resuelta por v1 — sesión: {}", sesionCaja.getId());
+
     } else {
-      // Si NO viene sesión, solo permitimos si es SUPER_ADMIN
+      // Sin sesión: solo SUPER_ADMIN
       if (!usuario.getRol().equals(RolNombre.SUPER_ADMIN)) {
         throw new BusinessException(
             "Se requiere una sesión de caja abierta para crear facturas. " +
@@ -204,38 +243,10 @@ public class FacturaServiceImpl implements FacturaService {
       log.info("Usuario SUPER_ADMIN {} facturando sin sesión de caja", usuario.getUsername());
     }
 
-    SesionCajaUsuario turnoActivo = null;
-    if (factura.getSesionCaja() != null) {
-      final SesionCaja sesionCajaFinal = factura.getSesionCaja();
-
-      // Buscar turno activo del usuario en ESTA sesión
-      turnoActivo = sesionCajaUsuarioRepository
-          .findTurnoActivoUsuarioEnSesion(usuario.getId(), sesionCajaFinal.getId())
-          .orElseGet(() -> {
-            if ("SHARED".equals(sesionCajaFinal.getModoCaja())) {
-              // Antes de auto-unir, verificar si tiene turno activo en otra sesión
-              // Si ya tiene uno activo en CUALQUIER sesión, usar ese
-              Optional<SesionCajaUsuario> turnoEnOtraSesion =
-                  sesionCajaUsuarioRepository.findTurnoActivoUsuario(usuario.getId());
-
-              if (turnoEnOtraSesion.isPresent()) {
-                // Tiene turno activo pero en sesión diferente — no auto-unir
-                throw new RuntimeException(
-                    "El usuario tiene un turno activo en: "
-                        + turnoEnOtraSesion.get().getSesionCaja().getTerminal().getNombre()
-                        + ". Verificá que estás facturando en la terminal correcta."
-                );
-              }
-
-              // No tiene turno en ninguna sesión → auto-join válido
-              log.info("Auto-join: creando turno para usuario {} en sesión {}",
-                  usuario.getId(), sesionCajaFinal.getId());
-              return sesionCajaService.unirseATurno(usuario.getId(), sesionCajaFinal.getId());
-            }
-            return null;
-          });
-      factura.setSesionCajaUsuario(turnoActivo);
+    if (sesionCaja != null) {
+      factura.setSesionCaja(sesionCaja);
     }
+    factura.setSesionCajaUsuario(turnoActivo);
 
 
 // Asignar el usuario (cajero)

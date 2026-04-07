@@ -252,6 +252,13 @@ public class FacturaServiceImpl implements FacturaService {
 // Asignar el usuario (cajero)
     factura.setCajero(usuario);
 
+    if (request.getV2SesionId() != null) {
+      factura.setV2SesionId(request.getV2SesionId());
+    }
+    if (request.getV2TurnoId() != null) {
+      factura.setV2TurnoId(request.getV2TurnoId());
+    }
+
 
     // PASO 11: Generar consecutivo único para este tipo de documento
     String consecutivo = terminalService.generarNumeroConsecutivo(

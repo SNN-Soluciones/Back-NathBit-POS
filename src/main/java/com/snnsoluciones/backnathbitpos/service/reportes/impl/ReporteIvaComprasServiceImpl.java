@@ -132,11 +132,28 @@ public class ReporteIvaComprasServiceImpl implements ReporteIvaComprasService {
                    WHEN di.codigo_impuesto = '01' AND di.codigo_tarifa = '08'
                    THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0)
                    ELSE 0 END), 0) AS iva_13,
-               -- Otros impuestos
-               COALESCE(SUM(CASE
-                   WHEN di.codigo_impuesto <> '01'
-                   THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0)
-                   ELSE 0 END), 0) AS otros_impuestos
+               -- Otros impuestos: residual para que siempre sume a fr.total_impuesto
+             GREATEST(0,
+                 COALESCE(fr.total_impuesto, 0)
+                 - COALESCE(SUM(CASE
+                     WHEN di.codigo_impuesto = '01' AND di.codigo_tarifa IN ('01','05','10','11')
+                     THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0) ELSE 0 END), 0)
+                 - COALESCE(SUM(CASE
+                     WHEN di.codigo_impuesto = '01' AND di.codigo_tarifa = '02'
+                     THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0) ELSE 0 END), 0)
+                 - COALESCE(SUM(CASE
+                     WHEN di.codigo_impuesto = '01' AND di.codigo_tarifa = '03'
+                     THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0) ELSE 0 END), 0)
+                 - COALESCE(SUM(CASE
+                     WHEN di.codigo_impuesto = '01' AND di.codigo_tarifa IN ('04','06')
+                     THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0) ELSE 0 END), 0)
+                 - COALESCE(SUM(CASE
+                     WHEN di.codigo_impuesto = '01' AND di.codigo_tarifa = '07'
+                     THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0) ELSE 0 END), 0)
+                 - COALESCE(SUM(CASE
+                     WHEN di.codigo_impuesto = '01' AND di.codigo_tarifa = '08'
+                     THEN COALESCE(NULLIF(di.impuesto_neto, 0), di.monto, 0) ELSE 0 END), 0)
+             ) AS otros_impuestos
             FROM  facturas_recepcion fr
             LEFT JOIN facturas_recepcion_detalles         frd ON frd.factura_recepcion_id        = fr.id
             LEFT JOIN facturas_recepcion_detalles_impuestos di ON di.factura_recepcion_detalle_id = frd.id

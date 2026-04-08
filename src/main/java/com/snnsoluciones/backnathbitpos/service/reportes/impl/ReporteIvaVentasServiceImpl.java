@@ -179,27 +179,27 @@ public class ReporteIvaVentasServiceImpl implements ReporteIvaVentasService {
                 f.fecha_emision,
 
                 COALESCE(SUM(CASE WHEN i.tarifa = 0
-                    THEN i.monto_impuesto ELSE 0 END), 0)
+                    THEN i.impuesto_neto ELSE 0 END), 0)
                     * CASE WHEN f.tipo_documento = 'NOTA_CREDITO' THEN -1 ELSE 1 END AS iva_0,
-
+    
                 COALESCE(SUM(CASE WHEN i.tarifa IN (0.01, 1.00)
-                    THEN i.monto_impuesto ELSE 0 END), 0)
+                    THEN i.impuesto_neto ELSE 0 END), 0)
                     * CASE WHEN f.tipo_documento = 'NOTA_CREDITO' THEN -1 ELSE 1 END AS iva_1,
-
+    
                 COALESCE(SUM(CASE WHEN i.tarifa IN (0.02, 2.00)
-                    THEN i.monto_impuesto ELSE 0 END), 0)
+                    THEN i.impuesto_neto ELSE 0 END), 0)
                     * CASE WHEN f.tipo_documento = 'NOTA_CREDITO' THEN -1 ELSE 1 END AS iva_2,
-
+    
                 COALESCE(SUM(CASE WHEN i.tarifa IN (0.04, 4.00)
-                    THEN i.monto_impuesto ELSE 0 END), 0)
+                    THEN i.impuesto_neto ELSE 0 END), 0)
                     * CASE WHEN f.tipo_documento = 'NOTA_CREDITO' THEN -1 ELSE 1 END AS iva_4,
-
+    
                 COALESCE(SUM(CASE WHEN i.tarifa IN (0.08, 8.00)
-                    THEN i.monto_impuesto ELSE 0 END), 0)
+                    THEN i.impuesto_neto ELSE 0 END), 0)
                     * CASE WHEN f.tipo_documento = 'NOTA_CREDITO' THEN -1 ELSE 1 END AS iva_8,
-
+    
                 COALESCE(SUM(CASE WHEN i.tarifa IN (0.13, 13.00)
-                    THEN i.monto_impuesto ELSE 0 END), 0)
+                    THEN i.impuesto_neto ELSE 0 END), 0)
                     * CASE WHEN f.tipo_documento = 'NOTA_CREDITO' THEN -1 ELSE 1 END AS iva_13,
 
                 CASE WHEN f.tipo_documento = 'NOTA_CREDITO'

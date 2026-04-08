@@ -138,7 +138,14 @@ public class ReporteIvaComprasResponse {
             totalDescuentos     = totalDescuentos.add(safe(l.getTotalDescuentos()));
             totalOtrosCargos    = totalOtrosCargos.add(safe(l.getTotalOtrosCargos()));
             totalGeneral        = totalGeneral.add(safe(l.getTotalComprobante()));
+            totalImpuestos   = totalImpuestos.add(safe(l.getTotalImpuesto()));
         }
+
+        BigDecimal sumaIvaTarifas = totalIva0.add(totalIva1).add(totalIva2)
+            .add(totalIva4).add(totalIva8).add(totalIva13);
+
+        totalOtrosImpuestos = totalImpuestos.subtract(sumaIvaTarifas)
+            .max(BigDecimal.ZERO);
     }
 
     private void inicializarCeros() {

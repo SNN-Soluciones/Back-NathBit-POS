@@ -19,6 +19,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -59,6 +61,44 @@ public class ReporteIvaVentasController {
     //  POST /api/reportes/iva-ventas/generar
     //  Recomendado: el frontend envía el body JSON con los filtros que necesite
     // ─────────────────────────────────────────────────────────────────────────
+
+    @Operation(
+        summary     = "Exportar reporte IVA ventas a Excel (POST)",
+        description = "Genera y descarga un archivo .xlsx con el desglose de IVA por tarifa. Mismo filtro que /generar."
+    )
+    @PostMapping(value = "/exportar-excel", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    @PreAuthorize("hasAnyRole('CAJERO', 'JEFE_CAJAS', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+    public ResponseEntity<byte[]> exportarExcel(
+        @Valid @RequestBody ReporteIvaVentasRequest request
+    ) {
+        log.info("POST /api/reportes/iva-ventas/exportar-excel — sucursal={}", request.getSucursalId());
+
+        try {
+            byte[] excelBytes = reporteIvaVentasService.generarExcel(request);
+
+            String filename = String.format("IVA_Ventas_%s_%s_%s.xlsx",
+                request.getSucursalId(),
+                request.getFechaEmisionDesde(),
+                request.getFechaEmisionHasta());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+            headers.setContentDispositionFormData("attachment", filename);
+            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+            headers.setContentLength(excelBytes.length);
+
+            return ResponseEntity.ok().headers(headers).body(excelBytes);
+
+        } catch (jakarta.persistence.EntityNotFoundException ex) {
+            log.warn("Sucursal no encontrada: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+
+        } catch (Exception ex) {
+            log.error("Error exportando Excel IVA", ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 
     @Operation(
         summary     = "Generar reporte IVA ventas (POST)",

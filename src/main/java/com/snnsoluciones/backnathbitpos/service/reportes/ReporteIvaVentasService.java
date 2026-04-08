@@ -13,6 +13,14 @@ import com.snnsoluciones.backnathbitpos.dto.reporte.ReporteIvaVentasResponse;
 public interface ReporteIvaVentasService {
 
     /**
+     * Genera el reporte de IVA en formato Excel (.xlsx).
+     *
+     * @param request parámetros de filtro (sucursalId obligatorio)
+     * @return bytes del archivo .xlsx
+     */
+    byte[] generarExcel(ReporteIvaVentasRequest request);
+
+    /**
      * Genera el reporte de IVA por tarifa aplicando todos los filtros del request.
      *
      * <p>Si algún filtro viene nulo se aplican los valores por defecto definidos

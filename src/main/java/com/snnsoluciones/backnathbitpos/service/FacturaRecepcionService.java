@@ -1128,9 +1128,9 @@ public class FacturaRecepcionService {
       factura.setXmlOriginalPath(rutaXml);
 
       if (request.getPdfFile() != null && !request.getPdfFile().isEmpty()) {
-        String rutaPdf = subirArchivoS3(
+        String rutaPdf = subirArchivoRecepcionS3(
             empresa.getNombreRazonSocial(),
-            factura.getTipoDocumento().name(),
+            factura.getProveedorIdentificacion(),
             factura.getClave(),
             "pdf",
             request.getPdfFile()
@@ -1221,9 +1221,9 @@ public class FacturaRecepcionService {
       factura.setXmlOriginalPath(rutaXml);
 
       if (request.getPdfFile() != null && !request.getPdfFile().isEmpty()) {
-        String rutaPdf = subirArchivoS3(
+        String rutaPdf = subirArchivoRecepcionS3(
             empresa.getNombreRazonSocial(),
-            factura.getTipoDocumento().name(),
+            factura.getProveedorIdentificacion(),
             factura.getClave(),
             "pdf",
             request.getPdfFile()
@@ -1387,8 +1387,10 @@ public class FacturaRecepcionService {
     // Obtener usuario del contexto de seguridad
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     String username = auth.getName();
+
     Usuario usuario = usuarioRepository.findByEmail(username)
-        .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + username));
+        .orElseGet(() -> usuarioRepository.findByEmail("root@sistema.com")
+            .orElseThrow(() -> new RuntimeException("Usuario sistema no encontrado")));
 
     // Crear compra
     Compra compra = new Compra();

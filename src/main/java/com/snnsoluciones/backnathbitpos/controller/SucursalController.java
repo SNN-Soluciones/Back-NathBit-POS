@@ -166,6 +166,7 @@ public class SucursalController extends BaseController {
     response.setAutoImprimirFactura(sucursal.getAutoImprimirFactura());
     response.setAutoImprimirComanda(sucursal.getAutoImprimirComanda());
     response.setTiempoAutoClose(sucursal.getTiempoAutoClose());
+    response.setAceptarAutomaticamente(sucursal.getAceptarAutomaticamente());
 
     // Campos de empresa
     response.setEmpresaId(sucursal.getEmpresa().getId());
@@ -189,6 +190,7 @@ public class SucursalController extends BaseController {
     // === NUEVOS CAMPOS DE IMPRESIÓN ===
     sucursal.setModoImpresion(request.getModoImpresion());
     sucursal.setIpOrquestador(request.getIpOrquestador());
+    sucursal.setAceptarAutomaticamente(request.getAceptarAutomaticamente());
 
     // Ubicación (solo si vienen todos los campos)
     if (request.getProvinciaId() != null && request.getCantonId() != null

@@ -78,6 +78,7 @@ public class SucursalServiceImpl implements SucursalService {
         existente.setAutoImprimirFactura(sucursal.getAutoImprimirFactura());
         existente.setAutoImprimirComanda(sucursal.getAutoImprimirComanda());
         existente.setTiempoAutoClose(sucursal.getTiempoAutoClose());
+        existente.setAceptarAutomaticamente(sucursal.getAceptarAutomaticamente());
 
 
         return sucursalRepository.save(existente);

@@ -25,6 +25,7 @@ public class SucursalResponse {
     private Boolean autoImprimirFactura;
     private Boolean autoImprimirComanda;
     private Integer tiempoAutoClose;
+    private Boolean aceptarAutomaticamente;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -32,6 +32,8 @@ public class SucursalRequest {
 
     private Integer barrioId;
 
+    private Boolean aceptarAutomaticamente = false;
+
     private String otrasSenas;
 
     private ModoFacturacion modoFacturacion;

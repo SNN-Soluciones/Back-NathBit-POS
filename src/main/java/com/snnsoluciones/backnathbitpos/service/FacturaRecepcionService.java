@@ -1243,6 +1243,7 @@ public class FacturaRecepcionService {
       // 7. ACEPTAR AUTOMÁTICAMENTE Y CREAR COMPRA
       if (request.isAceptarAutomaticamente()) {
         aceptarYCrearCompraAutomatico(factura);
+        facturaRecepcionRepository.save(factura); // 👈 persiste estado ACEPTADA
       }
 
       log.info("✅ Factura procesada completamente. ID: {}, Compra ID: {}",

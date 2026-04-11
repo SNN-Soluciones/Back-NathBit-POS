@@ -81,6 +81,10 @@ public class Sucursal {
     @Builder.Default
     private List<Terminal> terminales = new ArrayList<>();
 
+    @Column(name = "aceptar_automaticamente", nullable = false)
+    @Builder.Default
+    private Boolean aceptarAutomaticamente = false;
+
 
     @Column(name = "activa", nullable = false)
     private Boolean activa;

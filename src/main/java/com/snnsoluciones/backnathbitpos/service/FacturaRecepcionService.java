@@ -15,6 +15,7 @@ import com.snnsoluciones.backnathbitpos.repository.*;
 import com.snnsoluciones.backnathbitpos.scheduler.FacturaRecepcionXMLParserService;
 import com.snnsoluciones.backnathbitpos.sign.SignerService;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.StringReader;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -24,6 +25,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +66,8 @@ public class FacturaRecepcionService {
   private final CompraDetalleRepository compraDetalleRepository;
   private final ProductoInventarioService productoInventarioService;
   private final TerminalService terminalService;
+  private final EmailService emailService;
+  private final ResendEmailService resendEmailService;
 
   private final FacturaRecepcionXMLParserService xmlParserService;
   private final StorageService storageService;
@@ -114,6 +119,164 @@ public class FacturaRecepcionService {
         .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
 
     return mapearAResponse(factura);
+  }
+
+  @Transactional(readOnly = true)
+  public void generarZipReporteYEnviar(Long empresaId, Long sucursalId, int anio, int mes) {
+    log.info("📦 Generando ZIP reporte compras - empresa: {}, sucursal: {}, {}/{}",
+        empresaId, sucursalId, mes, anio);
+
+    // 1. Validar empresa y sucursal
+    Empresa empresa = empresaRepository.findById(empresaId)
+        .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+
+    Sucursal sucursal = sucursalRepository.findById(sucursalId)
+        .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
+
+    // 2. Obtener facturas del mes
+    List<FacturaRecepcion> facturas = facturaRecepcionRepository
+        .findAceptadasParaZip(empresaId, sucursalId, anio, mes);
+
+    if (facturas.isEmpty()) {
+      throw new RuntimeException(
+          String.format("No hay facturas aceptadas para %02d/%d", mes, anio));
+    }
+
+    log.info("📋 {} facturas encontradas para el ZIP", facturas.size());
+
+    // 3. Cargar impuestos
+    List<Long> facturaIds = facturas.stream()
+        .map(FacturaRecepcion::getId)
+        .collect(Collectors.toList());
+    facturaRecepcionRepository.cargarImpuestosDeDetalles(facturaIds);
+
+    // 4. Generar Excel
+    LocalDate fechaInicio = LocalDate.of(anio, mes, 1);
+    LocalDate fechaFin = fechaInicio.withDayOfMonth(fechaInicio.lengthOfMonth());
+
+    List<FacturaRecepcionReporteDTO> datos = facturas.stream()
+        .map(this::toReporteDTO)
+        .collect(Collectors.toList());
+
+    byte[] excelBytes = facturaRecepcionExcelService.generarExcel(datos, fechaInicio, fechaFin);
+
+    // 5. Armar ZIP en memoria
+    byte[] zipBytes;
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ZipOutputStream zos = new ZipOutputStream(baos)) {
+
+      // 5a. Agregar Excel
+      String nombreExcel = String.format("Reporte_Compras_%d_%02d.xlsx", anio, mes);
+      zos.putNextEntry(new ZipEntry(nombreExcel));
+      zos.write(excelBytes);
+      zos.closeEntry();
+      log.info("✅ Excel agregado al ZIP: {}", nombreExcel);
+
+      // 5b. Agregar XMLs y PDFs por factura
+      for (FacturaRecepcion factura : facturas) {
+        String cedula = factura.getProveedorIdentificacion();
+
+        // XML
+        if (factura.getXmlOriginalPath() != null && !factura.getXmlOriginalPath().isBlank()) {
+          try {
+            byte[] xmlBytes = storageService.obtenerArchivo(factura.getXmlOriginalPath());
+            String entryXml = String.format("xmls/%s/%s.xml", cedula, factura.getClave());
+            zos.putNextEntry(new ZipEntry(entryXml));
+            zos.write(xmlBytes);
+            zos.closeEntry();
+          } catch (Exception e) {
+            log.warn("⚠️ No se pudo obtener XML para factura {}: {}",
+                factura.getClave(), e.getMessage());
+          }
+        }
+
+        // PDF
+        if (factura.getPdfPath() != null && !factura.getPdfPath().isBlank()) {
+          try {
+            byte[] pdfBytes = storageService.obtenerArchivo(factura.getPdfPath());
+            String entryPdf = String.format("pdfs/%s/%s.pdf", cedula, factura.getClave());
+            zos.putNextEntry(new ZipEntry(entryPdf));
+            zos.write(pdfBytes);
+            zos.closeEntry();
+          } catch (Exception e) {
+            log.warn("⚠️ No se pudo obtener PDF para factura {}: {}",
+                factura.getClave(), e.getMessage());
+          }
+        }
+      }
+
+      zos.finish();
+      zipBytes = baos.toByteArray();
+      log.info("✅ ZIP generado: {} bytes", zipBytes.length);
+
+    } catch (IOException e) {
+      log.error("❌ Error generando ZIP", e);
+      throw new RuntimeException("Error generando ZIP: " + e.getMessage());
+    }
+
+    // 6. Determinar destinatario
+    String emailDestino = (sucursal.getEmail() != null && !sucursal.getEmail().isBlank())
+        ? sucursal.getEmail()
+        : empresa.getEmailNotificacion();
+
+    if (emailDestino == null || emailDestino.isBlank()) {
+      throw new RuntimeException(
+          "No hay email configurado en la sucursal ni en la empresa para enviar el reporte");
+    }
+
+    log.info("📧 Enviando ZIP a: {}", emailDestino);
+
+    // 7. Enviar por correo
+    String nombreZip = String.format("Compras_%s_%d_%02d.zip",
+        empresa.getNombreRazonSocial().replaceAll("\\s+", "_"), anio, mes);
+
+    String asunto = String.format("📦 Reporte de Compras %02d/%d - %s",
+        mes, anio, empresa.getNombreComercial());
+
+    String mensaje = String.format("""
+        Estimado contador,
+
+        Adjunto encontrará el reporte de compras correspondiente a <strong>%s %d</strong> 
+        para la sucursal <strong>%s</strong>.
+
+        <strong>Total de facturas:</strong> %d<br>
+        <strong>Período:</strong> %s al %s
+
+        El archivo ZIP contiene:
+        <ul>
+            <li>Reporte Excel con el detalle de compras</li>
+            <li>XMLs de cada factura organizados por proveedor</li>
+            <li>PDFs de cada factura organizados por proveedor</li>
+        </ul>
+
+        Saludos cordiales,<br>
+        <strong>%s</strong>
+        """,
+        fechaInicio.getMonth().getDisplayName(java.time.format.TextStyle.FULL,
+            new java.util.Locale("es", "CR")),
+        anio,
+        sucursal.getNombre(),
+        facturas.size(),
+        fechaInicio,
+        fechaFin,
+        empresa.getNombreComercial()
+    );
+
+    List<ResendEmailService.EmailAttachment> adjuntos = List.of(
+        new ResendEmailService.EmailAttachment(nombreZip, zipBytes, "application/zip")
+    );
+
+    boolean enviado = resendEmailService.enviarConAdjuntos(
+        emailDestino, asunto,
+        emailService.construirHtmlSimple(mensaje),  // ← ver nota abajo
+        adjuntos
+    );
+
+    if (!enviado) {
+      throw new RuntimeException("Error al enviar el correo con el reporte");
+    }
+
+    log.info("✅ Reporte ZIP enviado exitosamente a {}", emailDestino);
   }
 
   /**
@@ -270,6 +433,44 @@ public class FacturaRecepcionService {
       log.error("Error enviando mensaje receptor", e);
       throw new RuntimeException("Error al procesar decisión: " + e.getMessage());
     }
+  }
+
+  private String subirArchivoRecepcionS3(String razonSocial, String cedulaProveedor, String clave,
+      String extension, MultipartFile file) throws IOException {
+
+    LocalDate hoy = LocalDate.now();
+    String key = String.format("NathBit-POS/%s/compras/%d/%02d/%s/%s.%s",
+        razonSocial, hoy.getYear(), hoy.getMonthValue(), cedulaProveedor, clave, extension);
+
+    storageService.uploadFile(
+        file.getInputStream(),
+        key,
+        file.getContentType(),
+        file.getSize()
+    );
+    return key;
+  }
+
+  private String subirArchivoRecepcionS3(String razonSocial, String cedulaProveedor, String clave,
+      String extension, byte[] contenido) throws IOException {
+
+    LocalDate hoy = LocalDate.now();
+    String key = String.format("NathBit-POS/%s/compras/%d/%02d/%s/%s.%s",
+        razonSocial, hoy.getYear(), hoy.getMonthValue(), cedulaProveedor, clave, extension);
+
+    storageService.uploadFile(
+        new ByteArrayInputStream(contenido),
+        key,
+        "application/xml",
+        (long) contenido.length
+    );
+    return key;
+  }
+
+  private String subirArchivoRecepcionS3(String razonSocial, String cedulaProveedor, String clave,
+      String extension, String contenido) throws IOException {
+    return subirArchivoRecepcionS3(razonSocial, cedulaProveedor, clave, extension,
+        contenido.getBytes(StandardCharsets.UTF_8));
   }
 
   /**
@@ -920,9 +1121,8 @@ public class FacturaRecepcionService {
       // 4. Subir archivos a S3
       String rutaXml = subirArchivoS3(
           empresa.getNombreRazonSocial(),
-          factura.getTipoDocumento().name(),
-          factura.getClave(),
-          "xml",
+          factura.getProveedorIdentificacion(),
+          factura.getClave(), "xml",
           request.getXmlFile()
       );
       factura.setXmlOriginalPath(rutaXml);
@@ -1014,10 +1214,9 @@ public class FacturaRecepcionService {
       // 4. Subir archivos a S3
       String rutaXml = subirArchivoS3(
           empresa.getNombreRazonSocial(),
-          factura.getTipoDocumento().name(),
+          factura.getProveedorIdentificacion(),
           factura.getClave(),
-          "xml",
-          request.getXmlFile()
+          "xml", request.getXmlFile()
       );
       factura.setXmlOriginalPath(rutaXml);
 
@@ -1062,47 +1261,118 @@ public class FacturaRecepcionService {
    */
   private void aceptarYCrearCompraAutomatico(FacturaRecepcion factura) {
     try {
-      // 1. Construir mensaje receptor de aceptación
-      String xmlMensaje = construirXmlMensajeReceptor(
+      log.info("🤖 Iniciando aceptación automática para factura: {}", factura.getClave());
+
+      // 1. Construir XML mensaje receptor
+      String xmlSinFirmar = construirXmlMensajeReceptor(
           factura,
           TipoMensajeReceptor.ACEPTADO,
           null
       );
 
-      // 2. Enviar a Hacienda
+      // 2. Firmar XML
+      byte[] xmlFirmado = signerService.signXmlForEmpresa(
+          xmlSinFirmar.getBytes(StandardCharsets.UTF_8),
+          factura.getEmpresa().getId(),
+          TipoDocumento.MENSAJE_RECEPTOR
+      );
+
+      String xmlMensajeFirmado = new String(xmlFirmado, StandardCharsets.UTF_8);
+
+      // 3. Enviar a Hacienda
       IdentificacionDTO receptor = IdentificacionDTO.builder()
-          .tipoIdentificacion(
-              factura.getProveedorTipoIdentificacion().getCodigo()) // asegurar que sea 01/02/03/...
+          .tipoIdentificacion(factura.getProveedorTipoIdentificacion().getCodigo())
           .numeroIdentificacion(factura.getProveedorIdentificacion())
           .build();
 
-      haciendaClient.enviarMensajeReceptor(
+      String respuestaHacienda = haciendaClient.enviarMensajeReceptor(
           factura.getEmpresa().getId(),
-          xmlMensaje,
+          xmlMensajeFirmado,
           receptor
       );
 
-      // 3. Actualizar estado
+      // 4. Guardar XML firmado en S3
+      String pathXmlFirmado = subirArchivoRecepcionS3(
+          factura.getEmpresa().getNombreRazonSocial(),
+          factura.getProveedorIdentificacion(),
+          factura.getClave() + "-mensaje",
+          "xml",
+          xmlFirmado
+      );
+
+      // 5. Guardar respuesta Hacienda en S3
+      String pathXmlRespuestaMh = subirArchivoRecepcionS3(
+          factura.getEmpresa().getNombreRazonSocial(),
+          factura.getProveedorIdentificacion(),
+          factura.getClave() + "-respuesta",
+          "xml",
+          respuestaHacienda
+      );
+
+      // 6. Parsear respuesta Hacienda y actualizar estado
+      parsearYActualizarEstadoMensajeReceptor(factura, respuestaHacienda);
+
+      // 7. Actualizar campos de la factura
       factura.setEstadoInterno(EstadoFacturaRecepcion.ACEPTADA);
       factura.setMensajeReceptorEnviado(true);
       factura.setTipoMensajeReceptor(TipoMensajeReceptor.ACEPTADO);
+      factura.setXmlMensajeReceptorPath(pathXmlFirmado);
+      factura.setXmlRespuestaHaciendaPath(pathXmlRespuestaMh);
 
-      // 4. CREAR COMPRA AUTOMÁTICAMENTE
+      // 8. Crear compra
       Compra compra = crearCompraDesdeFactura(factura);
       compra = compraRepository.save(compra);
 
-      // 5. Vincular
       factura.setCompra(compra);
       factura.setConvertidaCompra(true);
 
-      // 6. Actualizar métricas
+      // 9. Actualizar métricas
       actualizarMetricasMensuales(compra);
 
-      log.info("✅ Factura aceptada y compra creada automáticamente. Compra ID: {}", compra.getId());
+      // 10. Enviar correo al proveedor si tiene email
+      if (factura.getProveedorEmail() != null && !factura.getProveedorEmail().isBlank()) {
+        try {
+          String asunto = "✅ Factura aceptada - " + factura.getEmpresa().getNombreComercial();
+          String mensaje = String.format("""
+                    Estimado(a) %s,
+
+                    Le informamos que la siguiente factura electrónica ha sido <strong>ACEPTADA</strong> exitosamente.
+
+                    <strong>Clave:</strong> %s<br>
+                    <strong>Consecutivo:</strong> %s<br>
+                    <strong>Total:</strong> ₡%s<br>
+                    <strong>Receptor:</strong> %s
+
+                    Saludos cordiales,<br>
+                    <strong>%s</strong>
+                    """,
+              factura.getProveedorNombre(),
+              factura.getClave(),
+              factura.getNumeroConsecutivo(),
+              String.format("%,.2f", factura.getTotalComprobante()),
+              factura.getEmpresa().getNombreRazonSocial(),
+              factura.getEmpresa().getNombreComercial()
+          );
+
+          emailService.enviarEmailSimple(factura.getProveedorEmail(), asunto, mensaje);
+          log.info("📧 Correo de aceptación enviado a proveedor: {}", factura.getProveedorEmail());
+
+        } catch (Exception e) {
+          // No fallar el flujo principal si el correo falla
+          log.warn("⚠️ No se pudo enviar correo al proveedor {}: {}",
+              factura.getProveedorEmail(), e.getMessage());
+        }
+      } else {
+        log.info("📭 Proveedor {} no tiene email registrado, omitiendo correo",
+            factura.getProveedorNombre());
+      }
+
+      log.info("✅ Aceptación automática completada. Factura: {}, Compra ID: {}",
+          factura.getClave(), compra.getId());
 
     } catch (Exception e) {
-      log.error("❌ Error en proceso automático, dejando factura como PENDIENTE", e);
-      // Si falla, dejar en pendiente para que usuario tome decisión manual
+      log.error("❌ Error en aceptación automática para factura {}, dejando como PENDIENTE: {}",
+          factura.getClave(), e.getMessage());
       factura.setEstadoInterno(EstadoFacturaRecepcion.PENDIENTE_DECISION);
     }
   }

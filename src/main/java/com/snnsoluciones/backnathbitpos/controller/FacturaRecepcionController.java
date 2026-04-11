@@ -5,8 +5,10 @@ import com.snnsoluciones.backnathbitpos.dto.facturarecepcion.*;
 import com.snnsoluciones.backnathbitpos.dto.proveedor.ProveedorDto;
 import com.snnsoluciones.backnathbitpos.entity.FacturaRecepcion;
 import com.snnsoluciones.backnathbitpos.entity.Proveedor;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
 import com.snnsoluciones.backnathbitpos.enums.TipoFechaReporte;
 import com.snnsoluciones.backnathbitpos.enums.factura.EstadoFacturaRecepcion;
+import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
 import com.snnsoluciones.backnathbitpos.service.FacturaRecepcionService;
 import com.snnsoluciones.backnathbitpos.service.ProveedorService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +44,7 @@ public class FacturaRecepcionController {
 
     private final FacturaRecepcionService facturaRecepcionService;
     private final ProveedorService proveedorService;
+    private final SucursalRepository sucursalRepository;
 
 
     /**
@@ -222,6 +225,48 @@ public class FacturaRecepcionController {
         }
     }
 
+    @PostMapping("/reporte-compras-zip")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'SOPORTE')")
+    @Operation(summary = "Generar y enviar reporte de compras por correo",
+        description = "Genera ZIP con Excel + XMLs + PDFs del mes y lo envía al contador")
+    public ResponseEntity<ApiResponse<String>> generarYEnviarReporteComprasZip(
+        @RequestParam Long empresaId,
+        @RequestParam Long sucursalId,
+        @RequestParam int anio,
+        @RequestParam int mes) {
+
+        log.info("POST /api/facturas-recepcion/reporte-compras-zip - empresa: {}, sucursal: {}, {}/{}",
+            empresaId, sucursalId, mes, anio);
+
+        // Validar mes
+        if (mes < 1 || mes > 12) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("El mes debe estar entre 1 y 12"));
+        }
+
+        // Validar que no sea futuro
+        LocalDate hoy = LocalDate.now();
+        if (anio > hoy.getYear() || (anio == hoy.getYear() && mes > hoy.getMonthValue())) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("No se puede generar reporte de un período futuro"));
+        }
+
+        try {
+            facturaRecepcionService.generarZipReporteYEnviar(empresaId, sucursalId, anio, mes);
+
+            String mensaje = String.format(
+                "✅ Reporte de compras %02d/%d enviado exitosamente al correo configurado",
+                mes, anio);
+
+            return ResponseEntity.ok(ApiResponse.success(mensaje, null));
+
+        } catch (Exception e) {
+            log.error("❌ Error generando reporte ZIP", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Error: " + e.getMessage()));
+        }
+    }
+
     @PostMapping(value = "/procesar-email", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<FacturaRecepcionResponse>> procesarDesdeEmail(
         @RequestParam Long empresaId,
@@ -230,15 +275,27 @@ public class FacturaRecepcionController {
         @RequestPart(value = "pdfFile", required = false) MultipartFile pdfFile) {
 
         try {
+            Sucursal sucursal = sucursalRepository.findById(sucursalId)
+                .orElseThrow(() -> new RuntimeException("Sucursal no encontrada"));
+
             SubirXmlRequest request = SubirXmlRequest.builder()
                 .empresaId(empresaId)
                 .sucursalId(sucursalId)
                 .xmlFile(xmlFile)
                 .pdfFile(pdfFile)
                 .crearProveedorSiNoExiste(true)
+                .aceptarAutomaticamente(sucursal.getAceptarAutomaticamente())
                 .build();
 
-            FacturaRecepcionResponse response = facturaRecepcionService.guardarDesdeEmail(request);
+            FacturaRecepcionResponse response;
+
+            if (Boolean.TRUE.equals(sucursal.getAceptarAutomaticamente())) {
+                log.info("✅ Sucursal {} tiene aceptación automática activa", sucursalId);
+                response = facturaRecepcionService.subirYProcesarCompleto(request);
+            } else {
+                log.info("📋 Sucursal {} sin aceptación automática, guardando como PENDIENTE", sucursalId);
+                response = facturaRecepcionService.guardarDesdeEmail(request);
+            }
 
             return ResponseEntity.ok(ApiResponse.success("OK", response));
 

@@ -709,7 +709,7 @@ public class EmailService {
   /**
    * Construir HTML básico para emails simples
    */
-  private String construirHtmlSimple(String mensaje) {
+  String construirHtmlSimple(String mensaje) {
     return """
         <!DOCTYPE html>
         <html>

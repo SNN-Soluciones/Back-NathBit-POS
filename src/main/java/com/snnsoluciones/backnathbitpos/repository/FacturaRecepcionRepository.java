@@ -24,6 +24,23 @@ public interface FacturaRecepcionRepository extends JpaRepository<FacturaRecepci
       LocalDateTime fechaHasta
   );
 
+  @Query("""
+    SELECT DISTINCT fr FROM FacturaRecepcion fr
+    LEFT JOIN FETCH fr.detalles
+    WHERE fr.empresa.id = :empresaId
+    AND fr.sucursal.id = :sucursalId
+    AND fr.estadoInterno = 'ACEPTADA'
+    AND YEAR(fr.fechaEmision) = :anio
+    AND MONTH(fr.fechaEmision) = :mes
+    ORDER BY fr.fechaEmision ASC
+    """)
+  List<FacturaRecepcion> findAceptadasParaZip(
+      @Param("empresaId") Long empresaId,
+      @Param("sucursalId") Long sucursalId,
+      @Param("anio") int anio,
+      @Param("mes") int mes
+  );
+
   Optional<FacturaRecepcion> findByClave(String clave);
 
   @Query(value = """

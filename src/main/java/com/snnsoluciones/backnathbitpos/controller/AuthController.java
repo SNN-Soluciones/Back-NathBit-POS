@@ -4,6 +4,7 @@ import com.snnsoluciones.backnathbitpos.dto.auth.*;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import com.snnsoluciones.backnathbitpos.service.auth.AuthService;
+import com.snnsoluciones.backnathbitpos.service.auth.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,6 +20,35 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
+
+    @Operation(summary = "Solicitar reset de contraseña")
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+        @Valid @RequestBody ForgotPasswordRequest request) {
+
+        passwordResetService.solicitarReset(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.ok("Código enviado al correo", null));
+    }
+
+    @Operation(summary = "Resetear contraseña con código")
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+        @Valid @RequestBody ResetPasswordRequest request) {
+
+        if (!request.getNuevaPassword().equals(request.getConfirmarPassword())) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Las contraseñas no coinciden"));
+        }
+
+        passwordResetService.resetPassword(
+            request.getEmail(),
+            request.getCodigo(),
+            request.getNuevaPassword(),
+            request.getConfirmarPassword()
+        );
+        return ResponseEntity.ok(ApiResponse.ok("Contraseña actualizada exitosamente", null));
+    }
     
     @Operation(summary = "Login de usuario")
     @PostMapping("/login")

@@ -83,6 +83,12 @@ public class Usuario {
     @Column(name = "requiere_cambio_password")
     private Boolean requiereCambioPassword = false;
 
+    @Column(name = "reset_token", length = 6)
+    private String resetToken;
+
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
+
     @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
     private Set<UsuarioEmpresa> usuarioEmpresas = new HashSet<>();
 

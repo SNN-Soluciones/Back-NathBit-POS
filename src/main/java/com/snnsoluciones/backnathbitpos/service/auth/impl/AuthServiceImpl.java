@@ -16,6 +16,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,7 @@ public class AuthServiceImpl implements AuthService {
     private final UsuarioService usuarioService;
     private final UsuarioEmpresaService usuarioEmpresaService;
     private final JwtTokenProvider tokenProvider;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public LoginResponse login(LoginRequest request) {
@@ -280,11 +282,32 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
+    @Override
+    public void cambiarPassword(CambiarPasswordRequest request) {
+        // Validar que las contraseñas nuevas coincidan
+        if (!request.getNuevaPassword().equals(request.getConfirmarPassword())) {
+            throw new IllegalArgumentException("Las contraseñas nuevas no coinciden");
+        }
+
+        // Obtener usuario actual
+        Long userId = getCurrentUserId();
+        Usuario usuario = usuarioService.buscarPorId(userId)
+            .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+
+        // Validar contraseña actual
+        if (!passwordEncoder.matches(request.getPasswordActual(), usuario.getPassword())) {
+            throw new IllegalArgumentException("La contraseña actual es incorrecta");
+        }
+
+        // Cambiar contraseña
+        usuarioService.cambiarPassword(userId, request.getNuevaPassword());
+    }
+
     private Long getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth != null && auth.getPrincipal() instanceof ContextoUsuario contexto) {
-          return contexto.getUserId();
+            return contexto.getUserId();
         }
 
         throw new RuntimeException("No se pudo obtener el usuario actual");

@@ -11,4 +11,6 @@ public interface AuthService {
     TokenResponse refresh(String refreshToken);
 
     TokenResponse cambiarPasswordTemporal(String email, String nuevaPassword);
+
+    void cambiarPassword(CambiarPasswordRequest request);
 }

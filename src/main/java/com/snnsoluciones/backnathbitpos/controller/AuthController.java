@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -16,11 +17,19 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Autenticación", description = "Endpoints de autenticación")
 public class AuthController {
     
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
+
+    @PutMapping("/cambiar-password")
+    public ResponseEntity<Void> cambiarPassword(
+        @Valid @RequestBody CambiarPasswordRequest request) {
+        authService.cambiarPassword(request);
+        return ResponseEntity.ok().build();
+    }
 
     @Operation(summary = "Solicitar reset de contraseña")
     @PostMapping("/forgot-password")

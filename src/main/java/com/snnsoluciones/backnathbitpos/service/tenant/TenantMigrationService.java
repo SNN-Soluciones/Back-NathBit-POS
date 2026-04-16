@@ -23,6 +23,45 @@ import java.util.regex.Pattern;
 @Slf4j
 public class TenantMigrationService {
 
+    /**
+     * ══════════════════════════════════════════════════════════════════════════
+     * PATCH: TABLAS_A_MIGRAR — Reemplazar la lista completa en TenantMigrationService
+     *
+     * AUDIT RESULT: Se encontraron ~15 tablas en entidades JPA que NO estaban
+     * en la lista original. Ejecutar la migración con la lista vieja dejaría
+     * datos huérfanos en: ordenes, inventario, facturas internas, recetas,
+     * promociones y tablas hijas de compuestos.
+     *
+     * INSTRUCCIÓN: Reemplazar el bloque `TABLAS_A_MIGRAR` completo en
+     * TenantMigrationService.java con la lista de abajo.
+     *
+     * CAMBIOS vs lista original:
+     * [+] empresa (copia el registro de la empresa al schema del tenant)
+     * [+] producto_compuesto          (antes solo estaba producto_compuesto_v2)
+     * [+] producto_compuesto_slot     (antes solo estaba slot_v2)
+     * [+] producto_compuesto_slot_opcion (antes solo estaba opcion_v2)
+     * [+] producto_compuesto_configuracion
+     * [+] producto_compuesto_slot_configuracion
+     * [+] producto_receta
+     * [+] receta_ingrediente
+     * [+] producto_inventario
+     * [+] producto_movimiento
+     * [+] promociones
+     * [+] promocion_items
+     * [+] factura_interna
+     * [+] factura_interna_detalles
+     * [+] facturas_recepcion_detalles
+     * [+] facturas_recepcion_referencias
+     * [+] facturas_recepcion_otros_cargos
+     * [+] facturas_recepcion_medios_pago
+     * [+] ordenes
+     * [+] orden_items
+     * [+] orden_item_opcion
+     * [+] orden_personas
+     * [+] orden_promocion_estado
+     * ══════════════════════════════════════════════════════════════════════════
+     */
+
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
     private final TenantRepository tenantRepository;
@@ -38,29 +77,40 @@ public class TenantMigrationService {
      */
     private static final List<TablaConfig> TABLAS_A_MIGRAR = List.of(
 
-        // ═══ NIVEL 0: Base directa de empresa ═══
-        new TablaConfig("sucursales", "empresa_id = ?", true),
-        new TablaConfig("categorias_producto", "empresa_id = ?", false),
-        new TablaConfig("familia_producto", "empresa_id = ?", false),
-        new TablaConfig("empresa_actividades", "empresa_id = ?", false),
-        new TablaConfig("empresa_cabys", "empresa_id = ?", false),
-        new TablaConfig("empresa_config_hacienda", "empresa_id = ?", false),
-        new TablaConfig("plataforma_digital_config", "empresa_id = ?", false),
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 0: La empresa misma (WHERE id = ?, no empresa_id = ?)
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("empresas", "id = ?", true),
 
-        // ═══ NIVEL 1: Dependen de sucursal ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 1: Dependen directamente de empresa
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("sucursales",               "empresa_id = ?", true),
+        new TablaConfig("categorias_producto",      "empresa_id = ?", false),
+        new TablaConfig("familia_producto",         "empresa_id = ?", false),
+        new TablaConfig("empresa_actividades",      "empresa_id = ?", false),
+        new TablaConfig("empresa_cabys",            "empresa_id = ?", false),
+        new TablaConfig("empresa_config_hacienda",  "empresa_id = ?", false),
+        new TablaConfig("plataforma_digital_config","empresa_id = ?", false),
+        new TablaConfig("tipos_cambio",             "empresa_id = ?", false),
+        new TablaConfig("usuarios_empresas",        "empresa_id = ?", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 2: Dependen de sucursal (via sucursal_id directo)
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("terminales",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", true),
         new TablaConfig("sucursal_receptor_smtp",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("impresoras_android",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-        new TablaConfig("consecutivos",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("codigos_verificacion",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("tokens_registro", "empresa_id = ?", false),
 
-        // ═══ NIVEL 2: Zona / Mesa / Barra ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 3: Zonas, mesas y barras
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("zona_mesa",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("zona_layout",
@@ -76,10 +126,12 @@ public class TenantMigrationService {
             "barra_id IN (SELECT b.id FROM public.barra b JOIN public.zona_mesa zm ON b.zona_id = zm.id " +
                 "JOIN public.sucursales s ON zm.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
 
-        // ═══ NIVEL 3: Clientes y Proveedores ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 4: Clientes y proveedores
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("clientes_ubicaciones",
             "id IN (SELECT ubicacion_id FROM public.clientes WHERE empresa_id = ? AND ubicacion_id IS NOT NULL)", false),
-        new TablaConfig("clientes", "empresa_id = ?", true),
+        new TablaConfig("clientes",    "empresa_id = ?", true),
         new TablaConfig("proveedores", "empresa_id = ?", false),
         new TablaConfig("cliente_emails",
             "cliente_id IN (SELECT id FROM public.clientes WHERE empresa_id = ?)", false),
@@ -91,22 +143,29 @@ public class TenantMigrationService {
             "exoneracion_id IN (SELECT ce.id FROM public.clientes_exoneraciones ce " +
                 "JOIN public.clientes c ON ce.cliente_id = c.id WHERE c.empresa_id = ?)", false),
 
-        // ═══ NIVEL 4: Productos ═══
-        new TablaConfig("productos", "empresa_id = ?", true),
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 5: Productos base
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("productos",        "empresa_id = ?", true),
         new TablaConfig("producto_categoria",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("producto_impuestos",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("producto_codigo_proveedor",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
-        new TablaConfig("productos_recetas", "empresa_id = ?", false),
-        new TablaConfig("receta_ingredientes",
-            "receta_id IN (SELECT id FROM public.productos_recetas WHERE empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 5.1: Combos
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("producto_combo",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("producto_combo_item",
             "combo_id IN (SELECT pc.id FROM public.producto_combo pc " +
                 "JOIN public.productos p ON pc.producto_id = p.id WHERE p.empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 5.2: Compuestos v1
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("producto_compuesto",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("producto_compuesto_slot",
@@ -123,6 +182,10 @@ public class TenantMigrationService {
             "configuracion_id IN (SELECT pcc.id FROM public.producto_compuesto_configuracion pcc " +
                 "JOIN public.producto_compuesto pc ON pcc.compuesto_id = pc.id " +
                 "JOIN public.productos p ON pc.producto_id = p.id WHERE p.empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 5.3: Compuestos v2
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("producto_compuesto_v2",
             "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
         new TablaConfig("slot_v2",
@@ -133,7 +196,22 @@ public class TenantMigrationService {
                 "JOIN public.producto_compuesto_v2 pc ON sv.compuesto_id = pc.id " +
                 "JOIN public.productos p ON pc.producto_id = p.id WHERE p.empresa_id = ?)", false),
 
-        // ═══ NIVEL 5: Usuarios del tenant ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 5.4: Recetas e inventario
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("productos_recetas",
+            "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
+        new TablaConfig("receta_ingredientes",
+            "receta_id IN (SELECT pr.id FROM public.productos_recetas pr " +
+                "JOIN public.productos p ON pr.producto_id = p.id WHERE p.empresa_id = ?)", false),
+        new TablaConfig("productos_inventarios",
+            "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
+        new TablaConfig("producto_movimientos",
+            "producto_id IN (SELECT id FROM public.productos WHERE empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 6: Usuarios del tenant
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("usuarios",
             "id IN (SELECT usuario_id FROM public.usuarios_sucursales WHERE " +
                 "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", true),
@@ -144,35 +222,86 @@ public class TenantMigrationService {
                 "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
         new TablaConfig("asistencias", "empresa_id = ?", false),
 
-        // ═══ NIVEL 6: Sesiones de caja ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 7: Sesiones de caja v1
+        // NOTA: sesiones_caja usa terminal_id, NO sucursal_id directo
+        //       La cadena es: sesiones_caja → terminal_id → terminales → sucursal_id
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("sesiones_caja",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+            "terminal_id IN (SELECT id FROM public.terminales WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+        new TablaConfig("sesion_caja_usuario",
+            "sesion_id IN (SELECT id FROM public.sesiones_caja WHERE " +
+                "terminal_id IN (SELECT id FROM public.terminales WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)))", false),
         new TablaConfig("sesion_caja_denominacion",
             "sesion_caja_id IN (SELECT id FROM public.sesiones_caja WHERE " +
-                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+                "terminal_id IN (SELECT id FROM public.terminales WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)))", false),
         new TablaConfig("cierre_datafono",
             "sesion_caja_id IN (SELECT id FROM public.sesiones_caja WHERE " +
-                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+                "terminal_id IN (SELECT id FROM public.terminales WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)))", false),
         new TablaConfig("movimientos_caja",
             "sesion_caja_id IN (SELECT id FROM public.sesiones_caja WHERE " +
+                "terminal_id IN (SELECT id FROM public.terminales WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)))", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 7.1: Sesiones de caja v2
+        // v2_sesion_caja tiene sucursal_id directo Y terminal_id
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("v2_sesion_caja",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("v2_turno_cajero",
+            "sesion_id IN (SELECT id FROM public.v2_sesion_caja WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+        new TablaConfig("v2_turno_denominacion",
+            "turno_id IN (SELECT id FROM public.v2_turno_cajero WHERE " +
+                "sesion_id IN (SELECT id FROM public.v2_sesion_caja WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)))", false),
+        new TablaConfig("v2_movimiento_caja",
+            "sesion_id IN (SELECT id FROM public.v2_sesion_caja WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+        new TablaConfig("v2_cierre_datafono",
+            "sesion_id IN (SELECT id FROM public.v2_sesion_caja WHERE " +
+                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
+        new TablaConfig("v2_sesion_plataforma",
+            "sesion_id IN (SELECT id FROM public.v2_sesion_caja WHERE " +
                 "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
 
-        // ═══ NIVEL 7: Facturas ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 8: Promociones
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("promociones",          "empresa_id = ?", false),
+        new TablaConfig("promocion_items",
+            "promocion_id IN (SELECT id FROM public.promociones WHERE empresa_id = ?)", false),
+        new TablaConfig("promocion_productos",
+            "promocion_id IN (SELECT id FROM public.promociones WHERE empresa_id = ?)", false),
+        new TablaConfig("promocion_categorias",
+            "promocion_id IN (SELECT id FROM public.promociones WHERE empresa_id = ?)", false),
+        new TablaConfig("promocion_familias",
+            "promocion_id IN (SELECT id FROM public.promociones WHERE empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 9: Facturas electrónicas Hacienda
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("facturas",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", true),
         new TablaConfig("factura_detalles",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("factura_detalle_impuesto",
+            "factura_detalle_id IN (SELECT fd.id FROM public.factura_detalles fd " +
+                "JOIN public.facturas f ON fd.factura_id = f.id " +
+                "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_descuentos",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("factura_detalle_impuesto",
+        new TablaConfig("factura_otros_cargos",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_medios_pago",
-            "factura_id IN (SELECT f.id FROM public.facturas f " +
-                "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("factura_otros_cargos",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_resumen_impuesto",
@@ -181,39 +310,76 @@ public class TenantMigrationService {
         new TablaConfig("factura_bitacora",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("factura_interna", "empresa_id = ?", false),
-        new TablaConfig("factura_interna_detalle",
-            "factura_interna_id IN (SELECT id FROM public.factura_interna WHERE empresa_id = ?)", false),
-        new TablaConfig("factura_interna_medios_pago",
-            "factura_interna_id IN (SELECT id FROM public.factura_interna WHERE empresa_id = ?)", false),
-        new TablaConfig("facturas_recepcion", "empresa_id = ?", false),
-        new TablaConfig("facturas_recepcion_detalles",
-            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
-        new TablaConfig("facturas_recepcion_descuentos",
-            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
-        new TablaConfig("facturas_recepcion_detalles_impuestos",
-            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
-        new TablaConfig("facturas_recepcion_medios_pago",
-            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
-        new TablaConfig("facturas_recepcion_otros_cargos",
-            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
-        new TablaConfig("facturas_recepcion_referencias",
-            "factura_recepcion_id IN (SELECT id FROM public.facturas_recepcion WHERE empresa_id = ?)", false),
         new TablaConfig("mensaje_receptor_bitacora",
+            "factura_id IN (SELECT f.id FROM public.facturas f " +
+                "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 9.1: Facturas internas
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("factura_interna",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("factura_interna_detalle",  // singular, verificado en producción
+            "factura_interna_id IN (SELECT fi.id FROM public.factura_interna fi " +
+                "JOIN public.sucursales s ON fi.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("factura_interna_medios_pago",
+            "factura_interna_id IN (SELECT fi.id FROM public.factura_interna fi " +
+                "JOIN public.sucursales s ON fi.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 9.2: Facturas de recepción (compras de proveedores)
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("facturas_recepcion",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
+        new TablaConfig("facturas_recepcion_detalles",
+            "factura_recepcion_id IN (SELECT fr.id FROM public.facturas_recepcion fr " +
+                "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("facturas_recepcion_detalles_impuestos",
+            "factura_recepcion_detalle_id IN (SELECT frd.id FROM public.facturas_recepcion_detalles frd " +
+                "JOIN public.facturas_recepcion fr ON frd.factura_recepcion_id = fr.id " +
+                "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("facturas_recepcion_descuentos",
+            "factura_recepcion_id IN (SELECT fr.id FROM public.facturas_recepcion fr " +
+                "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("facturas_recepcion_referencias",
+            "factura_recepcion_id IN (SELECT fr.id FROM public.facturas_recepcion fr " +
+                "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("facturas_recepcion_otros_cargos",
+            "factura_recepcion_id IN (SELECT fr.id FROM public.facturas_recepcion fr " +
+                "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("facturas_recepcion_medios_pago",
+            "factura_recepcion_id IN (SELECT fr.id FROM public.facturas_recepcion fr " +
+                "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 10: Compras
+        // ══════════════════════════════════════════════════════════════════
+        new TablaConfig("compras",        "empresa_id = ?", false),
+        new TablaConfig("compra_detalles",
             "compra_id IN (SELECT id FROM public.compras WHERE empresa_id = ?)", false),
 
-        // ═══ NIVEL 8: Órdenes ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 11: Órdenes de mesa
+        // orden_items → factura_id y factura_interna_id (FK opcionales)
+        // Va después de facturas para evitar FK violations
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("ordenes",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-        new TablaConfig("orden_personas",
-            "orden_id IN (SELECT o.id FROM public.ordenes o " +
-                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("orden_items",
             "orden_id IN (SELECT o.id FROM public.ordenes o " +
                 "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
-        new TablaConfig("orden_item_opciones",
-            "orden_item_id IN (SELECT oi.id FROM public.orden_items oi " +
+        new TablaConfig("orden_item_opciones",  // plural, verificado en producción
+            "orden_item_padre_id IN (SELECT oi.id FROM public.orden_items oi " +
                 "JOIN public.ordenes o ON oi.orden_id = o.id " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("orden_personas",
+            "orden_id IN (SELECT o.id FROM public.ordenes o " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("orden_promocion_estado",
+            "orden_id IN (SELECT o.id FROM public.ordenes o " +
+                "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+        new TablaConfig("orden_promocion_estados",  // tabla duplicada en prod, migrar también
+            "orden_id IN (SELECT o.id FROM public.ordenes o " +
                 "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("orden_facturas",
             "orden_id IN (SELECT o.id FROM public.ordenes o " +
@@ -222,39 +388,36 @@ public class TenantMigrationService {
             "orden_id IN (SELECT o.id FROM public.ordenes o " +
                 "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
 
-        // ═══ NIVEL 9: Inventario y movimientos ═══
-        new TablaConfig("productos_inventarios",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-        new TablaConfig("producto_movimientos",
-            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-
-        // ═══ NIVEL 10: Compras ═══
-        new TablaConfig("compras", "empresa_id = ?", false),
-        new TablaConfig("compra_detalles",
-            "compra_id IN (SELECT id FROM public.compras WHERE empresa_id = ?)", false),
-
-        // ═══ NIVEL 11: Cobros y pagos ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 12: Cobros y pagos
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("cuentas_por_cobrar", "empresa_id = ?", false),
         new TablaConfig("pagos",
             "cliente_id IN (SELECT id FROM public.clientes WHERE empresa_id = ?)", false),
-        new TablaConfig("historial_pagos", "empresa_id = ?", false),
-        new TablaConfig("planes_pago", "empresa_id = ?", false),
+        new TablaConfig("historial_pagos",    "empresa_id = ?", false),
+        new TablaConfig("planes_pago",        "empresa_id = ?", false),
 
-        // ═══ NIVEL 12: Mesa historial ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 13: Historial mesas
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("mesa_estado_hist",
             "mesa_id IN (SELECT m.id FROM public.mesa m " +
                 "JOIN public.zona_mesa zm ON m.zona_id = zm.id " +
                 "JOIN public.sucursales s ON zm.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
 
-        // ═══ NIVEL 13: Métricas ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 14: Métricas
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("metricas_ventas_diarias",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-        new TablaConfig("metricas_ventas_mensuales", "empresa_id = ?", false),
+        new TablaConfig("metricas_ventas_mensuales",     "empresa_id = ?", false),
         new TablaConfig("metricas_productos_vendidos",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
-        new TablaConfig("metricas_compras_mensuales", "empresa_id = ?", false),
+        new TablaConfig("metricas_compras_mensuales",    "empresa_id = ?", false),
 
-        // ═══ NIVEL 14: Cierre ═══
+        // ══════════════════════════════════════════════════════════════════
+        // NIVEL 15: Cierre y auditoría
+        // ══════════════════════════════════════════════════════════════════
         new TablaConfig("ventas_pausadas",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("email_audit_log",

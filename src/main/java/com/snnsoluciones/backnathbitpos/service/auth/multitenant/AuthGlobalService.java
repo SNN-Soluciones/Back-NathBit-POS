@@ -69,10 +69,20 @@ public class AuthGlobalService {
         List<TenantResumen> tenants = obtenerTenantsDeUsuario(usuario);
 
         // Generar token
-        String token = jwtTokenProvider.generateToken(
+        Long empresaLegacyId = null;
+        if (!tenants.isEmpty()) {
+            empresaLegacyId = tenantRepository
+                .findById(tenants.get(0).getId())
+                .map(Tenant::getEmpresaLegacyId)
+                .orElse(null);
+        }
+
+        String token = jwtTokenProvider.generateTokenWithContext(
             usuario.getId(),
             usuario.getEmail(),
-            usuario.getRol().name()
+            usuario.getRol().name(),
+            empresaLegacyId,
+            null
         );
 
         String refreshToken = jwtTokenProvider.generateRefreshToken(

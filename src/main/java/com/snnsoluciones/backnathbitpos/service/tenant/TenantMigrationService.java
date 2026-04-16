@@ -492,8 +492,11 @@ public class TenantMigrationService {
             log.info("✓ {} usuarios SUPER_ADMIN migrados a global", usuariosMigrados);
 
             // 9. Marcar empresa como migrada
-            empresa.setMigradoATenant(true);
-            empresa.setTenantId(tenant.getId());
+            jdbcTemplate.update(
+                "UPDATE public.empresas SET migrado_a_tenant = true, tenant_id = ? WHERE id = ?",
+                tenant.getId(), empresaId
+            );
+            log.info("✓ Empresa marcada como migrada (tenant_id={})", tenant.getId());
             empresaRepository.save(empresa);
 
             result.setSuccess(true);

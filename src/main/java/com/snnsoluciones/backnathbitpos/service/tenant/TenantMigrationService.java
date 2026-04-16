@@ -92,7 +92,6 @@ public class TenantMigrationService {
         new TablaConfig("empresa_cabys",            "empresa_id = ?", false),
         new TablaConfig("empresa_config_hacienda",  "empresa_id = ?", false),
         new TablaConfig("plataforma_digital_config","empresa_id = ?", false),
-        new TablaConfig("tipos_cambio",             "empresa_id = ?", false),
         new TablaConfig("usuarios_empresas",        "empresa_id = ?", false),
 
         // ══════════════════════════════════════════════════════════════════
@@ -231,7 +230,7 @@ public class TenantMigrationService {
             "terminal_id IN (SELECT id FROM public.terminales WHERE " +
                 "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
         new TablaConfig("sesion_caja_usuario",
-            "sesion_id IN (SELECT id FROM public.sesiones_caja WHERE " +
+            "sesion_caja_id IN (SELECT id FROM public.sesiones_caja WHERE " +
                 "terminal_id IN (SELECT id FROM public.terminales WHERE " +
                 "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)))", false),
         new TablaConfig("sesion_caja_denominacion",
@@ -292,11 +291,12 @@ public class TenantMigrationService {
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_detalle_impuesto",
-            "factura_detalle_id IN (SELECT fd.id FROM public.factura_detalles fd " +
+            "detalle_id IN (SELECT fd.id FROM public.factura_detalles fd " +
                 "JOIN public.facturas f ON fd.factura_id = f.id " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_descuentos",
-            "factura_id IN (SELECT f.id FROM public.facturas f " +
+            "factura_detalle_id IN (SELECT fd.id FROM public.factura_detalles fd " +
+                "JOIN public.facturas f ON fd.factura_id = f.id " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("factura_otros_cargos",
             "factura_id IN (SELECT f.id FROM public.facturas f " +
@@ -311,8 +311,7 @@ public class TenantMigrationService {
             "factura_id IN (SELECT f.id FROM public.facturas f " +
                 "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("mensaje_receptor_bitacora",
-            "factura_id IN (SELECT f.id FROM public.facturas f " +
-                "JOIN public.sucursales s ON f.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
+            "compra_id IN (SELECT id FROM public.compras WHERE empresa_id = ?)", false),
 
         // ══════════════════════════════════════════════════════════════════
         // NIVEL 9.1: Facturas internas
@@ -369,7 +368,7 @@ public class TenantMigrationService {
             "orden_id IN (SELECT o.id FROM public.ordenes o " +
                 "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("orden_item_opciones",  // plural, verificado en producción
-            "orden_item_padre_id IN (SELECT oi.id FROM public.orden_items oi " +
+            "orden_item_id IN (SELECT oi.id FROM public.orden_items oi " +
                 "JOIN public.ordenes o ON oi.orden_id = o.id " +
                 "JOIN public.sucursales s ON o.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("orden_personas",

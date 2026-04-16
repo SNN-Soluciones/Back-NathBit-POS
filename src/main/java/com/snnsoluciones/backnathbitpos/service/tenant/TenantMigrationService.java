@@ -338,7 +338,8 @@ public class TenantMigrationService {
                 "JOIN public.facturas_recepcion fr ON frd.factura_recepcion_id = fr.id " +
                 "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion_descuentos",
-            "factura_recepcion_id IN (SELECT fr.id FROM public.facturas_recepcion fr " +
+            "factura_recepcion_detalle_id IN (SELECT frd.id FROM public.facturas_recepcion_detalles frd " +
+                "JOIN public.facturas_recepcion fr ON frd.factura_recepcion_id = fr.id " +
                 "JOIN public.sucursales s ON fr.sucursal_id = s.id WHERE s.empresa_id = ?)", false),
         new TablaConfig("facturas_recepcion_referencias",
             "factura_recepcion_id IN (SELECT fr.id FROM public.facturas_recepcion fr " +
@@ -655,41 +656,88 @@ public class TenantMigrationService {
     /**
      * Migra usuarios SUPER_ADMIN a la tabla global
      */
+    /**
+     * Migra usuarios ROOT, SOPORTE y SUPER_ADMIN a public.usuarios_globales
+     */
     private int migrarUsuariosSuperAdmin(Empresa empresa, Tenant tenant) {
-        List<Usuario> superAdmins = usuarioRepository.findByEmpresaId(empresa.getId())
-            .stream()
-            .filter(u -> u.getRol() == RolNombre.SUPER_ADMIN)
-            .toList();
+        // Usar JDBC directo para evitar filtros de activo y problemas de join
+        String sql = """
+            SELECT DISTINCT u.id, u.nombre, u.apellidos, u.email, u.password,
+                           u.telefono, u.activo, u.rol
+            FROM public.usuarios u
+            JOIN public.usuarios_empresas ue ON ue.usuario_id = u.id
+            WHERE ue.empresa_id = ?
+              AND u.rol IN ('SUPER_ADMIN')
+            ORDER BY u.rol, u.nombre
+            """;
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, empresa.getId());
+        log.info("  Usuarios globales a migrar: {}", rows.size());
 
         int migrados = 0;
-        for (Usuario usuario : superAdmins) {
+        for (Map<String, Object> row : rows) {
             try {
-                if (usuarioGlobalRepository.findByEmailIgnoreCase(usuario.getEmail()).isEmpty()) {
-                    UsuarioGlobal usuarioGlobal = UsuarioGlobal.builder()
-                        .email(usuario.getEmail())
-                        .password(usuario.getPassword())
-                        .nombre(usuario.getNombre())
-                        .apellidos(usuario.getApellidos())
-                        .telefono(usuario.getTelefono())
-                        .rol(UsuarioGlobal.RolGlobal.SUPER_ADMIN)
-                        .activo(usuario.getActivo())
-                        .usuarioLegacyId(usuario.getId())
-                        .build();
-                    usuarioGlobal = usuarioGlobalRepository.save(usuarioGlobal);
+                String email    = (String) row.get("email");
+                String rolStr   = (String) row.get("rol");
+                Long   legacyId = ((Number) row.get("id")).longValue();
 
+                if (email == null || email.isBlank()) {
+                    log.warn("  ⊘ Usuario id={} sin email, omitido", legacyId);
+                    continue;
+                }
+
+                // Si ya existe en usuarios_globales, solo vinculamos si es SUPER_ADMIN
+                if (usuarioGlobalRepository.findByEmailIgnoreCase(email).isPresent()) {
+                    log.debug("  ⊘ {} ya existe en usuarios_globales", email);
+                    // Si es SUPER_ADMIN, asegurar que tenga relación con este tenant
+                    if ("SUPER_ADMIN".equals(rolStr)) {
+                        usuarioGlobalRepository.findByEmailIgnoreCase(email).ifPresent(ug -> {
+                            if (superAdminTenantRepository
+                                .findByUsuarioIdAndTenantId(ug.getId(), tenant.getId())
+                                .isEmpty()) {
+                                SuperAdminTenant relacion = SuperAdminTenant.crearPropietario(ug, tenant);
+                                superAdminTenantRepository.save(relacion);
+                                log.info("  ✓ Relación SuperAdminTenant creada para {}", email);
+                            }
+                        });
+                    }
+                    continue;
+                }
+
+                // Mapear rol legacy → RolGlobal
+                UsuarioGlobal.RolGlobal rolGlobal = UsuarioGlobal.RolGlobal.SUPER_ADMIN;
+
+                // Crear usuario global
+                UsuarioGlobal usuarioGlobal = UsuarioGlobal.builder()
+                    .email(email)
+                    .password((String) row.get("password"))
+                    .nombre((String) row.get("nombre"))
+                    .apellidos((String) row.get("apellidos"))
+                    .telefono((String) row.get("telefono"))
+                    .rol(rolGlobal)
+                    .activo(row.get("activo") != null ? (Boolean) row.get("activo") : true)
+                    .usuarioLegacyId(legacyId)
+                    .requiereCambioPassword(false)
+                    .build();
+
+                usuarioGlobal = usuarioGlobalRepository.save(usuarioGlobal);
+                log.info("  ✓ {} → usuarios_globales ({})", email, rolGlobal);
+
+                // Solo SUPER_ADMIN se vincula al tenant
+                // ROOT y SOPORTE tienen acceso cross-tenant por rol, no necesitan relación
+                if (rolGlobal == UsuarioGlobal.RolGlobal.SUPER_ADMIN) {
                     SuperAdminTenant relacion = SuperAdminTenant.crearPropietario(usuarioGlobal, tenant);
                     superAdminTenantRepository.save(relacion);
-
-                    usuario.setMigradoAGlobal(true);
-                    usuario.setUsuarioGlobalId(usuarioGlobal.getId());
-                    usuarioRepository.save(usuario);
-
-                    migrados++;
+                    log.info("  ✓ SuperAdminTenant creado para {}", email);
                 }
+
+                migrados++;
+
             } catch (Exception e) {
-                log.error("Error migrando usuario {}: {}", usuario.getEmail(), e.getMessage());
+                log.error("  ✗ Error migrando usuario {}: {}", row.get("email"), e.getMessage());
             }
         }
+
         return migrados;
     }
 

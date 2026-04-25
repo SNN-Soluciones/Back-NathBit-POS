@@ -12,6 +12,7 @@ import com.snnsoluciones.backnathbitpos.repository.global.UsuarioGlobalRepositor
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class AuthGlobalService {
     private final TenantRepository tenantRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * Realiza el login de un usuario global.
@@ -115,7 +117,8 @@ public class AuthGlobalService {
                     .id(t.getId())
                     .codigo(t.getCodigo())
                     .nombre(t.getNombre())
-                    .esPropietario(false) // No aplica para ROOT/SOPORTE
+                    .esPropietario(false)
+                    .sucursales(obtenerSucursalesDeSchema(t.getSchemaName()))
                     .build())
                 .collect(Collectors.toList());
         }
@@ -127,12 +130,16 @@ public class AuthGlobalService {
 
             return relaciones.stream()
                 .filter(r -> r.getTenant().estaActivo())
-                .map(r -> TenantResumen.builder()
-                    .id(r.getTenant().getId())
-                    .codigo(r.getTenant().getCodigo())
-                    .nombre(r.getTenant().getNombre())
-                    .esPropietario(r.esPropietario())
-                    .build())
+                .map(r -> {
+                    List<SucursalResumen> sucursales = obtenerSucursalesDeSchema(r.getTenant().getSchemaName());
+                    return TenantResumen.builder()
+                        .id(r.getTenant().getId())
+                        .codigo(r.getTenant().getCodigo())
+                        .nombre(r.getTenant().getNombre())
+                        .esPropietario(r.esPropietario())
+                        .sucursales(sucursales)
+                        .build();
+                })
                 .collect(Collectors.toList());
         }
 
@@ -220,5 +227,26 @@ public class AuthGlobalService {
             .rol(usuario.getRol().name())
             .requiereCambioPassword(Boolean.TRUE.equals(usuario.getRequiereCambioPassword()))
             .build();
+    }
+
+    private List<SucursalResumen> obtenerSucursalesDeSchema(String schemaName) {
+        String sql = String.format("""
+            SELECT id, nombre, numero_sucursal
+            FROM %s.sucursales
+            WHERE activa = true
+            ORDER BY nombre
+            """, schemaName);
+        try {
+            return jdbcTemplate.query(sql, (rs, rn) ->
+                SucursalResumen.builder()
+                    .id(rs.getLong("id"))
+                    .nombre(rs.getString("nombre"))
+                    .numeroSucursal(rs.getString("numero_sucursal"))
+                    .build()
+            );
+        } catch (Exception e) {
+            log.warn("Error obteniendo sucursales del schema {}: {}", schemaName, e.getMessage());
+            return List.of();
+        }
     }
 }

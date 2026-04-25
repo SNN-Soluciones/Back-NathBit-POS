@@ -19,6 +19,9 @@ import java.util.Optional;
 @Repository
 public interface DispositivoRepository extends JpaRepository<Dispositivo, Long> {
 
+    @Query("SELECT d FROM Dispositivo d JOIN FETCH d.tenant WHERE d.tipo = :tipo AND d.activo = true")
+    List<Dispositivo> findByTipoAndActivoTrue(@Param("tipo") String tipo);
+
     /**
      * Busca dispositivo por token único
      */

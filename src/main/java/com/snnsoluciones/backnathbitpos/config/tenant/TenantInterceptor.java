@@ -107,7 +107,7 @@ public class TenantInterceptor implements HandlerInterceptor {
      */
     private boolean trySetTenantFromDeviceToken(HttpServletRequest request) {
         String deviceToken = request.getHeader(HEADER_DEVICE_TOKEN);
-        
+
         if (!StringUtils.hasText(deviceToken)) {
             return false;
         }
@@ -115,7 +115,7 @@ public class TenantInterceptor implements HandlerInterceptor {
         log.debug("Device token encontrado: {}...", deviceToken.substring(0, Math.min(10, deviceToken.length())));
 
         Optional<Dispositivo> dispositivoOpt = dispositivoRepository.findByTokenWithTenant(deviceToken);
-        
+
         if (dispositivoOpt.isEmpty()) {
             log.warn("Device token no válido o dispositivo inactivo");
             return false;
@@ -129,13 +129,35 @@ public class TenantInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // Establecer contexto
+        // Establecer contexto de tenant
         TenantContext.setTenant(tenant.getId(), tenant.getSchemaName());
-        
-        // Actualizar último uso del dispositivo (async sería mejor)
-        dispositivo.registrarUso();
-        // No guardamos aquí para no afectar performance, 
-        // se puede hacer en un job async
+
+        // ── NUEVO: Setear autenticación en SecurityContext ─────────────────
+        // Solo si no hay autenticación previa (no pisar un JWT válido)
+        if (SecurityContextHolder.getContext().getAuthentication() == null
+            || !SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) {
+
+            String tipo = dispositivo.getTipo() != null ? dispositivo.getTipo() : "PDV";
+
+            ContextoUsuario contexto = new ContextoUsuario();
+            contexto.setUserId(dispositivo.getId());          // id del dispositivo como "userId"
+            contexto.setEmail("dispositivo_" + dispositivo.getId());
+            contexto.setRol(tipo);                            // "KIOSKO" | "PDV" | "COCINA"
+            contexto.setEmpresaId(tenant.getEmpresaLegacyId());
+            contexto.setSucursalId(dispositivo.getSucursalId());
+
+            var authentication = new org.springframework.security.authentication
+                .UsernamePasswordAuthenticationToken(
+                contexto,
+                null,
+                java.util.List.of(new org.springframework.security.core.authority
+                    .SimpleGrantedAuthority("ROLE_" + tipo))
+            );
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            log.debug("Autenticación seteada para dispositivo tipo={} id={}", tipo, dispositivo.getId());
+        }
+        // ──────────────────────────────────────────────────────────────────
 
         log.debug("Tenant establecido desde device token: {} ({})", tenant.getCodigo(), tenant.getSchemaName());
         return true;

@@ -11,6 +11,12 @@ import org.springframework.data.domain.Page;
 
 public interface V2SesionCajaService {
 
+    /**
+     * Abre sesión de caja para un kiosko — sin usuario, de forma autónoma.
+     * Si ya hay sesión abierta para la terminal, la retorna.
+     */
+    V2AbrirSesionResponse abrirSesionKiosko(Long terminalId);
+
     // ── Sesión ────────────────────────────────────────────────
     V2AbrirSesionResponse  abrirSesion(V2AbrirSesionRequest request, Long usuarioId);
     V2EstadoSesionResponse obtenerEstado(Long sesionId, Long usuarioId);

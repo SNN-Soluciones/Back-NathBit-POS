@@ -71,6 +71,7 @@ public class DispositivoUsuariosResponse {
         private String nombreCompleto;
         private String rol;
         private Boolean requiereCambioPin;
+        private String  fuente;
 
         /**
          * Indica si el usuario tiene PIN configurado

@@ -2,11 +2,13 @@ package com.snnsoluciones.backnathbitpos.entity.global;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.proxy.HibernateProxy;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Entidad Dispositivo - Dispositivos registrados para acceso al POS.
@@ -77,6 +79,30 @@ public class Dispositivo {
 
     @Column(name = "sucursal_nombre", length = 100)
     private String sucursalNombre;
+
+    // ==================== Kiosko / Tipo ====================
+
+    /**
+     * Tipo de dispositivo: PDV, KIOSKO, COCINA
+     */
+    @Builder.Default
+    @Column(length = 20)
+    private String tipo = "PDV";
+
+    /**
+     * Terminal asignada (referencia lógica al schema del tenant)
+     * Requerida para KIOSKO y PDV que generen documentos fiscales
+     */
+    @Column(name = "terminal_id")
+    private Long terminalId;
+
+    /**
+     * Configuración del dispositivo en formato JSON
+     * Para KIOSKO: { "permitePagoDirecto": true, "metodosPago": [...], "pausado": false }
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private String config;
 
     // ==================== Estado ====================
 
@@ -172,6 +198,7 @@ public class Dispositivo {
             .userAgent(userAgent)
             .ipRegistro(ipRegistro)
             .activo(true)
+            .tipo("PDV")
             .build();
     }
 

@@ -55,7 +55,7 @@ public class ProductoCompuestoController {
   }
 
   @GetMapping
-  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO')")
+  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO', 'SOPORTE', 'KIOSKO')")
   @Operation(summary = "Obtener configuración",
       description = "Obtiene la configuración completa del producto compuesto")
   public ResponseEntity<ApiResponse<ProductoCompuestoDto>> obtener(
@@ -128,7 +128,7 @@ public class ProductoCompuestoController {
   }
 
   @GetMapping("/slots/{slotId}/opciones")
-  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO', 'MESERO')")
+  @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN', 'CAJERO', 'MESERO', 'SOPORTE', 'KIOSKO')")
   @Operation(summary = "Obtener opciones de un slot",
       description = "Obtiene opciones dinámicas (familia) o manuales según configuración del slot")
   public ResponseEntity<ApiResponse<List<OpcionSlotDTO>>> obtenerOpcionesSlot(
@@ -160,7 +160,7 @@ public class ProductoCompuestoController {
    * @return Flujo de configuración
    */
   @GetMapping("/flujo-configuracion")
-  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE', 'KIOSKO')")
   public ResponseEntity<ConfiguracionFlujoDTO> obtenerFlujoConfiguracion(
       @PathVariable Long productoId,
       @RequestParam Long sucursalId
@@ -189,7 +189,7 @@ public class ProductoCompuestoController {
    * @return Configuración completa con slots y opciones
    */
   @GetMapping("/configuraciones/por-opcion/{opcionId}")
-  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE', 'KIOSKO')")
   public ResponseEntity<ProductoCompuestoConfiguracionDTO> obtenerConfiguracionPorOpcion(
       @PathVariable Long productoId,
       @PathVariable Long opcionId,
@@ -208,7 +208,7 @@ public class ProductoCompuestoController {
    * ⭐ AGREGADO @PathVariable Long productoId
    */
   @GetMapping("/slots/{slotId}/opciones-con-subconfig")
-  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE', 'KIOSKO')")
   public ResponseEntity<List<OpcionSlotConSubConfigDTO>> obtenerOpcionesConSubConfig(
       @PathVariable Long productoId,  // ⭐ AGREGADO
       @PathVariable Long slotId,
@@ -227,7 +227,7 @@ public class ProductoCompuestoController {
    * ⭐ AGREGADO @PathVariable Long productoId
    */
   @GetMapping("/opciones/{opcionId}/sub-configuracion")
-  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT')")
+  @PreAuthorize("hasAnyRole('CAJERO', 'ADMIN', 'SUPER_ADMIN', 'ROOT', 'SOPORTE', 'KIOSKO')")
   public ResponseEntity<ProductoCompuestoConfiguracionDTO> cargarSubConfiguracion(
       @PathVariable Long productoId,  // ⭐ AGREGADO
       @PathVariable Long opcionId,

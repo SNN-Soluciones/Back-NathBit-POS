@@ -1,18 +1,22 @@
 package com.snnsoluciones.backnathbitpos.service.auth.multitenant;
 
 import com.snnsoluciones.backnathbitpos.config.tenant.TenantContext;
+import com.snnsoluciones.backnathbitpos.dto.auth.CambiarPinRequest;
 import com.snnsoluciones.backnathbitpos.dto.auth.multitenant.AuthMultitenantDTOs.*;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.entity.UsuarioSucursal;
 import com.snnsoluciones.backnathbitpos.entity.global.Dispositivo;
 import com.snnsoluciones.backnathbitpos.entity.global.Tenant;
+import com.snnsoluciones.backnathbitpos.entity.global.UsuarioGlobal;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.NotFoundException;
 import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioRepository;
 import com.snnsoluciones.backnathbitpos.repository.UsuarioSucursalRepository;
 import com.snnsoluciones.backnathbitpos.repository.global.DispositivoRepository;
+import com.snnsoluciones.backnathbitpos.repository.global.UsuarioGlobalRepository;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
+import java.util.ArrayList;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +46,7 @@ public class AuthPinService {
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
+    private final UsuarioGlobalRepository usuarioGlobalRepository;
 
     /**
      * PIN por defecto para usuarios migrados o nuevos
@@ -78,13 +83,54 @@ public class AuthPinService {
         TenantContext.setTenant(tenant.getId(), tenant.getSchemaName());
 
         try {
-            // Obtener usuarios activos del tenant
-            // NOTA: Esto asume que el schema ya está configurado por el TenantConnectionProvider
-            List<Usuario> usuarios = obtenerUsuariosDelTenant(tenant.getEmpresaLegacyId());
+            // Usuarios del schema (CAJERO, MESERO, ADMIN, etc.) → fuente SCHEMA
+            List<UsuarioLocalInfo> usuariosInfo = new ArrayList<>(
+                obtenerUsuariosDelTenantViaJdbc(tenant.getSchemaName())
+            );
 
-            List<UsuarioLocalInfo> usuariosInfo = usuarios.stream()
-                .map(this::mapToUsuarioLocalInfo)
-                .collect(Collectors.toList());
+            // Usuarios globales del tenant (SUPER_ADMIN) → fuente GLOBAL
+            List<UsuarioGlobal> globales = new ArrayList<>(
+                usuarioGlobalRepository.findByTenantId(tenant.getId())
+            );
+            // ROOT y SOPORTE también aparecen en todos los dispositivos
+            globales.addAll(usuarioGlobalRepository.findUsuariosSistemaActivos());
+
+            for (UsuarioGlobal ug : globales) {
+                if (ug.getPin() == null || ug.getPin().isBlank()) continue;
+
+                String nombreCompleto = ug.getNombre() +
+                    (ug.getApellidos() != null ? " " + ug.getApellidos() : "");
+                String avatar = ug.getNombre().substring(0, 1).toUpperCase() +
+                    (ug.getApellidos() != null ? ug.getApellidos().substring(0, 1).toUpperCase() : "");
+
+                usuariosInfo.add(UsuarioLocalInfo.builder()
+                    .id(ug.getId())
+                    .nombre(ug.getNombre())
+                    .apellidos(ug.getApellidos())
+                    .nombreCompleto(nombreCompleto)
+                    .rol(ug.getRol().name())
+                    .avatar(avatar)
+                    .fuente("GLOBAL")
+                    .build());
+            }
+
+            SucursalResumen sucursalResumen = null;
+            if (dispositivo.getSucursalId() != null) {
+                String sql = String.format(
+                    "SELECT id, nombre, numero_sucursal FROM %s.sucursales WHERE id = ?",
+                    tenant.getSchemaName()
+                );
+                try {
+                    Map<String, Object> row = jdbcTemplate.queryForMap(sql, dispositivo.getSucursalId());
+                    sucursalResumen = SucursalResumen.builder()
+                        .id(((Number) row.get("id")).longValue())
+                        .nombre((String) row.get("nombre"))
+                        .numeroSucursal(row.get("numero_sucursal") != null ? row.get("numero_sucursal").toString() : "001")
+                        .build();
+                } catch (Exception e) {
+                    log.warn("No se pudo obtener sucursal del dispositivo: {}", e.getMessage());
+                }
+            }
 
             return ObtenerUsuariosResponse.builder()
                 .tenant(TenantResumen.builder()
@@ -92,6 +138,7 @@ public class AuthPinService {
                     .codigo(tenant.getCodigo())
                     .nombre(tenant.getNombre())
                     .build())
+                .sucursal(sucursalResumen)
                 .dispositivo(DispositivoInfo.builder()
                     .id(dispositivo.getId())
                     .nombre(dispositivo.getNombre())
@@ -124,44 +171,90 @@ public class AuthPinService {
      * Realiza el login con PIN.
      */
     public LoginPinResponse loginConPin(String deviceToken, LoginPinRequest request) {
-        log.info("Intento de login con PIN para usuario ID: {}", request.getUsuarioId());
+        log.info("Login PIN usuario={} fuente={}", request.getUsuarioId(), request.getFuente());
 
-        // Validar dispositivo
         Dispositivo dispositivo = dispositivoRepository.findByTokenWithTenant(deviceToken)
             .orElseThrow(() -> new UnauthorizedException("Dispositivo no autorizado"));
 
         Tenant tenant = dispositivo.getTenant();
-        if (!tenant.estaActivo()) {
-            throw new BadRequestException("La empresa no está activa");
-        }
+        if (!tenant.estaActivo()) throw new BadRequestException("La empresa no está activa");
 
-        // Buscar usuario directamente en el schema del tenant
         String schemaName = tenant.getSchemaName();
+
+        // ── Flujo GLOBAL (ROOT, SOPORTE, SUPER_ADMIN) ──────────────────────
+        if ("GLOBAL".equals(request.getFuente())) {
+            // ← Reemplazar usuarioGlobalRepository.findById() con JDBC directo
+            Map<String, Object> ugData;
+            try {
+                ugData = jdbcTemplate.queryForMap(
+                    "SELECT id, nombre, apellidos, email, pin, pin_longitud, requiere_cambio_pin, rol, activo " +
+                        "FROM public.usuarios_globales WHERE id = ?",
+                    request.getUsuarioId()
+                );
+            } catch (Exception e) {
+                throw new NotFoundException("Usuario no encontrado");
+            }
+
+            log.info("DEBUG ugData id={} pin={}", ugData.get("id"), ugData.get("pin"));
+            log.info("DEBUG pin ingresado={}", request.getPin());
+            log.info("DEBUG matches={}", passwordEncoder.matches(request.getPin(), (String) ugData.get("pin")));
+
+            if (!Boolean.TRUE.equals(ugData.get("activo")))
+                throw new UnauthorizedException("Usuario desactivado");
+
+            String pin = (String) ugData.get("pin");
+            if (pin == null || pin.isBlank())
+                throw new BadRequestException("Usuario requiere configuración de PIN");
+
+            if (!passwordEncoder.matches(request.getPin(), pin))
+                throw new UnauthorizedException("PIN incorrecto");
+
+            Long ugId = ((Number) ugData.get("id")).longValue();
+            String nombre = (String) ugData.get("nombre");
+            String apellidos = (String) ugData.get("apellidos");
+            String email = (String) ugData.get("email");
+            String rol = (String) ugData.get("rol");
+            Boolean requiereCambioPin = (Boolean) ugData.get("requiere_cambio_pin");
+
+            Long empresaId = tenant.getEmpresaLegacyId() != null
+                ? tenant.getEmpresaLegacyId() : -tenant.getId();
+
+            String sessionToken = jwtTokenProvider.generateTokenWithContext(
+                ugId, email, rol, empresaId, dispositivo.getSucursalId()
+            );
+
+            String nombreCompleto = nombre + (apellidos != null ? " " + apellidos : "");
+            String avatar = nombre.substring(0, 1).toUpperCase() +
+                (apellidos != null ? apellidos.substring(0, 1).toUpperCase() : "");
+
+            log.info("Login GLOBAL exitoso: {} en tenant {}", email, tenant.getCodigo());
+
+            return LoginPinResponse.builder()
+                .sessionToken(sessionToken)
+                .usuario(UsuarioLocalInfo.builder()
+                    .id(ugId).nombre(nombre).apellidos(apellidos)
+                    .nombreCompleto(nombreCompleto).rol(rol).avatar(avatar)
+                    .build())
+                .tenant(TenantResumen.builder()
+                    .id(tenant.getId()).codigo(tenant.getCodigo()).nombre(tenant.getNombre()).build())
+                .sucursales(List.of())
+                .requiereCambioPin(Boolean.TRUE.equals(requiereCambioPin))
+                .build();
+        }
+
+        // ── Flujo SCHEMA (ADMIN, CAJERO, MESERO, etc.) ──────────────────────
         Map<String, Object> usuarioData = buscarUsuarioEnTenant(schemaName, request.getUsuarioId());
+        if (usuarioData == null) throw new NotFoundException("Usuario no encontrado");
 
-        if (usuarioData == null) {
-            throw new NotFoundException("Usuario no encontrado");
-        }
-
-        // Verificar que esté activo
         Boolean activo = (Boolean) usuarioData.get("activo");
-        if (!Boolean.TRUE.equals(activo)) {
-            throw new UnauthorizedException("Usuario desactivado");
-        }
+        if (!Boolean.TRUE.equals(activo)) throw new UnauthorizedException("Usuario desactivado");
 
-        // Verificar PIN
         String pinAlmacenado = (String) usuarioData.get("pin");
-        if (pinAlmacenado == null || pinAlmacenado.isBlank()) {
-            log.warn("Usuario {} sin PIN configurado", request.getUsuarioId());
+        if (pinAlmacenado == null || pinAlmacenado.isBlank())
             throw new BadRequestException("Usuario requiere configuración de PIN");
-        }
-
-        if (!passwordEncoder.matches(request.getPin(), pinAlmacenado)) {
-            log.warn("PIN incorrecto para usuario {}", request.getUsuarioId());
+        if (!passwordEncoder.matches(request.getPin(), pinAlmacenado))
             throw new UnauthorizedException("PIN incorrecto");
-        }
 
-        // Extraer datos del usuario
         Long usuarioId = ((Number) usuarioData.get("id")).longValue();
         String nombre = (String) usuarioData.get("nombre");
         String apellidos = (String) usuarioData.get("apellidos");
@@ -169,53 +262,32 @@ public class AuthPinService {
         String rol = (String) usuarioData.get("rol");
         Boolean requiereCambioPin = (Boolean) usuarioData.get("requiere_cambio_pin");
 
-        // Obtener sucursales del usuario
         List<SucursalResumen> sucursales = obtenerSucursalesDelTenant(schemaName, usuarioId);
 
-        // Generar token de sesión
         Long empresaId = tenant.getEmpresaLegacyId() != null
-            ? tenant.getEmpresaLegacyId()
-            : -tenant.getId();
+            ? tenant.getEmpresaLegacyId() : -tenant.getId();
 
         String sessionToken = jwtTokenProvider.generateTokenWithContext(
             usuarioId,
             email != null ? email : "user_" + usuarioId,
-            rol,
-            empresaId,
+            rol, empresaId,
             sucursales.isEmpty() ? null : sucursales.get(0).getId()
         );
 
-        log.info("Login exitoso con PIN para usuario {} en tenant {}", usuarioId, tenant.getCodigo());
+        log.info("Login SCHEMA exitoso: usuario={} en tenant {}", usuarioId, tenant.getCodigo());
 
-        // Construir respuesta
-        String nombreCompleto = nombre;
-        if (apellidos != null && !apellidos.isBlank()) {
-            nombreCompleto += " " + apellidos;
-        }
-
-        String avatar = "";
-        if (nombre != null && !nombre.isBlank()) {
-            avatar = nombre.substring(0, 1).toUpperCase();
-            if (apellidos != null && !apellidos.isBlank()) {
-                avatar += apellidos.substring(0, 1).toUpperCase();
-            }
-        }
+        String nombreCompleto = nombre + (apellidos != null && !apellidos.isBlank() ? " " + apellidos : "");
+        String avatar = nombre != null && !nombre.isBlank() ? nombre.substring(0, 1).toUpperCase() +
+                                                              (apellidos != null && !apellidos.isBlank() ? apellidos.substring(0, 1).toUpperCase() : "") : "";
 
         return LoginPinResponse.builder()
             .sessionToken(sessionToken)
             .usuario(UsuarioLocalInfo.builder()
-                .id(usuarioId)
-                .nombre(nombre)
-                .apellidos(apellidos)
-                .nombreCompleto(nombreCompleto)
-                .rol(rol)
-                .avatar(avatar)
+                .id(usuarioId).nombre(nombre).apellidos(apellidos)
+                .nombreCompleto(nombreCompleto).rol(rol).avatar(avatar)
                 .build())
             .tenant(TenantResumen.builder()
-                .id(tenant.getId())
-                .codigo(tenant.getCodigo())
-                .nombre(tenant.getNombre())
-                .build())
+                .id(tenant.getId()).codigo(tenant.getCodigo()).nombre(tenant.getNombre()).build())
             .sucursales(sucursales)
             .requiereCambioPin(Boolean.TRUE.equals(requiereCambioPin))
             .build();
@@ -252,32 +324,34 @@ public class AuthPinService {
      * Cambia el PIN del usuario.
      */
     public void cambiarPin(Long usuarioId, CambiarPinRequest request) {
-        log.info("Cambiando PIN para usuario {}", usuarioId);
+        log.info("Cambiando PIN para usuario {} fuente={}", usuarioId, request.getFuente());
 
-        // Validar longitud
-        if (request.getLongitud() != 4 && request.getLongitud() != 6) {
+        if (request.getLongitud() != 4 && request.getLongitud() != 6)
             throw new BadRequestException("La longitud del PIN debe ser 4 o 6 dígitos");
-        }
-
-        // Validar que el PIN tenga la longitud correcta
-        if (request.getNuevoPin().length() != request.getLongitud()) {
+        if (request.getNuevoPin().length() != request.getLongitud())
             throw new BadRequestException("El PIN debe tener exactamente " + request.getLongitud() + " dígitos");
-        }
-
-        // Validar que sean solo dígitos
-        if (!request.getNuevoPin().matches("\\d+")) {
+        if (!request.getNuevoPin().matches("\\d+"))
             throw new BadRequestException("El PIN solo debe contener dígitos");
+
+        String pinEncriptado = passwordEncoder.encode(request.getNuevoPin());
+
+        if ("GLOBAL".equals(request.getFuente())) {
+            // Actualizar en public.usuarios_globales
+            int updated = jdbcTemplate.update(
+                "UPDATE public.usuarios_globales SET pin = ?, pin_longitud = ?, requiere_cambio_pin = false WHERE id = ?",
+                pinEncriptado, request.getLongitud(), usuarioId
+            );
+            if (updated == 0) throw new NotFoundException("Usuario global no encontrado");
+        } else {
+            // Actualizar en schema del tenant via JPA
+            Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+            usuario.setPin(pinEncriptado);
+            usuario.setPinLongitud(request.getLongitud());
+            usuario.setRequiereCambioPin(false);
+            usuario.setUpdatedAt(LocalDateTime.now());
+            usuarioRepository.save(usuario);
         }
-
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-            .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
-
-        // Encriptar y guardar
-        usuario.setPin(passwordEncoder.encode(request.getNuevoPin()));
-        usuario.setPinLongitud(request.getLongitud());
-        usuario.setRequiereCambioPin(false);
-        usuario.setUpdatedAt(LocalDateTime.now());
-        usuarioRepository.save(usuario);
 
         log.info("PIN cambiado exitosamente para usuario {}", usuarioId);
     }
@@ -305,11 +379,8 @@ public class AuthPinService {
      */
     private List<Usuario> obtenerUsuariosDelTenant(Long empresaLegacyId) {
         if (empresaLegacyId != null) {
-            // Sistema legacy: usuarios por empresa_id
-            return usuarioRepository.findByEmpresaId(empresaLegacyId);
+            return usuarioRepository.findByEmpresaId(empresaLegacyId); // ← lee public.usuarios
         }
-        // TODO: Sistema nuevo: usuarios directamente del schema del tenant
-        // Por ahora retornar lista vacía
         return List.of();
     }
 
@@ -339,17 +410,14 @@ public class AuthPinService {
      */
     private UsuarioLocalInfo mapToUsuarioLocalInfo(Usuario usuario) {
         String nombreCompleto = usuario.getNombre();
-        if (usuario.getApellidos() != null && !usuario.getApellidos().isBlank()) {
+        if (usuario.getApellidos() != null && !usuario.getApellidos().isBlank())
             nombreCompleto += " " + usuario.getApellidos();
-        }
 
-        // Generar avatar (iniciales)
         String avatar = "";
         if (usuario.getNombre() != null && !usuario.getNombre().isBlank()) {
             avatar = usuario.getNombre().substring(0, 1).toUpperCase();
-            if (usuario.getApellidos() != null && !usuario.getApellidos().isBlank()) {
+            if (usuario.getApellidos() != null && !usuario.getApellidos().isBlank())
                 avatar += usuario.getApellidos().substring(0, 1).toUpperCase();
-            }
         }
 
         return UsuarioLocalInfo.builder()
@@ -359,6 +427,40 @@ public class AuthPinService {
             .nombreCompleto(nombreCompleto)
             .rol(usuario.getRol().name())
             .avatar(avatar)
+            .fuente("SCHEMA")  // ← siempre SCHEMA para usuarios del tenant
             .build();
+    }
+
+    private List<UsuarioLocalInfo> obtenerUsuariosDelTenantViaJdbc(String schemaName) {
+        String sql = String.format("""
+        SELECT id, nombre, apellidos, rol, pin_longitud, requiere_cambio_pin
+        FROM %s.usuarios
+        WHERE activo = true
+          AND pin IS NOT NULL
+          AND rol NOT IN ('ROOT', 'SOPORTE')
+        ORDER BY nombre
+        """, schemaName);
+        try {
+            return jdbcTemplate.query(sql, (rs, rn) -> {
+                String nombre = rs.getString("nombre");
+                String apellidos = rs.getString("apellidos");
+                String nombreCompleto = nombre + (apellidos != null ? " " + apellidos : "");
+                String avatar = nombre.substring(0, 1).toUpperCase() +
+                    (apellidos != null && !apellidos.isBlank()
+                        ? apellidos.substring(0, 1).toUpperCase() : "");
+                return UsuarioLocalInfo.builder()
+                    .id(rs.getLong("id"))
+                    .nombre(nombre)
+                    .apellidos(apellidos)
+                    .nombreCompleto(nombreCompleto)
+                    .rol(rs.getString("rol"))
+                    .avatar(avatar)
+                    .fuente("SCHEMA")
+                    .build();
+            });
+        } catch (Exception e) {
+            log.warn("Error obteniendo usuarios del schema {}: {}", schemaName, e.getMessage());
+            return List.of();
+        }
     }
 }

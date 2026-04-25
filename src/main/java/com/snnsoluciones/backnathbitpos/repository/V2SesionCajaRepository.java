@@ -19,6 +19,10 @@ public interface V2SesionCajaRepository
     extends JpaRepository<V2SesionCaja, Long>,
     JpaSpecificationExecutor<V2SesionCaja> {
 
+    // Sesiones abiertas de una sucursal SOLO tipo PDV (para el cajero)
+    @Query("SELECT s FROM V2SesionCaja s WHERE s.sucursal.id = :sucursalId AND s.estado = 'ABIERTA' AND s.terminal.tipo = 'PDV'")
+    List<V2SesionCaja> findAbiertasPDVBySucursalId(@Param("sucursalId") Long sucursalId);
+
     // Sesión activa de una terminal
     @Query("SELECT s FROM V2SesionCaja s WHERE s.terminal.id = :terminalId AND s.estado = 'ABIERTA'")
     Optional<V2SesionCaja> findAbiertaByTerminalId(@Param("terminalId") Long terminalId);

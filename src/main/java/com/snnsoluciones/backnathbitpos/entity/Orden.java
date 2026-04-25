@@ -40,9 +40,9 @@ public class Orden {
     @JoinColumn(name = "sucursal_id", nullable = false)
     private Sucursal sucursal;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "mesero_id", nullable = false)
-    private Usuario mesero; // Usuario que atiende
+    @ManyToOne(optional = true)
+    @JoinColumn(name = "mesero_id", nullable = true)
+    private Usuario mesero; // null para órdenes de kiosko
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)

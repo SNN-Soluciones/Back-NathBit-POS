@@ -21,6 +21,24 @@ public class AuthMultitenantDTOs {
 
     // ==================== LOGIN GLOBAL ====================
 
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class RegistrarDispositivoConCredencialesRequest {
+        @NotNull(message = "El tenantId es requerido")
+        private Long tenantId;
+
+        @NotNull(message = "La sucursal es requerida")
+        private Long sucursalId;
+
+        @NotBlank(message = "El nombre del dispositivo es requerido")
+        @Size(max = 100)
+        private String nombreDispositivo;
+
+        private String plataforma; // WEB, ANDROID, IOS
+
+        private String tipo;       // "PDV" | "KIOSKO" | "COCINA"
+        private Long terminalId;
+    }
+
     /**
      * Request para login de usuario global (ROOT, SOPORTE, SUPER_ADMIN)
      */
@@ -81,6 +99,7 @@ public class AuthMultitenantDTOs {
         private String codigo;
         private String nombre;
         private boolean esPropietario;
+        private List<SucursalResumen> sucursales;
     }
 
     // ==================== LOGIN POR EMPRESA ====================
@@ -109,6 +128,7 @@ public class AuthMultitenantDTOs {
         private DispositivoInfo dispositivo;
         private List<UsuarioLocalInfo> usuarios;
         private boolean requiereRegistro;
+        private List<SucursalResumen> sucursales; // ← NUEVO (para Flujo A)
     }
 
     /**
@@ -140,6 +160,7 @@ public class AuthMultitenantDTOs {
         private String nombreCompleto;
         private String rol;
         private String avatar; // URL o iniciales
+        private String fuente; // "GLOBAL" | "SCHEMA"
     }
 
     // ==================== REGISTRO DE DISPOSITIVO ====================
@@ -199,7 +220,11 @@ public class AuthMultitenantDTOs {
         @NotNull(message = "La sucursal es requerida")
         private Long sucursalId;
 
+
+        private String tipo;       // "PDV" | "KIOSKO" | "COCINA"
+        private Long terminalId;
         private String plataforma;
+
     }
 
     /**
@@ -232,6 +257,9 @@ public class AuthMultitenantDTOs {
         @NotBlank(message = "El PIN es requerido")
         @Size(min = 4, max = 6, message = "El PIN debe tener entre 4 y 6 dígitos")
         private String pin;
+
+        private String fuente; // "GLOBAL" | "SCHEMA"
+
     }
 
     /**
@@ -260,21 +288,6 @@ public class AuthMultitenantDTOs {
         private Long id;
         private String nombre;
         private String numeroSucursal;
-    }
-
-    /**
-     * Request para cambiar PIN
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CambiarPinRequest {
-        @NotBlank(message = "El nuevo PIN es requerido")
-        private String nuevoPin;
-
-        @NotNull(message = "La longitud del PIN es requerida")
-        private Integer longitud; // 4 o 6
     }
 
     /**

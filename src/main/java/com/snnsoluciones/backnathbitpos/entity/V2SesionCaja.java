@@ -29,7 +29,7 @@ public class V2SesionCaja {
     private Sucursal sucursal;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "usuario_apertura_id", nullable = false)
+    @JoinColumn(name = "usuario_apertura_id", nullable = true)
     private Usuario usuarioApertura;
 
     @Column(name = "modo_gaveta", nullable = false, length = 20)

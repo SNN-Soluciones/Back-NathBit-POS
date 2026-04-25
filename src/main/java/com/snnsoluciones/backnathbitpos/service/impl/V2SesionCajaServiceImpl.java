@@ -50,6 +50,56 @@ public class V2SesionCajaServiceImpl implements V2SesionCajaService {
         return v != null ? v : BigDecimal.ZERO;
     }
 
+    @Override
+    public V2AbrirSesionResponse abrirSesionKiosko(Long terminalId) {
+        log.info("Abriendo sesión kiosko para terminal: {}", terminalId);
+
+        // Si ya hay sesión abierta, retornarla
+        Optional<V2SesionCaja> sesionExistente = sesionRepo.findAbiertaByTerminalId(terminalId);
+        if (sesionExistente.isPresent()) {
+            V2SesionCaja sesion = sesionExistente.get();
+            log.info("Sesión kiosko ya existe: {}", sesion.getId());
+            return V2AbrirSesionResponse.builder()
+                .sesionId(sesion.getId())
+                .turnoId(null) // kiosko no tiene turno de cajero
+                .terminal(sesion.getTerminal().getNombre())
+                .modoGaveta(sesion.getModoGaveta())
+                .montoInicial(sesion.getMontoInicial())
+                .fechaApertura(sesion.getFechaApertura())
+                .build();
+        }
+
+        // Crear nueva sesión sin usuario
+        Terminal terminal = terminalRepo.findById(terminalId)
+            .orElseThrow(() -> new RuntimeException("Terminal no encontrada"));
+
+        if (!terminal.getActiva()) {
+            throw new RuntimeException("La terminal del kiosko no está activa");
+        }
+
+        V2SesionCaja sesion = V2SesionCaja.builder()
+            .terminal(terminal)
+            .sucursal(terminal.getSucursal())
+            .usuarioApertura(null)      // kiosko — sin usuario
+            .modoGaveta("KIOSKO")       // modo especial
+            .montoInicial(BigDecimal.ZERO)
+            .estado("ABIERTA")
+            .observaciones("Sesión automática kiosko")
+            .build();
+
+        sesion = sesionRepo.save(sesion);
+        log.info("Sesión kiosko {} creada para terminal {}", sesion.getId(), terminal.getNombre());
+
+        return V2AbrirSesionResponse.builder()
+            .sesionId(sesion.getId())
+            .turnoId(null)
+            .terminal(terminal.getNombre())
+            .modoGaveta("KIOSKO")
+            .montoInicial(BigDecimal.ZERO)
+            .fechaApertura(sesion.getFechaApertura())
+            .build();
+    }
+
     // =========================================================
     // ABRIR SESIÓN
     // =========================================================
@@ -446,7 +496,9 @@ public class V2SesionCajaServiceImpl implements V2SesionCajaService {
         List<V2EstadoSesionResponse.OtroTurnoDTO> otrosTurnos = turnos.stream()
             .map(t -> V2EstadoSesionResponse.OtroTurnoDTO.builder()
                 .turnoId(t.getId())
-                .cajeroNombre(t.getUsuario().getNombre() + " " + t.getUsuario().getApellidos())
+                .cajeroNombre(t.getUsuario() != null
+                    ? t.getUsuario().getNombre() + " " + t.getUsuario().getApellidos()
+                    : "Kiosko")
                 .estado(t.getEstado())
                 .fechaInicio(t.getFechaInicio())
                 .build())
@@ -584,6 +636,9 @@ public class V2SesionCajaServiceImpl implements V2SesionCajaService {
 
             if (filtros.getModoGaveta() != null && !filtros.getModoGaveta().isBlank())
                 predicates.add(cb.equal(root.get("modoGaveta"), filtros.getModoGaveta()));
+            else
+                // Si no filtra por modoGaveta, excluir kiosko por defecto
+                predicates.add(cb.notEqual(root.get("modoGaveta"), "KIOSKO"));
 
             if (filtros.getFechaDesde() != null)
                 predicates.add(cb.greaterThanOrEqualTo(root.get("fechaApertura"), filtros.getFechaDesde()));
@@ -649,8 +704,9 @@ public class V2SesionCajaServiceImpl implements V2SesionCajaService {
             .sesionId(sesion.getId())
             .terminal(sesion.getTerminal().getNombre())
             .sucursal(sesion.getSucursal().getNombre())
-            .usuarioApertura(sesion.getUsuarioApertura().getNombre()
-                + " " + sesion.getUsuarioApertura().getApellidos())
+            .usuarioApertura(sesion.getUsuarioApertura() != null
+                ? sesion.getUsuarioApertura().getNombre() + " " + sesion.getUsuarioApertura().getApellidos()
+                : "Kiosko")
             .modoGaveta(sesion.getModoGaveta())
             .estado(sesion.getEstado())
             .fechaApertura(sesion.getFechaApertura())

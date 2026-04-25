@@ -1,10 +1,15 @@
 package com.snnsoluciones.backnathbitpos.service.auth.multitenant;
 
 import com.snnsoluciones.backnathbitpos.dto.auth.multitenant.AuthMultitenantDTOs.*;
+import com.snnsoluciones.backnathbitpos.entity.Sucursal;
+import com.snnsoluciones.backnathbitpos.entity.Terminal;
 import com.snnsoluciones.backnathbitpos.entity.global.*;
 import com.snnsoluciones.backnathbitpos.entity.global.Dispositivo.Plataforma;
 import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
 import com.snnsoluciones.backnathbitpos.exception.NotFoundException;
+import com.snnsoluciones.backnathbitpos.exception.UnauthorizedException;
+import com.snnsoluciones.backnathbitpos.repository.SucursalRepository;
+import com.snnsoluciones.backnathbitpos.repository.TerminalRepository;
 import com.snnsoluciones.backnathbitpos.repository.global.*;
 import com.snnsoluciones.backnathbitpos.service.EmailService;
 import java.util.Map;
@@ -35,11 +40,89 @@ public class AuthDispositivoService {
     private final UsuarioGlobalRepository usuarioGlobalRepository;
     private final EmailService emailService;
     private final JdbcTemplate jdbcTemplate;
+    private final SuperAdminTenantRepository superAdminTenantRepository;
+    private final TerminalRepository terminalRepository;
+    private final SucursalRepository sucursalRepository;
 
     /**
      * Máximo de códigos activos por tenant
      */
     private static final int MAX_CODIGOS_ACTIVOS_POR_TENANT = 10;
+
+    @Transactional
+    public VerificarCodigoResponse registrarConCredenciales(
+        RegistrarDispositivoConCredencialesRequest request,
+        Long usuarioGlobalId,
+        String ipCliente,
+        String userAgent) {
+
+        log.info("Registro con credenciales - tenantId={}, sucursalId={}, dispositivo={}",
+            request.getTenantId(), request.getSucursalId(), request.getNombreDispositivo());
+
+        // 1. Buscar tenant
+        Tenant tenant = tenantRepository.findById(request.getTenantId())
+            .orElseThrow(() -> new NotFoundException("Empresa no encontrada"));
+
+        if (!tenant.estaActivo()) {
+            throw new BadRequestException("La empresa no está activa");
+        }
+
+        // 2. Verificar que el usuario tiene acceso a este tenant
+        boolean tieneAcceso = superAdminTenantRepository
+            .existsActiveByUsuarioIdAndTenantId(usuarioGlobalId, request.getTenantId());
+
+        // ROOT y SOPORTE tienen acceso a todos
+        UsuarioGlobal usuarioGlobal = usuarioGlobalRepository.findById(usuarioGlobalId)
+            .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+
+        if (!tieneAcceso && !usuarioGlobal.esRolSistema()) {
+            throw new UnauthorizedException("No tiene acceso a esta empresa");
+        }
+
+        // 3. Verificar que la sucursal existe en el schema
+        String sucursalNombre = obtenerNombreSucursal(tenant.getSchemaName(), request.getSucursalId());
+        if (sucursalNombre == null) {
+            throw new BadRequestException("Sucursal no encontrada");
+        }
+
+        // 4. Crear dispositivo directamente (sin OTP — ya se autenticó con credenciales)
+        Plataforma plataforma = parsePlataforma(request.getPlataforma());
+
+        Dispositivo dispositivo = Dispositivo.crear(
+            tenant,
+            request.getNombreDispositivo(),
+            plataforma,
+            userAgent,
+            ipCliente
+        );
+        dispositivo.setSucursalId(request.getSucursalId());
+        dispositivo.setSucursalNombre(sucursalNombre);
+        dispositivo.setTipo(request.getTipo() != null ? request.getTipo() : "PDV");
+        dispositivo.setTerminalId(request.getTerminalId());
+        dispositivo = dispositivoRepository.save(dispositivo);
+
+        log.info("Dispositivo {} registrado con credenciales para tenant {} en sucursal {}",
+            dispositivo.getNombre(), tenant.getCodigo(), sucursalNombre);
+
+        // 5. Retornar mismo formato que verificarCodigo para consistencia
+        return VerificarCodigoResponse.builder()
+            .deviceToken(dispositivo.getToken())
+            .tenant(TenantResumen.builder()
+                .id(tenant.getId())
+                .codigo(tenant.getCodigo())
+                .nombre(tenant.getNombre())
+                .build())
+            .sucursal(SucursalResumen.builder()
+                .id(request.getSucursalId())
+                .nombre(sucursalNombre)
+                .build())
+            .dispositivo(DispositivoInfo.builder()
+                .id(dispositivo.getId())
+                .nombre(dispositivo.getNombre())
+                .plataforma(plataforma != null ? plataforma.name() : null)
+                .build())
+            .build();
+    }
 
     /**
      * Valida el código de empresa y verifica el dispositivo.
@@ -66,8 +149,10 @@ public class AuthDispositivoService {
         // Si no hay token, requiere registro
         if (deviceToken == null || deviceToken.isBlank()) {
             log.info("Dispositivo sin token, requiere registro");
+            List<SucursalResumen> sucursales = obtenerSucursalesDeSchema(tenant.getSchemaName());
             return LoginEmpresaResponse.builder()
                 .tenant(tenantResumen)
+                .sucursales(sucursales)
                 .requiereRegistro(true)
                 .build();
         }
@@ -309,10 +394,11 @@ public class AuthDispositivoService {
         codigo.marcarComoUsado();
         codigoRegistroRepository.save(codigo);
 
-        // Determinar plataforma
+        // Determinar plataforma y tipo
         Plataforma plataforma = parsePlataforma(request.getPlataforma());
+        String tipo = request.getTipo() != null ? request.getTipo() : "PDV";
 
-        // Crear dispositivo CON SUCURSAL
+        // Crear dispositivo
         Dispositivo dispositivo = Dispositivo.crear(
             tenant,
             request.getNombreDispositivo(),
@@ -322,10 +408,34 @@ public class AuthDispositivoService {
         );
         dispositivo.setSucursalId(request.getSucursalId());
         dispositivo.setSucursalNombre(codigo.getSucursalNombre());
+        dispositivo.setTipo(tipo);
+
+        // Si es KIOSKO → asignar o crear terminal automáticamente
+        // Si es PDV → usar la terminalId que manda el frontend (puede ser null)
+        if ("KIOSKO".equals(tipo)) {
+            Terminal terminal = asignarOCrearTerminalKiosko(
+                tenant.getSchemaName(), request.getSucursalId()
+            );
+            dispositivo.setTerminalId(terminal.getId());
+        } else {
+            dispositivo.setTerminalId(request.getTerminalId());
+        }
+
+        // Guardar dispositivo — solo una vez
         dispositivo = dispositivoRepository.save(dispositivo);
 
-        log.info("Dispositivo {} registrado para tenant {} en sucursal {}",
-            dispositivo.getNombre(), tenant.getCodigo(), codigo.getSucursalNombre());
+        // Si es KIOSKO → linkear dispositivoId en la terminal
+        if ("KIOSKO".equals(tipo)) {
+            final Dispositivo dispositivoFinal = dispositivo; // ← agregar esta línea
+            terminalRepository.findById(dispositivo.getTerminalId())
+                .ifPresent(t -> {
+                    t.setDispositivoId(dispositivoFinal.getId()); // ← usar dispositivoFinal
+                    terminalRepository.save(t);
+                });
+        }
+
+        log.info("Dispositivo {} tipo={} registrado para tenant {} en sucursal {}",
+            dispositivo.getNombre(), tipo, tenant.getCodigo(), codigo.getSucursalNombre());
 
         return VerificarCodigoResponse.builder()
             .deviceToken(dispositivo.getToken())
@@ -405,4 +515,83 @@ public class AuthDispositivoService {
             return Plataforma.WEB;
         }
     }
+
+    public List<SucursalResumen> obtenerSucursalesDeSchema(String schemaName) {
+        String sql = String.format("""
+            SELECT id, nombre, numero_sucursal
+            FROM %s.sucursales
+            WHERE activa = true
+            ORDER BY nombre
+            """, schemaName);
+        try {
+            return jdbcTemplate.query(sql, (rs, rn) ->
+                SucursalResumen.builder()
+                    .id(rs.getLong("id"))
+                    .nombre(rs.getString("nombre"))
+                    .numeroSucursal(rs.getString("numero_sucursal"))
+                    .build()
+            );
+        } catch (Exception e) {
+            log.warn("Error obteniendo sucursales del schema {}: {}", schemaName, e.getMessage());
+            return List.of();
+        }
+    }
+
+    public Terminal asignarOCrearTerminalKiosko(String schemaName, Long sucursalId) {
+        // Buscar terminal KIOSKO disponible via JDBC
+        String sqlBuscar = String.format("""
+        SELECT id, nombre, numero_terminal
+        FROM %s.terminales
+        WHERE sucursal_id = ?
+          AND tipo = 'KIOSKO'
+          AND dispositivo_id IS NULL
+          AND activa = true
+        LIMIT 1
+        """, schemaName);
+
+        List<Map<String, Object>> disponibles = jdbcTemplate.queryForList(sqlBuscar, sucursalId);
+
+        if (!disponibles.isEmpty()) {
+            Long terminalId = ((Number) disponibles.get(0).get("id")).longValue();
+            log.info("Terminal KIOSKO disponible: {}", terminalId);
+            // Retornar un Terminal dummy con solo el id — suficiente para setear terminalId
+            Terminal t = new Terminal();
+            t.setId(terminalId);
+            return t;
+        }
+
+        // No hay → crear nueva via JDBC
+        String sqlMaxNumero = String.format("""
+        SELECT COALESCE(MAX(CAST(numero_terminal AS INTEGER)), 0)
+        FROM %s.terminales
+        WHERE sucursal_id = ?
+        """, schemaName);
+
+        Integer maxNumero = jdbcTemplate.queryForObject(sqlMaxNumero, Integer.class, sucursalId);
+        String siguienteNumero = String.format("%05d", (maxNumero != null ? maxNumero : 0) + 1);
+
+        String sqlCrear = String.format("""
+        INSERT INTO %s.terminales
+          (sucursal_id, numero_terminal, nombre, tipo, activa,
+           consecutivo_factura_electronica, consecutivo_tiquete_electronico,
+           consecutivo_nota_credito, consecutivo_nota_debito,
+           consecutivo_factura_compra, consecutivo_factura_exportacion,
+           consecutivo_mensaje_receptor, consecutivo_recibo_pago,
+           consecutivo_tiquete_interno, consecutivo_factura_interna,
+           consecutivo_proforma, consecutivo_orden_pedido,
+           imprimir_automatico, created_at, updated_at)
+        VALUES (?, ?, ?, 'KIOSKO', true, 0,0,0,0,0,0,0,0,0,0,0,0, false, NOW(), NOW())
+        RETURNING id
+        """, schemaName);
+
+        Long nuevoId = jdbcTemplate.queryForObject(sqlCrear, Long.class,
+            sucursalId, siguienteNumero, "Kiosko " + siguienteNumero);
+
+        log.info("Terminal KIOSKO creada via JDBC: id={}", nuevoId);
+
+        Terminal t = new Terminal();
+        t.setId(nuevoId);
+        return t;
+    }
+
 }

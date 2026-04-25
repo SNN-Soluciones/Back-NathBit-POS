@@ -13,6 +13,7 @@ import com.snnsoluciones.backnathbitpos.repository.TokenRegistroRepository;
 import com.snnsoluciones.backnathbitpos.repository.global.DispositivoRepository;
 import com.snnsoluciones.backnathbitpos.repository.global.TenantRepository;
 import com.snnsoluciones.backnathbitpos.service.DispositivoService;
+import java.util.ArrayList;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -174,39 +175,110 @@ public class DispositivoServiceImpl implements DispositivoService {
         // 2. Registrar uso
         registrarUso(dispositivo);
 
-        // 3. Obtener usuarios del schema del tenant via JDBC
-        String schemaName = dispositivo.getTenant().getSchemaName();
-        String sql = String.format("""
-        SELECT id, nombre, apellidos, rol, pin_longitud, requiere_cambio_pin
-        FROM %s.usuarios
-        WHERE activo = true AND pin IS NOT NULL
-        """, schemaName);
+        String schemaName  = dispositivo.getTenant().getSchemaName();
+        Long   sucursalId  = dispositivo.getSucursalId();
+        Long   tenantId    = dispositivo.getTenant().getId();
 
-        List<DispositivoUsuariosResponse.UsuarioInfo> usuariosInfo = jdbcTemplate.query(sql, (rs, rowNum) -> {
-            String rol = rs.getString("rol");
+        List<DispositivoUsuariosResponse.UsuarioInfo> todos = new ArrayList<>();
 
-            if (!Boolean.TRUE.equals(includeRoot) && (rol.equals("ROOT") || rol.equals("SOPORTE"))) {
-                return null;
-            }
+        // ── QUERY 1: usuarios del schema filtrados por sucursal ────────────
+        // ADMIN ve todo el tenant, roles operativos solo su sucursal
+        String sqlSchema = String.format("""
+            SELECT id, nombre, apellidos, rol, pin_longitud, requiere_cambio_pin,
+                   'SCHEMA' AS fuente
+            FROM %s.usuarios
+            WHERE activo = true
+              AND pin IS NOT NULL
+              AND (
+                    rol IN ('ADMIN', 'JEFE_CAJAS')
+                    OR sucursal_id = ?
+              )
+            ORDER BY rol, nombre
+            """, schemaName);
 
-            return DispositivoUsuariosResponse.UsuarioInfo.builder()
-                .id(rs.getLong("id"))
-                .nombre(rs.getString("nombre"))
-                .apellidos(rs.getString("apellidos"))
-                .nombreCompleto(rs.getString("nombre") + " " +
-                    (rs.getString("apellidos") != null ? rs.getString("apellidos") : ""))
-                .rol(rol)
-                .longitudPin(rs.getInt("pin_longitud"))
-                .requiereCambioPin(rs.getBoolean("requiere_cambio_pin"))
-                .tienePin(true)
-                .build();
-        });
+        List<DispositivoUsuariosResponse.UsuarioInfo> usuariosSchema =
+            jdbcTemplate.query(sqlSchema, (rs, rn) -> {
+                String rol = rs.getString("rol");
+                if (!Boolean.TRUE.equals(includeRoot) && (rol.equals("ROOT") || rol.equals("SOPORTE"))) {
+                    return null;
+                }
+                return DispositivoUsuariosResponse.UsuarioInfo.builder()
+                    .id(rs.getLong("id"))
+                    .nombre(rs.getString("nombre"))
+                    .apellidos(rs.getString("apellidos"))
+                    .nombreCompleto(rs.getString("nombre") + " " +
+                        (rs.getString("apellidos") != null ? rs.getString("apellidos") : ""))
+                    .rol(rol)
+                    .longitudPin(rs.getInt("pin_longitud"))
+                    .requiereCambioPin(rs.getBoolean("requiere_cambio_pin"))
+                    .tienePin(true)
+                    .fuente("SCHEMA")  // para que AuthPinService sepa dónde buscar
+                    .build();
+            }, sucursalId);
 
-        List<DispositivoUsuariosResponse.UsuarioInfo> usuariosFiltrados = usuariosInfo.stream()
-            .filter(Objects::nonNull)
-            .collect(Collectors.toList());
+        todos.addAll(usuariosSchema.stream().filter(Objects::nonNull).toList());
 
-        log.info("Usuarios encontrados: {}", usuariosFiltrados.size());
+        // ── QUERY 2: SUPER_ADMIN ligados a este tenant ─────────────────────
+        String sqlSuperAdmin = """
+            SELECT ug.id, ug.nombre, ug.apellidos, ug.rol, ug.pin_longitud, ug.requiere_cambio_pin
+            FROM public.usuarios_globales ug
+            JOIN public.super_admin_tenants sat ON sat.usuario_id = ug.id
+            WHERE sat.tenant_id = ?
+              AND sat.activo = true
+              AND ug.activo = true
+              AND ug.pin IS NOT NULL
+            ORDER BY ug.nombre
+            """;
+
+        List<DispositivoUsuariosResponse.UsuarioInfo> superAdmins =
+            jdbcTemplate.query(sqlSuperAdmin, (rs, rn) ->
+                    DispositivoUsuariosResponse.UsuarioInfo.builder()
+                        .id(rs.getLong("id"))
+                        .nombre(rs.getString("nombre"))
+                        .apellidos(rs.getString("apellidos"))
+                        .nombreCompleto(rs.getString("nombre") + " " +
+                            (rs.getString("apellidos") != null ? rs.getString("apellidos") : ""))
+                        .rol(rs.getString("rol"))
+                        .longitudPin(rs.getInt("pin_longitud"))
+                        .requiereCambioPin(rs.getBoolean("requiere_cambio_pin"))
+                        .tienePin(true)
+                        .fuente("GLOBAL")  // AuthPinService busca en usuarios_globales
+                        .build(),
+                tenantId);
+
+        todos.addAll(superAdmins);
+
+        // ── QUERY 3: ROOT y SOPORTE (solo si includeRoot = true) ──────────
+        if (Boolean.TRUE.equals(includeRoot)) {
+            String sqlRoot = """
+                SELECT id, nombre, apellidos, rol::text, pin_longitud, requiere_cambio_pin
+                FROM public.usuarios_globales
+                WHERE rol IN ('ROOT', 'SOPORTE')
+                  AND activo = true
+                  AND pin IS NOT NULL
+                ORDER BY nombre
+                """;
+
+            List<DispositivoUsuariosResponse.UsuarioInfo> rootUsers =
+                jdbcTemplate.query(sqlRoot, (rs, rn) ->
+                    DispositivoUsuariosResponse.UsuarioInfo.builder()
+                        .id(rs.getLong("id"))
+                        .nombre(rs.getString("nombre"))
+                        .apellidos(rs.getString("apellidos"))
+                        .nombreCompleto(rs.getString("nombre") + " " +
+                            (rs.getString("apellidos") != null ? rs.getString("apellidos") : ""))
+                        .rol(rs.getString("rol"))
+                        .longitudPin(rs.getInt("pin_longitud"))
+                        .requiereCambioPin(rs.getBoolean("requiere_cambio_pin"))
+                        .tienePin(true)
+                        .fuente("GLOBAL")
+                        .build());
+
+            todos.addAll(rootUsers);
+        }
+
+        log.info("Usuarios encontrados: {} schema + {} super_admin + root/soporte",
+            usuariosSchema.stream().filter(Objects::nonNull).count(), superAdmins.size());
 
         return DispositivoUsuariosResponse.builder()
             .empresa(DispositivoUsuariosResponse.EmpresaInfo.builder()
@@ -217,7 +289,7 @@ public class DispositivoServiceImpl implements DispositivoService {
                 .id(dispositivo.getSucursalId())
                 .nombre(dispositivo.getSucursalNombre())
                 .build())
-            .usuarios(usuariosFiltrados)
+            .usuarios(todos)
             .build();
     }
 

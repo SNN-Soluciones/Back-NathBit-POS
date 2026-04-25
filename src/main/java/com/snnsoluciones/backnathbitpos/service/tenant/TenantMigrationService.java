@@ -212,14 +212,20 @@ public class TenantMigrationService {
         // NIVEL 6: Usuarios del tenant
         // ══════════════════════════════════════════════════════════════════
         new TablaConfig("usuarios",
-            "id IN (SELECT usuario_id FROM public.usuarios_sucursales WHERE " +
-                "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", true),
+            "id IN (" +
+                "SELECT ue.usuario_id FROM public.usuarios_empresas ue " +
+                "JOIN public.usuarios u2 ON u2.id = ue.usuario_id " +
+                "WHERE ue.empresa_id = ? " +
+                "AND u2.rol NOT IN ('ROOT', 'SOPORTE', 'SUPER_ADMIN')" +
+                ")", true),
         new TablaConfig("usuarios_sucursales",
             "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
         new TablaConfig("usuario_registro",
             "usuario_id IN (SELECT usuario_id FROM public.usuarios_sucursales WHERE " +
                 "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?))", false),
         new TablaConfig("asistencias", "empresa_id = ?", false),
+        new TablaConfig("kiosco_config",
+            "sucursal_id IN (SELECT id FROM public.sucursales WHERE empresa_id = ?)", false),
 
         // ══════════════════════════════════════════════════════════════════
         // NIVEL 7: Sesiones de caja v1
@@ -491,6 +497,10 @@ public class TenantMigrationService {
             result.setUsuariosMigrados(usuariosMigrados);
             log.info("✓ {} usuarios SUPER_ADMIN migrados a global", usuariosMigrados);
 
+            // 8.1 Asignar PIN a usuarios globales que pudieran existir sin él
+            int pinGlobalesAsignados = asignarPinGlobalesExistentes();
+            log.info("✓ {} usuarios globales actualizados con PIN", pinGlobalesAsignados);
+
             // 9. Marcar empresa como migrada
             jdbcTemplate.update(
                 "UPDATE public.empresas SET migrado_a_tenant = true, tenant_id = ? WHERE id = ?",
@@ -711,6 +721,7 @@ public class TenantMigrationService {
                 UsuarioGlobal.RolGlobal rolGlobal = UsuarioGlobal.RolGlobal.SUPER_ADMIN;
 
                 // Crear usuario global
+                String pinPorDefecto = passwordEncoder.encode("1234");
                 UsuarioGlobal usuarioGlobal = UsuarioGlobal.builder()
                     .email(email)
                     .password((String) row.get("password"))
@@ -721,6 +732,9 @@ public class TenantMigrationService {
                     .activo(row.get("activo") != null ? (Boolean) row.get("activo") : true)
                     .usuarioLegacyId(legacyId)
                     .requiereCambioPassword(false)
+                    .pin(pinPorDefecto)              // ← NUEVO
+                    .pinLongitud(4)                  // ← NUEVO
+                    .requiereCambioPin(true)         // ← NUEVO
                     .build();
 
                 usuarioGlobal = usuarioGlobalRepository.save(usuarioGlobal);
@@ -742,6 +756,17 @@ public class TenantMigrationService {
         }
 
         return migrados;
+    }
+
+    @Transactional
+    public int asignarPinGlobalesExistentes() {
+        String pinEncriptado = passwordEncoder.encode("1234");
+        int updated = jdbcTemplate.update(
+            "UPDATE public.usuarios_globales SET pin = ?, pin_longitud = 4, requiere_cambio_pin = true WHERE pin IS NULL",
+            pinEncriptado
+        );
+        log.info("✓ PIN asignado a {} usuarios globales sin PIN", updated);
+        return updated;
     }
 
     /**

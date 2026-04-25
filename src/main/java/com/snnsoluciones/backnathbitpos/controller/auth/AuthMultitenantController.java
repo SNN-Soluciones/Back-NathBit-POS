@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.controller.auth;
 
+import com.snnsoluciones.backnathbitpos.dto.auth.CambiarPinRequest;
 import com.snnsoluciones.backnathbitpos.dto.auth.multitenant.AuthMultitenantDTOs.*;
 import com.snnsoluciones.backnathbitpos.dto.common.ApiResponse;
 import com.snnsoluciones.backnathbitpos.service.auth.multitenant.AuthDispositivoService;
@@ -68,6 +69,55 @@ public class AuthMultitenantController {
         } catch (Exception e) {
             log.error("Error en login global: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/pin/cambiar")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> cambiarPin(
+        @Valid @RequestBody CambiarPinRequest request,
+        Authentication authentication) {
+
+        log.info("POST /api/auth/pin/cambiar");
+
+        try {
+            Long usuarioId = obtenerUsuarioIdDeAuth(authentication);
+            authPinService.cambiarPin(usuarioId, request);
+            return ResponseEntity.ok(ApiResponse.success("PIN cambiado exitosamente", null));
+        } catch (Exception e) {
+            log.error("Error cambiando PIN: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Registrar dispositivo con credenciales",
+        description = "Flujo B: registra el dispositivo usando el JWT del usuario ya autenticado. Sin OTP.")
+    @PostMapping("/dispositivo/registrar-con-credenciales")
+    @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<VerificarCodigoResponse>> registrarConCredenciales(
+        @Valid @RequestBody RegistrarDispositivoConCredencialesRequest request,
+        Authentication authentication,
+        HttpServletRequest httpRequest) {
+
+        log.info("POST /api/auth/dispositivo/registrar-con-credenciales - tenantId={}, sucursalId={}",
+            request.getTenantId(), request.getSucursalId());
+
+        try {
+            Long usuarioId = obtenerUsuarioIdDeAuth(authentication);
+            String ipCliente = obtenerIpCliente(httpRequest);
+            String userAgent = httpRequest.getHeader("User-Agent");
+
+            VerificarCodigoResponse response = authDispositivoService.registrarConCredenciales(
+                request, usuarioId, ipCliente, userAgent
+            );
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Dispositivo registrado exitosamente", response));
+        } catch (Exception e) {
+            log.error("Error registrando dispositivo con credenciales: {}", e.getMessage());
+            return ResponseEntity.badRequest()
                 .body(ApiResponse.error(e.getMessage()));
         }
     }
@@ -267,33 +317,6 @@ public class AuthMultitenantController {
         } catch (Exception e) {
             log.error("Error en login con PIN: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error(e.getMessage()));
-        }
-    }
-
-    @Operation(summary = "Cambiar PIN", 
-               description = "Permite al usuario cambiar su PIN")
-    @PostMapping("/pin/cambiar")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<MensajeResponse>> cambiarPin(
-            @Valid @RequestBody CambiarPinRequest request,
-            Authentication authentication) {
-        
-        log.info("POST /api/auth/pin/cambiar");
-        
-        try {
-            Long usuarioId = obtenerUsuarioIdDeAuth(authentication);
-            authPinService.cambiarPin(usuarioId, request);
-            
-            MensajeResponse response = MensajeResponse.builder()
-                .mensaje("PIN actualizado correctamente")
-                .success(true)
-                .build();
-            
-            return ResponseEntity.ok(ApiResponse.success("PIN cambiado", response));
-        } catch (Exception e) {
-            log.error("Error cambiando PIN: {}", e.getMessage());
-            return ResponseEntity.badRequest()
                 .body(ApiResponse.error(e.getMessage()));
         }
     }

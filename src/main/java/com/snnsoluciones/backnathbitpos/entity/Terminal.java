@@ -37,6 +37,13 @@ public class Terminal {
     private String descripcion;
 
     @Builder.Default
+    @Column(name = "tipo", length = 20, nullable = false)
+    private String tipo = "PDV";
+
+    @Column(name = "dispositivo_id")
+    private Long dispositivoId; // null = disponible, not null = asignada
+
+    @Builder.Default
     @Column(nullable = false)
     private Boolean activa = true;
     

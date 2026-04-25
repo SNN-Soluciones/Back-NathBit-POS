@@ -5,6 +5,7 @@ import com.snnsoluciones.backnathbitpos.dto.usuarios.UsuarioResponse;
 import com.snnsoluciones.backnathbitpos.entity.Usuario;
 import com.snnsoluciones.backnathbitpos.entity.UsuarioEmpresa;
 import com.snnsoluciones.backnathbitpos.exception.NotFoundException;
+import com.snnsoluciones.backnathbitpos.repository.EmpresaRepository;
 import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import com.snnsoluciones.backnathbitpos.security.jwt.JwtTokenProvider;
 import com.snnsoluciones.backnathbitpos.service.UsuarioEmpresaService;
@@ -33,6 +34,7 @@ public class AuthServiceImpl implements AuthService {
     private final UsuarioEmpresaService usuarioEmpresaService;
     private final JwtTokenProvider tokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final EmpresaRepository empresaRepository;
 
     @Override
     public LoginResponse login(LoginRequest request) {
@@ -50,12 +52,37 @@ public class AuthServiceImpl implements AuthService {
             .or(() -> usuarioService.buscarPorEmail(request.getEmail()))
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        // Generar tokens
-        String token = tokenProvider.generateToken(
-            usuario.getId(),
-            usuario.getEmail(),
-            usuario.getRol().name()
-        );
+        Long empresaIdParaToken = null;
+
+        List<UsuarioEmpresa> empresasUsuario = usuarioEmpresaService.listarPorUsuario(usuario.getId());
+        if (!empresasUsuario.isEmpty()) {
+            Long empresaId = empresasUsuario.get(0).getEmpresa().getId();
+            Boolean migrado = empresaRepository.findById(empresaId)
+                .map(e -> Boolean.TRUE.equals(e.getMigradoATenant()))
+                .orElse(false);
+            if (migrado) {
+                empresaIdParaToken = empresaId;
+            }
+        }
+
+        String token;
+        if (empresaIdParaToken != null) {
+            // Empresa migrada → token con empresaId para routing al tenant
+            token = tokenProvider.generateTokenWithContext(
+                usuario.getId(),
+                usuario.getEmail(),
+                usuario.getRol().name(),
+                empresaIdParaToken,
+                null
+            );
+        } else {
+            // Empresa NO migrada → token legacy sin empresaId
+            token = tokenProvider.generateToken(
+                usuario.getId(),
+                usuario.getEmail(),
+                usuario.getRol().name()
+            );
+        }
 
         String refreshToken = tokenProvider.generateRefreshToken(
             usuario.getId(),

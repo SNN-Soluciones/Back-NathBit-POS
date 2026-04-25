@@ -14,6 +14,9 @@ public interface TerminalRepository extends JpaRepository<Terminal, Long> {
 
     Optional<Terminal> findFirstBySucursalId(Long sucursalId);
 
+    @Query("SELECT t FROM Terminal t WHERE t.sucursal.id = :sucursalId AND t.tipo = 'KIOSKO' AND t.dispositivoId IS NULL AND t.activa = true")
+    List<Terminal> findKioskoDisponibles(@Param("sucursalId") Long sucursalId);
+
 
     // Buscar terminales por sucursal
     List<Terminal> findBySucursalId(Long sucursalId);

@@ -33,4 +33,7 @@ public class CambiarPinRequest {
     @NotBlank(message = "La confirmación del PIN es obligatoria")
     @Pattern(regexp = "^\\d{4,6}$", message = "La confirmación debe tener entre 4 y 6 dígitos")
     private String confirmarPin;
+
+    private Integer longitud;
+    private String fuente; // "GLOBAL" | "SCHEMA"  ← agregar esto
 }

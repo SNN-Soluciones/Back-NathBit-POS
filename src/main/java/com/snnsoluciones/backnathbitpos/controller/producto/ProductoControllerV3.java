@@ -5,6 +5,8 @@ import com.snnsoluciones.backnathbitpos.dto.producto.ProductoCreateDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoListDto;
 import com.snnsoluciones.backnathbitpos.dto.producto.ProductoUpdateDto;
+import com.snnsoluciones.backnathbitpos.exception.BadRequestException;
+import com.snnsoluciones.backnathbitpos.security.ContextoUsuario;
 import com.snnsoluciones.backnathbitpos.service.producto.ProductoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -215,7 +218,7 @@ public class ProductoControllerV3 {
         """
     )
     public ResponseEntity<ApiResponse<Page<ProductoListDto>>> listar(
-        @Parameter(description = "ID de la empresa", required = true)
+        @Parameter(description = "ID de la empresa")
         @RequestParam Long empresaId,
 
         @Parameter(description = "ID de sucursal (opcional, NULL = solo globales)")
@@ -240,10 +243,14 @@ public class ProductoControllerV3 {
         @RequestParam(defaultValue = DEFAULT_SORT_BY) String sortBy,
 
         @Parameter(description = "Dirección de ordenamiento")
-        @RequestParam(defaultValue = "asc") String sortDir) {
+        @RequestParam(defaultValue = "asc") String sortDir,
+
+        Authentication authentication) {
 
         log.debug("GET /api/v3/productos - empresaId={}, sucursalId={}, termino={}, activo={}, tipo={}",
             empresaId, sucursalId, termino, activo, tipo); // ✨ AGREGADO tipo al log
+
+        Long resolvedEmpresaId = resolverEmpresaId(empresaId, authentication);
 
         try {
             // Crear Pageable
@@ -257,13 +264,13 @@ public class ProductoControllerV3 {
 
             if (termino != null && !termino.trim().isEmpty()) {
                 // BÚSQUEDA con término (puede combinarse con tipo)
-                productos = productoService.buscar(empresaId, sucursalId, termino, tipo, activo, pageable); // ✨ AGREGADO tipo
+                productos = productoService.buscar(resolvedEmpresaId, sucursalId, termino, tipo, activo, pageable); // ✨ AGREGADO tipo
             } else if (activo) {
                 // LISTAR solo activos (puede combinarse con tipo)
-                productos = productoService.listarActivos(empresaId, sucursalId, tipo, pageable); // ✨ AGREGADO tipo
+                productos = productoService.listarActivos(resolvedEmpresaId, sucursalId, tipo, pageable); // ✨ AGREGADO tipo
             } else {
                 // LISTAR todos (puede combinarse con tipo)
-                productos = productoService.listar(empresaId, sucursalId, tipo, pageable); // ✨ AGREGADO tipo
+                productos = productoService.listar(resolvedEmpresaId, sucursalId, tipo, pageable); // ✨ AGREGADO tipo
             }
 
             return ResponseEntity.ok(ApiResponse.<Page<ProductoListDto>>builder()
@@ -508,6 +515,7 @@ public class ProductoControllerV3 {
      * Buscar productos por categoría
      */
     @GetMapping("/categoria/{categoriaId}")
+    @PreAuthorize("hasAnyRole('ROOT', 'SUPER_ADMIN', 'ADMIN','JEFE_CAJAS', 'CAJERO', 'MESERO','COCINA', 'KIOSKO')")
     @Operation(
         summary = "Listar productos por categoría",
         description = "Lista productos de una categoría específica con filtros de empresa/sucursal"
@@ -676,10 +684,13 @@ public class ProductoControllerV3 {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "200") int size,
         @RequestParam(defaultValue = "nombre") String sortBy,
-        @RequestParam(defaultValue = "asc") String sortDir) {
+        @RequestParam(defaultValue = "asc") String sortDir,
+        Authentication authentication) {
 
         log.debug("GET /api/v3/productos/familia/{} - empresa: {}, sucursal: {}",
             familiaId, empresaId, sucursalId);
+
+        Long resolvedEmpresaId = resolverEmpresaId(empresaId, authentication);
 
         try {
             Sort.Direction direction = "desc".equalsIgnoreCase(sortDir)
@@ -709,5 +720,15 @@ public class ProductoControllerV3 {
                     .message("Error al listar productos: " + e.getMessage())
                     .build());
         }
+    }
+
+    private Long resolverEmpresaId(Long empresaId, Authentication authentication) {
+        if (empresaId != null) return empresaId;
+
+        if (authentication != null && authentication.getPrincipal() instanceof ContextoUsuario) {
+            Long id = ((ContextoUsuario) authentication.getPrincipal()).getEmpresaId();
+            if (id != null) return id;
+        }
+        throw new BadRequestException("empresaId es requerido");
     }
 }

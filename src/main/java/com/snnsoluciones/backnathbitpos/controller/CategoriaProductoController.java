@@ -35,7 +35,7 @@ public class CategoriaProductoController {
 
   @Operation(summary = "Listar categorías por empresa")
   @GetMapping("/empresa/{empresaId}/{sucursalId}")
-  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN', 'JEFE_CAJAS', 'CAJERO', 'MESERO')")
+  @PreAuthorize("hasAnyRole('ROOT', 'SOPORTE', 'SUPER_ADMIN', 'ADMIN','JEFE_CAJAS', 'CAJERO', 'MESERO', 'KIOSKO')")
   public ResponseEntity<ApiResponse<List<CategoriaProductoResponse>>> listarPorEmpresa(
       @PathVariable Long empresaId, @PathVariable Long sucursalId,
       @RequestParam(required = false) String busqueda) {

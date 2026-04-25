@@ -76,6 +76,10 @@ public class SecurityConfig {
                     "/api/auth/forgot-password",
                     "/api/auth/reset-password",
                     "/api/dispositivos/usuarios",
+                    "/api/auth/pdv/solicitar-codigo",
+                    "/api/auth/pdv/validar-codigo",
+                    "/api/auth/pdv/registrar-dispositivo",   // ← el service valida auth internamente
+                    "/api/auth/pdv/login-credenciales",
 
                     // Auth multi-tenant (NUEVOS)
                     "/api/auth/global/login",
@@ -86,6 +90,9 @@ public class SecurityConfig {
                     "/api/auth/dispositivo/reenviar",
                     "/api/auth/dispositivo/usuarios",  // <-- AGREGAR
                     "/api/auth/pin",
+                    "/api/kiosko/init",
+                    "/api/kiosko/orden",
+                    "/api/kiosko/orden/*/estado",
 
                     // Otros públicos
                     "/api/facturas-recepcion/procesar-email",

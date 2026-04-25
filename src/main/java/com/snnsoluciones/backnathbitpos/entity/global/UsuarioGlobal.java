@@ -99,6 +99,21 @@ public class UsuarioGlobal {
     @Builder.Default
     private Set<SuperAdminTenant> superAdminTenants = new HashSet<>();
 
+    /**
+     * PIN encriptado con BCrypt para acceso desde dispositivos PDV.
+     * Separado del password web.
+     */
+    @Column(length = 255)
+    private String pin;
+
+    @Builder.Default
+    @Column(name = "pin_longitud")
+    private Integer pinLongitud = 4;
+
+    @Builder.Default
+    @Column(name = "requiere_cambio_pin")
+    private Boolean requiereCambioPin = true;
+
     // ==================== Lifecycle ====================
 
     @PrePersist

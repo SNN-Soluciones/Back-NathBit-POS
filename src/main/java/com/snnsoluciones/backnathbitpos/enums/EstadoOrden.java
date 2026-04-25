@@ -3,6 +3,7 @@ package com.snnsoluciones.backnathbitpos.enums;
 public enum EstadoOrden {
   ABIERTA("Abierta", "Orden activa, puede modificarse"),
   EN_PREPARACION("En Preparación", "Orden enviada a cocina"),
+  PENDIENTE_PAGO("Pendiente de Pago", "Orden del kiosko esperando cobro en caja"),
   PREPARADA("Preparada", "Orden lista para servir"),
   SERVIDA("Servida", "Orden entregada al cliente"),
   POR_PAGAR("Por Pagar", "Cliente solicitó la cuenta"),
@@ -33,7 +34,7 @@ public enum EstadoOrden {
 
   public boolean puedePagarse() {
     return this == ABIERTA || this == EN_PREPARACION || this == PREPARADA ||
-        this == SERVIDA || this == POR_PAGAR;
+        this == SERVIDA || this == POR_PAGAR || this == PENDIENTE_PAGO;
   }
 
   public boolean esFinal() {

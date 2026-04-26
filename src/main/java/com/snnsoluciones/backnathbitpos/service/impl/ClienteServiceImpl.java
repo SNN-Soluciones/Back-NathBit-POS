@@ -1,5 +1,6 @@
 package com.snnsoluciones.backnathbitpos.service.impl;
 
+import com.snnsoluciones.backnathbitpos.dto.ContribuyenteDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ActividadEconomicaDto;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClienteEmailDTO;
 import com.snnsoluciones.backnathbitpos.dto.cliente.ClientePOSDto;
@@ -27,6 +28,7 @@ import com.snnsoluciones.backnathbitpos.repository.ClienteUbicacionRepository;
 import com.snnsoluciones.backnathbitpos.repository.CodigoCABySRepository;
 import com.snnsoluciones.backnathbitpos.service.ClienteService;
 import com.snnsoluciones.backnathbitpos.service.EmpresaService;
+import com.snnsoluciones.backnathbitpos.service.HaciendaProxyService;
 import com.snnsoluciones.backnathbitpos.service.UbicacionService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -68,9 +70,9 @@ public class ClienteServiceImpl implements ClienteService {
   private final EmpresaService empresaService;
   private final ModularHelperService modularHelper;
   private final ClienteActividadRepository clienteActividadRepository;
-  private final ActividadEconomicaRepository actividadEconomicaRepository;
-  private final RestTemplate restTemplate;
   private final JdbcTemplate jdbcTemplate;
+  private final HaciendaProxyService haciendaProxyService;
+
 
   @PersistenceContext
   private EntityManager entityManager;
@@ -127,8 +129,11 @@ public class ClienteServiceImpl implements ClienteService {
         if (actividadDto.getCodigo() != null && actividadDto.getDescripcion() != null) {
           ClienteActividad actividad = ClienteActividad.builder()
               .cliente(cliente)
-              .codigoActividad(actividadDto.getCodigo())
+              .codigoCiiu4(actividadDto.getCodigo())      // ✅ agrega este
+              .codigoActividad(actividadDto.getCodigo())  // ya estaba
               .descripcion(actividadDto.getDescripcion())
+              .tipo(actividadDto.getTipo())               // si el DTO lo tiene
+              .estado("A")                                // activa por defecto
               .build();
 
           cliente.getActividades().add(actividad);
@@ -1132,21 +1137,20 @@ public class ClienteServiceImpl implements ClienteService {
     }
 
     String identificacion = cliente.getNumeroIdentificacion();
-    String url = "https://api.hacienda.go.cr/fe/ae?identificacion=" + identificacion;
 
     try {
-      log.info("📡 Consultando Hacienda: {}", url);
+      // ✅ USA el proxy que ya tiene fallback a Gometa
+      ContribuyenteDTO contribuyente = haciendaProxyService.consultar(identificacion);
 
-      Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-
-      if (response == null || !response.containsKey("actividades")) {
-        throw new RuntimeException("No se obtuvieron actividades desde Hacienda");
+      if (contribuyente == null || contribuyente.getActividades() == null
+          || contribuyente.getActividades().isEmpty()) {
+        throw new RuntimeException("No se obtuvieron actividades para la identificación: " + identificacion);
       }
+
+      log.info("📡 Fuente de datos: {}", contribuyente.getFuente());
 
       // ELIMINAR anteriores
       clienteActividadRepository.deleteByClienteId(clienteId);
-
-      // Limpiar colección del cliente
       if (cliente.getActividades() != null) {
         cliente.getActividades().clear();
       } else {
@@ -1155,63 +1159,39 @@ public class ClienteServiceImpl implements ClienteService {
 
       log.info("🗑️ Actividades anteriores eliminadas");
 
-      // Procesar nuevas
-      List<Map<String, Object>> actividadesHacienda =
-          (List<Map<String, Object>>) response.get("actividades");
-
-      log.info("📥 Procesando {} actividades", actividadesHacienda.size());
-
-      for (Map<String, Object> actData : actividadesHacienda) {
-        String codigoCiiu4 = (String) actData.get("codigo");
-        String descripcion = (String) actData.get("descripcion");
-        String tipo = (String) actData.get("tipo");
-        String estado = (String) actData.get("estado");
-
-        // Extraer CIIU3 con manejo seguro
-        String codigoCiiu3 = null;
-        if (actData.containsKey("ciiu3") && actData.get("ciiu3") != null) {
-          Object ciiu3Obj = actData.get("ciiu3");
-
-          if (ciiu3Obj instanceof Map) {
-            Map<String, Object> ciiu3Data = (Map<String, Object>) ciiu3Obj;
-            codigoCiiu3 = (String) ciiu3Data.get("codigo");
-          }
-        }
-
+      for (ContribuyenteDTO.ActividadDTO actData : contribuyente.getActividades()) {
         // Solo activas
-        if (!"A".equals(estado)) {
-          log.debug("⏭️ Saltando actividad inactiva: {}", codigoCiiu4);
+        if (!"A".equals(actData.getEstado())) {
+          log.debug("⏭️ Saltando actividad inactiva: {}", actData.getCodigo());
           continue;
         }
 
-        // ✅ CREAR con Builder
+        // ✅ CIIU4 siempre viene en actData.getCodigo() (tanto Hacienda como Gometa)
+        String codigoCiiu4 = actData.getCodigo();
+
         ClienteActividad ca = ClienteActividad.builder()
             .codigoCiiu4(codigoCiiu4)
-            .codigoCiiu3(codigoCiiu3)
-            .codigoActividad(codigoCiiu3 != null ? codigoCiiu3 : codigoCiiu4)
-            .descripcion(descripcion != null ? descripcion.trim() : null)
-            .tipo(tipo)
-            .estado(estado)
+            // codigoCiiu3 ya no está en ActividadDTO — se omite intencionalmente
+            .codigoActividad(codigoCiiu4)   // ✅ SIEMPRE CIIU4
+            .descripcion(actData.getDescripcion() != null ? actData.getDescripcion().trim() : null)
+            .tipo(actData.getTipo())
+            .estado(actData.getEstado())
             .build();
 
-        // ✅ IMPORTANTE: Agregar al Set del cliente (esto hace que JPA maneje el cliente_id)
         cliente.getActividades().add(ca);
-        ca.setCliente(cliente); // Relación bidireccional
+        ca.setCliente(cliente);
 
-        log.debug("✅ Agregada: {} - {} - {}", tipo, codigoCiiu4, descripcion);
+        log.debug("✅ Agregada: {} - {} - {}", actData.getTipo(), codigoCiiu4, actData.getDescripcion());
       }
 
-      // Guardar cliente (cascade guardará las actividades)
       clienteRepository.save(cliente);
+      log.info("✅ Actividades actualizadas correctamente desde {}", contribuyente.getFuente());
 
-      log.info("✅ Actividades actualizadas correctamente");
-
-      // Retornar lista actualizada
       return listarActividadesCliente(clienteId);
 
     } catch (Exception e) {
-      log.error("❌ Error consultando Hacienda: {}", e.getMessage(), e);
-      throw new RuntimeException("Error al consultar Hacienda: " + e.getMessage());
+      log.error("❌ Error consultando actividades: {}", e.getMessage(), e);
+      throw new RuntimeException("Error al consultar actividades: " + e.getMessage());
     }
   }
 

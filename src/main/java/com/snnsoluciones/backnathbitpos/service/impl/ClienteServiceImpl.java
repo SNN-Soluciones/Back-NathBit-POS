@@ -1197,14 +1197,13 @@ public class ClienteServiceImpl implements ClienteService {
 
   // Helper privado
   private List<ActividadEconomicaDto> listarActividadesCliente(Long clienteId) {
-    List<ClienteActividad> actividades = clienteActividadRepository.findByClienteId(clienteId);
-
-    return actividades.stream()
+    return clienteActividadRepository.findByClienteId(clienteId).stream()
         .map(ca -> {
           ActividadEconomicaDto dto = new ActividadEconomicaDto();
-          dto.setCodigo(ca.getTipo()); // "P" o "S"
-          dto.setCodigo(ca.getCodigoCiiu4()); // Usar CIIU4 nuevo
+          dto.setCodigo(ca.getCodigoCiiu4());
           dto.setDescripcion(ca.getDescripcion());
+          dto.setTipo(ca.getTipo());
+          dto.setEstado(ca.getEstado());
           return dto;
         })
         .collect(Collectors.toList());
